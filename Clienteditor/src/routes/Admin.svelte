@@ -14,9 +14,9 @@
   const handleProblemAdd = () => {
     Problem.refetch();
   };
-  const handleTestAdd=()=>{
+  const handleTestAdd = () => {
     Test.refetch();
-  }
+  };
 </script>
 
 <style>
