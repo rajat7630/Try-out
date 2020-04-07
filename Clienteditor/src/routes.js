@@ -14,13 +14,17 @@ import Thankyou from './routes/thankyou.svelte';
 =======
 import GiveTest from './routes/give_test.svelte';
 import Pubnub from './routes/pubnub.svelte';
+<<<<<<< HEAD
 >>>>>>> feat: added pubnub sdk
+=======
+
+>>>>>>> feat: pubnub frontend added of admin and user
 function userIsAdmin() {
-  //check if user is admin and returns true or false
-  return document.cookie ? true : false;
+  // check if user is admin and returns true or false
+  return !!document.cookie;
 }
 function notAdmin() {
-  return document.cookie ? false : true;
+  return !document.cookie;
 }
 
 const routes = [
@@ -52,14 +56,17 @@ const routes = [
   {
     name: '/admin',
     component: Admin,
+    onlyIf: { guard: userIsAdmin, redirect: '/' },
   },
   {
     name: '/test/:id',
     component: Tests,
+    onlyIf: { guard: userIsAdmin, redirect: '/' },
   },
   {
     name: '/problem/:id',
     component: Problems,
+    onlyIf: { guard: userIsAdmin, redirect: '/' },
   },
   {
 <<<<<<< HEAD
@@ -76,6 +83,7 @@ const routes = [
 =======
     name: '/pubnub',
     component: Pubnub,
+    onlyIf: { guard: userIsAdmin, redirect: '/' },
   },
   {
     name: '/home',
@@ -85,11 +93,16 @@ const routes = [
   {
     name: '/sendtest/:id',
     component: SendTest,
+    onlyIf: { guard: userIsAdmin, redirect: '/' },
   },
   {
     name: '/givetest/:token',
     component: GiveTest,
+<<<<<<< HEAD
 >>>>>>> feat: added pubnub sdk
+=======
+    onlyIf: { guard: userIsAdmin, redirect: '/' },
+>>>>>>> feat: pubnub frontend added of admin and user
   },
 ];
 
