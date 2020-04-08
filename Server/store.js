@@ -52,6 +52,7 @@ async function updateProblem(id, problem) {
     problemTests: Problem.problemTests,
     difficultyLevel: problem.difficultyLevel
   });
+
   return {
     success: true,
     message: 'Problem updated Successfully',
@@ -59,10 +60,15 @@ async function updateProblem(id, problem) {
   };
 }
 async function addNewTest(test) {
+  console.log(test);
   const res = await Test.query().insert({
     testName: test.testName,
     difficultyLevel: test.difficultyLevel,
     email: test.email
+  });
+  console.log(res.id);
+  test.problems.forEach((ele) => {
+    addTestProblem({ t_id: res.id, p_id: parseInt(ele) });
   });
 
   return {
@@ -72,31 +78,32 @@ async function addNewTest(test) {
   };
 }
 async function deleteTest(id) {
-  try {
-    await TestProblem.query()
-      .delete()
-      .where('t_id', id);
+  await TestProblem.query()
+    .delete()
+    .where('t_id', parseInt(id));
 
-    await Test.query().deleteById(id);
-    return getAllTests();
-  } catch (error) {
-    throw new Error(error);
-  }
+  await Test.query().deleteById(parseInt(id));
+  return getAllTests();
 }
 async function updateTest(id, test) {
-  try {
-    const updatedTest = await Test.query().patchAndFetchById(id, {
-      testName: test.testName,
-      difficultyLevel: test.difficultyLevel
-    });
-    return {
-      success: true,
-      message: 'Test updated Successfully',
-      test: testReducer(updatedTest)
-    };
-  } catch (error) {
-    throw new Error(error);
-  }
+  console.log(id, test);
+  const updatedTest = await Test.query().patchAndFetchById(parseInt(id), {
+    testName: test.testName,
+    difficultyLevel: test.difficultyLevel
+  });
+
+  await TestProblem.query()
+    .delete()
+    .where('t_id', parseInt(id));
+  test.problems.forEach((ele) => {
+    addTestProblem({ t_id: parseInt(id), p_id: parseInt(ele) });
+  });
+
+  return {
+    success: true,
+    message: 'Test updated Successfully',
+    test: testReducer(updatedTest)
+  };
 }
 async function addNewUser(user) {
   try {
@@ -116,20 +123,16 @@ async function addNewUser(user) {
 }
 
 async function addTestProblem(testProblem) {
-  try {
-    const res = await TestProblem.query().insert({
-      t_id: testProblem.t_id,
-      p_id: testProblem.p_id
-    });
-    const test = getTestById(testProblem.t_id);
-    return {
-      success: true,
-      message: 'Problem added successfully',
-      test: test
-    };
-  } catch (error) {
-    throw new Error(error);
-  }
+  const res = await TestProblem.query().insert({
+    t_id: testProblem.t_id,
+    p_id: testProblem.p_id
+  });
+  const test = getTestById(testProblem.t_id);
+  return {
+    success: true,
+    message: 'Problem added successfully',
+    test: test
+  };
 }
 async function problemReducer(prob) {
   return {
@@ -210,7 +213,7 @@ function getToken(id) {
 function getTestByToken(token) {
   const decode = jwt.decode(token);
   console.log(decode);
-  return getTestById(decode.testId)
+  return getTestById(decode.testId);
 }
 
 function sendMail(mailDetails) {

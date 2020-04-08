@@ -8,11 +8,7 @@
   };
 
   const showSurprise = () => {
-    open(
-      TestField,
-      { onChange: TestCheck },
-      { closeOnEsc: false, closeOnOuterClick: false }
-    );
+    location.replace("http://localhost:5000/newtest")
   };
 </script>
 

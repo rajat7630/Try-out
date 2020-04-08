@@ -29004,6 +29004,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
             // extra care to replace process.env.NODE_ENV in their production builds,
             // or define an appropriate global.process polyfill.
         }
+    //# sourceMappingURL=invariant.esm.js.map
 
     var fastJsonStableStringify = function (data, opts) {
         if (!opts) opts = {};
@@ -29188,6 +29189,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
         bSet.add(b);
         return false;
     }
+    //# sourceMappingURL=equality.esm.js.map
 
     function isStringValue(value) {
         return value.kind === 'StringValue';
@@ -29971,6 +29973,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
         }
         return value;
     }
+    //# sourceMappingURL=bundle.esm.js.map
 
     var OBSERVABLE;
     function isObservable(value) {
@@ -30026,6 +30029,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
             return function () { return subscription.unsubscribe(); };
         });
     }
+    //# sourceMappingURL=svelte-observable.es.js.map
 
     var CLIENT = typeof Symbol !== 'undefined' ? Symbol('client') : '@@client';
     function getClient() {
@@ -30100,6 +30104,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
         var observable = client.subscribe(options);
         return observe(observable);
     }
+    //# sourceMappingURL=svelte-apollo.es.js.map
 
     function devAssert(condition, message) {
       var booleanCondition = Boolean(condition);
@@ -32985,8 +32990,8 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 `;
 
     const problemsByAuthor = src$1`
-  query problemsByAuthor($email:String) {
-    problemsByAuthor(email:$email) {
+  query problemsByAuthor($email: String) {
+    problemsByAuthor(email: $email) {
       id
       problemName
       problemTests
@@ -33021,8 +33026,8 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 `;
 
     const testsByAuthor = src$1`
-  query testsByAuthor($email:String) {
-    testsByAuthor(email:$email) {
+  query testsByAuthor($email: String) {
+    testsByAuthor(email: $email) {
       id
       testName
       difficultyLevel
@@ -33031,16 +33036,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 `;
 
     const testByToken = src$1`
-  query getTest($token:String) {
-    testByToken (token:$token){
+  query getTest($token: String) {
+    testByToken(token: $token) {
       id
-      problems{
+      problems {
         id
         problemName
         description
-        
       }
-      
     }
   }
 `;
@@ -33055,55 +33058,39 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 `;
 
     const addProblem = src$1`
-  mutation addNewProblem($problemName:String,$description: String,$problemTests:JSON,$difficultyLevel: String,$email: String){
+  mutation addNewProblem(
+    $problemName: String
+    $description: String
+    $problemTests: JSON
+    $difficultyLevel: String
+    $email: String
+  ) {
     addProblem(
-    data:{
-      problemName: $problemName,
-      description: $description,
-      problemTests:$problemTests,
-      difficultyLevel: $difficultyLevel,
-      email: $email})
-    {
-    success
-    message
-    problems
-    {
-      id
-      problemName
-      problemTests
-      description
-      difficultyLevel
-      email
+      data: {
+        problemName: $problemName
+        description: $description
+        problemTests: $problemTests
+        difficultyLevel: $difficultyLevel
+        email: $email
+      }
+    ) {
+      success
+      message
+      problems {
+        id
+        problemName
+        problemTests
+        description
+        difficultyLevel
+        email
+      }
     }
   }
-}
 `;
 
     const deleteProblem = src$1`
-  mutation deleteProblem($id:Id!){
-    deleteProblem(id:$id){
-      id
-      problemName
-      problemTests
-      description
-      difficultyLevel
-      email
-  }
-}`;
-
-    const updateProblem = src$1`
-  mutation updateProblem($id:ID!,$problemName:String,$description: String,$problemTests:JSON,$difficultyLevel: String){
-    updateProblem(id:$id,
-    data:{
-      problemName: $problemName,
-      description: $description,
-      problemTests:$problemTests,
-      difficultyLevel: $difficultyLevel})
-    {
-    success
-    message
-    problems
-    {
+  mutation deleteProblem($id: Id!) {
+    deleteProblem(id: $id) {
       id
       problemName
       problemTests
@@ -33112,12 +33099,54 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
       email
     }
   }
-}
+`;
+
+    const updateProblem = src$1`
+  mutation updateProblem(
+    $id: ID!
+    $problemName: String
+    $description: String
+    $problemTests: JSON
+    $difficultyLevel: String
+  ) {
+    updateProblem(
+      id: $id
+      data: {
+        problemName: $problemName
+        description: $description
+        problemTests: $problemTests
+        difficultyLevel: $difficultyLevel
+      }
+    ) {
+      success
+      message
+      problems {
+        id
+        problemName
+        problemTests
+        description
+        difficultyLevel
+        email
+      }
+    }
+  }
 `;
 
     const addTest = src$1`
-  mutation addNewTest($testName:String,$difficultyLevel: String,$email: String){
-    addTest(data:{testName: $testName,difficultyLevel: $difficultyLevel,email: $email}){
+  mutation addNewTest(
+    $testName: String
+    $difficultyLevel: String
+    $email: String
+    $problems: [ID]
+  ) {
+    addTest(
+      data: {
+        testName: $testName
+        difficultyLevel: $difficultyLevel
+        email: $email
+        problems: $problems
+      }
+    ) {
       success
       message
       tests {
@@ -33132,13 +33161,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
           difficultyLevel
           email
         }
-     }
+      }
+    }
   }
-}`;
+`;
 
     const deleteTest = src$1`
-  mutation deleteTest($id:Id!) {
-    deleteTest(id:$id){
+  mutation deleteTest($id: ID) {
+    deleteTest(id: $id) {
       id
       testName
       difficultyLevel
@@ -33150,64 +33180,62 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
         difficultyLevel
         email
       }
+    }
   }
-}`;
+`;
     const updateTest = src$1`
-mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
-  updateTest(id:$id,
-    data:{testName: $testName,difficultyLevel: $difficultyLevel}){
-    success
-    message
-    tests {
-      id
-      testName
-      difficultyLevel
-      email
-      problems {
-        id
-        problemName
-        problemTests
-        description
-        difficultyLevel
-        email
+  mutation updateTest(
+    $id: ID
+    $testName: String
+    $difficultyLevel: String
+    $problems: [ID]
+  ) {
+    updateTest(
+      id: $id
+      data: {
+        testName: $testName
+        difficultyLevel: $difficultyLevel
+        problems: $problems
       }
-   }
-}
-}`;
+    ) {
+      success
+      message
+    }
+  }
+`;
 
     const addUser = src$1`
-  mutation addNewUser($name:String,$email: String,$collegeName:String){
-    addUser(data:{name: $name, email:$email, collegeName: $collegeName }) {
+  mutation addNewUser($name: String, $email: String, $collegeName: String) {
+    addUser(data: { name: $name, email: $email, collegeName: $collegeName }) {
       success
       message
       user {
         name
         id
         collegeName
-    }
-  }
-}
-`;
-    const addTestProblem = src$1`
-  mutation addTestProblem($t_id:Int, $p_id:Int)
-  {
-   addTestProblem(data:{t_id: $t_id p_id: $p_id }) {
-    success
-    message
-    test {
-      id
-      testName
-      difficultyLevel
-      problems {
-        id
-        problemName
-        problemTests
-        description
-        difficultyLevel
-        email
       }
     }
-   }
+  }
+`;
+    const addTestProblem = src$1`
+  mutation addTestProblem($t_id: Int, $p_id: Int) {
+    addTestProblem(data: { t_id: $t_id, p_id: $p_id }) {
+      success
+      message
+      test {
+        id
+        testName
+        difficultyLevel
+        problems {
+          id
+          problemName
+          problemTests
+          description
+          difficultyLevel
+          email
+        }
+      }
+    }
   }
 `;
 
@@ -35968,8 +35996,8 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     			button = element("button");
     			button.textContent = "Add Test";
     			attr_dev(button, "class", "bg-transparent border border-gray-500 hover:border-indigo-500\n    text-gray-500 hover:text-indigo-500 font-bold py-2 px-4 rounded-full");
-    			add_location(button, file$a, 19, 2, 392);
-    			add_location(p, file$a, 18, 0, 386);
+    			add_location(button, file$a, 15, 2, 327);
+    			add_location(p, file$a, 14, 0, 321);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -36009,10 +36037,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     	};
 
     	const showSurprise = () => {
-    		open(TestField, { onChange: TestCheck }, {
-    			closeOnEsc: false,
-    			closeOnOuterClick: false
-    		});
+    		location.replace("http://localhost:5000/newtest");
     	};
 
     	const writable_props = ["changeCheck"];
@@ -37439,26 +37464,14 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
 
     function get_each_context$3(ctx, list, i) {
     	const child_ctx = ctx.slice();
-    	child_ctx[11] = list[i];
+    	child_ctx[8] = list[i];
     	return child_ctx;
     }
 
-    function get_each_context_1$1(ctx, list, i) {
-    	const child_ctx = ctx.slice();
-    	child_ctx[14] = list[i];
-    	return child_ctx;
-    }
-
-    function get_each_context_2(ctx, list, i) {
-    	const child_ctx = ctx.slice();
-    	child_ctx[17] = list[i];
-    	return child_ctx;
-    }
-
-    // (155:4) {:catch err}
-    function create_catch_block_1$1(ctx) {
+    // (168:4) {:catch err}
+    function create_catch_block$4(ctx) {
     	let t0;
-    	let t1_value = /*err*/ ctx[10] + "";
+    	let t1_value = /*err*/ ctx[7] + "";
     	let t1;
 
     	const block = {
@@ -37471,7 +37484,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     			insert_dev(target, t1, anchor);
     		},
     		p: function update(ctx, dirty) {
-    			if (dirty & /*$test*/ 2 && t1_value !== (t1_value = /*err*/ ctx[10] + "")) set_data_dev(t1, t1_value);
+    			if (dirty & /*$test*/ 1 && t1_value !== (t1_value = /*err*/ ctx[7] + "")) set_data_dev(t1, t1_value);
     		},
     		i: noop,
     		o: noop,
@@ -37483,320 +37496,222 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_catch_block_1$1.name,
+    		id: create_catch_block$4.name,
     		type: "catch",
-    		source: "(155:4) {:catch err}",
+    		source: "(168:4) {:catch err}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (44:4) {:then result}
+    // (61:4) {:then result}
     function create_then_block$4(ctx) {
     	let t0;
-    	let div16;
+    	let div9;
     	let div8;
-    	let div7;
-    	let div6;
     	let div5;
+    	let div4;
+    	let div3;
     	let br0;
     	let t1;
-    	let div4;
+    	let div2;
     	let div1;
     	let div0;
-    	let t2_value = /*result*/ ctx[9].data.testById.testName + "";
+    	let t2_value = /*result*/ ctx[6].data.testById.testName + "";
     	let t2;
     	let t3;
-    	let div3;
-    	let div2;
-    	let button0;
-    	let t5;
-    	let button1;
-    	let t7;
     	let p0;
-    	let t9;
+    	let t5;
     	let p1;
-    	let t10_value = /*result*/ ctx[9].data.testById.difficultyLevel + "";
-    	let t10;
-    	let t11;
+    	let t6_value = /*result*/ ctx[6].data.testById.difficultyLevel + "";
+    	let t6;
+    	let t7;
     	let br1;
-    	let t12;
+    	let t8;
     	let br2;
-    	let t13;
+    	let t9;
     	let p2;
-    	let t15;
+    	let t11;
     	let ul;
-    	let t16;
-    	let t17;
-    	let div15;
-    	let div14;
-    	let div13;
-    	let div12;
-    	let div11;
-    	let div10;
-    	let div9;
-    	let t19;
-    	let ol;
-    	let promise;
-    	let t20;
+    	let t12;
+    	let div7;
+    	let div6;
+    	let button0;
+    	let t14;
     	let a;
-    	let button2;
+    	let button1;
     	let a_href_value;
+    	let t16;
+    	let button2;
     	let current;
+    	let dispose;
     	const navbar = new Navbar({ $$inline: true });
-    	let each_value_2 = /*result*/ ctx[9].data.testById.problems;
-    	validate_each_argument(each_value_2);
-    	let each_blocks_1 = [];
-
-    	for (let i = 0; i < each_value_2.length; i += 1) {
-    		each_blocks_1[i] = create_each_block_2(get_each_context_2(ctx, each_value_2, i));
-    	}
-
-    	let each_value_1 = /*problems*/ ctx[0];
-    	validate_each_argument(each_value_1);
+    	let each_value = /*result*/ ctx[6].data.testById.problems;
+    	validate_each_argument(each_value);
     	let each_blocks = [];
 
-    	for (let i = 0; i < each_value_1.length; i += 1) {
-    		each_blocks[i] = create_each_block_1$1(get_each_context_1$1(ctx, each_value_1, i));
+    	for (let i = 0; i < each_value.length; i += 1) {
+    		each_blocks[i] = create_each_block$3(get_each_context$3(ctx, each_value, i));
     	}
 
-    	let info = {
-    		ctx,
-    		current: null,
-    		token: null,
-    		pending: create_pending_block_1$1,
-    		then: create_then_block_1$1,
-    		catch: create_catch_block$4,
-    		value: 9,
-    		error: 10
-    	};
-
-    	handle_promise(promise = /*$Problem*/ ctx[2], info);
+    	function click_handler(...args) {
+    		return /*click_handler*/ ctx[5](/*result*/ ctx[6], ...args);
+    	}
 
     	const block = {
     		c: function create() {
     			create_component(navbar.$$.fragment);
     			t0 = space();
-    			div16 = element("div");
+    			div9 = element("div");
     			div8 = element("div");
-    			div7 = element("div");
-    			div6 = element("div");
     			div5 = element("div");
+    			div4 = element("div");
+    			div3 = element("div");
     			br0 = element("br");
     			t1 = space();
-    			div4 = element("div");
+    			div2 = element("div");
     			div1 = element("div");
     			div0 = element("div");
     			t2 = text(t2_value);
     			t3 = space();
-    			div3 = element("div");
-    			div2 = element("div");
-    			button0 = element("button");
-    			button0.textContent = "Edit";
-    			t5 = space();
-    			button1 = element("button");
-    			button1.textContent = "Save";
-    			t7 = space();
     			p0 = element("p");
-    			p0.textContent = "Test Instructions :";
-    			t9 = space();
+    			p0.textContent = "Difficulty Level :";
+    			t5 = space();
     			p1 = element("p");
-    			t10 = text(t10_value);
-    			t11 = space();
+    			t6 = text(t6_value);
+    			t7 = space();
     			br1 = element("br");
-    			t12 = space();
+    			t8 = space();
     			br2 = element("br");
-    			t13 = space();
+    			t9 = space();
     			p2 = element("p");
     			p2.textContent = "Problems :";
-    			t15 = space();
+    			t11 = space();
     			ul = element("ul");
-
-    			for (let i = 0; i < each_blocks_1.length; i += 1) {
-    				each_blocks_1[i].c();
-    			}
-
-    			t16 = space();
 
     			for (let i = 0; i < each_blocks.length; i += 1) {
     				each_blocks[i].c();
     			}
 
-    			t17 = space();
-    			div15 = element("div");
-    			div14 = element("div");
-    			div13 = element("div");
-    			div12 = element("div");
-    			div11 = element("div");
-    			div10 = element("div");
-    			div9 = element("div");
-    			div9.textContent = "All Problems";
-    			t19 = space();
-    			ol = element("ol");
-    			info.block.c();
-    			t20 = space();
+    			t12 = space();
+    			div7 = element("div");
+    			div6 = element("div");
+    			button0 = element("button");
+    			button0.textContent = "Edit";
+    			t14 = space();
     			a = element("a");
+    			button1 = element("button");
+    			button1.textContent = "Send Test";
+    			t16 = space();
     			button2 = element("button");
-    			button2.textContent = "Send Test";
+    			button2.textContent = "Delete";
     			attr_dev(br0, "class", "my-24");
-    			add_location(br0, file$f, 53, 16, 1242);
+    			add_location(br0, file$f, 70, 16, 1522);
     			attr_dev(div0, "class", "font-bold text-3xl mb-2");
-    			add_location(div0, file$f, 57, 20, 1390);
+    			add_location(div0, file$f, 74, 20, 1670);
     			attr_dev(div1, "class", "flex-initial text-center px-4 py-2 m-2");
-    			add_location(div1, file$f, 56, 18, 1317);
-    			attr_dev(button0, "class", "bg-red-500 hover:bg-red-700 text-white font-bold\n                        py-2 px-4 border border-red-700 rounded svelte-xh1oyn");
-    			add_location(button0, file$f, 63, 22, 1654);
-    			attr_dev(button1, "class", "bg-blue-500 hover:bg-blue-700 text-white\n                        font-bold py-2 px-4 border border-blue-700 rounded svelte-xh1oyn");
-    			add_location(button1, file$f, 68, 22, 1891);
+    			add_location(div1, file$f, 73, 18, 1597);
     			attr_dev(div2, "class", "flex");
-    			add_location(div2, file$f, 62, 20, 1613);
-    			attr_dev(div3, "class", "flex-initial px-4 py-2 m-2");
-    			add_location(div3, file$f, 61, 18, 1552);
-    			attr_dev(div4, "class", "flex");
-    			add_location(div4, file$f, 55, 16, 1280);
+    			add_location(div2, file$f, 72, 16, 1560);
     			attr_dev(p0, "class", "font-bold text-2xl mb-2");
-    			add_location(p0, file$f, 77, 16, 2201);
+    			add_location(p0, file$f, 80, 16, 1854);
     			attr_dev(p1, "class", "text-gray-700 text-2xl");
-    			add_location(p1, file$f, 78, 16, 2276);
-    			add_location(br1, file$f, 81, 16, 2405);
-    			add_location(br2, file$f, 82, 16, 2428);
+    			add_location(p1, file$f, 81, 16, 1928);
+    			add_location(br1, file$f, 84, 16, 2057);
+    			add_location(br2, file$f, 85, 16, 2080);
     			attr_dev(p2, "class", "font-bold text-2xl mb-2");
-    			add_location(p2, file$f, 83, 16, 2451);
-    			add_location(ul, file$f, 84, 16, 2517);
-    			attr_dev(div5, "class", "px-12 py-8");
-    			add_location(div5, file$f, 51, 14, 1200);
-    			attr_dev(div6, "class", "max-w-auto rounded overflow-hidden shadow-lg");
-    			add_location(div6, file$f, 50, 12, 1127);
-    			attr_dev(div7, "class", "p-8 mx-2 mt-24 items-center");
-    			add_location(div7, file$f, 49, 10, 1073);
-    			attr_dev(div8, "class", "w-1/2 h-12");
-    			add_location(div8, file$f, 47, 8, 1037);
-    			attr_dev(div9, "class", "font-bold text-3xl mb-2");
-    			add_location(div9, file$f, 117, 20, 3659);
-    			attr_dev(div10, "class", "flex-initial text-center px-4 py-2 m-2");
-    			add_location(div10, file$f, 116, 18, 3586);
-    			attr_dev(div11, "class", "flex");
-    			add_location(div11, file$f, 115, 16, 3549);
-    			add_location(ol, file$f, 120, 16, 3779);
-    			attr_dev(div12, "class", "px-6 py-4");
-    			add_location(div12, file$f, 114, 14, 3509);
-    			attr_dev(div13, "class", "max-w-auto rounded overflow-hidden shadow-lg");
-    			add_location(div13, file$f, 113, 12, 3436);
-    			attr_dev(div14, "class", "p-8 mx-2 mt-24 items-center");
-    			add_location(div14, file$f, 112, 10, 3382);
-    			attr_dev(div15, "class", "w-1/2 h-12");
-    			add_location(div15, file$f, 111, 8, 3347);
-    			attr_dev(div16, "class", "flex mb-4");
-    			add_location(div16, file$f, 46, 6, 1005);
-    			attr_dev(button2, "class", "bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4\n          border border-red-700 rounded svelte-xh1oyn");
-    			add_location(button2, file$f, 148, 8, 4707);
-    			attr_dev(a, "href", a_href_value = "http://localhost:5000/sendtest/" + /*result*/ ctx[9].data.testById.id);
-    			add_location(a, file$f, 147, 6, 4631);
+    			add_location(p2, file$f, 86, 16, 2103);
+    			add_location(ul, file$f, 87, 16, 2169);
+    			attr_dev(div3, "class", "px-12 py-8");
+    			add_location(div3, file$f, 68, 14, 1480);
+    			attr_dev(div4, "class", "max-w-auto rounded overflow-hidden shadow-lg");
+    			add_location(div4, file$f, 67, 12, 1407);
+    			attr_dev(div5, "class", "p-8 mx-2 mt-24 items-center");
+    			add_location(div5, file$f, 66, 10, 1353);
+    			attr_dev(button0, "class", "savebutton bg-red-500 hover:bg-red-700 text-white\n                font-bold py-2 px-4 border border-red-700 rounded svelte-itkqqp");
+    			add_location(button0, file$f, 105, 14, 2722);
+    			attr_dev(button1, "class", "bg-red-500 hover:bg-red-700 text-white font-bold py-2\n                  px-4 border border-red-700 rounded");
+    			add_location(button1, file$f, 115, 16, 3180);
+    			attr_dev(a, "href", a_href_value = "http://localhost:5000/sendtest/" + /*result*/ ctx[6].data.testById.id);
+    			add_location(a, file$f, 113, 14, 3080);
+    			attr_dev(button2, "class", "deleteButton bg-red-500 hover:bg-red-700 text-white font-bold py-2\n                px-4 border border-red-700 rounded svelte-itkqqp");
+    			add_location(button2, file$f, 121, 14, 3409);
+    			attr_dev(div6, "class", "flex buttonbox svelte-itkqqp");
+    			add_location(div6, file$f, 104, 12, 2679);
+    			attr_dev(div7, "class", "px-4 py-2");
+    			add_location(div7, file$f, 103, 10, 2643);
+    			attr_dev(div8, "class", "h-12");
+    			add_location(div8, file$f, 64, 8, 1323);
+    			attr_dev(div9, "class", "");
+    			add_location(div9, file$f, 63, 6, 1300);
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			mount_component(navbar, target, anchor);
     			insert_dev(target, t0, anchor);
-    			insert_dev(target, div16, anchor);
-    			append_dev(div16, div8);
-    			append_dev(div8, div7);
-    			append_dev(div7, div6);
-    			append_dev(div6, div5);
-    			append_dev(div5, br0);
-    			append_dev(div5, t1);
+    			insert_dev(target, div9, anchor);
+    			append_dev(div9, div8);
+    			append_dev(div8, div5);
     			append_dev(div5, div4);
-    			append_dev(div4, div1);
+    			append_dev(div4, div3);
+    			append_dev(div3, br0);
+    			append_dev(div3, t1);
+    			append_dev(div3, div2);
+    			append_dev(div2, div1);
     			append_dev(div1, div0);
     			append_dev(div0, t2);
-    			append_dev(div4, t3);
-    			append_dev(div4, div3);
-    			append_dev(div3, div2);
-    			append_dev(div2, button0);
-    			append_dev(div2, t5);
-    			append_dev(div2, button1);
-    			append_dev(div5, t7);
-    			append_dev(div5, p0);
-    			append_dev(div5, t9);
-    			append_dev(div5, p1);
-    			append_dev(p1, t10);
-    			append_dev(div5, t11);
-    			append_dev(div5, br1);
-    			append_dev(div5, t12);
-    			append_dev(div5, br2);
-    			append_dev(div5, t13);
-    			append_dev(div5, p2);
-    			append_dev(div5, t15);
-    			append_dev(div5, ul);
-
-    			for (let i = 0; i < each_blocks_1.length; i += 1) {
-    				each_blocks_1[i].m(ul, null);
-    			}
-
-    			append_dev(ul, t16);
+    			append_dev(div3, t3);
+    			append_dev(div3, p0);
+    			append_dev(div3, t5);
+    			append_dev(div3, p1);
+    			append_dev(p1, t6);
+    			append_dev(div3, t7);
+    			append_dev(div3, br1);
+    			append_dev(div3, t8);
+    			append_dev(div3, br2);
+    			append_dev(div3, t9);
+    			append_dev(div3, p2);
+    			append_dev(div3, t11);
+    			append_dev(div3, ul);
 
     			for (let i = 0; i < each_blocks.length; i += 1) {
     				each_blocks[i].m(ul, null);
     			}
 
-    			append_dev(div16, t17);
-    			append_dev(div16, div15);
-    			append_dev(div15, div14);
-    			append_dev(div14, div13);
-    			append_dev(div13, div12);
-    			append_dev(div12, div11);
-    			append_dev(div11, div10);
-    			append_dev(div10, div9);
-    			append_dev(div12, t19);
-    			append_dev(div12, ol);
-    			info.block.m(ol, info.anchor = null);
-    			info.mount = () => ol;
-    			info.anchor = null;
-    			insert_dev(target, t20, anchor);
-    			insert_dev(target, a, anchor);
-    			append_dev(a, button2);
+    			append_dev(div8, t12);
+    			append_dev(div8, div7);
+    			append_dev(div7, div6);
+    			append_dev(div6, button0);
+    			append_dev(div6, t14);
+    			append_dev(div6, a);
+    			append_dev(a, button1);
+    			append_dev(div6, t16);
+    			append_dev(div6, button2);
     			current = true;
+    			if (remount) run_all(dispose);
+
+    			dispose = [
+    				listen_dev(button0, "click", click_handler, false, false, false),
+    				listen_dev(button2, "click", /*deleteTestHandler*/ ctx[2], false, false, false)
+    			];
     		},
     		p: function update(new_ctx, dirty) {
     			ctx = new_ctx;
-    			if ((!current || dirty & /*$test*/ 2) && t2_value !== (t2_value = /*result*/ ctx[9].data.testById.testName + "")) set_data_dev(t2, t2_value);
-    			if ((!current || dirty & /*$test*/ 2) && t10_value !== (t10_value = /*result*/ ctx[9].data.testById.difficultyLevel + "")) set_data_dev(t10, t10_value);
+    			if ((!current || dirty & /*$test*/ 1) && t2_value !== (t2_value = /*result*/ ctx[6].data.testById.testName + "")) set_data_dev(t2, t2_value);
+    			if ((!current || dirty & /*$test*/ 1) && t6_value !== (t6_value = /*result*/ ctx[6].data.testById.difficultyLevel + "")) set_data_dev(t6, t6_value);
 
-    			if (dirty & /*$test*/ 2) {
-    				each_value_2 = /*result*/ ctx[9].data.testById.problems;
-    				validate_each_argument(each_value_2);
+    			if (dirty & /*$test*/ 1) {
+    				each_value = /*result*/ ctx[6].data.testById.problems;
+    				validate_each_argument(each_value);
     				let i;
 
-    				for (i = 0; i < each_value_2.length; i += 1) {
-    					const child_ctx = get_each_context_2(ctx, each_value_2, i);
-
-    					if (each_blocks_1[i]) {
-    						each_blocks_1[i].p(child_ctx, dirty);
-    					} else {
-    						each_blocks_1[i] = create_each_block_2(child_ctx);
-    						each_blocks_1[i].c();
-    						each_blocks_1[i].m(ul, t16);
-    					}
-    				}
-
-    				for (; i < each_blocks_1.length; i += 1) {
-    					each_blocks_1[i].d(1);
-    				}
-
-    				each_blocks_1.length = each_value_2.length;
-    			}
-
-    			if (dirty & /*problems*/ 1) {
-    				each_value_1 = /*problems*/ ctx[0];
-    				validate_each_argument(each_value_1);
-    				let i;
-
-    				for (i = 0; i < each_value_1.length; i += 1) {
-    					const child_ctx = get_each_context_1$1(ctx, each_value_1, i);
+    				for (i = 0; i < each_value.length; i += 1) {
+    					const child_ctx = get_each_context$3(ctx, each_value, i);
 
     					if (each_blocks[i]) {
     						each_blocks[i].p(child_ctx, dirty);
     					} else {
-    						each_blocks[i] = create_each_block_1$1(child_ctx);
+    						each_blocks[i] = create_each_block$3(child_ctx);
     						each_blocks[i].c();
     						each_blocks[i].m(ul, null);
     					}
@@ -37806,18 +37721,10 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     					each_blocks[i].d(1);
     				}
 
-    				each_blocks.length = each_value_1.length;
+    				each_blocks.length = each_value.length;
     			}
 
-    			info.ctx = ctx;
-
-    			if (dirty & /*$Problem*/ 4 && promise !== (promise = /*$Problem*/ ctx[2]) && handle_promise(promise, info)) ; else {
-    				const child_ctx = ctx.slice();
-    				child_ctx[9] = info.resolved;
-    				info.block.p(child_ctx, dirty);
-    			}
-
-    			if (!current || dirty & /*$test*/ 2 && a_href_value !== (a_href_value = "http://localhost:5000/sendtest/" + /*result*/ ctx[9].data.testById.id)) {
+    			if (!current || dirty & /*$test*/ 1 && a_href_value !== (a_href_value = "http://localhost:5000/sendtest/" + /*result*/ ctx[6].data.testById.id)) {
     				attr_dev(a, "href", a_href_value);
     			}
     		},
@@ -37833,14 +37740,9 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     		d: function destroy(detaching) {
     			destroy_component(navbar, detaching);
     			if (detaching) detach_dev(t0);
-    			if (detaching) detach_dev(div16);
-    			destroy_each(each_blocks_1, detaching);
+    			if (detaching) detach_dev(div9);
     			destroy_each(each_blocks, detaching);
-    			info.block.d();
-    			info.token = null;
-    			info = null;
-    			if (detaching) detach_dev(t20);
-    			if (detaching) detach_dev(a);
+    			run_all(dispose);
     		}
     	};
 
@@ -37848,65 +37750,18 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     		block,
     		id: create_then_block$4.name,
     		type: "then",
-    		source: "(44:4) {:then result}",
+    		source: "(61:4) {:then result}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (86:18) {#each result.data.testById.problems as problem}
-    function create_each_block_2(ctx) {
+    // (89:18) {#each result.data.testById.problems as problem}
+    function create_each_block$3(ctx) {
     	let li;
     	let a;
-    	let t_value = /*problem*/ ctx[17].problemName + "";
-    	let t;
-    	let a_href_value;
-
-    	const block = {
-    		c: function create() {
-    			li = element("li");
-    			a = element("a");
-    			t = text(t_value);
-    			attr_dev(a, "target", "_blank");
-    			attr_dev(a, "href", a_href_value = "http://localhost:5000/problem/" + /*problem*/ ctx[17].id);
-    			add_location(a, file$f, 87, 22, 2657);
-    			attr_dev(li, "class", "text-xl mb-2");
-    			add_location(li, file$f, 86, 20, 2609);
-    		},
-    		m: function mount(target, anchor) {
-    			insert_dev(target, li, anchor);
-    			append_dev(li, a);
-    			append_dev(a, t);
-    		},
-    		p: function update(ctx, dirty) {
-    			if (dirty & /*$test*/ 2 && t_value !== (t_value = /*problem*/ ctx[17].problemName + "")) set_data_dev(t, t_value);
-
-    			if (dirty & /*$test*/ 2 && a_href_value !== (a_href_value = "http://localhost:5000/problem/" + /*problem*/ ctx[17].id)) {
-    				attr_dev(a, "href", a_href_value);
-    			}
-    		},
-    		d: function destroy(detaching) {
-    			if (detaching) detach_dev(li);
-    		}
-    	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_each_block_2.name,
-    		type: "each",
-    		source: "(86:18) {#each result.data.testById.problems as problem}",
-    		ctx
-    	});
-
-    	return block;
-    }
-
-    // (95:18) {#each problems as pb}
-    function create_each_block_1$1(ctx) {
-    	let li;
-    	let a;
-    	let t0_value = /*pb*/ ctx[14].problemName + "";
+    	let t0_value = /*problem*/ ctx[8].problemName + "";
     	let t0;
     	let a_href_value;
     	let t1;
@@ -37918,10 +37773,10 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     			t0 = text(t0_value);
     			t1 = space();
     			attr_dev(a, "target", "_blank");
-    			attr_dev(a, "href", a_href_value = "http://localhost:5000/problem/" + /*pb*/ ctx[14].id);
-    			add_location(a, file$f, 96, 22, 3009);
-    			attr_dev(li, "class", "test-sl mb-2");
-    			add_location(li, file$f, 95, 20, 2961);
+    			attr_dev(a, "href", a_href_value = "http://localhost:5000/problem/" + /*problem*/ ctx[8].id);
+    			add_location(a, file$f, 90, 22, 2309);
+    			attr_dev(li, "class", "text-xl mb-2");
+    			add_location(li, file$f, 89, 20, 2261);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, li, anchor);
@@ -37930,9 +37785,9 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     			append_dev(li, t1);
     		},
     		p: function update(ctx, dirty) {
-    			if (dirty & /*problems*/ 1 && t0_value !== (t0_value = /*pb*/ ctx[14].problemName + "")) set_data_dev(t0, t0_value);
+    			if (dirty & /*$test*/ 1 && t0_value !== (t0_value = /*problem*/ ctx[8].problemName + "")) set_data_dev(t0, t0_value);
 
-    			if (dirty & /*problems*/ 1 && a_href_value !== (a_href_value = "http://localhost:5000/problem/" + /*pb*/ ctx[14].id)) {
+    			if (dirty & /*$test*/ 1 && a_href_value !== (a_href_value = "http://localhost:5000/problem/" + /*problem*/ ctx[8].id)) {
     				attr_dev(a, "href", a_href_value);
     			}
     		},
@@ -37943,227 +37798,16 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_each_block_1$1.name,
-    		type: "each",
-    		source: "(95:18) {#each problems as pb}",
-    		ctx
-    	});
-
-    	return block;
-    }
-
-    // (138:18) {:catch err}
-    function create_catch_block$4(ctx) {
-    	let t0;
-    	let t1_value = /*err*/ ctx[10] + "";
-    	let t1;
-
-    	const block = {
-    		c: function create() {
-    			t0 = text("Error: ");
-    			t1 = text(t1_value);
-    		},
-    		m: function mount(target, anchor) {
-    			insert_dev(target, t0, anchor);
-    			insert_dev(target, t1, anchor);
-    		},
-    		p: function update(ctx, dirty) {
-    			if (dirty & /*$Problem*/ 4 && t1_value !== (t1_value = /*err*/ ctx[10] + "")) set_data_dev(t1, t1_value);
-    		},
-    		d: function destroy(detaching) {
-    			if (detaching) detach_dev(t0);
-    			if (detaching) detach_dev(t1);
-    		}
-    	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_catch_block$4.name,
-    		type: "catch",
-    		source: "(138:18) {:catch err}",
-    		ctx
-    	});
-
-    	return block;
-    }
-
-    // (124:18) {:then result}
-    function create_then_block_1$1(ctx) {
-    	let each_1_anchor;
-    	let each_value = /*result*/ ctx[9].data.allProblems;
-    	validate_each_argument(each_value);
-    	let each_blocks = [];
-
-    	for (let i = 0; i < each_value.length; i += 1) {
-    		each_blocks[i] = create_each_block$3(get_each_context$3(ctx, each_value, i));
-    	}
-
-    	const block = {
-    		c: function create() {
-    			for (let i = 0; i < each_blocks.length; i += 1) {
-    				each_blocks[i].c();
-    			}
-
-    			each_1_anchor = empty();
-    		},
-    		m: function mount(target, anchor) {
-    			for (let i = 0; i < each_blocks.length; i += 1) {
-    				each_blocks[i].m(target, anchor);
-    			}
-
-    			insert_dev(target, each_1_anchor, anchor);
-    		},
-    		p: function update(ctx, dirty) {
-    			if (dirty & /*$Problem, problems*/ 5) {
-    				each_value = /*result*/ ctx[9].data.allProblems;
-    				validate_each_argument(each_value);
-    				let i;
-
-    				for (i = 0; i < each_value.length; i += 1) {
-    					const child_ctx = get_each_context$3(ctx, each_value, i);
-
-    					if (each_blocks[i]) {
-    						each_blocks[i].p(child_ctx, dirty);
-    					} else {
-    						each_blocks[i] = create_each_block$3(child_ctx);
-    						each_blocks[i].c();
-    						each_blocks[i].m(each_1_anchor.parentNode, each_1_anchor);
-    					}
-    				}
-
-    				for (; i < each_blocks.length; i += 1) {
-    					each_blocks[i].d(1);
-    				}
-
-    				each_blocks.length = each_value.length;
-    			}
-    		},
-    		d: function destroy(detaching) {
-    			destroy_each(each_blocks, detaching);
-    			if (detaching) detach_dev(each_1_anchor);
-    		}
-    	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_then_block_1$1.name,
-    		type: "then",
-    		source: "(124:18) {:then result}",
-    		ctx
-    	});
-
-    	return block;
-    }
-
-    // (125:20) {#each result.data.allProblems as prob}
-    function create_each_block$3(ctx) {
-    	let label;
-    	let li;
-    	let a;
-    	let input;
-    	let input_value_value;
-    	let t0;
-    	let t1_value = /*prob*/ ctx[11].problemName + "";
-    	let t1;
-    	let a_href_value;
-    	let t2;
-    	let dispose;
-
-    	const block = {
-    		c: function create() {
-    			label = element("label");
-    			li = element("li");
-    			a = element("a");
-    			input = element("input");
-    			t0 = space();
-    			t1 = text(t1_value);
-    			t2 = space();
-    			attr_dev(input, "type", "checkbox");
-    			input.__value = input_value_value = /*prob*/ ctx[11];
-    			input.value = input.__value;
-    			/*$$binding_groups*/ ctx[8][0].push(input);
-    			add_location(input, file$f, 128, 28, 4108);
-    			attr_dev(a, "href", a_href_value = "http://localhost:5000/problem/" + /*prob*/ ctx[11].id);
-    			add_location(a, file$f, 127, 26, 4029);
-    			add_location(li, file$f, 126, 24, 3998);
-    			add_location(label, file$f, 125, 22, 3966);
-    		},
-    		m: function mount(target, anchor, remount) {
-    			insert_dev(target, label, anchor);
-    			append_dev(label, li);
-    			append_dev(li, a);
-    			append_dev(a, input);
-    			input.checked = ~/*problems*/ ctx[0].indexOf(input.__value);
-    			append_dev(a, t0);
-    			append_dev(a, t1);
-    			append_dev(label, t2);
-    			if (remount) dispose();
-    			dispose = listen_dev(input, "change", /*input_change_handler*/ ctx[7]);
-    		},
-    		p: function update(ctx, dirty) {
-    			if (dirty & /*$Problem*/ 4 && input_value_value !== (input_value_value = /*prob*/ ctx[11])) {
-    				prop_dev(input, "__value", input_value_value);
-    			}
-
-    			input.value = input.__value;
-
-    			if (dirty & /*problems*/ 1) {
-    				input.checked = ~/*problems*/ ctx[0].indexOf(input.__value);
-    			}
-
-    			if (dirty & /*$Problem*/ 4 && t1_value !== (t1_value = /*prob*/ ctx[11].problemName + "")) set_data_dev(t1, t1_value);
-
-    			if (dirty & /*$Problem*/ 4 && a_href_value !== (a_href_value = "http://localhost:5000/problem/" + /*prob*/ ctx[11].id)) {
-    				attr_dev(a, "href", a_href_value);
-    			}
-    		},
-    		d: function destroy(detaching) {
-    			if (detaching) detach_dev(label);
-    			/*$$binding_groups*/ ctx[8][0].splice(/*$$binding_groups*/ ctx[8][0].indexOf(input), 1);
-    			dispose();
-    		}
-    	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
     		id: create_each_block$3.name,
     		type: "each",
-    		source: "(125:20) {#each result.data.allProblems as prob}",
+    		source: "(89:18) {#each result.data.testById.problems as problem}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (122:35)                      Loading...                   {:then result}
-    function create_pending_block_1$1(ctx) {
-    	let t;
-
-    	const block = {
-    		c: function create() {
-    			t = text("Loading...");
-    		},
-    		m: function mount(target, anchor) {
-    			insert_dev(target, t, anchor);
-    		},
-    		p: noop,
-    		d: function destroy(detaching) {
-    			if (detaching) detach_dev(t);
-    		}
-    	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_pending_block_1$1.name,
-    		type: "pending",
-    		source: "(122:35)                      Loading...                   {:then result}",
-    		ctx
-    	});
-
-    	return block;
-    }
-
-    // (42:18)        Loading ...     {:then result}
+    // (59:18)        Loading ...     {:then result}
     function create_pending_block$4(ctx) {
     	let t;
 
@@ -38186,7 +37830,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     		block,
     		id: create_pending_block$4.name,
     		type: "pending",
-    		source: "(42:18)        Loading ...     {:then result}",
+    		source: "(59:18)        Loading ...     {:then result}",
     		ctx
     	});
 
@@ -38207,13 +37851,13 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     		token: null,
     		pending: create_pending_block$4,
     		then: create_then_block$4,
-    		catch: create_catch_block_1$1,
-    		value: 9,
-    		error: 10,
+    		catch: create_catch_block$4,
+    		value: 6,
+    		error: 7,
     		blocks: [,,,]
     	};
 
-    	handle_promise(promise = /*$test*/ ctx[1], info);
+    	handle_promise(promise = /*$test*/ ctx[0], info);
 
     	const block = {
     		c: function create() {
@@ -38224,9 +37868,9 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     			info.block.c();
     			attr_dev(link, "href", "https://unpkg.com/tailwindcss@^1.0/dist/tailwind.min.css");
     			attr_dev(link, "rel", "stylesheet");
-    			add_location(link, file$f, 36, 0, 764);
-    			add_location(div, file$f, 40, 2, 867);
-    			add_location(body, file$f, 39, 0, 858);
+    			add_location(link, file$f, 53, 0, 1059);
+    			add_location(div, file$f, 57, 2, 1162);
+    			add_location(body, file$f, 56, 0, 1153);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -38245,9 +37889,9 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     			ctx = new_ctx;
     			info.ctx = ctx;
 
-    			if (dirty & /*$test*/ 2 && promise !== (promise = /*$test*/ ctx[1]) && handle_promise(promise, info)) ; else {
+    			if (dirty & /*$test*/ 1 && promise !== (promise = /*$test*/ ctx[0]) && handle_promise(promise, info)) ; else {
     				const child_ctx = ctx.slice();
-    				child_ctx[9] = info.resolved;
+    				child_ctx[6] = info.resolved;
     				info.block.p(child_ctx, dirty);
     			}
     		},
@@ -38287,7 +37931,6 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
 
     function instance$i($$self, $$props, $$invalidate) {
     	let $test;
-    	let $Problem;
     	let { currentRoute } = $$props;
     	console.log(currentRoute);
     	const client = getClient();
@@ -38298,11 +37941,20 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     	});
 
     	validate_store(test, "test");
-    	component_subscribe($$self, test, value => $$invalidate(1, $test = value));
-    	let Problem = query(client, { query: apolloClient.getProblems });
-    	validate_store(Problem, "Problem");
-    	component_subscribe($$self, Problem, value => $$invalidate(2, $Problem = value));
-    	let problems = [];
+    	component_subscribe($$self, test, value => $$invalidate(0, $test = value));
+
+    	async function deleteTestHandler() {
+    		try {
+    			mutate(client, {
+    				mutation: apolloClient.deleteTest,
+    				variables: { id: currentRoute.namedParams.id }
+    			});
+    		} catch(err) {
+    		}
+
+    		location.replace("http://localhost:5000/admin");
+    	}
+
     	const writable_props = ["currentRoute"];
 
     	Object.keys($$props).forEach(key => {
@@ -38311,58 +37963,43 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
 
     	let { $$slots = {}, $$scope } = $$props;
     	validate_slots("Tests", $$slots, []);
-    	const $$binding_groups = [[]];
 
-    	function input_change_handler() {
-    		problems = get_binding_group_value($$binding_groups[0]);
-    		$$invalidate(0, problems);
-    	}
+    	const click_handler = result => {
+    		location.replace(`http://localhost:5000/editTest/${result.data.testById.id}`);
+    	};
 
     	$$self.$set = $$props => {
-    		if ("currentRoute" in $$props) $$invalidate(5, currentRoute = $$props.currentRoute);
+    		if ("currentRoute" in $$props) $$invalidate(3, currentRoute = $$props.currentRoute);
     	};
 
     	$$self.$capture_state = () => ({
     		apolloClient,
     		getClient,
     		query,
+    		mutate,
     		Navbar,
     		currentRoute,
     		client,
     		test,
-    		Problem,
-    		problems,
-    		$test,
-    		$Problem
+    		deleteTestHandler,
+    		$test
     	});
 
     	$$self.$inject_state = $$props => {
-    		if ("currentRoute" in $$props) $$invalidate(5, currentRoute = $$props.currentRoute);
-    		if ("Problem" in $$props) $$invalidate(4, Problem = $$props.Problem);
-    		if ("problems" in $$props) $$invalidate(0, problems = $$props.problems);
+    		if ("currentRoute" in $$props) $$invalidate(3, currentRoute = $$props.currentRoute);
     	};
 
     	if ($$props && "$$inject" in $$props) {
     		$$self.$inject_state($$props.$$inject);
     	}
 
-    	return [
-    		problems,
-    		$test,
-    		$Problem,
-    		test,
-    		Problem,
-    		currentRoute,
-    		client,
-    		input_change_handler,
-    		$$binding_groups
-    	];
+    	return [$test, test, deleteTestHandler, currentRoute, client, click_handler];
     }
 
     class Tests extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$i, create_fragment$i, safe_not_equal, { currentRoute: 5 });
+    		init(this, options, instance$i, create_fragment$i, safe_not_equal, { currentRoute: 3 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
@@ -38374,7 +38011,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     		const { ctx } = this.$$;
     		const props = options.props || {};
 
-    		if (/*currentRoute*/ ctx[5] === undefined && !("currentRoute" in props)) {
+    		if (/*currentRoute*/ ctx[3] === undefined && !("currentRoute" in props)) {
     			console_1$6.warn("<Tests> was created without expected prop 'currentRoute'");
     		}
     	}
@@ -38680,31 +38317,1816 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     	}
     }
 
+    /* src/routes/newTest.svelte generated by Svelte v3.20.1 */
+
+    const { console: console_1$8 } = globals;
+    const file$h = "src/routes/newTest.svelte";
+
+    function get_each_context$4(ctx, list, i) {
+    	const child_ctx = ctx.slice();
+    	child_ctx[15] = list[i];
+    	return child_ctx;
+    }
+
+    function get_each_context_1$1(ctx, list, i) {
+    	const child_ctx = ctx.slice();
+    	child_ctx[18] = list[i];
+    	return child_ctx;
+    }
+
+    // (160:16) {#each ppp as p}
+    function create_each_block_1$1(ctx) {
+    	let li;
+    	let t_value = /*p*/ ctx[18] + "";
+    	let t;
+
+    	const block = {
+    		c: function create() {
+    			li = element("li");
+    			t = text(t_value);
+    			attr_dev(li, "class", "text-xl mb-2");
+    			add_location(li, file$h, 160, 18, 4790);
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, li, anchor);
+    			append_dev(li, t);
+    		},
+    		p: function update(ctx, dirty) {
+    			if (dirty & /*ppp*/ 2 && t_value !== (t_value = /*p*/ ctx[18] + "")) set_data_dev(t, t_value);
+    		},
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(li);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_each_block_1$1.name,
+    		type: "each",
+    		source: "(160:16) {#each ppp as p}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (198:16) {:catch err}
+    function create_catch_block$6(ctx) {
+    	let t0;
+    	let t1_value = /*err*/ ctx[14] + "";
+    	let t1;
+
+    	const block = {
+    		c: function create() {
+    			t0 = text("Error: ");
+    			t1 = text(t1_value);
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, t0, anchor);
+    			insert_dev(target, t1, anchor);
+    		},
+    		p: function update(ctx, dirty) {
+    			if (dirty & /*$Problems*/ 4 && t1_value !== (t1_value = /*err*/ ctx[14] + "")) set_data_dev(t1, t1_value);
+    		},
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(t0);
+    			if (detaching) detach_dev(t1);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_catch_block$6.name,
+    		type: "catch",
+    		source: "(198:16) {:catch err}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (183:16) {:then result}
+    function create_then_block$6(ctx) {
+    	let each_1_anchor;
+    	let each_value = /*result*/ ctx[13].data.allProblems;
+    	validate_each_argument(each_value);
+    	let each_blocks = [];
+
+    	for (let i = 0; i < each_value.length; i += 1) {
+    		each_blocks[i] = create_each_block$4(get_each_context$4(ctx, each_value, i));
+    	}
+
+    	const block = {
+    		c: function create() {
+    			for (let i = 0; i < each_blocks.length; i += 1) {
+    				each_blocks[i].c();
+    			}
+
+    			each_1_anchor = empty();
+    		},
+    		m: function mount(target, anchor) {
+    			for (let i = 0; i < each_blocks.length; i += 1) {
+    				each_blocks[i].m(target, anchor);
+    			}
+
+    			insert_dev(target, each_1_anchor, anchor);
+    		},
+    		p: function update(ctx, dirty) {
+    			if (dirty & /*$Problems, test, changeHandler*/ 37) {
+    				each_value = /*result*/ ctx[13].data.allProblems;
+    				validate_each_argument(each_value);
+    				let i;
+
+    				for (i = 0; i < each_value.length; i += 1) {
+    					const child_ctx = get_each_context$4(ctx, each_value, i);
+
+    					if (each_blocks[i]) {
+    						each_blocks[i].p(child_ctx, dirty);
+    					} else {
+    						each_blocks[i] = create_each_block$4(child_ctx);
+    						each_blocks[i].c();
+    						each_blocks[i].m(each_1_anchor.parentNode, each_1_anchor);
+    					}
+    				}
+
+    				for (; i < each_blocks.length; i += 1) {
+    					each_blocks[i].d(1);
+    				}
+
+    				each_blocks.length = each_value.length;
+    			}
+    		},
+    		d: function destroy(detaching) {
+    			destroy_each(each_blocks, detaching);
+    			if (detaching) detach_dev(each_1_anchor);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_then_block$6.name,
+    		type: "then",
+    		source: "(183:16) {:then result}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (184:18) {#each result.data.allProblems as prob}
+    function create_each_block$4(ctx) {
+    	let label;
+    	let li;
+    	let input;
+    	let input_value_value;
+    	let t0;
+    	let t1_value = /*prob*/ ctx[15].problemName + "";
+    	let t1;
+    	let t2;
+    	let dispose;
+
+    	const block = {
+    		c: function create() {
+    			label = element("label");
+    			li = element("li");
+    			input = element("input");
+    			t0 = space();
+    			t1 = text(t1_value);
+    			t2 = space();
+    			attr_dev(input, "type", "checkbox");
+    			input.__value = input_value_value = /*prob*/ ctx[15].id;
+    			input.value = input.__value;
+    			/*$$binding_groups*/ ctx[9][0].push(input);
+    			add_location(input, file$h, 187, 24, 5675);
+    			add_location(li, file$h, 185, 22, 5562);
+    			add_location(label, file$h, 184, 20, 5532);
+    		},
+    		m: function mount(target, anchor, remount) {
+    			insert_dev(target, label, anchor);
+    			append_dev(label, li);
+    			append_dev(li, input);
+    			input.checked = ~/*test*/ ctx[0].problems.indexOf(input.__value);
+    			append_dev(li, t0);
+    			append_dev(li, t1);
+    			append_dev(label, t2);
+    			if (remount) run_all(dispose);
+
+    			dispose = [
+    				listen_dev(input, "change", /*input_change_handler*/ ctx[12]),
+    				listen_dev(
+    					input,
+    					"change",
+    					function () {
+    						if (is_function(/*changeHandler*/ ctx[5](/*prob*/ ctx[15].problemName))) /*changeHandler*/ ctx[5](/*prob*/ ctx[15].problemName).apply(this, arguments);
+    					},
+    					false,
+    					false,
+    					false
+    				)
+    			];
+    		},
+    		p: function update(new_ctx, dirty) {
+    			ctx = new_ctx;
+
+    			if (dirty & /*$Problems*/ 4 && input_value_value !== (input_value_value = /*prob*/ ctx[15].id)) {
+    				prop_dev(input, "__value", input_value_value);
+    			}
+
+    			input.value = input.__value;
+
+    			if (dirty & /*test*/ 1) {
+    				input.checked = ~/*test*/ ctx[0].problems.indexOf(input.__value);
+    			}
+
+    			if (dirty & /*$Problems*/ 4 && t1_value !== (t1_value = /*prob*/ ctx[15].problemName + "")) set_data_dev(t1, t1_value);
+    		},
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(label);
+    			/*$$binding_groups*/ ctx[9][0].splice(/*$$binding_groups*/ ctx[9][0].indexOf(input), 1);
+    			run_all(dispose);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_each_block$4.name,
+    		type: "each",
+    		source: "(184:18) {#each result.data.allProblems as prob}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (181:34)                    Loading...                 {:then result}
+    function create_pending_block$6(ctx) {
+    	let t;
+
+    	const block = {
+    		c: function create() {
+    			t = text("Loading...");
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, t, anchor);
+    		},
+    		p: noop,
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(t);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_pending_block$6.name,
+    		type: "pending",
+    		source: "(181:34)                    Loading...                 {:then result}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    function create_fragment$k(ctx) {
+    	let link;
+    	let t0;
+    	let body;
+    	let div22;
+    	let t1;
+    	let h1;
+    	let strong;
+    	let t3;
+    	let div21;
+    	let div12;
+    	let div11;
+    	let div10;
+    	let div9;
+    	let br0;
+    	let t4;
+    	let div2;
+    	let div1;
+    	let div0;
+    	let input0;
+    	let t5;
+    	let br1;
+    	let t6;
+    	let div8;
+    	let div7;
+    	let div6;
+    	let div5;
+    	let div3;
+    	let label0;
+    	let t8;
+    	let div4;
+    	let label1;
+    	let input1;
+    	let t9;
+    	let span0;
+    	let t11;
+    	let label2;
+    	let input2;
+    	let t12;
+    	let span1;
+    	let t14;
+    	let label3;
+    	let input3;
+    	let t15;
+    	let span2;
+    	let t17;
+    	let br2;
+    	let t18;
+    	let p;
+    	let t20;
+    	let ul;
+    	let t21;
+    	let div20;
+    	let div18;
+    	let div17;
+    	let div16;
+    	let div15;
+    	let div14;
+    	let div13;
+    	let t23;
+    	let ol;
+    	let promise;
+    	let t24;
+    	let div19;
+    	let button;
+    	let current;
+    	let dispose;
+    	const navbar = new Navbar({ $$inline: true });
+    	let each_value_1 = /*ppp*/ ctx[1];
+    	validate_each_argument(each_value_1);
+    	let each_blocks = [];
+
+    	for (let i = 0; i < each_value_1.length; i += 1) {
+    		each_blocks[i] = create_each_block_1$1(get_each_context_1$1(ctx, each_value_1, i));
+    	}
+
+    	let info = {
+    		ctx,
+    		current: null,
+    		token: null,
+    		pending: create_pending_block$6,
+    		then: create_then_block$6,
+    		catch: create_catch_block$6,
+    		value: 13,
+    		error: 14
+    	};
+
+    	handle_promise(promise = /*$Problems*/ ctx[2], info);
+
+    	const block = {
+    		c: function create() {
+    			link = element("link");
+    			t0 = space();
+    			body = element("body");
+    			div22 = element("div");
+    			create_component(navbar.$$.fragment);
+    			t1 = space();
+    			h1 = element("h1");
+    			strong = element("strong");
+    			strong.textContent = "Add New Test";
+    			t3 = space();
+    			div21 = element("div");
+    			div12 = element("div");
+    			div11 = element("div");
+    			div10 = element("div");
+    			div9 = element("div");
+    			br0 = element("br");
+    			t4 = space();
+    			div2 = element("div");
+    			div1 = element("div");
+    			div0 = element("div");
+    			input0 = element("input");
+    			t5 = space();
+    			br1 = element("br");
+    			t6 = space();
+    			div8 = element("div");
+    			div7 = element("div");
+    			div6 = element("div");
+    			div5 = element("div");
+    			div3 = element("div");
+    			label0 = element("label");
+    			label0.textContent = "Difficulty Type";
+    			t8 = space();
+    			div4 = element("div");
+    			label1 = element("label");
+    			input1 = element("input");
+    			t9 = space();
+    			span0 = element("span");
+    			span0.textContent = "Easy";
+    			t11 = space();
+    			label2 = element("label");
+    			input2 = element("input");
+    			t12 = space();
+    			span1 = element("span");
+    			span1.textContent = "Medium";
+    			t14 = space();
+    			label3 = element("label");
+    			input3 = element("input");
+    			t15 = space();
+    			span2 = element("span");
+    			span2.textContent = "Hard";
+    			t17 = space();
+    			br2 = element("br");
+    			t18 = space();
+    			p = element("p");
+    			p.textContent = "Problems Added:";
+    			t20 = space();
+    			ul = element("ul");
+
+    			for (let i = 0; i < each_blocks.length; i += 1) {
+    				each_blocks[i].c();
+    			}
+
+    			t21 = space();
+    			div20 = element("div");
+    			div18 = element("div");
+    			div17 = element("div");
+    			div16 = element("div");
+    			div15 = element("div");
+    			div14 = element("div");
+    			div13 = element("div");
+    			div13.textContent = "All Problems";
+    			t23 = space();
+    			ol = element("ol");
+    			info.block.c();
+    			t24 = space();
+    			div19 = element("div");
+    			button = element("button");
+    			button.textContent = "Save";
+    			attr_dev(link, "href", "https://unpkg.com/tailwindcss@^1.0/dist/tailwind.min.css");
+    			attr_dev(link, "rel", "stylesheet");
+    			add_location(link, file$h, 81, 0, 1615);
+    			add_location(strong, file$h, 89, 6, 1821);
+    			attr_dev(h1, "class", "heading svelte-1mn5pzz");
+    			add_location(h1, file$h, 88, 4, 1794);
+    			attr_dev(br0, "class", "my-24");
+    			add_location(br0, file$h, 98, 14, 2096);
+    			attr_dev(input0, "type", "text");
+    			attr_dev(input0, "placeholder", "Enter Test Name...");
+    			add_location(input0, file$h, 103, 20, 2296);
+    			attr_dev(div0, "class", "font-bold text-3xl mb-2");
+    			add_location(div0, file$h, 102, 18, 2238);
+    			attr_dev(div1, "class", "flex-initial text-center px-4 py-2 m-2");
+    			add_location(div1, file$h, 101, 16, 2167);
+    			attr_dev(div2, "class", "flex");
+    			add_location(div2, file$h, 100, 14, 2132);
+    			add_location(br1, file$h, 110, 14, 2527);
+    			attr_dev(label0, "class", "block text-gray-500 font-bold md:text-right\n                          mb-1 md:mb-0 pr-4");
+    			attr_dev(label0, "for", "inline-username");
+    			add_location(label0, file$h, 116, 24, 2817);
+    			attr_dev(div3, "class", "md:w-2/3");
+    			add_location(div3, file$h, 115, 22, 2770);
+    			attr_dev(input1, "type", "radio");
+    			attr_dev(input1, "class", "form-radio");
+    			attr_dev(input1, "name", "difficultyType");
+    			input1.__value = "easy";
+    			input1.value = input1.__value;
+    			/*$$binding_groups*/ ctx[9][1].push(input1);
+    			add_location(input1, file$h, 125, 26, 3227);
+    			attr_dev(span0, "class", "ml-2 text-gray-500");
+    			add_location(span0, file$h, 131, 26, 3504);
+    			attr_dev(label1, "class", "inline-flex items-center");
+    			add_location(label1, file$h, 124, 24, 3160);
+    			attr_dev(input2, "type", "radio");
+    			attr_dev(input2, "class", "form-radio");
+    			attr_dev(input2, "name", "difficultyType");
+    			input2.__value = "medium";
+    			input2.value = input2.__value;
+    			/*$$binding_groups*/ ctx[9][1].push(input2);
+    			add_location(input2, file$h, 134, 26, 3678);
+    			attr_dev(span1, "class", "ml-2 text-gray-500");
+    			add_location(span1, file$h, 140, 26, 3957);
+    			attr_dev(label2, "class", "inline-flex items-center ml-6");
+    			add_location(label2, file$h, 133, 24, 3606);
+    			attr_dev(input3, "type", "radio");
+    			attr_dev(input3, "class", "form-radio");
+    			attr_dev(input3, "name", "difficultyType");
+    			input3.__value = "hard";
+    			input3.value = input3.__value;
+    			/*$$binding_groups*/ ctx[9][1].push(input3);
+    			add_location(input3, file$h, 143, 26, 4133);
+    			attr_dev(span2, "class", "ml-2 text-gray-500");
+    			add_location(span2, file$h, 149, 26, 4410);
+    			attr_dev(label3, "class", "inline-flex items-center ml-6");
+    			add_location(label3, file$h, 142, 24, 4061);
+    			attr_dev(div4, "class", "");
+    			add_location(div4, file$h, 123, 22, 3121);
+    			attr_dev(div5, "class", " md:items-center mb-6");
+    			add_location(div5, file$h, 114, 20, 2712);
+    			attr_dev(div6, "class", "font-bold text-3xl mb-2");
+    			add_location(div6, file$h, 113, 18, 2654);
+    			attr_dev(div7, "class", "flex-initial text-center px-4 py-2 m-2");
+    			add_location(div7, file$h, 112, 16, 2583);
+    			attr_dev(div8, "class", "flex");
+    			add_location(div8, file$h, 111, 14, 2548);
+    			add_location(br2, file$h, 156, 14, 4627);
+    			attr_dev(p, "class", "font-bold text-2xl mb-2");
+    			add_location(p, file$h, 157, 14, 4648);
+    			attr_dev(ul, "class", "problist svelte-1mn5pzz");
+    			add_location(ul, file$h, 158, 14, 4717);
+    			attr_dev(div9, "class", "px-12 py-8");
+    			add_location(div9, file$h, 96, 12, 2056);
+    			attr_dev(div10, "class", "max-w-auto rounded overflow-hidden shadow-lg");
+    			add_location(div10, file$h, 95, 10, 1985);
+    			attr_dev(div11, "class", "p-8 mx-2 mt-5 items-center");
+    			add_location(div11, file$h, 94, 8, 1934);
+    			attr_dev(div12, "class", "w-1/2 h-12");
+    			add_location(div12, file$h, 92, 6, 1900);
+    			attr_dev(div13, "class", "font-bold text-3xl mb-2");
+    			add_location(div13, file$h, 176, 18, 5240);
+    			attr_dev(div14, "class", "flex-initial text-center px-4 py-2 m-2");
+    			add_location(div14, file$h, 175, 16, 5169);
+    			attr_dev(div15, "class", "flex");
+    			add_location(div15, file$h, 174, 14, 5134);
+    			add_location(ol, file$h, 179, 14, 5354);
+    			attr_dev(div16, "class", "px-6 py-4");
+    			add_location(div16, file$h, 173, 12, 5096);
+    			attr_dev(div17, "class", "max-w-auto rounded overflow-hidden shadow-lg");
+    			add_location(div17, file$h, 172, 10, 5025);
+    			attr_dev(div18, "class", "p-8 mx-2 mt-5 items-center");
+    			add_location(div18, file$h, 171, 8, 4974);
+    			attr_dev(button, "class", "bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4\n            border border-blue-700 rounded submitbutton svelte-1mn5pzz");
+    			add_location(button, file$h, 205, 10, 6254);
+    			attr_dev(div19, "class", "buttonbox svelte-1mn5pzz");
+    			add_location(div19, file$h, 204, 8, 6220);
+    			attr_dev(div20, "class", "w-1/2 h-12");
+    			add_location(div20, file$h, 170, 6, 4941);
+    			attr_dev(div21, "class", "flex mb-4 h-12");
+    			add_location(div21, file$h, 91, 4, 1865);
+    			add_location(div22, file$h, 85, 2, 1718);
+    			add_location(body, file$h, 84, 0, 1709);
+    		},
+    		l: function claim(nodes) {
+    			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
+    		},
+    		m: function mount(target, anchor, remount) {
+    			insert_dev(target, link, anchor);
+    			insert_dev(target, t0, anchor);
+    			insert_dev(target, body, anchor);
+    			append_dev(body, div22);
+    			mount_component(navbar, div22, null);
+    			append_dev(div22, t1);
+    			append_dev(div22, h1);
+    			append_dev(h1, strong);
+    			append_dev(div22, t3);
+    			append_dev(div22, div21);
+    			append_dev(div21, div12);
+    			append_dev(div12, div11);
+    			append_dev(div11, div10);
+    			append_dev(div10, div9);
+    			append_dev(div9, br0);
+    			append_dev(div9, t4);
+    			append_dev(div9, div2);
+    			append_dev(div2, div1);
+    			append_dev(div1, div0);
+    			append_dev(div0, input0);
+    			set_input_value(input0, /*test*/ ctx[0].testName);
+    			append_dev(div9, t5);
+    			append_dev(div9, br1);
+    			append_dev(div9, t6);
+    			append_dev(div9, div8);
+    			append_dev(div8, div7);
+    			append_dev(div7, div6);
+    			append_dev(div6, div5);
+    			append_dev(div5, div3);
+    			append_dev(div3, label0);
+    			append_dev(div5, t8);
+    			append_dev(div5, div4);
+    			append_dev(div4, label1);
+    			append_dev(label1, input1);
+    			input1.checked = input1.__value === /*test*/ ctx[0].difficultyLevel;
+    			append_dev(label1, t9);
+    			append_dev(label1, span0);
+    			append_dev(div4, t11);
+    			append_dev(div4, label2);
+    			append_dev(label2, input2);
+    			input2.checked = input2.__value === /*test*/ ctx[0].difficultyLevel;
+    			append_dev(label2, t12);
+    			append_dev(label2, span1);
+    			append_dev(div4, t14);
+    			append_dev(div4, label3);
+    			append_dev(label3, input3);
+    			input3.checked = input3.__value === /*test*/ ctx[0].difficultyLevel;
+    			append_dev(label3, t15);
+    			append_dev(label3, span2);
+    			append_dev(div9, t17);
+    			append_dev(div9, br2);
+    			append_dev(div9, t18);
+    			append_dev(div9, p);
+    			append_dev(div9, t20);
+    			append_dev(div9, ul);
+
+    			for (let i = 0; i < each_blocks.length; i += 1) {
+    				each_blocks[i].m(ul, null);
+    			}
+
+    			append_dev(div21, t21);
+    			append_dev(div21, div20);
+    			append_dev(div20, div18);
+    			append_dev(div18, div17);
+    			append_dev(div17, div16);
+    			append_dev(div16, div15);
+    			append_dev(div15, div14);
+    			append_dev(div14, div13);
+    			append_dev(div16, t23);
+    			append_dev(div16, ol);
+    			info.block.m(ol, info.anchor = null);
+    			info.mount = () => ol;
+    			info.anchor = null;
+    			append_dev(div20, t24);
+    			append_dev(div20, div19);
+    			append_dev(div19, button);
+    			current = true;
+    			if (remount) run_all(dispose);
+
+    			dispose = [
+    				listen_dev(input0, "input", /*input0_input_handler*/ ctx[7]),
+    				listen_dev(input1, "change", /*input1_change_handler*/ ctx[8]),
+    				listen_dev(input2, "change", /*input2_change_handler*/ ctx[10]),
+    				listen_dev(input3, "change", /*input3_change_handler*/ ctx[11]),
+    				listen_dev(button, "click", /*clickHandler*/ ctx[4], false, false, false)
+    			];
+    		},
+    		p: function update(new_ctx, [dirty]) {
+    			ctx = new_ctx;
+
+    			if (dirty & /*test*/ 1 && input0.value !== /*test*/ ctx[0].testName) {
+    				set_input_value(input0, /*test*/ ctx[0].testName);
+    			}
+
+    			if (dirty & /*test*/ 1) {
+    				input1.checked = input1.__value === /*test*/ ctx[0].difficultyLevel;
+    			}
+
+    			if (dirty & /*test*/ 1) {
+    				input2.checked = input2.__value === /*test*/ ctx[0].difficultyLevel;
+    			}
+
+    			if (dirty & /*test*/ 1) {
+    				input3.checked = input3.__value === /*test*/ ctx[0].difficultyLevel;
+    			}
+
+    			if (dirty & /*ppp*/ 2) {
+    				each_value_1 = /*ppp*/ ctx[1];
+    				validate_each_argument(each_value_1);
+    				let i;
+
+    				for (i = 0; i < each_value_1.length; i += 1) {
+    					const child_ctx = get_each_context_1$1(ctx, each_value_1, i);
+
+    					if (each_blocks[i]) {
+    						each_blocks[i].p(child_ctx, dirty);
+    					} else {
+    						each_blocks[i] = create_each_block_1$1(child_ctx);
+    						each_blocks[i].c();
+    						each_blocks[i].m(ul, null);
+    					}
+    				}
+
+    				for (; i < each_blocks.length; i += 1) {
+    					each_blocks[i].d(1);
+    				}
+
+    				each_blocks.length = each_value_1.length;
+    			}
+
+    			info.ctx = ctx;
+
+    			if (dirty & /*$Problems*/ 4 && promise !== (promise = /*$Problems*/ ctx[2]) && handle_promise(promise, info)) ; else {
+    				const child_ctx = ctx.slice();
+    				child_ctx[13] = info.resolved;
+    				info.block.p(child_ctx, dirty);
+    			}
+    		},
+    		i: function intro(local) {
+    			if (current) return;
+    			transition_in(navbar.$$.fragment, local);
+    			current = true;
+    		},
+    		o: function outro(local) {
+    			transition_out(navbar.$$.fragment, local);
+    			current = false;
+    		},
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(link);
+    			if (detaching) detach_dev(t0);
+    			if (detaching) detach_dev(body);
+    			destroy_component(navbar);
+    			/*$$binding_groups*/ ctx[9][1].splice(/*$$binding_groups*/ ctx[9][1].indexOf(input1), 1);
+    			/*$$binding_groups*/ ctx[9][1].splice(/*$$binding_groups*/ ctx[9][1].indexOf(input2), 1);
+    			/*$$binding_groups*/ ctx[9][1].splice(/*$$binding_groups*/ ctx[9][1].indexOf(input3), 1);
+    			destroy_each(each_blocks, detaching);
+    			info.block.d();
+    			info.token = null;
+    			info = null;
+    			run_all(dispose);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_fragment$k.name,
+    		type: "component",
+    		source: "",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    function instance$k($$self, $$props, $$invalidate) {
+    	let $Problems;
+
+    	let test = {
+    		testName: "",
+    		difficultyLevel: "",
+    		email: "sample@sourcefuse.com",
+    		problems: []
+    	};
+
+    	const client = getClient();
+    	const Problems = subscribe$2(client, { query: apolloClient.getProblems });
+    	validate_store(Problems, "Problems");
+    	component_subscribe($$self, Problems, value => $$invalidate(2, $Problems = value));
+
+    	async function clickHandler() {
+    		console.log(test);
+
+    		try {
+    			await mutate(client, {
+    				mutation: apolloClient.addTest,
+    				variables: test
+    			});
+    		} catch(err) {
+    			console.log(err);
+    		}
+
+    		location.replace("http://localhost:5000/admin");
+    	}
+
+    	function changeHandler(name) {
+    		console.log(ppp.length, name);
+    		let rr = ppp.length;
+
+    		$$invalidate(1, ppp = [
+    			...ppp.filter(ele => {
+    				return ele !== name;
+    			})
+    		]);
+
+    		if (rr === ppp.length) {
+    			$$invalidate(1, ppp = [...ppp, name]);
+    		}
+    	}
+
+    	const writable_props = [];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$8.warn(`<NewTest> was created with unknown prop '${key}'`);
+    	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("NewTest", $$slots, []);
+    	const $$binding_groups = [[], []];
+
+    	function input0_input_handler() {
+    		test.testName = this.value;
+    		$$invalidate(0, test);
+    	}
+
+    	function input1_change_handler() {
+    		test.difficultyLevel = this.__value;
+    		$$invalidate(0, test);
+    	}
+
+    	function input2_change_handler() {
+    		test.difficultyLevel = this.__value;
+    		$$invalidate(0, test);
+    	}
+
+    	function input3_change_handler() {
+    		test.difficultyLevel = this.__value;
+    		$$invalidate(0, test);
+    	}
+
+    	function input_change_handler() {
+    		test.problems = get_binding_group_value($$binding_groups[0]);
+    		$$invalidate(0, test);
+    	}
+
+    	$$self.$capture_state = () => ({
+    		apolloClient,
+    		getClient,
+    		query,
+    		subscribe: subscribe$2,
+    		mutate,
+    		Navbar,
+    		test,
+    		client,
+    		Problems,
+    		clickHandler,
+    		changeHandler,
+    		ppp,
+    		$Problems
+    	});
+
+    	$$self.$inject_state = $$props => {
+    		if ("test" in $$props) $$invalidate(0, test = $$props.test);
+    		if ("ppp" in $$props) $$invalidate(1, ppp = $$props.ppp);
+    	};
+
+    	let ppp;
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
+
+    	 $$invalidate(1, ppp = []);
+
+    	return [
+    		test,
+    		ppp,
+    		$Problems,
+    		Problems,
+    		clickHandler,
+    		changeHandler,
+    		client,
+    		input0_input_handler,
+    		input1_change_handler,
+    		$$binding_groups,
+    		input2_change_handler,
+    		input3_change_handler,
+    		input_change_handler
+    	];
+    }
+
+    class NewTest extends SvelteComponentDev {
+    	constructor(options) {
+    		super(options);
+    		init(this, options, instance$k, create_fragment$k, safe_not_equal, {});
+
+    		dispatch_dev("SvelteRegisterComponent", {
+    			component: this,
+    			tagName: "NewTest",
+    			options,
+    			id: create_fragment$k.name
+    		});
+    	}
+    }
+
+    /* src/routes/editTest.svelte generated by Svelte v3.20.1 */
+
+    const { console: console_1$9 } = globals;
+    const file$i = "src/routes/editTest.svelte";
+
+    function get_each_context$5(ctx, list, i) {
+    	const child_ctx = ctx.slice();
+    	child_ctx[19] = list[i];
+    	return child_ctx;
+    }
+
+    function get_each_context_1$2(ctx, list, i) {
+    	const child_ctx = ctx.slice();
+    	child_ctx[22] = list[i];
+    	return child_ctx;
+    }
+
+    // (178:16) {#each ppp as p}
+    function create_each_block_1$2(ctx) {
+    	let li;
+    	let t_value = /*p*/ ctx[22] + "";
+    	let t;
+
+    	const block = {
+    		c: function create() {
+    			li = element("li");
+    			t = text(t_value);
+    			attr_dev(li, "class", "text-xl mb-2");
+    			add_location(li, file$i, 178, 18, 5324);
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, li, anchor);
+    			append_dev(li, t);
+    		},
+    		p: function update(ctx, dirty) {
+    			if (dirty & /*ppp*/ 2 && t_value !== (t_value = /*p*/ ctx[22] + "")) set_data_dev(t, t_value);
+    		},
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(li);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_each_block_1$2.name,
+    		type: "each",
+    		source: "(178:16) {#each ppp as p}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (216:16) {:catch err}
+    function create_catch_block$7(ctx) {
+    	let t0;
+    	let t1_value = /*err*/ ctx[18] + "";
+    	let t1;
+
+    	const block = {
+    		c: function create() {
+    			t0 = text("Error: ");
+    			t1 = text(t1_value);
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, t0, anchor);
+    			insert_dev(target, t1, anchor);
+    		},
+    		p: function update(ctx, dirty) {
+    			if (dirty & /*$Problems*/ 4 && t1_value !== (t1_value = /*err*/ ctx[18] + "")) set_data_dev(t1, t1_value);
+    		},
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(t0);
+    			if (detaching) detach_dev(t1);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_catch_block$7.name,
+    		type: "catch",
+    		source: "(216:16) {:catch err}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (201:16) {:then result}
+    function create_then_block$7(ctx) {
+    	let each_1_anchor;
+    	let each_value = /*result*/ ctx[17].data.allProblems;
+    	validate_each_argument(each_value);
+    	let each_blocks = [];
+
+    	for (let i = 0; i < each_value.length; i += 1) {
+    		each_blocks[i] = create_each_block$5(get_each_context$5(ctx, each_value, i));
+    	}
+
+    	const block = {
+    		c: function create() {
+    			for (let i = 0; i < each_blocks.length; i += 1) {
+    				each_blocks[i].c();
+    			}
+
+    			each_1_anchor = empty();
+    		},
+    		m: function mount(target, anchor) {
+    			for (let i = 0; i < each_blocks.length; i += 1) {
+    				each_blocks[i].m(target, anchor);
+    			}
+
+    			insert_dev(target, each_1_anchor, anchor);
+    		},
+    		p: function update(ctx, dirty) {
+    			if (dirty & /*$Problems, testInitial, changeHandler*/ 69) {
+    				each_value = /*result*/ ctx[17].data.allProblems;
+    				validate_each_argument(each_value);
+    				let i;
+
+    				for (i = 0; i < each_value.length; i += 1) {
+    					const child_ctx = get_each_context$5(ctx, each_value, i);
+
+    					if (each_blocks[i]) {
+    						each_blocks[i].p(child_ctx, dirty);
+    					} else {
+    						each_blocks[i] = create_each_block$5(child_ctx);
+    						each_blocks[i].c();
+    						each_blocks[i].m(each_1_anchor.parentNode, each_1_anchor);
+    					}
+    				}
+
+    				for (; i < each_blocks.length; i += 1) {
+    					each_blocks[i].d(1);
+    				}
+
+    				each_blocks.length = each_value.length;
+    			}
+    		},
+    		d: function destroy(detaching) {
+    			destroy_each(each_blocks, detaching);
+    			if (detaching) detach_dev(each_1_anchor);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_then_block$7.name,
+    		type: "then",
+    		source: "(201:16) {:then result}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (202:18) {#each result.data.allProblems as prob}
+    function create_each_block$5(ctx) {
+    	let label;
+    	let li;
+    	let input;
+    	let input_value_value;
+    	let t0;
+    	let t1_value = /*prob*/ ctx[19].problemName + "";
+    	let t1;
+    	let t2;
+    	let dispose;
+
+    	const block = {
+    		c: function create() {
+    			label = element("label");
+    			li = element("li");
+    			input = element("input");
+    			t0 = space();
+    			t1 = text(t1_value);
+    			t2 = space();
+    			attr_dev(input, "type", "checkbox");
+    			input.__value = input_value_value = /*prob*/ ctx[19].id;
+    			input.value = input.__value;
+    			/*$$binding_groups*/ ctx[13][0].push(input);
+    			add_location(input, file$i, 205, 24, 6209);
+    			add_location(li, file$i, 203, 22, 6096);
+    			add_location(label, file$i, 202, 20, 6066);
+    		},
+    		m: function mount(target, anchor, remount) {
+    			insert_dev(target, label, anchor);
+    			append_dev(label, li);
+    			append_dev(li, input);
+    			input.checked = ~/*testInitial*/ ctx[0].problems.indexOf(input.__value);
+    			append_dev(li, t0);
+    			append_dev(li, t1);
+    			append_dev(label, t2);
+    			if (remount) run_all(dispose);
+
+    			dispose = [
+    				listen_dev(input, "change", /*input_change_handler*/ ctx[16]),
+    				listen_dev(
+    					input,
+    					"change",
+    					function () {
+    						if (is_function(/*changeHandler*/ ctx[6](/*prob*/ ctx[19].problemName))) /*changeHandler*/ ctx[6](/*prob*/ ctx[19].problemName).apply(this, arguments);
+    					},
+    					false,
+    					false,
+    					false
+    				)
+    			];
+    		},
+    		p: function update(new_ctx, dirty) {
+    			ctx = new_ctx;
+
+    			if (dirty & /*$Problems*/ 4 && input_value_value !== (input_value_value = /*prob*/ ctx[19].id)) {
+    				prop_dev(input, "__value", input_value_value);
+    			}
+
+    			input.value = input.__value;
+
+    			if (dirty & /*testInitial*/ 1) {
+    				input.checked = ~/*testInitial*/ ctx[0].problems.indexOf(input.__value);
+    			}
+
+    			if (dirty & /*$Problems*/ 4 && t1_value !== (t1_value = /*prob*/ ctx[19].problemName + "")) set_data_dev(t1, t1_value);
+    		},
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(label);
+    			/*$$binding_groups*/ ctx[13][0].splice(/*$$binding_groups*/ ctx[13][0].indexOf(input), 1);
+    			run_all(dispose);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_each_block$5.name,
+    		type: "each",
+    		source: "(202:18) {#each result.data.allProblems as prob}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (199:34)                    Loading...                 {:then result}
+    function create_pending_block$7(ctx) {
+    	let t;
+
+    	const block = {
+    		c: function create() {
+    			t = text("Loading...");
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, t, anchor);
+    		},
+    		p: noop,
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(t);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_pending_block$7.name,
+    		type: "pending",
+    		source: "(199:34)                    Loading...                 {:then result}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    function create_fragment$l(ctx) {
+    	let link;
+    	let t0;
+    	let body;
+    	let div22;
+    	let t1;
+    	let h1;
+    	let strong;
+    	let t3;
+    	let div21;
+    	let div12;
+    	let div11;
+    	let div10;
+    	let div9;
+    	let br0;
+    	let t4;
+    	let div2;
+    	let div1;
+    	let div0;
+    	let input0;
+    	let t5;
+    	let br1;
+    	let t6;
+    	let div8;
+    	let div7;
+    	let div6;
+    	let div5;
+    	let div3;
+    	let label0;
+    	let t8;
+    	let div4;
+    	let label1;
+    	let input1;
+    	let t9;
+    	let span0;
+    	let t11;
+    	let label2;
+    	let input2;
+    	let t12;
+    	let span1;
+    	let t14;
+    	let label3;
+    	let input3;
+    	let t15;
+    	let span2;
+    	let t17;
+    	let br2;
+    	let t18;
+    	let p;
+    	let t20;
+    	let ul;
+    	let t21;
+    	let div20;
+    	let div18;
+    	let div17;
+    	let div16;
+    	let div15;
+    	let div14;
+    	let div13;
+    	let t23;
+    	let ol;
+    	let promise;
+    	let t24;
+    	let div19;
+    	let button;
+    	let current;
+    	let dispose;
+    	const navbar = new Navbar({ $$inline: true });
+    	let each_value_1 = /*ppp*/ ctx[1];
+    	validate_each_argument(each_value_1);
+    	let each_blocks = [];
+
+    	for (let i = 0; i < each_value_1.length; i += 1) {
+    		each_blocks[i] = create_each_block_1$2(get_each_context_1$2(ctx, each_value_1, i));
+    	}
+
+    	let info = {
+    		ctx,
+    		current: null,
+    		token: null,
+    		pending: create_pending_block$7,
+    		then: create_then_block$7,
+    		catch: create_catch_block$7,
+    		value: 17,
+    		error: 18
+    	};
+
+    	handle_promise(promise = /*$Problems*/ ctx[2], info);
+
+    	const block = {
+    		c: function create() {
+    			link = element("link");
+    			t0 = space();
+    			body = element("body");
+    			div22 = element("div");
+    			create_component(navbar.$$.fragment);
+    			t1 = space();
+    			h1 = element("h1");
+    			strong = element("strong");
+    			strong.textContent = "Add New Test";
+    			t3 = space();
+    			div21 = element("div");
+    			div12 = element("div");
+    			div11 = element("div");
+    			div10 = element("div");
+    			div9 = element("div");
+    			br0 = element("br");
+    			t4 = space();
+    			div2 = element("div");
+    			div1 = element("div");
+    			div0 = element("div");
+    			input0 = element("input");
+    			t5 = space();
+    			br1 = element("br");
+    			t6 = space();
+    			div8 = element("div");
+    			div7 = element("div");
+    			div6 = element("div");
+    			div5 = element("div");
+    			div3 = element("div");
+    			label0 = element("label");
+    			label0.textContent = "Difficulty Type";
+    			t8 = space();
+    			div4 = element("div");
+    			label1 = element("label");
+    			input1 = element("input");
+    			t9 = space();
+    			span0 = element("span");
+    			span0.textContent = "Easy";
+    			t11 = space();
+    			label2 = element("label");
+    			input2 = element("input");
+    			t12 = space();
+    			span1 = element("span");
+    			span1.textContent = "Medium";
+    			t14 = space();
+    			label3 = element("label");
+    			input3 = element("input");
+    			t15 = space();
+    			span2 = element("span");
+    			span2.textContent = "Hard";
+    			t17 = space();
+    			br2 = element("br");
+    			t18 = space();
+    			p = element("p");
+    			p.textContent = "Problems Added:";
+    			t20 = space();
+    			ul = element("ul");
+
+    			for (let i = 0; i < each_blocks.length; i += 1) {
+    				each_blocks[i].c();
+    			}
+
+    			t21 = space();
+    			div20 = element("div");
+    			div18 = element("div");
+    			div17 = element("div");
+    			div16 = element("div");
+    			div15 = element("div");
+    			div14 = element("div");
+    			div13 = element("div");
+    			div13.textContent = "All Problems";
+    			t23 = space();
+    			ol = element("ol");
+    			info.block.c();
+    			t24 = space();
+    			div19 = element("div");
+    			button = element("button");
+    			button.textContent = "Save";
+    			attr_dev(link, "href", "https://unpkg.com/tailwindcss@^1.0/dist/tailwind.min.css");
+    			attr_dev(link, "rel", "stylesheet");
+    			add_location(link, file$i, 99, 0, 2121);
+    			add_location(strong, file$i, 107, 6, 2327);
+    			attr_dev(h1, "class", "heading svelte-1mn5pzz");
+    			add_location(h1, file$i, 106, 4, 2300);
+    			attr_dev(br0, "class", "my-24");
+    			add_location(br0, file$i, 116, 14, 2602);
+    			attr_dev(input0, "type", "text");
+    			attr_dev(input0, "placeholder", "Enter Test Name...");
+    			add_location(input0, file$i, 121, 20, 2802);
+    			attr_dev(div0, "class", "font-bold text-3xl mb-2");
+    			add_location(div0, file$i, 120, 18, 2744);
+    			attr_dev(div1, "class", "flex-initial text-center px-4 py-2 m-2");
+    			add_location(div1, file$i, 119, 16, 2673);
+    			attr_dev(div2, "class", "flex");
+    			add_location(div2, file$i, 118, 14, 2638);
+    			add_location(br1, file$i, 128, 14, 3040);
+    			attr_dev(label0, "class", "block text-gray-500 font-bold md:text-right\n                          mb-1 md:mb-0 pr-4");
+    			attr_dev(label0, "for", "inline-username");
+    			add_location(label0, file$i, 134, 24, 3330);
+    			attr_dev(div3, "class", "md:w-2/3");
+    			add_location(div3, file$i, 133, 22, 3283);
+    			attr_dev(input1, "type", "radio");
+    			attr_dev(input1, "class", "form-radio");
+    			attr_dev(input1, "name", "difficultyType");
+    			input1.__value = "easy";
+    			input1.value = input1.__value;
+    			/*$$binding_groups*/ ctx[13][1].push(input1);
+    			add_location(input1, file$i, 143, 26, 3740);
+    			attr_dev(span0, "class", "ml-2 text-gray-500");
+    			add_location(span0, file$i, 149, 26, 4024);
+    			attr_dev(label1, "class", "inline-flex items-center");
+    			add_location(label1, file$i, 142, 24, 3673);
+    			attr_dev(input2, "type", "radio");
+    			attr_dev(input2, "class", "form-radio");
+    			attr_dev(input2, "name", "difficultyType");
+    			input2.__value = "medium";
+    			input2.value = input2.__value;
+    			/*$$binding_groups*/ ctx[13][1].push(input2);
+    			add_location(input2, file$i, 152, 26, 4198);
+    			attr_dev(span1, "class", "ml-2 text-gray-500");
+    			add_location(span1, file$i, 158, 26, 4484);
+    			attr_dev(label2, "class", "inline-flex items-center ml-6");
+    			add_location(label2, file$i, 151, 24, 4126);
+    			attr_dev(input3, "type", "radio");
+    			attr_dev(input3, "class", "form-radio");
+    			attr_dev(input3, "name", "difficultyType");
+    			input3.__value = "hard";
+    			input3.value = input3.__value;
+    			/*$$binding_groups*/ ctx[13][1].push(input3);
+    			add_location(input3, file$i, 161, 26, 4660);
+    			attr_dev(span2, "class", "ml-2 text-gray-500");
+    			add_location(span2, file$i, 167, 26, 4944);
+    			attr_dev(label3, "class", "inline-flex items-center ml-6");
+    			add_location(label3, file$i, 160, 24, 4588);
+    			attr_dev(div4, "class", "");
+    			add_location(div4, file$i, 141, 22, 3634);
+    			attr_dev(div5, "class", " md:items-center mb-6");
+    			add_location(div5, file$i, 132, 20, 3225);
+    			attr_dev(div6, "class", "font-bold text-3xl mb-2");
+    			add_location(div6, file$i, 131, 18, 3167);
+    			attr_dev(div7, "class", "flex-initial text-center px-4 py-2 m-2");
+    			add_location(div7, file$i, 130, 16, 3096);
+    			attr_dev(div8, "class", "flex");
+    			add_location(div8, file$i, 129, 14, 3061);
+    			add_location(br2, file$i, 174, 14, 5161);
+    			attr_dev(p, "class", "font-bold text-2xl mb-2");
+    			add_location(p, file$i, 175, 14, 5182);
+    			attr_dev(ul, "class", "problist svelte-1mn5pzz");
+    			add_location(ul, file$i, 176, 14, 5251);
+    			attr_dev(div9, "class", "px-12 py-8");
+    			add_location(div9, file$i, 114, 12, 2562);
+    			attr_dev(div10, "class", "max-w-auto rounded overflow-hidden shadow-lg");
+    			add_location(div10, file$i, 113, 10, 2491);
+    			attr_dev(div11, "class", "p-8 mx-2 mt-5 items-center");
+    			add_location(div11, file$i, 112, 8, 2440);
+    			attr_dev(div12, "class", "w-1/2 h-12");
+    			add_location(div12, file$i, 110, 6, 2406);
+    			attr_dev(div13, "class", "font-bold text-3xl mb-2");
+    			add_location(div13, file$i, 194, 18, 5774);
+    			attr_dev(div14, "class", "flex-initial text-center px-4 py-2 m-2");
+    			add_location(div14, file$i, 193, 16, 5703);
+    			attr_dev(div15, "class", "flex");
+    			add_location(div15, file$i, 192, 14, 5668);
+    			add_location(ol, file$i, 197, 14, 5888);
+    			attr_dev(div16, "class", "px-6 py-4");
+    			add_location(div16, file$i, 191, 12, 5630);
+    			attr_dev(div17, "class", "max-w-auto rounded overflow-hidden shadow-lg");
+    			add_location(div17, file$i, 190, 10, 5559);
+    			attr_dev(div18, "class", "p-8 mx-2 mt-5 items-center");
+    			add_location(div18, file$i, 189, 8, 5508);
+    			attr_dev(button, "class", "bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4\n            border border-blue-700 rounded submitbutton svelte-1mn5pzz");
+    			add_location(button, file$i, 223, 10, 6795);
+    			attr_dev(div19, "class", "buttonbox svelte-1mn5pzz");
+    			add_location(div19, file$i, 222, 8, 6761);
+    			attr_dev(div20, "class", "w-1/2 h-12");
+    			add_location(div20, file$i, 188, 6, 5475);
+    			attr_dev(div21, "class", "flex mb-4 h-12");
+    			add_location(div21, file$i, 109, 4, 2371);
+    			add_location(div22, file$i, 103, 2, 2224);
+    			add_location(body, file$i, 102, 0, 2215);
+    		},
+    		l: function claim(nodes) {
+    			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
+    		},
+    		m: function mount(target, anchor, remount) {
+    			insert_dev(target, link, anchor);
+    			insert_dev(target, t0, anchor);
+    			insert_dev(target, body, anchor);
+    			append_dev(body, div22);
+    			mount_component(navbar, div22, null);
+    			append_dev(div22, t1);
+    			append_dev(div22, h1);
+    			append_dev(h1, strong);
+    			append_dev(div22, t3);
+    			append_dev(div22, div21);
+    			append_dev(div21, div12);
+    			append_dev(div12, div11);
+    			append_dev(div11, div10);
+    			append_dev(div10, div9);
+    			append_dev(div9, br0);
+    			append_dev(div9, t4);
+    			append_dev(div9, div2);
+    			append_dev(div2, div1);
+    			append_dev(div1, div0);
+    			append_dev(div0, input0);
+    			set_input_value(input0, /*testInitial*/ ctx[0].testName);
+    			append_dev(div9, t5);
+    			append_dev(div9, br1);
+    			append_dev(div9, t6);
+    			append_dev(div9, div8);
+    			append_dev(div8, div7);
+    			append_dev(div7, div6);
+    			append_dev(div6, div5);
+    			append_dev(div5, div3);
+    			append_dev(div3, label0);
+    			append_dev(div5, t8);
+    			append_dev(div5, div4);
+    			append_dev(div4, label1);
+    			append_dev(label1, input1);
+    			input1.checked = input1.__value === /*testInitial*/ ctx[0].difficultyLevel;
+    			append_dev(label1, t9);
+    			append_dev(label1, span0);
+    			append_dev(div4, t11);
+    			append_dev(div4, label2);
+    			append_dev(label2, input2);
+    			input2.checked = input2.__value === /*testInitial*/ ctx[0].difficultyLevel;
+    			append_dev(label2, t12);
+    			append_dev(label2, span1);
+    			append_dev(div4, t14);
+    			append_dev(div4, label3);
+    			append_dev(label3, input3);
+    			input3.checked = input3.__value === /*testInitial*/ ctx[0].difficultyLevel;
+    			append_dev(label3, t15);
+    			append_dev(label3, span2);
+    			append_dev(div9, t17);
+    			append_dev(div9, br2);
+    			append_dev(div9, t18);
+    			append_dev(div9, p);
+    			append_dev(div9, t20);
+    			append_dev(div9, ul);
+
+    			for (let i = 0; i < each_blocks.length; i += 1) {
+    				each_blocks[i].m(ul, null);
+    			}
+
+    			append_dev(div21, t21);
+    			append_dev(div21, div20);
+    			append_dev(div20, div18);
+    			append_dev(div18, div17);
+    			append_dev(div17, div16);
+    			append_dev(div16, div15);
+    			append_dev(div15, div14);
+    			append_dev(div14, div13);
+    			append_dev(div16, t23);
+    			append_dev(div16, ol);
+    			info.block.m(ol, info.anchor = null);
+    			info.mount = () => ol;
+    			info.anchor = null;
+    			append_dev(div20, t24);
+    			append_dev(div20, div19);
+    			append_dev(div19, button);
+    			current = true;
+    			if (remount) run_all(dispose);
+
+    			dispose = [
+    				listen_dev(input0, "input", /*input0_input_handler*/ ctx[11]),
+    				listen_dev(input1, "change", /*input1_change_handler*/ ctx[12]),
+    				listen_dev(input2, "change", /*input2_change_handler*/ ctx[14]),
+    				listen_dev(input3, "change", /*input3_change_handler*/ ctx[15]),
+    				listen_dev(button, "click", /*clickHandler*/ ctx[5], false, false, false)
+    			];
+    		},
+    		p: function update(new_ctx, [dirty]) {
+    			ctx = new_ctx;
+
+    			if (dirty & /*testInitial*/ 1 && input0.value !== /*testInitial*/ ctx[0].testName) {
+    				set_input_value(input0, /*testInitial*/ ctx[0].testName);
+    			}
+
+    			if (dirty & /*testInitial*/ 1) {
+    				input1.checked = input1.__value === /*testInitial*/ ctx[0].difficultyLevel;
+    			}
+
+    			if (dirty & /*testInitial*/ 1) {
+    				input2.checked = input2.__value === /*testInitial*/ ctx[0].difficultyLevel;
+    			}
+
+    			if (dirty & /*testInitial*/ 1) {
+    				input3.checked = input3.__value === /*testInitial*/ ctx[0].difficultyLevel;
+    			}
+
+    			if (dirty & /*ppp*/ 2) {
+    				each_value_1 = /*ppp*/ ctx[1];
+    				validate_each_argument(each_value_1);
+    				let i;
+
+    				for (i = 0; i < each_value_1.length; i += 1) {
+    					const child_ctx = get_each_context_1$2(ctx, each_value_1, i);
+
+    					if (each_blocks[i]) {
+    						each_blocks[i].p(child_ctx, dirty);
+    					} else {
+    						each_blocks[i] = create_each_block_1$2(child_ctx);
+    						each_blocks[i].c();
+    						each_blocks[i].m(ul, null);
+    					}
+    				}
+
+    				for (; i < each_blocks.length; i += 1) {
+    					each_blocks[i].d(1);
+    				}
+
+    				each_blocks.length = each_value_1.length;
+    			}
+
+    			info.ctx = ctx;
+
+    			if (dirty & /*$Problems*/ 4 && promise !== (promise = /*$Problems*/ ctx[2]) && handle_promise(promise, info)) ; else {
+    				const child_ctx = ctx.slice();
+    				child_ctx[17] = info.resolved;
+    				info.block.p(child_ctx, dirty);
+    			}
+    		},
+    		i: function intro(local) {
+    			if (current) return;
+    			transition_in(navbar.$$.fragment, local);
+    			current = true;
+    		},
+    		o: function outro(local) {
+    			transition_out(navbar.$$.fragment, local);
+    			current = false;
+    		},
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(link);
+    			if (detaching) detach_dev(t0);
+    			if (detaching) detach_dev(body);
+    			destroy_component(navbar);
+    			/*$$binding_groups*/ ctx[13][1].splice(/*$$binding_groups*/ ctx[13][1].indexOf(input1), 1);
+    			/*$$binding_groups*/ ctx[13][1].splice(/*$$binding_groups*/ ctx[13][1].indexOf(input2), 1);
+    			/*$$binding_groups*/ ctx[13][1].splice(/*$$binding_groups*/ ctx[13][1].indexOf(input3), 1);
+    			destroy_each(each_blocks, detaching);
+    			info.block.d();
+    			info.token = null;
+    			info = null;
+    			run_all(dispose);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_fragment$l.name,
+    		type: "component",
+    		source: "",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    function instance$l($$self, $$props, $$invalidate) {
+    	let $test;
+    	let $Problems;
+    	let { currentRoute } = $$props;
+
+    	let testInitial = {
+    		id: "",
+    		testName: "",
+    		difficultyLevel: "",
+    		problems: []
+    	};
+
+    	const client = getClient();
+
+    	const test = subscribe$2(client, {
+    		query: apolloClient.getTestById,
+    		variables: { id: currentRoute.namedParams.id }
+    	});
+
+    	validate_store(test, "test");
+    	component_subscribe($$self, test, value => $$invalidate(8, $test = value));
+    	let test_id;
+
+    	$test.then(res => {
+    		const tt = { ...res.data.testById };
+    		$$invalidate(0, testInitial.testName = tt.testName, testInitial);
+    		$$invalidate(0, testInitial.id = tt.id, testInitial);
+    		$$invalidate(0, testInitial.difficultyLevel = tt.difficultyLevel, testInitial);
+
+    		$$invalidate(
+    			0,
+    			testInitial.problems = [
+    				...tt.problems.map(ele => {
+    					$$invalidate(1, ppp = [...ppp, ele.problemName]);
+    					return ele.id;
+    				})
+    			],
+    			testInitial
+    		);
+    	});
+
+    	const Problems = subscribe$2(client, { query: apolloClient.getProblems });
+    	validate_store(Problems, "Problems");
+    	component_subscribe($$self, Problems, value => $$invalidate(2, $Problems = value));
+
+    	async function clickHandler() {
+    		console.log(testInitial);
+
+    		try {
+    			await mutate(client, {
+    				mutation: apolloClient.updateTest,
+    				variables: testInitial
+    			});
+    		} catch(err) {
+    			console.log(err);
+    		}
+
+    		location.replace("http://localhost:5000/admin");
+    	}
+
+    	function changeHandler(name) {
+    		console.log(ppp.length, name);
+    		let rr = ppp.length;
+
+    		$$invalidate(1, ppp = [
+    			...ppp.filter(ele => {
+    				return ele !== name;
+    			})
+    		]);
+
+    		if (rr === ppp.length) {
+    			$$invalidate(1, ppp = [...ppp, name]);
+    		}
+    	}
+
+    	const writable_props = ["currentRoute"];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$9.warn(`<EditTest> was created with unknown prop '${key}'`);
+    	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("EditTest", $$slots, []);
+    	const $$binding_groups = [[], []];
+
+    	function input0_input_handler() {
+    		testInitial.testName = this.value;
+    		$$invalidate(0, testInitial);
+    	}
+
+    	function input1_change_handler() {
+    		testInitial.difficultyLevel = this.__value;
+    		$$invalidate(0, testInitial);
+    	}
+
+    	function input2_change_handler() {
+    		testInitial.difficultyLevel = this.__value;
+    		$$invalidate(0, testInitial);
+    	}
+
+    	function input3_change_handler() {
+    		testInitial.difficultyLevel = this.__value;
+    		$$invalidate(0, testInitial);
+    	}
+
+    	function input_change_handler() {
+    		testInitial.problems = get_binding_group_value($$binding_groups[0]);
+    		$$invalidate(0, testInitial);
+    	}
+
+    	$$self.$set = $$props => {
+    		if ("currentRoute" in $$props) $$invalidate(7, currentRoute = $$props.currentRoute);
+    	};
+
+    	$$self.$capture_state = () => ({
+    		apolloClient,
+    		getClient,
+    		query,
+    		subscribe: subscribe$2,
+    		mutate,
+    		Navbar,
+    		currentRoute,
+    		testInitial,
+    		client,
+    		test,
+    		test_id,
+    		Problems,
+    		clickHandler,
+    		changeHandler,
+    		ppp,
+    		$test,
+    		$Problems
+    	});
+
+    	$$self.$inject_state = $$props => {
+    		if ("currentRoute" in $$props) $$invalidate(7, currentRoute = $$props.currentRoute);
+    		if ("testInitial" in $$props) $$invalidate(0, testInitial = $$props.testInitial);
+    		if ("test_id" in $$props) test_id = $$props.test_id;
+    		if ("ppp" in $$props) $$invalidate(1, ppp = $$props.ppp);
+    	};
+
+    	let ppp;
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
+
+    	 $$invalidate(1, ppp = []);
+
+    	return [
+    		testInitial,
+    		ppp,
+    		$Problems,
+    		test,
+    		Problems,
+    		clickHandler,
+    		changeHandler,
+    		currentRoute,
+    		$test,
+    		client,
+    		test_id,
+    		input0_input_handler,
+    		input1_change_handler,
+    		$$binding_groups,
+    		input2_change_handler,
+    		input3_change_handler,
+    		input_change_handler
+    	];
+    }
+
+    class EditTest extends SvelteComponentDev {
+    	constructor(options) {
+    		super(options);
+    		init(this, options, instance$l, create_fragment$l, safe_not_equal, { currentRoute: 7 });
+
+    		dispatch_dev("SvelteRegisterComponent", {
+    			component: this,
+    			tagName: "EditTest",
+    			options,
+    			id: create_fragment$l.name
+    		});
+
+    		const { ctx } = this.$$;
+    		const props = options.props || {};
+
+    		if (/*currentRoute*/ ctx[7] === undefined && !("currentRoute" in props)) {
+    			console_1$9.warn("<EditTest> was created without expected prop 'currentRoute'");
+    		}
+    	}
+
+    	get currentRoute() {
+    		throw new Error("<EditTest>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	set currentRoute(value) {
+    		throw new Error("<EditTest>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+    }
+
     const routes = [
       {
         name: '/',
-        component: Login,
+        component: Login
         // onlyIf: { guard: notAdmin,redirect: '/admin' }
       },
       {
+        name: '/newtest',
+        component: NewTest
+      },
+      {
+        name: '/editTest/:id',
+        component: EditTest
+      },
+      {
         name: '/admin',
-        component: Admin,
+        component: Admin
       },
       {
         name: '/test/:id',
-        component: Tests,
+        component: Tests
       },
       {
         name: '/problem/:id',
-        component: Problems,
+        component: Problems
       },
       {
-        name:'/sendtest/:id',
-        component:Send_test,
+        name: '/sendtest/:id',
+        component: Send_test
       },
       {
-        name:'/givetest/:token',
-        component:Home,
+        name: '/givetest/:token',
+        component: Home
       }
     ];
 
@@ -39333,6 +40755,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     var zenObservable = Observable_1.Observable;
 
     var Observable = zenObservable;
+    //# sourceMappingURL=bundle.esm.js.map
 
     function validateOperation(operation) {
         var OPERATION_FIELDS = [
@@ -39487,6 +40910,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     function execute(link, operation) {
         return (link.request(createOperation(operation.context, transformOperation(validateOperation(operation)))) || Observable.of());
     }
+    //# sourceMappingURL=bundle.esm.js.map
 
     function symbolObservablePonyfill(root) {
     	var result;
@@ -41621,6 +43045,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
         };
         return ApolloClient;
     }());
+    //# sourceMappingURL=bundle.esm.js.map
 
     function queryFromPojo(obj) {
         var op = {
@@ -41788,6 +43213,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
         };
         return ApolloCache;
     }());
+    //# sourceMappingURL=bundle.esm.js.map
 
     // This currentContext variable will only be used if the makeSlotClass
     // function is called, which happens only if this is the first copy of the
@@ -41927,6 +43353,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     }();
 
     var bind = Slot.bind, noContext = Slot.noContext;
+    //# sourceMappingURL=context.esm.js.map
 
     function defaultDispose() { }
     var Cache = /** @class */ (function () {
@@ -42401,6 +43828,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
         };
         return optimistic;
     }
+    //# sourceMappingURL=bundle.esm.js.map
 
     var haveWarned = false;
     function shouldWarn() {
@@ -43329,6 +44757,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
         };
         return InMemoryCache;
     }(ApolloCache));
+    //# sourceMappingURL=bundle.esm.js.map
 
     /**
      * Converts an AST into a string, using one set of reasonable
@@ -43747,6 +45176,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
             return fallbackURI || '/graphql';
         }
     };
+    //# sourceMappingURL=bundle.esm.js.map
 
     var createHttpLink = function (linkOptions) {
         if (linkOptions === void 0) { linkOptions = {}; }
@@ -43886,6 +45316,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
         }
         return HttpLink;
     }(ApolloLink));
+    //# sourceMappingURL=bundle.esm.js.map
 
     function onError(errorHandler) {
         return new ApolloLink(function (operation, forward) {
@@ -43965,6 +45396,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
         };
         return ErrorLink;
     }(ApolloLink));
+    //# sourceMappingURL=bundle.esm.js.map
 
     var PRESET_CONFIG_KEYS = [
         'request',
@@ -44075,10 +45507,11 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
         }
         return DefaultClient;
     }(ApolloClient));
+    //# sourceMappingURL=bundle.esm.js.map
 
     /* src/App.svelte generated by Svelte v3.20.1 */
 
-    function create_fragment$k(ctx) {
+    function create_fragment$m(ctx) {
     	let current;
 
     	const router = new src_6({
@@ -44121,7 +45554,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$k.name,
+    		id: create_fragment$m.name,
     		type: "component",
     		source: "",
     		ctx
@@ -44130,7 +45563,7 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     	return block;
     }
 
-    function instance$k($$self, $$props, $$invalidate) {
+    function instance$m($$self, $$props, $$invalidate) {
     	const client = new DefaultClient({ uri: "http://localhost:3000/graphql" });
     	setClient(client);
     	let { currentRoute } = $$props;
@@ -44175,13 +45608,13 @@ mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
     class App extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$k, create_fragment$k, safe_not_equal, { currentRoute: 0 });
+    		init(this, options, instance$m, create_fragment$m, safe_not_equal, { currentRoute: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "App",
     			options,
-    			id: create_fragment$k.name
+    			id: create_fragment$m.name
     		});
 
     		const { ctx } = this.$$;

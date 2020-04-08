@@ -1,6 +1,6 @@
 <script>
   import { apolloClient } from "../apolloClient.js";
-  import { getClient, query } from "svelte-apollo";
+  import { getClient, query, mutate } from "svelte-apollo";
   import Navbar from "../components/navbar.svelte";
   export let currentRoute;
   console.log(currentRoute);
@@ -9,9 +9,20 @@
     query: apolloClient.getTestById,
     variables: { id: currentRoute.namedParams.id }
   });
-  let Problem = query(client, { query: apolloClient.getProblems });
-
-  let problems = [];
+  async function deleteTestHandler()
+  {
+    try{
+      mutate(client, {
+        mutation:apolloClient.deleteTest,
+        variables:{id: currentRoute.namedParams.id}
+      });
+    }
+    catch(err)
+    {
+      Error:- {err}
+    }
+    location.replace("http://localhost:5000/admin")
+  }
 </script>
 
 <style>
@@ -24,8 +35,14 @@
   .btn-blue:hover {
     @apply bg-blue-700;
   }
-  button {
-    margin-left: 92%;
+  .buttonbox {
+    margin-left: 70vw;
+  }
+  .savebutton {
+    margin-right: 3vw;
+  }
+  .deleteButton{
+    margin-left: 3vw;
   }
   #blk {
     margin-top: 6%;
@@ -44,8 +61,8 @@
     {:then result}
       <Navbar />
       <!-- style="margin-left:23%;margin-top:7%; -->
-      <div class="flex mb-4">
-        <div class="w-1/2 h-12">
+      <div class="">
+        <div class="h-12">
 
           <div class="p-8 mx-2 mt-24 items-center">
             <div class="max-w-auto rounded overflow-hidden shadow-lg">
@@ -59,23 +76,9 @@
                       {result.data.testById.testName}
                     </div>
                   </div>
-                  <div class="flex-initial px-4 py-2 m-2">
-                    <div class="flex">
-                      <button
-                        class="bg-red-500 hover:bg-red-700 text-white font-bold
-                        py-2 px-4 border border-red-700 rounded">
-                        Edit
-                      </button>
-                      <button
-                        class="bg-blue-500 hover:bg-blue-700 text-white
-                        font-bold py-2 px-4 border border-blue-700 rounded">
-                        Save
-                      </button>
-                    </div>
-                  </div>
                 </div>
 
-                <p class="font-bold text-2xl mb-2">Test Instructions :</p>
+                <p class="font-bold text-2xl mb-2">Difficulty Level :</p>
                 <p class="text-gray-700 text-2xl">
                   {result.data.testById.difficultyLevel}
                 </p>
@@ -92,24 +95,41 @@
                       </a>
                     </li>
                   {/each}
-                  {#each problems as pb}
-                    <li class="test-sl mb-2">
-                      <a
-                        target="_blank"
-                        href="http://localhost:5000/problem/{pb.id}">
-                        {pb.problemName}
-                      </a>
-                    </li>
-                  {/each}
                 </ul>
 
               </div>
 
             </div>
           </div>
+          <div class="px-4 py-2">
+            <div class="flex buttonbox">
+              <button
+                on:click={() => {
+                  location.replace(`http://localhost:5000/editTest/${result.data.testById.id}`);
+                }}
+                class="savebutton bg-red-500 hover:bg-red-700 text-white
+                font-bold py-2 px-4 border border-red-700 rounded">
+                Edit
+              </button>
+              <a
+                href="http://localhost:5000/sendtest/{result.data.testById.id}">
+                <button
+                  class="bg-red-500 hover:bg-red-700 text-white font-bold py-2
+                  px-4 border border-red-700 rounded">
+                  Send Test
+                </button>
+              </a>
+              <button
+                on:click={deleteTestHandler}
+                class="deleteButton bg-red-500 hover:bg-red-700 text-white font-bold py-2
+                px-4 border border-red-700 rounded">
+                Delete
+              </button>
+            </div>
+          </div>
 
         </div>
-        <div class="w-1/2 h-12">
+        <!-- <div class="w-1/2 h-12">
           <div class="p-8 mx-2 mt-24 items-center">
             <div class="max-w-auto rounded overflow-hidden shadow-lg">
               <div class="px-6 py-4">
@@ -142,16 +162,9 @@
               </div>
             </div>
           </div>
-        </div>
+        </div> -->
       </div>
 
-      <a href="http://localhost:5000/sendtest/{result.data.testById.id}">
-        <button
-          class="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4
-          border border-red-700 rounded">
-          Send Test
-        </button>
-      </a>
     {:catch err}
       Error: {err}
     {/await}

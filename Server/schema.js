@@ -52,8 +52,8 @@ const typeDefs = gql`
     deleteProblem(id:ID!):[Problem]
     updateProblem(id:ID!,data:updateProblemInputs):updateProblemOutput!
     addTest(data:addTestInputs):addTestOutput!
-    deleteTest(id:ID!):[Test]
-    updateTest(id:ID!,data:updateTestInputs):updateTestOutput!
+    deleteTest(id:ID):[Test]
+    updateTest(id:ID,data:updateTestInputs):updateTestOutput!
     addUser(data:addUserInputs):userDetail
     sendMail(mailBody: String, email: String):mailSent
     addTestProblem(data:addTestProblemsInputs):testProblemOutput!
@@ -69,6 +69,7 @@ const typeDefs = gql`
     testName: String
     difficultyLevel: String
     email:String
+    problems:[ID]
   }
   input addUserInputs {
     name: String 
@@ -88,6 +89,7 @@ const typeDefs = gql`
   input updateTestInputs {
     testName:String
     difficultyLevel:String
+    problems:[ID]
   }
   type addProblemOutput {
     success: Boolean!
@@ -97,7 +99,6 @@ const typeDefs = gql`
   type addTestOutput {
     success: Boolean
     message: String
-    tests: [Test]
   }
   type userDetail {
     success: Boolean

@@ -2,27 +2,45 @@
   import { apolloClient } from "../apolloClient.js";
   import { getClient, query, subscribe, mutate } from "svelte-apollo";
   import Navbar from "../components/navbar.svelte";
-  let test = {
+  export let currentRoute;
+  let testInitial = {
+    id: "",
     testName: "",
     difficultyLevel: "",
-    email: "sample@sourcefuse.com",
     problems: []
   };
   const client = getClient();
+  const test = subscribe(client, {
+    query: apolloClient.getTestById,
+    variables: { id: currentRoute.namedParams.id }
+  });
+  $: ppp = [];
+  let test_id;
+  $test.then(res => {
+    const tt = { ...res.data.testById };
+    testInitial.testName = tt.testName;
+    testInitial.id = tt.id;
+    testInitial.difficultyLevel = tt.difficultyLevel;
+    testInitial.problems = [
+      ...tt.problems.map(ele => {
+        ppp = [...ppp, ele.problemName];
+        return ele.id;
+      })
+    ];
+  });
   const Problems = subscribe(client, { query: apolloClient.getProblems });
   async function clickHandler() {
-    console.log(test);
+    console.log(testInitial);
     try {
       await mutate(client, {
-        mutation: apolloClient.addTest,
-        variables: test
+        mutation: apolloClient.updateTest,
+        variables: testInitial
       });
     } catch (err) {
       console.log(err);
     }
-    location.replace("http://localhost:5000/admin")
+    location.replace("http://localhost:5000/admin");
   }
-  $: ppp = [];
   function changeHandler(name) {
     console.log(ppp.length, name);
     let rr = ppp.length;
@@ -103,7 +121,7 @@
                   <div class="font-bold text-3xl mb-2">
                     <input
                       type="text"
-                      bind:value={test.testName}
+                      bind:value={testInitial.testName}
                       placeholder="Enter Test Name..." />
                   </div>
                 </div>
@@ -127,7 +145,7 @@
                             type="radio"
                             class="form-radio"
                             name="difficultyType"
-                            bind:group={test.difficultyLevel}
+                            bind:group={testInitial.difficultyLevel}
                             value="easy" />
                           <span class="ml-2 text-gray-500">Easy</span>
                         </label>
@@ -136,7 +154,7 @@
                             type="radio"
                             class="form-radio"
                             name="difficultyType"
-                            bind:group={test.difficultyLevel}
+                            bind:group={testInitial.difficultyLevel}
                             value="medium" />
                           <span class="ml-2 text-gray-500">Medium</span>
                         </label>
@@ -145,7 +163,7 @@
                             type="radio"
                             class="form-radio"
                             name="difficultyType"
-                            bind:group={test.difficultyLevel}
+                            bind:group={testInitial.difficultyLevel}
                             value="hard" />
                           <span class="ml-2 text-gray-500">Hard</span>
                         </label>
@@ -187,7 +205,7 @@
                         <!-- <a href="http://localhost:5000/problem/{prob.id}"> -->
                         <input
                           type="checkbox"
-                          bind:group={test.problems}
+                          bind:group={testInitial.problems}
                           on:change={changeHandler(prob.problemName)}
                           value={prob.id} />
                         {prob.problemName}

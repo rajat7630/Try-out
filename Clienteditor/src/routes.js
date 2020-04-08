@@ -5,39 +5,49 @@ import Problems from './routes/Problems.svelte';
 import Tests from './routes/Tests.svelte';
 import SendTest from './routes/send_test.svelte';
 import GiveTest from './routes/give_test.svelte';
+import NewTest from './routes/newTest.svelte';
+import EditTest from './routes/editTest.svelte';
 function userIsAdmin() {
   //check if user is admin and returns true or false
   return document.cookie ? true : false;
 }
-function notAdmin(){
+function notAdmin() {
   return document.cookie ? false : true;
 }
 
 const routes = [
   {
     name: '/',
-    component: Login,
+    component: Login
     // onlyIf: { guard: notAdmin,redirect: '/admin' }
   },
   {
+    name: '/newtest',
+    component: NewTest
+  },
+  {
+    name: '/editTest/:id',
+    component: EditTest
+  },
+  {
     name: '/admin',
-    component: Admin,
+    component: Admin
   },
   {
     name: '/test/:id',
-    component: Tests,
+    component: Tests
   },
   {
     name: '/problem/:id',
-    component: Problems,
+    component: Problems
   },
   {
-    name:'/sendtest/:id',
-    component:SendTest,
+    name: '/sendtest/:id',
+    component: SendTest
   },
   {
-    name:'/givetest/:token',
-    component:Home,
+    name: '/givetest/:token',
+    component: Home
   }
 ];
 

@@ -12,8 +12,8 @@ const getProblems = gql`
 `;
 
 const problemsByAuthor = gql`
-  query problemsByAuthor($email:String) {
-    problemsByAuthor(email:$email) {
+  query problemsByAuthor($email: String) {
+    problemsByAuthor(email: $email) {
       id
       problemName
       problemTests
@@ -48,8 +48,8 @@ const allTests = gql`
 `;
 
 const testsByAuthor = gql`
-  query testsByAuthor($email:String) {
-    testsByAuthor(email:$email) {
+  query testsByAuthor($email: String) {
+    testsByAuthor(email: $email) {
       id
       testName
       difficultyLevel
@@ -58,16 +58,14 @@ const testsByAuthor = gql`
 `;
 
 const testByToken = gql`
-  query getTest($token:String) {
-    testByToken (token:$token){
+  query getTest($token: String) {
+    testByToken(token: $token) {
       id
-      problems{
+      problems {
         id
         problemName
         description
-        
       }
-      
     }
   }
 `;
@@ -82,55 +80,39 @@ const sendMail = gql`
 `;
 
 const addProblem = gql`
-  mutation addNewProblem($problemName:String,$description: String,$problemTests:JSON,$difficultyLevel: String,$email: String){
+  mutation addNewProblem(
+    $problemName: String
+    $description: String
+    $problemTests: JSON
+    $difficultyLevel: String
+    $email: String
+  ) {
     addProblem(
-    data:{
-      problemName: $problemName,
-      description: $description,
-      problemTests:$problemTests,
-      difficultyLevel: $difficultyLevel,
-      email: $email})
-    {
-    success
-    message
-    problems
-    {
-      id
-      problemName
-      problemTests
-      description
-      difficultyLevel
-      email
+      data: {
+        problemName: $problemName
+        description: $description
+        problemTests: $problemTests
+        difficultyLevel: $difficultyLevel
+        email: $email
+      }
+    ) {
+      success
+      message
+      problems {
+        id
+        problemName
+        problemTests
+        description
+        difficultyLevel
+        email
+      }
     }
   }
-}
 `;
 
 const deleteProblem = gql`
-  mutation deleteProblem($id:Id!){
-    deleteProblem(id:$id){
-      id
-      problemName
-      problemTests
-      description
-      difficultyLevel
-      email
-  }
-}`;
-
-const updateProblem = gql`
-  mutation updateProblem($id:ID!,$problemName:String,$description: String,$problemTests:JSON,$difficultyLevel: String){
-    updateProblem(id:$id,
-    data:{
-      problemName: $problemName,
-      description: $description,
-      problemTests:$problemTests,
-      difficultyLevel: $difficultyLevel})
-    {
-    success
-    message
-    problems
-    {
+  mutation deleteProblem($id: Id!) {
+    deleteProblem(id: $id) {
       id
       problemName
       problemTests
@@ -139,12 +121,54 @@ const updateProblem = gql`
       email
     }
   }
-}
+`;
+
+const updateProblem = gql`
+  mutation updateProblem(
+    $id: ID!
+    $problemName: String
+    $description: String
+    $problemTests: JSON
+    $difficultyLevel: String
+  ) {
+    updateProblem(
+      id: $id
+      data: {
+        problemName: $problemName
+        description: $description
+        problemTests: $problemTests
+        difficultyLevel: $difficultyLevel
+      }
+    ) {
+      success
+      message
+      problems {
+        id
+        problemName
+        problemTests
+        description
+        difficultyLevel
+        email
+      }
+    }
+  }
 `;
 
 const addTest = gql`
-  mutation addNewTest($testName:String,$difficultyLevel: String,$email: String){
-    addTest(data:{testName: $testName,difficultyLevel: $difficultyLevel,email: $email}){
+  mutation addNewTest(
+    $testName: String
+    $difficultyLevel: String
+    $email: String
+    $problems: [ID]
+  ) {
+    addTest(
+      data: {
+        testName: $testName
+        difficultyLevel: $difficultyLevel
+        email: $email
+        problems: $problems
+      }
+    ) {
       success
       message
       tests {
@@ -159,13 +183,14 @@ const addTest = gql`
           difficultyLevel
           email
         }
-     }
+      }
+    }
   }
-}`;
+`;
 
 const deleteTest = gql`
-  mutation deleteTest($id:Id!) {
-    deleteTest(id:$id){
+  mutation deleteTest($id: ID) {
+    deleteTest(id: $id) {
       id
       testName
       difficultyLevel
@@ -177,64 +202,62 @@ const deleteTest = gql`
         difficultyLevel
         email
       }
+    }
   }
-}`;
+`;
 const updateTest = gql`
-mutation updateTest($id:ID!,$testName:String,$difficultyLevel: String){
-  updateTest(id:$id,
-    data:{testName: $testName,difficultyLevel: $difficultyLevel}){
-    success
-    message
-    tests {
-      id
-      testName
-      difficultyLevel
-      email
-      problems {
-        id
-        problemName
-        problemTests
-        description
-        difficultyLevel
-        email
+  mutation updateTest(
+    $id: ID
+    $testName: String
+    $difficultyLevel: String
+    $problems: [ID]
+  ) {
+    updateTest(
+      id: $id
+      data: {
+        testName: $testName
+        difficultyLevel: $difficultyLevel
+        problems: $problems
       }
-   }
-}
-}`;
+    ) {
+      success
+      message
+    }
+  }
+`;
 
 const addUser = gql`
-  mutation addNewUser($name:String,$email: String,$collegeName:String){
-    addUser(data:{name: $name, email:$email, collegeName: $collegeName }) {
+  mutation addNewUser($name: String, $email: String, $collegeName: String) {
+    addUser(data: { name: $name, email: $email, collegeName: $collegeName }) {
       success
       message
       user {
         name
         id
         collegeName
-    }
-  }
-}
-`;
-const addTestProblem = gql`
-  mutation addTestProblem($t_id:Int, $p_id:Int)
-  {
-   addTestProblem(data:{t_id: $t_id p_id: $p_id }) {
-    success
-    message
-    test {
-      id
-      testName
-      difficultyLevel
-      problems {
-        id
-        problemName
-        problemTests
-        description
-        difficultyLevel
-        email
       }
     }
-   }
+  }
+`;
+const addTestProblem = gql`
+  mutation addTestProblem($t_id: Int, $p_id: Int) {
+    addTestProblem(data: { t_id: $t_id, p_id: $p_id }) {
+      success
+      message
+      test {
+        id
+        testName
+        difficultyLevel
+        problems {
+          id
+          problemName
+          problemTests
+          description
+          difficultyLevel
+          email
+        }
+      }
+    }
   }
 `;
 
