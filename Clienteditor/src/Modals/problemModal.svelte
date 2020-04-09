@@ -1,23 +1,8 @@
 <script>
   import { getContext } from "svelte";
   import ProblemField from "./ProblemFields.svelte";
-  const { open } = getContext("simple-modal");
-  export let changeCheck;
-  const problemCheck=(val)=>{
-    console.log(val);
-    changeCheck(val);
-  }
-
-  const handleChange=(value)=>{
-    problemCheck(value);
-  }
   const showSurprise = () => {
-    problemCheck(0);
-    open(
-      ProblemField,
-      { message: "hello", onChange:handleChange },
-      { closeOnEsc: false, closeOnOuterClick: false }
-    );
+    location.replace("http://localhost:5000/newProblem");
   };
 </script>
 

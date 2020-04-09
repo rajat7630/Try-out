@@ -111,7 +111,7 @@ const addProblem = gql`
 `;
 
 const deleteProblem = gql`
-  mutation deleteProblem($id: Id!) {
+  mutation deleteProblem($id: ID) {
     deleteProblem(id: $id) {
       id
       problemName
@@ -142,14 +142,6 @@ const updateProblem = gql`
     ) {
       success
       message
-      problems {
-        id
-        problemName
-        problemTests
-        description
-        difficultyLevel
-        email
-      }
     }
   }
 `;
@@ -171,19 +163,6 @@ const addTest = gql`
     ) {
       success
       message
-      tests {
-        id
-        testName
-        difficultyLevel
-        problems {
-          id
-          problemName
-          problemTests
-          description
-          difficultyLevel
-          email
-        }
-      }
     }
   }
 `;

@@ -7,6 +7,8 @@ import SendTest from './routes/send_test.svelte';
 import GiveTest from './routes/give_test.svelte';
 import NewTest from './routes/newTest.svelte';
 import EditTest from './routes/editTest.svelte';
+import NewProblem from './routes/addProblem.svelte';
+import EditProblem from './routes/editProblem.svelte';
 function userIsAdmin() {
   //check if user is admin and returns true or false
   return document.cookie ? true : false;
@@ -24,6 +26,14 @@ const routes = [
   {
     name: '/newtest',
     component: NewTest
+  },
+  {
+    name: '/newProblem',
+    component: NewProblem
+  },
+  {
+    name: '/editProblem/:id',
+    component: EditProblem
   },
   {
     name: '/editTest/:id',

@@ -6,10 +6,11 @@
   import "ace-builds/src-noconflict/snippets/javascript.js";
   import "ace-builds/src-noconflict/mode-javascript.js";
   import "ace-builds/src-noconflict/theme-tomorrow_night.js";
-  import { dataStore, currentTab } from "./store";
-
+  export let inputChange;
+  export let inputVal;
   let ieditor;
   $: inputstatus = "Corret";
+  let test_case = "";
 
   onMount(() => {
     ace.config.set("basePath", "ace-builds/src-noconflict/");
@@ -28,7 +29,7 @@
 
   afterUpdate(() => {
     let pos = ieditor.session.selection.toJSON();
-    ieditor.session.setValue($currentTab.test_case);
+    ieditor.session.setValue(inputVal);
     ieditor.session.selection.fromJSON(pos);
   });
 
@@ -38,20 +39,21 @@
       clearTimeout(timer);
 
       timer = setTimeout(() => {
-        dataStore.updateTestInput($currentTab.id, ieditor.getValue());
+        test_case = ieditor.getValue();
+        inputChange(test_case);
         try {
-          JSON.parse($currentTab.test_case);
+          JSON.parse(test_case);
           inputstatus = "Correct";
         } catch (err) {
           console.log(err.message);
-          inputstatus=err.message;
+          inputstatus = err.message;
         }
-      }, 100);
+      }, 10);
     };
   })();
 
   try {
-    JSON.parse($currentTab.test_case);
+    JSON.parse(test_case);
     inputstatus = "Correct";
   } catch (err) {
     console.log(err.message);
@@ -63,6 +65,7 @@
     border-bottom: solid 2px #25282c;
     max-width: 40vw;
     height: 20vh;
+    padding: 5vh;
     font-size: 1.2rem;
   }
 </style>

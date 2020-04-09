@@ -49,7 +49,7 @@ const typeDefs = gql`
   }
   type Mutation {
     addProblem(data:addProblemInputs):addProblemOutput!
-    deleteProblem(id:ID!):[Problem]
+    deleteProblem(id:ID):[Problem]
     updateProblem(id:ID!,data:updateProblemInputs):updateProblemOutput!
     addTest(data:addTestInputs):addTestOutput!
     deleteTest(id:ID):[Test]
@@ -113,7 +113,6 @@ const typeDefs = gql`
   type updateProblemOutput {
     success:Boolean
     message:String
-    problem:Problem!
   }
   type updateTestOutput {
     success:Boolean

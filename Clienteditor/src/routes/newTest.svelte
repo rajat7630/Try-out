@@ -20,7 +20,7 @@
     } catch (err) {
       console.log(err);
     }
-    location.replace("http://localhost:5000/admin")
+    // location.replace("http://localhost:5000/admin")
   }
   $: ppp = [];
   function changeHandler(name) {

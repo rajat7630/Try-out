@@ -24,6 +24,7 @@ async function addNewProblem(problem) {
   const res = await Problem.query().insert({
     problemName: problem.problemName,
     description: problem.description,
+    problemTests:JSON.stringify(problem.problemTests),
     difficultyLevel: problem.difficultyLevel,
     email: problem.email
   });
@@ -36,20 +37,21 @@ async function addNewProblem(problem) {
 }
 
 async function deleteProblem(id) {
+  console.log("delete problem");
   const deleteTest = await TestProblem.query()
     .delete()
-    .where('p_id', id);
+    .where('p_id', parseInt(id));
 
-  await Problem.query().deleteById(id);
+  await Problem.query().deleteById(parseInt(id));
 
   return getAllProblems();
 }
 
 async function updateProblem(id, problem) {
-  const updatedProblem = await Problem.query().patchAndFetchById(id, {
+  const updatedProblem = await Problem.query().patchAndFetchById(parseInt(id), {
     problemName: problem.problemName,
     description: problem.description,
-    problemTests: Problem.problemTests,
+    problemTests: JSON.stringify(problem.problemTests),
     difficultyLevel: problem.difficultyLevel
   });
 
@@ -174,6 +176,7 @@ async function getAllProblems() {
 
 async function getProblemById(id) {
   const res = await Problem.query().findById(id);
+  console.log(res);
   return problemReducer(res);
 }
 
