@@ -1,7 +1,4 @@
 <script>
-  import { getContext } from "svelte";
-  import TestField from "./testField.svelte";
-  const { open } = getContext("simple-modal");
   export let changeCheck;
   const TestCheck = () => {
     changeCheck();

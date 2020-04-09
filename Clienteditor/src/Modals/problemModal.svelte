@@ -1,6 +1,5 @@
 <script>
   import { getContext } from "svelte";
-  import ProblemField from "./ProblemFields.svelte";
   const showSurprise = () => {
     location.replace("http://localhost:5000/newProblem");
   };
