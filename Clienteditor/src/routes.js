@@ -8,6 +8,7 @@ import NewTest from './routes/newTest.svelte';
 import EditTest from './routes/editTest.svelte';
 import NewProblem from './routes/addProblem.svelte';
 import EditProblem from './routes/editProblem.svelte';
+import Thankyou from './routes/thankyou.svelte';
 function userIsAdmin() {
   //check if user is admin and returns true or false
   return document.cookie ? true : false;
@@ -57,7 +58,11 @@ const routes = [
   {
     name: '/givetest/:token',
     component: Home
-  }
+  },
+  // {
+  //   name:'givetest/:token/thankyou',
+  //   component:Thankyou
+  // }
 ];
 
 export { routes };

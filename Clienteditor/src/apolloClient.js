@@ -271,7 +271,16 @@ const getTestById = gql`
   }
 `;
 
+const addAttempt = gql`
+  mutation addAttempt($u_id: ID, $t_id: ID, $solutions: JSON) {
+    addAttempt(data: { u_id: $u_id, t_id: $t_id, solutions: $solutions }) {
+      success
+      message
+    }
+  }
+`;
 export const apolloClient = {
+  addAttempt,
   sendMail,
   getTestById,
   getProblems,
@@ -288,5 +297,5 @@ export const apolloClient = {
   deleteTest,
   addUser,
   getToken,
-  testByToken
+  testByToken,
 };

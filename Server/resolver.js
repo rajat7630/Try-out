@@ -14,57 +14,61 @@ module.exports = {
     allTests: () => {
       return store.getAllTests();
     },
-    testByToken:(_, {token})=>{
+    testByToken: (_, { token }) => {
       return store.getTestByToken(token);
     },
-    testById:(_, {id})=>{
+    testById: (_, { id }) => {
       return store.getTestById(id);
     },
 
-    testsByAuthor: (_, {email}) => {
+    testsByAuthor: (_, { email }) => {
       return store.getTestsByAuthor(email);
     },
-    problemsByAuthor:(_, {email})=>{
+    problemsByAuthor: (_, { email }) => {
       return store.getProblemsByAuthor(email);
-    }
+    },
   },
   Mutation: {
-    addProblem: (parent,{data},ctx,info) => {
+    addAttempt: (_, { data }) => {
+      console.log(data);
+      return store.addNewAttempt(data);
+    },
+    addProblem: (parent, { data }, ctx, info) => {
       console.log(data);
       return store.addNewProblem(data);
     },
-    deleteProblem:(parent,{id},ctx,info) => {
-       console.log(id);
-       return store.deleteProblem(id);
+    deleteProblem: (parent, { id }, ctx, info) => {
+      console.log(id);
+      return store.deleteProblem(id);
     },
-    updateProblem:(parent,{id,data},ctx,info) => {
-        console.log(id,data);
-        return store.updateProblem(id,data);
+    updateProblem: (parent, { id, data }, ctx, info) => {
+      console.log(id, data);
+      return store.updateProblem(id, data);
     },
-    addTest: (parent,{data},ctx,info) => {
+    addTest: (parent, { data }, ctx, info) => {
       console.log(data);
       return store.addNewTest(data);
     },
-    deleteTest:(parent,{id},ctx,info) => {
-        console.log(id);
-        return store.deleteTest(id);
+    deleteTest: (parent, { id }, ctx, info) => {
+      console.log(id);
+      return store.deleteTest(id);
     },
-    updateTest:(parent,{id,data},ctx,info) => {
-        console.log(id,data);
-        return store.updateTest(id,data);
+    updateTest: (parent, { id, data }, ctx, info) => {
+      console.log(id, data);
+      return store.updateTest(id, data);
     },
-    addUser:(parent,{data},ctx,info)=>{
+    addUser: (parent, { data }, ctx, info) => {
       console.log(data);
       return store.addNewUser(data);
     },
 
-    addTestProblem:(parent,{data},ctx,info) => {
-        console.log(data);
-        return store.addTestProblem(data);
+    addTestProblem: (parent, { data }, ctx, info) => {
+      console.log(data);
+      return store.addTestProblem(data);
     },
- 
-    sendMail:(_, mailDetails)=>{
+
+    sendMail: (_, mailDetails) => {
       return store.sendMail(mailDetails);
-    }
-  }
+    },
+  },
 };

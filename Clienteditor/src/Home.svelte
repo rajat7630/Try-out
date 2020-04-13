@@ -10,6 +10,7 @@
   import Modal from "svelte-simple-modal";
   import { cookieHandler } from "./helperFunctions/cookie_handler.js";
   export let currentRoute;
+  import Timer from "./components/timer.svelte";
   console.log(currentRoute);
 
   const client = getClient();
@@ -17,8 +18,11 @@
     query: apolloClient.testByToken,
     variables: { token: currentRoute.namedParams.token }
   });
+  var tokens = currentRoute.namedParams.token.split(".");
+  console.log(JSON.parse(atob(tokens[1])));
 
   $problems.then(res => {
+    cookieHandler.setCookie("test_id", res.data.testByToken.id);    
     dataStore.updateStore(res.data.testByToken.problems);
   });
 
@@ -70,6 +74,7 @@
   <h1>Test is being loaded...</h1>
 {:then result}
   <div class="flex flex-col w-full">
+    <Timer expireTime={JSON.parse(atob(tokens[1])).exp} />
     <Tabs />
   </div>
   <EditorArea />

@@ -1,12 +1,16 @@
 <script>
   import EditorWindow from "./EditorWindow.svelte";
+  import { dataStore } from "./store.js";
+  import { cookieHandler } from "./helperFunctions/cookie_handler.js";
+  import { apolloClient } from "./apolloClient.js";
+  import { mutate, getClient } from "svelte-apollo";
   // import NewProblem from "./newProblem.svelte";
   import { currentTab } from "./store";
   let outputData = "";
   let outputCheck = "";
   let dragging = false;
   $: height = "40vh";
-
+  const client =getClient();
   function runHandler() {
     // fetch("http://localhost:5000/result/" + $currentTab.id, {
     //   method:"GET"
@@ -18,6 +22,23 @@
     //   outputData=data.output;
     //   outputCheck=data.answer;
     // })
+  }
+
+  async function sendSolution(data) {
+    let solutions = {
+      u_id: parseInt(cookieHandler.getCookie("user_id")),
+      t_id: parseInt(cookieHandler.getCookie("test_id")),
+      solutions: JSON.stringify(data)
+    };
+    console.log(solutions);
+    try {
+      await mutate(client, {
+        mutation: apolloClient.addAttempt,
+        variables: solutions
+      });
+    } catch (err) {
+      console.log(err);
+    }
   }
 </script>
 
@@ -40,8 +61,8 @@
   .title {
     font-size: 1.5rem;
   }
-  .sizechanger{
-    background: #25282c
+  .sizechanger {
+    background: #25282c;
   }
 
   .runButton {
@@ -86,13 +107,16 @@
   <h1 class="question px-3 py-3">{$currentTab.description}</h1>
   <EditorWindow />
   <div
-    class="w-full bg-gray-800 sizechanger cursor-move text-bg-600 flex justify-center
-    text-3xl h-3"
+    class="w-full bg-gray-800 sizechanger cursor-move text-bg-600 flex
+    justify-center text-3xl h-3"
     style="line-height: 1px; cursor: ns-resize;"
     on:mousedown={evt => {
       dragging = true;
     }} />
   <div class="output" id="outputid" style="height:{height}">
+    <button class="runButton" on:click={() => sendSolution($dataStore)}>
+      Submit
+    </button>
     <button class="runButton" on:click={() => runHandler()}>Run</button>
     <h2 class="text-3xl text-center title">Output</h2>
     <div class="flex-1 text-gray-700 text-center px-4 py-2 outputValue">
@@ -101,6 +125,5 @@
     <div class="flex-1 text-gray-700 text-center px-4 py-2 outputValue">
       {outputCheck}
     </div>
-
   </div>
 </div>

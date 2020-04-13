@@ -32,10 +32,12 @@ const typeDefs = gql`
     name: String
     collegeName: String
   }
-  type Solution {
-    id: ID!
-    solution: String
-    problem: Problem
+  type Attempt{
+    id:ID!
+    u_id:ID!
+    t_id:ID!
+    solutions:JSON
+    attemptTime:String
   }
   type Query {
     getToken(id: ID!): Payload
@@ -50,6 +52,7 @@ const typeDefs = gql`
   type Mutation {
     addProblem(data:addProblemInputs):addProblemOutput!
     deleteProblem(id:ID):[Problem]
+    addAttempt(data:addAttemptInput):addAttemptOutput
     updateProblem(id:ID!,data:updateProblemInputs):updateProblemOutput!
     addTest(data:addTestInputs):addTestOutput!
     deleteTest(id:ID):[Test]
@@ -70,6 +73,15 @@ const typeDefs = gql`
     difficultyLevel: String
     email:String
     problems:[ID]
+  }
+  input addAttemptInput{
+    u_id:ID
+    t_id:ID
+    solutions:JSON
+  }
+  type addAttemptOutput{
+    message:String
+    success:Boolean
   }
   input addUserInputs {
     name: String 

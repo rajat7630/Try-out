@@ -1,6 +1,6 @@
 import { writable, derived } from 'svelte/store';
-const { subscribe, update } = writable([]);
 
+const { subscribe, update } = writable([]);
 function updateSolution(id, solution) {
   // fetch('http://localhost:3000/updateSolution/' + id, {
   //   method: 'POST',
@@ -39,7 +39,7 @@ function updateStore(problems) {
         return { ...problem, active: true, solution: 'function Solution(){}' };
       }
       return { ...problem, active: false, solution: 'function Solution(){}' };
-    })
+    }),
   ]);
 }
 

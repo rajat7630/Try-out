@@ -84,11 +84,9 @@ importers:
       apollo: 2.26.0_typescript@3.8.3
       apollo-datasource-rest: 0.7.0
       apollo-server: 2.11.0
-      aws-sdk: 2.654.0
       body-parser: 1.19.0
-      concurrently: 5.1.0
+      cookies: 0.8.0
       cors: 2.8.5
-      dotenv: 8.2.0
       express: 4.17.1
       graphql-type-json: 0.3.1
       jsonwebtoken: 8.5.1
@@ -106,22 +104,13 @@ importers:
       redis: 3.0.2
       redis-server: 1.2.2
       typescript: 3.8.3
-    devDependencies:
-      eslint: 6.8.0
-      eslint-config-airbnb-base: 14.1.0_8cdb6d8c18c3319a1365bd5afa0063a3
-      eslint-plugin-import: 2.20.2_eslint@6.8.0
     specifiers:
       apollo: ^2.22.1
       apollo-datasource-rest: ^0.7.0
       apollo-server: ^2.10.0
-      aws-sdk: ^2.644.0
       body-parser: ^1.19.0
-      concurrently: ^5.1.0
+      cookies: ^0.8.0
       cors: ^2.8.5
-      dotenv: ^8.2.0
-      eslint: ^6.8.0
-      eslint-config-airbnb-base: ^14.1.0
-      eslint-plugin-import: ^2.20.1
       express: ^4.17.1
       graphql-type-json: ^0.3.1
       jsonwebtoken: ^8.5.1
@@ -2548,6 +2537,15 @@ packages:
       node: '>= 0.6'
     resolution:
       integrity: sha512-+Hp8fLp57wnUSt0tY0tHEXh4voZRDnoIrZPqlo3DPiI4y9lwg/jqx+1Om94/W6ZaPDOUbnjOt/99w66zk+l1Xg==
+  /cookies/0.8.0:
+    dependencies:
+      depd: 2.0.0
+      keygrip: 1.1.0
+    dev: false
+    engines:
+      node: '>= 0.8'
+    resolution:
+      integrity: sha512-8aPsApQfebXnuI+537McwYsDtjVxGm8gTIzQI3FDW6t5t/DAhERxtnbEPN/8RX+uZthoz4eCOgloXaE5cYyNow==
   /copy-descriptor/0.1.1:
     engines:
       node: '>=0.10.0'
@@ -2796,6 +2794,12 @@ packages:
       node: '>= 0.6'
     resolution:
       integrity: sha1-m81S4UwJd2PnSbJ0xDRu0uVgtak=
+  /depd/2.0.0:
+    dev: false
+    engines:
+      node: '>= 0.8'
+    resolution:
+      integrity: sha512-g7nH6P6dyDioJogAAGprGpCtVImJhpPk/roCzdb3fIh61/s/nPsfR6onyMwkCAR/OlC3yBC0lESvUoQEAssIrw==
   /deprecated-decorator/0.1.6:
     dev: false
     resolution:
@@ -4761,6 +4765,14 @@ packages:
       node: '>= 0.4.0'
     resolution:
       integrity: sha512-40aUybvhH9t2h71ncA1/1SbtTNCVZHgsTsTgqPUxGWDmUDrXyDf2wMNQKEbdBjbf4AI+fQhbECNTV6lWxQKUzg==
+  /keygrip/1.1.0:
+    dependencies:
+      tsscmp: 1.0.6
+    dev: false
+    engines:
+      node: '>= 0.6'
+    resolution:
+      integrity: sha512-iYSchDJ+liQ8iwbSI2QqsQOvqv58eJCEanyJPJi+Khyu8smkcKSFUCbPwzFcL7YVtZ6eONjqRX/38caJ7QjRAQ==
   /keypairs/1.2.14:
     dependencies:
       eckles: 1.4.1
@@ -7796,6 +7808,12 @@ packages:
   /tslib/1.11.1:
     resolution:
       integrity: sha512-aZW88SY8kQbU7gpV19lN24LtXh/yD4ZZg6qieAJDDg+YBsJcSmLGK9QpnUjAKVG/xefmvJGd1WUmfpT/g6AJGA==
+  /tsscmp/1.0.6:
+    dev: false
+    engines:
+      node: '>=0.6.x'
+    resolution:
+      integrity: sha512-LxhtAkPDTkVCMQjt2h6eBVY28KCjikZqZfMcC15YBeNjkgUpdCfBu5HoiOTDu86v6smE8yOjyEktJ8hlbANHQA==
   /tty/1.0.1:
     dev: false
     resolution:
