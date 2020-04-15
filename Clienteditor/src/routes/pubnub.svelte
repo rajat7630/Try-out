@@ -1,69 +1,74 @@
 <script>
-  import pubnub from "../components/pubnub.js";
-  //import "./csspubnub.svelte";
+  import { apolloClient } from "../apolloClient.js";
+  import { getClient, query } from "svelte-apollo";
+  import Modal from "svelte-simple-modal";
+  import Content from "../Modals/problemModal.svelte";
+  import TestModal from "../Modals/testModal.svelte";
+  import Navbar from "../components/navbar.svelte";
+  import { publish, grantPermissions } from "../../pubnubClient.js";
+  import pubnub from "../../pubnubinit.js";
 
+  const client = getClient();
+  const Test = query(client, { query: apolloClient.allTests });
+  const Problem = query(client, { query: apolloClient.getProblems });
+  const handleProblemAdd = () => {
+    Problem.refetch();
+  };
+  const handleTestAdd = () => {
+    Test.refetch();
+  };
   let hasJoinedChat = false;
-  let user = "";
-
+  let channel = "";
   let username = "";
   let newMessage = "";
-  let messages = [];
-  let output = [];
-  const handleChange = value => (messages = value);
+  let messages = "";
+  let output = [""];
 
-  function createUser() {
-    pubnub.createUser(
-      {
-        name: username
-      },
-      function(status, response) {}
-    );
+  function joined() {
     hasJoinedChat = true;
   }
-
-  pubnub.getUser(
-    {
-      include: {
-        customFields: true
-      }
-    },
-    function(status, response) {}
-  );
-
-  function initializeChannel() {
-    //console.log("Subscribing..");
+  function close() {
+    hasJoinedChat = false;
   }
 
-  function publish() {
-    function publishSampleMessage() {
-      console.log("This is Check Part");
-      var publishConfig = {
-        channel: "chat",
-        message: newMessage
-      };
-      pubnub.publish(publishConfig, function(status, response) {
-        console.log(status, response);
-      });
+  // const user = {
+  //   id: 1,
+  //   email: "newUserr.com",
+  //   name: "adarash",
+  //   flag: "U",
+  //   ttl: 1440,
+  //   profileUrl: "xyz.com"
+  // };
+
+  pubnub.addListener({
+    message: function(m) {
+      output = [...output, m.message];
+      newMessage = "";
+      // console.log(m);
     }
+  });
 
-    pubnub.addListener({
-      status: function(statusEvent) {
-        if (statusEvent.category === "PNConnectedCategory") {
-          publishSampleMessage();
-        }
-      },
-      message: function(msg) {
-        output = [...output] + msg.message;
-        console.log(msg.message);
-      },
-      presence: function(presenceEvent) {
-        // handle presence
-      }
-    });
-    pubnub.subscribe({
-      channels: ["chat"]
-    });
+  function getCookie(name) {
+    var match = document.cookie.match(new RegExp("(^| )" + name + "=([^;]+)"));
+    if (match) return match[2];
   }
+  const userEmail = getCookie("access_email");
+
+  let sEmails = userEmail.split("%");
+  let userName = sEmails[0];
+
+  const user = {
+    id: Math.floor(Math.random() * 10) + 1,
+    email: userName,
+    name: userName,
+    flag: "U",
+    ttl: 1440,
+    profileUrl: null
+  };
+
+  grantPermissions(user);
+
+  //subscribe("newUserr.com");
 </script>
 
 <style>
@@ -88,18 +93,7 @@
   .login-form h2 {
     margin-bottom: 20px;
   }
-  button[type="submit"] {
-    width: 100%;
-    padding: 10px;
-    font-size: 18px;
-    color: #fff;
-    background-color: #000;
-    cursor: pointer;
-  }
-  button[type="submit"]:hover {
-    color: #000;
-    background-color: #fff;
-  }
+
   input {
     width: 100%;
     margin-bottom: 20px;
@@ -107,6 +101,16 @@
   }
   label {
     margin-bottom: 20px;
+  }
+  .btm {
+    position: fixed;
+    right: 120px;
+    bottom: 60px;
+  }
+  .btm2 {
+    position: absolute;
+    right: 0px;
+    bottom: 359px;
   }
   .chat {
     position: absolute;
@@ -118,7 +122,7 @@
     width: 300px;
     border: 1px solid #dcc;
   }
-  .chat header {
+  .header {
     border-bottom: 1px solid #dcc;
     padding: 20px;
   }
@@ -155,45 +159,85 @@
     border: none;
     margin-bottom: 0;
   }
+  .btn {
+    @apply font-bold py-2 px-4 rounded;
+  }
+  .btn-blue {
+    @apply bg-blue-500 text-white;
+  }
+  .btn-blue:hover {
+    @apply bg-blue-700;
+  }
+  button {
+    margin-left: 92%;
+  }
+  #blk {
+    margin-top: 6%;
+    margin-left: 10%;
+    margin-right: 6%;
+  }
+  #btn {
+    float: right;
+  }
 </style>
 
-<div class="App">
-  {#if hasJoinedChat}
-    <div class="chat">
-      <p>
-        <a href="https://www.pubnub.com/?devrel_pbpn=javascript-chat">
-          <img
-            src="https://d2c805weuec6z7.cloudfront.net/Powered_By_PubNub.png"
-            alt="Powered By PubNub"
-            width="150" />
-        </a>
-      </p>
-      <p />
-      <p>Enter chat and press enter.</p>
-      <input bind:value={newMessage} placeholder="Your Message Here" />
-      <button on:click={publish}>Send</button>
-      <p>Chat Output:</p>
-      <ul class="messages">
-        {#each output as message}
-          <li>
-            <span>{message}</span>
-          </li>
-        {/each}
-      </ul>
-    </div>
-  {:else}
-    <div class="login-form">
-      <h2>Sign in to Chat</h2>
-      <form on:submit={createUser}>
-        <label for="username">Enter your username</label>
-        <input
-          type="text"
-          bind:value={username}
-          id="username"
-          name="username"
-          placeholder="Username" />
-        <button type="submit">Join Chat</button>
-      </form>
-    </div>
-  {/if}
-</div>
+<link
+  href="https://unpkg.com/tailwindcss@^1.0/dist/tailwind.min.css"
+  rel="stylesheet" />
+<body>
+
+  <Navbar />
+
+  <div>
+    <p>USER PAGE</p>
+  </div>
+
+  <div class="App">
+    {#if hasJoinedChat}
+      <div class="chat">
+        <div class="header">
+          <button
+            on:click={close}
+            class="btm2 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2
+            px-4 rounded-full">
+            Close
+          </button>
+        </div>
+        <p>
+          <a href="https://www.pubnub.com/?devrel_pbpn=javascript-chat">
+            <img
+              src="https://d2c805weuec6z7.cloudfront.net/Powered_By_PubNub.png"
+              alt="Powered By PubNub"
+              width="150" />
+          </a>
+        </p>
+        <p />
+        <p>Enter chat and press enter.</p>
+        <form
+          on:submit|preventDefault={publish(newMessage, 'channel.' + userName)}>
+          <input bind:value={newMessage} placeholder="Your Message Here" />
+          <button type="submit">Send</button>
+        </form>
+        <p>Chat Output:</p>
+        <div class="message-form">
+          <ul class="messages">
+            {#each output as message}
+              <li>
+                <span>{message}</span>
+              </li>
+            {/each}
+          </ul>
+        </div>
+      </div>
+    {:else}
+      <div class="btm">
+        <button
+          on:click={joined}
+          class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4
+          rounded-full">
+          Helpdesk...
+        </button>
+      </div>
+    {/if}
+  </div>
+</body>

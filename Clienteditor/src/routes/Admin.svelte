@@ -24,7 +24,7 @@
     Test.refetch();
   };
   let hasJoinedChat = false;
-  let channel = "";
+  let channels = [""];
   let username = "";
   let newMessage = "";
   let messages = "";
@@ -36,23 +36,6 @@
   function close() {
     hasJoinedChat = false;
   }
-
-  // const user = {
-  //   id: 1,
-  //   email: "newUserr.com",
-  //   name: "adarash",
-  //   flag: "U",
-  //   ttl: 1440,
-  //   profileUrl: "xyz.com"
-  // };
-
-  pubnub.addListener({
-    message: function(m) {
-      output = [...output, m.message];
-      // console.log(m);
-    }
-  });
-
   function getCookie(name) {
     var match = document.cookie.match(new RegExp("(^| )" + name + "=([^;]+)"));
     if (match) return match[2];
@@ -66,14 +49,49 @@
     id: Math.floor(Math.random() * 10) + 1,
     email: userName,
     name: userName,
-    flag: "U",
+    flag: "A",
     ttl: 1440,
     profileUrl: null
   };
 
+  // const user = {
+  //   id: 1,
+  //   email: "newUserr.com",
+  //   name: "adarash",
+  //   flag: "U",
+  //   ttl: 1440,
+  //   profileUrl: "xyz.com"
+  // };
+  let channelName = "channel." + userName;
+  console.log(channelName);
+  pubnub.addListener({
+    message: function(m) {
+      let flag = true;
+      for (let i = 0; i < channels.length; i++) {
+        if (channels[i] == m.channel) {
+          flag = false;
+          break;
+        } else {
+          flag = true;
+        }
+      }
+      if (flag) {
+        console.log("different channel");
+        output = [m.message];
+        channels = [...channels, m.channel];
+      } else {
+        output = [...output, m.message];
+        newMessage = "";
+      }
+    }
+  });
+
   grantPermissions(user);
 
   //subscribe("newUserr.com");
+  const changeChannel = m => {
+    channelName = m.channel;
+  };
 </script>
 
 <style>
@@ -108,8 +126,8 @@
     margin-bottom: 20px;
   }
   .btm {
-    position: fixed;
-    right: 120px;
+    position: absolute;
+    right: 60px;
     bottom: 60px;
   }
   .btm2 {
@@ -124,7 +142,7 @@
     height: 400px;
     display: flex;
     flex-direction: column;
-    width: 300px;
+    width: 500px;
     border: 1px solid #dcc;
   }
   .header {
@@ -173,9 +191,7 @@
   .btn-blue:hover {
     @apply bg-blue-700;
   }
-  button {
-    margin-left: 92%;
-  }
+
   #blk {
     margin-top: 6%;
     margin-left: 10%;
@@ -264,30 +280,39 @@
             Close
           </button>
         </div>
-        <p>
-          <a href="https://www.pubnub.com/?devrel_pbpn=javascript-chat">
-            <img
-              src="https://d2c805weuec6z7.cloudfront.net/Powered_By_PubNub.png"
-              alt="Powered By PubNub"
-              width="150" />
-          </a>
-        </p>
-        <p />
-        <p>Enter chat and press enter.</p>
-        <form
-          on:submit|preventDefault={publish(newMessage, 'channel.' + userName)}>
-          <input bind:value={newMessage} placeholder="Your Message Here" />
-          <button type="submit">Send</button>
-        </form>
-        <p>Chat Output:</p>
-        <div class="message-form">
-          <ul class="messages">
-            {#each output as message}
-              <li>
-                <span>{message}</span>
-              </li>
-            {/each}
-          </ul>
+        <div class="flex">
+          <div class="w-1/2">
+            Active Channels
+            <div class="message-form">
+              <ul class="messages">
+                {#each channels as channel}
+                  <li>
+                    <button on:click={changeChannel({ channel })}>
+                      {channel}
+                    </button>
+                  </li>
+                {/each}
+              </ul>
+            </div>
+          </div>
+          <div class="w-1/2">
+            <p>Enter chat and press enter.</p>
+            <form on:submit|preventDefault={publish(newMessage, channelName)}>
+              <input bind:value={newMessage} placeholder="Your Message Here" />
+              <button type="submit">Send</button>
+            </form>
+            <p>Chat Output:</p>
+            <div class="message-form">
+              <ul class="messages">
+                {#each output as message}
+                  <li>
+                    <span>{message}</span>
+                  </li>
+                {/each}
+              </ul>
+            </div>
+          </div>
+
         </div>
       </div>
     {:else}
@@ -296,7 +321,7 @@
           on:click={joined}
           class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4
           rounded-full">
-          Helpdesk...
+          User Chat
         </button>
       </div>
     {/if}

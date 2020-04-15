@@ -1,6 +1,5 @@
+import axios from 'axios';
 import pubnub from './pubnubinit';
-
-import server from '../Server/pubnubServer';
 
 export const subscribe = (email) => {
   pubnub.subscribe({
@@ -8,7 +7,6 @@ export const subscribe = (email) => {
     withPresence: true,
   });
 };
-
 export const wildcardsubscription = () => {
   pubnub.subscribe({
     channels: ['channel.*'],
@@ -17,23 +15,33 @@ export const wildcardsubscription = () => {
 };
 export const grantPermissions = async (users) => {
   if (users.flag === 'A') {
-    const message = await server.grantPermissionForAdmin(
-      users.email,
-      users.ttl
-    );
+    const message = await axios({
+      method: 'post',
+      url: '/pubnubadmin',
+      data: {
+        id: users.email,
+        ttl: users.ttl,
+      },
+    });
     console.log(message);
     pubnub.setAuthKey(users.email);
     pubnub.setUUID(users.email);
     wildcardsubscription();
   } else {
-    const message = await server.grantPermissionForUser(users.email, users.ttl);
+    const message = await axios({
+      method: 'post',
+      url: '/pubnubuser',
+      data: {
+        id: users.email,
+        ttl: users.ttl,
+      },
+    });
     console.log(message);
     pubnub.setAuthKey(users.email);
     pubnub.setUUID(users.email);
     subscribe(users.email);
   }
 };
-
 export const publish = async (newMessage, channelName) => {
   try {
     await pubnub.publish({
@@ -50,7 +58,6 @@ export const publish = async (newMessage, channelName) => {
     throw new Error(e);
   }
 };
-
 export const signal = async (newMessage, channelName) => {
   try {
     await pubnub.signal({
@@ -62,7 +69,6 @@ export const signal = async (newMessage, channelName) => {
     throw new Error('unable to signal message');
   }
 };
-
 export const addMessageAction = async (action, channelName, timetoken) => {
   try {
     await pubnub.addMessageAction({
@@ -74,4 +80,7 @@ export const addMessageAction = async (action, channelName, timetoken) => {
   } catch (e) {
     throw new Error('unable to add action');
   }
+};
+export const unsubscribe = () => {
+  pubnub.unsubscribeAll();
 };
