@@ -1,4 +1,8 @@
 <script>
+  import { dataStore } from "../store.js";
+  import { cookieHandler } from "../helperFunctions/cookie_handler.js";
+  import { apolloClient } from "../apolloClient.js";
+  import { mutate, getClient } from "svelte-apollo";
   export let expireTime;
   console.log(expireTime);
   let timer = {
@@ -6,20 +10,38 @@
     minute: "",
     second: ""
   };
+  const client = getClient();
+
+  async function sendSolution(data) {
+    let solutions = {
+      u_id: parseInt(cookieHandler.getCookie("user_id")),
+      t_id: parseInt(cookieHandler.getCookie("test_id")),
+      solutions: JSON.stringify(data)
+    };
+    try {
+      await mutate(client, {
+        mutation: apolloClient.addAttempt,
+        variables: solutions
+      });
+      location.replace("http://localhost:5000/feedback");
+    } catch (err) {
+      console.log(err);
+    }
+  }
   function InitializeTimer() {
     let d = new Date();
     let currentTime = Math.floor(d.getTime() / 1000);
     if (currentTime > expireTime) {
       clearInterval(timeCounter);
+      sendSolution($dataStore);
       return;
     }
     let remainingTime = Math.floor(expireTime - currentTime);
     timer.hour = Math.floor(remainingTime / 3600).toString();
     timer.minute = (Math.floor(remainingTime / 60) % 60).toString();
     timer.second = (remainingTime % 60).toString();
-    console.log(timer);
   }
-  
+
   let timeCounter = setInterval(InitializeTimer, 1000);
 </script>
 

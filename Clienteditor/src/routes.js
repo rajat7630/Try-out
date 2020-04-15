@@ -9,6 +9,7 @@ import EditTest from './routes/editTest.svelte';
 import NewProblem from './routes/addProblem.svelte';
 import EditProblem from './routes/editProblem.svelte';
 import Thankyou from './routes/thankyou.svelte';
+
 function userIsAdmin() {
   //check if user is admin and returns true or false
   return document.cookie ? true : false;
@@ -20,49 +21,49 @@ function notAdmin() {
 const routes = [
   {
     name: '/',
-    component: Login
+    component: Login,
     // onlyIf: { guard: notAdmin,redirect: '/admin' }
   },
   {
     name: '/newtest',
-    component: NewTest
+    component: NewTest,
   },
   {
     name: '/newProblem',
-    component: NewProblem
+    component: NewProblem,
   },
   {
     name: '/editProblem/:id',
-    component: EditProblem
+    component: EditProblem,
   },
   {
     name: '/editTest/:id',
-    component: EditTest
+    component: EditTest,
   },
   {
     name: '/admin',
-    component: Admin
+    component: Admin,
   },
   {
     name: '/test/:id',
-    component: Tests
+    component: Tests,
   },
   {
     name: '/problem/:id',
-    component: Problems
+    component: Problems,
   },
   {
     name: '/sendtest/:id',
-    component: SendTest
+    component: SendTest,
   },
   {
     name: '/givetest/:token',
-    component: Home
+    component: Home,
   },
-  // {
-  //   name:'givetest/:token/thankyou',
-  //   component:Thankyou
-  // }
+  {
+    name: '/thankyou',
+    component: Thankyou,
+  },
 ];
 
 export { routes };

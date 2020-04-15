@@ -36,6 +36,7 @@
         mutation: apolloClient.addAttempt,
         variables: solutions
       });
+      location.replace("http://localhost:5000/feedback");
     } catch (err) {
       console.log(err);
     }
