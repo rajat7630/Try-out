@@ -17,7 +17,7 @@ export const grantPermissions = async (users) => {
   if (users.flag === 'A') {
     const message = await axios({
       method: 'post',
-      url: '/pubnubadmin',
+      url: 'http://localhost:3000/pubnubadmin',
       data: {
         id: users.email,
         ttl: users.ttl,
@@ -30,7 +30,7 @@ export const grantPermissions = async (users) => {
   } else {
     const message = await axios({
       method: 'post',
-      url: '/pubnubuser',
+      url: 'http://localhost:3000/pubnubuser',
       data: {
         id: users.email,
         ttl: users.ttl,

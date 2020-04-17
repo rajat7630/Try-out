@@ -5,16 +5,14 @@
   import Content from "../Modals/problemModal.svelte";
   import TestModal from "../Modals/testModal.svelte";
   import Navbar from "../components/navbar.svelte";
-<<<<<<< HEAD
-  import { cookieHandler } from "../helperFunctions/cookie_handler.js";
-=======
   import { publish, grantPermissions } from "../../pubnubClient.js";
   import pubnub from "../../pubnubinit.js";
 
->>>>>>> feat: pubnub frontend added of admin and user
+  import { cookieHandler } from "../helperFunctions/cookie_handler.js";
   const client = getClient();
-  const tokens=cookieHandler.getCookie("access_token").split('.');
+  const tokens = cookieHandler.getCookie("access_token").split(".");
   console.log(atob(tokens[1]));
+
   const Test = query(client, { query: apolloClient.allTests });
   const Problem = query(client, { query: apolloClient.getProblems });
   const handleProblemAdd = () => {
@@ -54,14 +52,6 @@
     profileUrl: null
   };
 
-  // const user = {
-  //   id: 1,
-  //   email: "newUserr.com",
-  //   name: "adarash",
-  //   flag: "U",
-  //   ttl: 1440,
-  //   profileUrl: "xyz.com"
-  // };
   let channelName = "channel." + userName;
   console.log(channelName);
   pubnub.addListener({
@@ -200,7 +190,7 @@
   #btn {
     float: right;
   }
-  .prob{
+  .prob {
     list-style: none;
   }
 </style>

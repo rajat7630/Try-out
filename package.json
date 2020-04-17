@@ -8,7 +8,6 @@
     "dev": "concurrently \"npm run server \" \"npm run client \" "
   },
   "dependencies": {
-    
     "apollo-boost": "^0.4.7",
     "aws-sdk": "^2.644.0",
     "concurrently": "^5.1.0",
@@ -26,7 +25,6 @@
     "eslint-plugin-import": "^2.20.2",
     "husky": "^4.2.3",
     "lint-staged": "^10.1.1"
-<<<<<<< HEAD
   },
   "husky": {
     "hooks": {
@@ -37,7 +35,5 @@
     "*.js": [
       "eslint --fix"
     ]
-=======
->>>>>>> f6fa512... knexfile fixed
   }
 }
