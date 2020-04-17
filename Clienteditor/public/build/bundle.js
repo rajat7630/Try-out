@@ -31284,16 +31284,25 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
   }
 `;
-
-    const addAttempt = src$1`
-  mutation addAttempt($u_id: ID, $t_id: ID, $solutions: JSON) {
-    addAttempt(data: { u_id: $u_id, t_id: $t_id, solutions: $solutions }) {
+    const updateAttempt = src$1`
+  mutation updateAttempt($id: ID, $u_id: ID, $solutions: JSON) {
+    updateAttempt(data: { u_id: $u_id, id: $id, solutions: $solutions }) {
       success
       message
     }
   }
 `;
+    const addAttempt = src$1`
+  mutation addAttempt($u_id: ID, $t_id: ID, $solutions: JSON) {
+    addAttempt(data: { u_id: $u_id, t_id: $t_id, solutions: $solutions }) {
+      success
+      message
+      id
+    }
+  }
+`;
     const apolloClient = {
+      updateAttempt,
       addAttempt,
       sendMail,
       getTestById,
@@ -32905,14 +32914,12 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	let div0;
     	let t3;
     	let div3;
-    	let button0;
+    	let button;
     	let t5;
-    	let button1;
-    	let t7;
     	let h2;
-    	let t9;
+    	let t7;
     	let div1;
-    	let t11;
+    	let t9;
     	let div2;
     	let current;
     	let dispose;
@@ -32929,42 +32936,37 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			div0 = element("div");
     			t3 = space();
     			div3 = element("div");
-    			button0 = element("button");
-    			button0.textContent = "Submit";
+    			button = element("button");
+    			button.textContent = "Submit";
     			t5 = space();
-    			button1 = element("button");
-    			button1.textContent = "Run";
-    			t7 = space();
     			h2 = element("h2");
     			h2.textContent = "Output";
-    			t9 = space();
+    			t7 = space();
     			div1 = element("div");
     			div1.textContent = `${/*outputData*/ ctx[4]}`;
-    			t11 = space();
+    			t9 = space();
     			div2 = element("div");
     			div2.textContent = `${/*outputCheck*/ ctx[5]}`;
     			attr_dev(h1, "class", "question px-3 py-3 svelte-1txjdtn");
-    			add_location(h1, file$2, 107, 2, 2375);
+    			add_location(h1, file$2, 107, 2, 2382);
     			attr_dev(div0, "class", "w-full bg-gray-800 sizechanger cursor-move text-bg-600 flex\n    justify-center text-3xl h-3 svelte-1txjdtn");
     			set_style(div0, "line-height", "1px");
     			set_style(div0, "cursor", "ns-resize");
-    			add_location(div0, file$2, 109, 2, 2458);
-    			attr_dev(button0, "class", "runButton svelte-1txjdtn");
-    			add_location(button0, file$2, 117, 4, 2741);
-    			attr_dev(button1, "class", "runButton svelte-1txjdtn");
-    			add_location(button1, file$2, 120, 4, 2841);
+    			add_location(div0, file$2, 109, 2, 2465);
+    			attr_dev(button, "class", "runButton svelte-1txjdtn");
+    			add_location(button, file$2, 117, 4, 2748);
     			attr_dev(h2, "class", "text-3xl text-center title svelte-1txjdtn");
-    			add_location(h2, file$2, 121, 4, 2914);
+    			add_location(h2, file$2, 120, 4, 2848);
     			attr_dev(div1, "class", "flex-1 text-gray-700 text-center px-4 py-2 outputValue svelte-1txjdtn");
-    			add_location(div1, file$2, 122, 4, 2969);
+    			add_location(div1, file$2, 121, 4, 2903);
     			attr_dev(div2, "class", "flex-1 text-gray-700 text-center px-4 py-2 outputValue svelte-1txjdtn");
-    			add_location(div2, file$2, 125, 4, 3072);
+    			add_location(div2, file$2, 124, 4, 3006);
     			attr_dev(div3, "class", "output svelte-1txjdtn");
     			attr_dev(div3, "id", "outputid");
     			set_style(div3, "height", /*height*/ ctx[1]);
-    			add_location(div3, file$2, 116, 2, 2678);
+    			add_location(div3, file$2, 116, 2, 2685);
     			attr_dev(div4, "class", "mainDiv flex flex-col svelte-1txjdtn");
-    			add_location(div4, file$2, 93, 0, 2050);
+    			add_location(div4, file$2, 93, 0, 2057);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -32979,14 +32981,12 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			append_dev(div4, div0);
     			append_dev(div4, t3);
     			append_dev(div4, div3);
-    			append_dev(div3, button0);
+    			append_dev(div3, button);
     			append_dev(div3, t5);
-    			append_dev(div3, button1);
-    			append_dev(div3, t7);
     			append_dev(div3, h2);
-    			append_dev(div3, t9);
+    			append_dev(div3, t7);
     			append_dev(div3, div1);
-    			append_dev(div3, t11);
+    			append_dev(div3, t9);
     			append_dev(div3, div2);
     			current = true;
     			if (remount) run_all(dispose);
@@ -32994,10 +32994,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			dispose = [
     				listen_dev(window, "keydown", /*keydown_handler*/ ctx[8], false, false, false),
     				listen_dev(div0, "mousedown", /*mousedown_handler*/ ctx[9], false, false, false),
-    				listen_dev(button0, "click", /*click_handler*/ ctx[10], false, false, false),
-    				listen_dev(button1, "click", /*click_handler_1*/ ctx[11], false, false, false),
-    				listen_dev(div4, "mousemove", /*mousemove_handler*/ ctx[12], false, false, false),
-    				listen_dev(div4, "mouseup", /*mouseup_handler*/ ctx[13], false, false, false)
+    				listen_dev(button, "click", /*click_handler*/ ctx[10], false, false, false),
+    				listen_dev(div4, "mousemove", /*mousemove_handler*/ ctx[11], false, false, false),
+    				listen_dev(div4, "mouseup", /*mouseup_handler*/ ctx[12], false, false, false)
     			];
     		},
     		p: function update(ctx, [dirty]) {
@@ -33061,8 +33060,8 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	// })
     	async function sendSolution(data) {
     		let solutions = {
+    			id: parseInt(cookieHandler.getCookie("attemptId")),
     			u_id: parseInt(cookieHandler.getCookie("user_id")),
-    			t_id: parseInt(cookieHandler.getCookie("test_id")),
     			solutions: JSON.stringify(data)
     		};
 
@@ -33070,13 +33069,11 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     		try {
     			await mutate(client, {
-    				mutation: apolloClient.addAttempt,
+    				mutation: apolloClient.updateAttempt,
     				variables: solutions
     			});
-
-    			location.replace("http://localhost:5000/feedback");
     		} catch(err) {
-    			console.log(err);
+    			console.log(err); // location.replace("http://localhost:5000/thankyou");
     		}
     	}
 
@@ -33102,7 +33099,6 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	};
 
     	const click_handler = () => sendSolution($dataStore);
-    	const click_handler_1 = () => runHandler();
 
     	const mousemove_handler = evt => {
     		if (dragging) {
@@ -33160,7 +33156,6 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		keydown_handler,
     		mousedown_handler,
     		click_handler,
-    		click_handler_1,
     		mousemove_handler,
     		mouseup_handler
     	];
@@ -33429,58 +33424,61 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			button = element("button");
     			button.textContent = "Submit";
     			attr_dev(p, "class", "text-2xl font-bold");
-    			add_location(p, file$4, 32, 4, 856);
+    			add_location(p, file$4, 35, 4, 942);
     			attr_dev(div0, "class", "flex justify-between items-center pb-3");
-    			add_location(div0, file$4, 31, 2, 799);
+    			add_location(div0, file$4, 34, 2, 885);
     			attr_dev(label0, "class", "block text-gray-500 font-bold md:text-right mb-1 md:mb-0 pr-4");
     			attr_dev(label0, "for", "inline-full-name");
-    			add_location(label0, file$4, 37, 8, 1029);
+    			add_location(label0, file$4, 40, 8, 1115);
     			attr_dev(div1, "class", "md:w-1/3");
-    			add_location(div1, file$4, 36, 6, 998);
+    			add_location(div1, file$4, 39, 6, 1084);
     			attr_dev(input0, "class", "bg-gray-200 appearance-none border-2 border-gray-200 rounded\n          w-full py-2 px-4 text-gray-700 leading-tight focus:outline-none\n          focus:bg-white focus:border-purple-500");
     			attr_dev(input0, "id", "inline-full-name");
     			attr_dev(input0, "type", "text");
     			attr_dev(input0, "placeholder", "Name");
-    			add_location(input0, file$4, 44, 8, 1232);
+    			input0.required = true;
+    			add_location(input0, file$4, 47, 8, 1318);
     			attr_dev(div2, "class", "md:w-2/3");
-    			add_location(div2, file$4, 43, 6, 1201);
+    			add_location(div2, file$4, 46, 6, 1287);
     			attr_dev(div3, "class", "md:flex md:items-center mb-6");
-    			add_location(div3, file$4, 35, 4, 949);
+    			add_location(div3, file$4, 38, 4, 1035);
     			attr_dev(label1, "class", "block text-gray-500 font-bold md:text-right mb-1 md:mb-0 pr-4");
     			attr_dev(label1, "for", "inline-username");
-    			add_location(label1, file$4, 56, 8, 1668);
+    			add_location(label1, file$4, 60, 8, 1773);
     			attr_dev(div4, "class", "md:w-1/3");
-    			add_location(div4, file$4, 55, 6, 1637);
+    			add_location(div4, file$4, 59, 6, 1742);
     			attr_dev(input1, "class", "bg-gray-200 appearance-none border-2 border-gray-200 rounded\n          w-full py-2 px-4 text-gray-700 leading-tight focus:outline-none\n          focus:bg-white focus:border-purple-500");
     			attr_dev(input1, "id", "inline-username");
     			attr_dev(input1, "type", "text-area");
     			attr_dev(input1, "placeholder", "College Name");
-    			add_location(input1, file$4, 63, 8, 1878);
+    			input1.required = true;
+    			add_location(input1, file$4, 67, 8, 1983);
     			attr_dev(div5, "class", "md:w-2/3");
-    			add_location(div5, file$4, 62, 6, 1847);
+    			add_location(div5, file$4, 66, 6, 1952);
     			attr_dev(div6, "class", "md:flex md:items-center mb-6");
-    			add_location(div6, file$4, 54, 4, 1588);
+    			add_location(div6, file$4, 58, 4, 1693);
     			attr_dev(label2, "class", "block text-gray-500 font-bold md:text-right mb-1 md:mb-0 pr-4");
     			attr_dev(label2, "for", "inline-username");
-    			add_location(label2, file$4, 75, 8, 2333);
+    			add_location(label2, file$4, 80, 8, 2457);
     			attr_dev(div7, "class", "md:w-1/3");
-    			add_location(div7, file$4, 74, 6, 2302);
+    			add_location(div7, file$4, 79, 6, 2426);
     			attr_dev(input2, "class", "bg-gray-200 appearance-none border-2 border-gray-200 rounded\n          w-full py-2 px-4 text-gray-700 leading-tight focus:outline-none\n          focus:bg-white focus:border-purple-500");
     			attr_dev(input2, "id", "inline-username");
     			attr_dev(input2, "type", "text-area");
     			attr_dev(input2, "placeholder", "E-mail");
-    			add_location(input2, file$4, 82, 8, 2537);
+    			input2.required = true;
+    			add_location(input2, file$4, 87, 8, 2661);
     			attr_dev(div8, "class", "md:w-2/3");
-    			add_location(div8, file$4, 81, 6, 2506);
+    			add_location(div8, file$4, 86, 6, 2630);
     			attr_dev(div9, "class", "md:flex md:items-center mb-6");
-    			add_location(div9, file$4, 73, 4, 2253);
+    			add_location(div9, file$4, 78, 4, 2377);
     			attr_dev(form, "class", "w-full max-w-md");
-    			add_location(form, file$4, 34, 2, 914);
+    			add_location(form, file$4, 37, 2, 1000);
     			attr_dev(button, "class", "px-4 bg-transparent p-3 rounded-lg text-indigo-500\n      hover:bg-gray-100 hover:text-indigo-400 mr-2");
-    			add_location(button, file$4, 94, 4, 2948);
+    			add_location(button, file$4, 100, 4, 3091);
     			attr_dev(div10, "class", "flex justify-end pt-2");
-    			add_location(div10, file$4, 93, 2, 2908);
-    			add_location(div11, file$4, 30, 0, 791);
+    			add_location(div10, file$4, 99, 2, 3051);
+    			add_location(div11, file$4, 33, 0, 877);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -33564,6 +33562,10 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	const client = getClient();
 
     	async function clickHandler() {
+    		if (user.name === "" || user.email === "" || user.collegeName === "") {
+    			return;
+    		}
+
     		console.log(user);
 
     		try {
@@ -34609,7 +34611,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     const { console: console_1$3 } = globals;
     const file$7 = "src/Home.svelte";
 
-    // (65:0) {#if cookieHandler.getCookie('loggedIn') !== 'true'}
+    // (66:0) {#if cookieHandler.getCookie('loggedIn') !== 'true'}
     function create_if_block$2(ctx) {
     	let div;
     	let current;
@@ -34626,7 +34628,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		c: function create() {
     			div = element("div");
     			create_component(modal.$$.fragment);
-    			add_location(div, file$7, 65, 2, 2205);
+    			add_location(div, file$7, 66, 2, 2284);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div, anchor);
@@ -34652,14 +34654,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_if_block$2.name,
     		type: "if",
-    		source: "(65:0) {#if cookieHandler.getCookie('loggedIn') !== 'true'}",
+    		source: "(66:0) {#if cookieHandler.getCookie('loggedIn') !== 'true'}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (67:4) <Modal>
+    // (68:4) <Modal>
     function create_default_slot(ctx) {
     	let current;
 
@@ -34695,14 +34697,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_default_slot.name,
     		type: "slot",
-    		source: "(67:4) <Modal>",
+    		source: "(68:4) <Modal>",
     		ctx
     	});
 
     	return block;
     }
 
-    // (81:0) {:catch err}
+    // (82:0) {:catch err}
     function create_catch_block(ctx) {
     	let h1;
 
@@ -34710,7 +34712,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		c: function create() {
     			h1 = element("h1");
     			h1.textContent = "Error :- Contact Admin";
-    			add_location(h1, file$7, 81, 2, 2502);
+    			add_location(h1, file$7, 82, 2, 2581);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, h1, anchor);
@@ -34727,14 +34729,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_catch_block.name,
     		type: "catch",
-    		source: "(81:0) {:catch err}",
+    		source: "(82:0) {:catch err}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (75:0) {:then result}
+    // (76:0) {:then result}
     function create_then_block(ctx) {
     	let div;
     	let t0;
@@ -34760,7 +34762,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			t1 = space();
     			create_component(editorarea.$$.fragment);
     			attr_dev(div, "class", "flex flex-col w-full");
-    			add_location(div, file$7, 75, 2, 2354);
+    			add_location(div, file$7, 76, 2, 2433);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div, anchor);
@@ -34798,14 +34800,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_then_block.name,
     		type: "then",
-    		source: "(75:0) {:then result}",
+    		source: "(76:0) {:then result}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (73:18)    <h1>Test is being loaded...</h1> {:then result}
+    // (74:18)    <h1>Test is being loaded...</h1> {:then result}
     function create_pending_block(ctx) {
     	let h1;
 
@@ -34813,7 +34815,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		c: function create() {
     			h1 = element("h1");
     			h1.textContent = "Test is being loaded...";
-    			add_location(h1, file$7, 73, 2, 2304);
+    			add_location(h1, file$7, 74, 2, 2383);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, h1, anchor);
@@ -34830,7 +34832,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_pending_block.name,
     		type: "pending",
-    		source: "(73:18)    <h1>Test is being loaded...</h1> {:then result}",
+    		source: "(74:18)    <h1>Test is being loaded...</h1> {:then result}",
     		ctx
     	});
 
@@ -34944,6 +34946,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	component_subscribe($$self, problems, value => $$invalidate(0, $problems = value));
     	var tokens = currentRoute.namedParams.token.split(".");
     	console.log(JSON.parse(atob(tokens[1])));
+    	cookieHandler.setCookie("attemptId", JSON.parse(atob(tokens[1])).attemptId);
 
     	$problems.then(res => {
     		cookieHandler.setCookie("test_id", res.data.testByToken.id);
@@ -37412,10 +37415,10 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     const { console: console_1$7 } = globals;
     const file$g = "src/routes/send_test.svelte";
 
-    // (22:0) {:catch err}
+    // (132:8) {:catch err}
     function create_catch_block$4(ctx) {
     	let t0;
-    	let t1_value = /*err*/ ctx[6] + "";
+    	let t1_value = /*err*/ ctx[9] + "";
     	let t1;
 
     	const block = {
@@ -37428,7 +37431,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			insert_dev(target, t1, anchor);
     		},
     		p: function update(ctx, dirty) {
-    			if (dirty & /*$token*/ 1 && t1_value !== (t1_value = /*err*/ ctx[6] + "")) set_data_dev(t1, t1_value);
+    			if (dirty & /*$token*/ 4 && t1_value !== (t1_value = /*err*/ ctx[9] + "")) set_data_dev(t1, t1_value);
     		},
     		d: function destroy(detaching) {
     			if (detaching) detach_dev(t0);
@@ -37440,37 +37443,149 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_catch_block$4.name,
     		type: "catch",
-    		source: "(22:0) {:catch err}",
+    		source: "(132:8) {:catch err}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (16:0) {:then result}
+    // (63:8) {:then result}
     function create_then_block$4(ctx) {
-    	let input;
-    	let input_value_value;
+    	let div7;
+    	let div6;
+    	let div2;
+    	let div0;
+    	let label0;
+    	let t1;
+    	let div1;
+    	let input0;
+    	let input0_value_value;
+    	let t2;
+    	let div5;
+    	let div3;
+    	let label1;
+    	let t4;
+    	let div4;
+    	let input1;
+    	let t5;
+    	let div9;
+    	let div8;
+    	let button;
+    	let dispose;
+
+    	function click_handler(...args) {
+    		return /*click_handler*/ ctx[7](/*result*/ ctx[8], ...args);
+    	}
 
     	const block = {
     		c: function create() {
-    			input = element("input");
-    			attr_dev(input, "type", "text");
-    			attr_dev(input, "id", "mailBody");
-    			input.value = input_value_value = "localhost:5000/givetest/" + /*result*/ ctx[5].data.getToken.token;
-    			input.readOnly = true;
-    			add_location(input, file$g, 16, 2, 402);
+    			div7 = element("div");
+    			div6 = element("div");
+    			div2 = element("div");
+    			div0 = element("div");
+    			label0 = element("label");
+    			label0.textContent = "Test Link";
+    			t1 = space();
+    			div1 = element("div");
+    			input0 = element("input");
+    			t2 = space();
+    			div5 = element("div");
+    			div3 = element("div");
+    			label1 = element("label");
+    			label1.textContent = "Email";
+    			t4 = space();
+    			div4 = element("div");
+    			input1 = element("input");
+    			t5 = space();
+    			div9 = element("div");
+    			div8 = element("div");
+    			button = element("button");
+    			button.textContent = "Send Test";
+    			attr_dev(label0, "class", "block text-gray-500 font-bold md:text-right mb-1\n                    md:mb-0 pr-4");
+    			attr_dev(label0, "for", "inline-full-name");
+    			add_location(label0, file$g, 68, 18, 1493);
+    			attr_dev(div0, "class", "md:w-1/5");
+    			add_location(div0, file$g, 67, 16, 1452);
+    			attr_dev(input0, "class", "bg-gray-200 appearance-none border-2 border-gray-200\n                    rounded w-full py-2 px-4 text-gray-700 leading-tight\n                    focus:outline-none focus:bg-white focus:border-purple-500");
+    			attr_dev(input0, "id", "inline-full-name");
+    			attr_dev(input0, "type", "text");
+    			input0.value = input0_value_value = "localhost:5000/givetest/" + /*result*/ ctx[8].data.getToken.token;
+    			input0.readOnly = true;
+    			add_location(input0, file$g, 76, 18, 1791);
+    			attr_dev(div1, "class", "md:w-3/5");
+    			add_location(div1, file$g, 75, 16, 1750);
+    			attr_dev(div2, "class", "md:flex md:items-center mb-6");
+    			add_location(div2, file$g, 66, 14, 1393);
+    			attr_dev(label1, "class", "block text-gray-500 font-bold md:text-right mb-1\n                    md:mb-0 pr-4");
+    			attr_dev(label1, "for", "inline-full-name");
+    			add_location(label1, file$g, 88, 18, 2375);
+    			attr_dev(div3, "class", "md:w-1/5");
+    			add_location(div3, file$g, 87, 16, 2334);
+    			attr_dev(input1, "class", "bg-gray-200 appearance-none border-2 border-gray-200\n                    rounded w-full py-2 px-4 text-gray-700 leading-tight\n                    focus:outline-none focus:bg-white focus:border-purple-500");
+    			attr_dev(input1, "id", "inline-full-name");
+    			attr_dev(input1, "type", "text");
+    			attr_dev(input1, "placeholder", "Enter Email");
+    			add_location(input1, file$g, 96, 18, 2669);
+    			attr_dev(div4, "class", "md:w-3/5");
+    			add_location(div4, file$g, 95, 16, 2628);
+    			attr_dev(div5, "class", "md:flex md:items-center mb-6");
+    			add_location(div5, file$g, 86, 14, 2275);
+    			attr_dev(div6, "class", "max-w-auto rounded overflow-hidden shadow-lg");
+    			add_location(div6, file$g, 65, 12, 1320);
+    			attr_dev(div7, "class", "p-8 mx-2 mt-24 items-center");
+    			add_location(div7, file$g, 64, 10, 1266);
+    			attr_dev(button, "class", "bg-red-500 hover:bg-red-700 text-white font-bold py-2\n                px-4 border border-red-700 rounded");
+    			add_location(button, file$g, 110, 14, 3239);
+    			attr_dev(div8, "class", "flex buttonbox svelte-l4ym3b");
+    			add_location(div8, file$g, 109, 12, 3196);
+    			attr_dev(div9, "class", "px-4 py-2");
+    			add_location(div9, file$g, 108, 10, 3160);
     		},
-    		m: function mount(target, anchor) {
-    			insert_dev(target, input, anchor);
+    		m: function mount(target, anchor, remount) {
+    			insert_dev(target, div7, anchor);
+    			append_dev(div7, div6);
+    			append_dev(div6, div2);
+    			append_dev(div2, div0);
+    			append_dev(div0, label0);
+    			append_dev(div2, t1);
+    			append_dev(div2, div1);
+    			append_dev(div1, input0);
+    			append_dev(div6, t2);
+    			append_dev(div6, div5);
+    			append_dev(div5, div3);
+    			append_dev(div3, label1);
+    			append_dev(div5, t4);
+    			append_dev(div5, div4);
+    			append_dev(div4, input1);
+    			set_input_value(input1, /*email*/ ctx[0]);
+    			insert_dev(target, t5, anchor);
+    			insert_dev(target, div9, anchor);
+    			append_dev(div9, div8);
+    			append_dev(div8, button);
+    			if (remount) run_all(dispose);
+
+    			dispose = [
+    				listen_dev(input1, "input", /*input1_input_handler*/ ctx[6]),
+    				listen_dev(button, "click", click_handler, false, false, false)
+    			];
     		},
-    		p: function update(ctx, dirty) {
-    			if (dirty & /*$token*/ 1 && input_value_value !== (input_value_value = "localhost:5000/givetest/" + /*result*/ ctx[5].data.getToken.token) && input.value !== input_value_value) {
-    				prop_dev(input, "value", input_value_value);
+    		p: function update(new_ctx, dirty) {
+    			ctx = new_ctx;
+
+    			if (dirty & /*$token*/ 4 && input0_value_value !== (input0_value_value = "localhost:5000/givetest/" + /*result*/ ctx[8].data.getToken.token) && input0.value !== input0_value_value) {
+    				prop_dev(input0, "value", input0_value_value);
+    			}
+
+    			if (dirty & /*email*/ 1 && input1.value !== /*email*/ ctx[0]) {
+    				set_input_value(input1, /*email*/ ctx[0]);
     			}
     		},
     		d: function destroy(detaching) {
-    			if (detaching) detach_dev(input);
+    			if (detaching) detach_dev(div7);
+    			if (detaching) detach_dev(t5);
+    			if (detaching) detach_dev(div9);
+    			run_all(dispose);
     		}
     	};
 
@@ -37478,14 +37593,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_then_block$4.name,
     		type: "then",
-    		source: "(16:0) {:then result}",
+    		source: "(63:8) {:then result}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (14:15)    Loading... {:then result}
+    // (61:23)            Loading...         {:then result}
     function create_pending_block$4(ctx) {
     	let t;
 
@@ -37506,7 +37621,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_pending_block$4.name,
     		type: "pending",
-    		source: "(14:15)    Loading... {:then result}",
+    		source: "(61:23)            Loading...         {:then result}",
     		ctx
     	});
 
@@ -37514,14 +37629,19 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     function create_fragment$j(ctx) {
-    	let h1;
+    	let link;
+    	let t0;
+    	let body;
+    	let div2;
     	let t1;
-    	let promise;
-    	let t2;
-    	let input;
+    	let h1;
+    	let strong;
     	let t3;
-    	let button;
-    	let dispose;
+    	let div1;
+    	let div0;
+    	let promise;
+    	let current;
+    	const navbar = new Navbar({ $$inline: true });
 
     	let info = {
     		ctx,
@@ -37530,70 +37650,87 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		pending: create_pending_block$4,
     		then: create_then_block$4,
     		catch: create_catch_block$4,
-    		value: 5,
-    		error: 6
+    		value: 8,
+    		error: 9
     	};
 
-    	handle_promise(promise = /*$token*/ ctx[0], info);
+    	handle_promise(promise = /*$token*/ ctx[2], info);
 
     	const block = {
     		c: function create() {
-    			h1 = element("h1");
-    			h1.textContent = "The link generated is as follows";
+    			link = element("link");
+    			t0 = space();
+    			body = element("body");
+    			div2 = element("div");
+    			create_component(navbar.$$.fragment);
     			t1 = space();
-    			info.block.c();
-    			t2 = space();
-    			input = element("input");
+    			h1 = element("h1");
+    			strong = element("strong");
+    			strong.textContent = "Send Test";
     			t3 = space();
-    			button = element("button");
-    			button.textContent = "Send";
-    			add_location(h1, file$g, 12, 0, 314);
-    			attr_dev(input, "type", "email");
-    			attr_dev(input, "id", "email");
-    			input.value = "";
-    			attr_dev(input, "placeholder", "Enter Email here");
-    			add_location(input, file$g, 24, 0, 562);
-    			add_location(button, file$g, 25, 0, 636);
+    			div1 = element("div");
+    			div0 = element("div");
+    			info.block.c();
+    			attr_dev(link, "href", "https://unpkg.com/tailwindcss@^1.0/dist/tailwind.min.css");
+    			attr_dev(link, "rel", "stylesheet");
+    			add_location(link, file$g, 48, 0, 900);
+    			add_location(strong, file$g, 56, 6, 1106);
+    			attr_dev(h1, "class", "heading svelte-l4ym3b");
+    			add_location(h1, file$g, 55, 4, 1079);
+    			attr_dev(div0, "class", "h-12");
+    			add_location(div0, file$g, 59, 6, 1168);
+    			attr_dev(div1, "class", "");
+    			add_location(div1, file$g, 58, 4, 1147);
+    			add_location(div2, file$g, 52, 2, 1003);
+    			add_location(body, file$g, 51, 0, 994);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
-    		m: function mount(target, anchor, remount) {
-    			insert_dev(target, h1, anchor);
-    			insert_dev(target, t1, anchor);
-    			info.block.m(target, info.anchor = anchor);
-    			info.mount = () => t2.parentNode;
-    			info.anchor = t2;
-    			insert_dev(target, t2, anchor);
-    			insert_dev(target, input, anchor);
-    			insert_dev(target, t3, anchor);
-    			insert_dev(target, button, anchor);
-    			if (remount) dispose();
-    			dispose = listen_dev(button, "click", /*click_handler*/ ctx[4], false, false, false);
+    		m: function mount(target, anchor) {
+    			insert_dev(target, link, anchor);
+    			insert_dev(target, t0, anchor);
+    			insert_dev(target, body, anchor);
+    			append_dev(body, div2);
+    			mount_component(navbar, div2, null);
+    			append_dev(div2, t1);
+    			append_dev(div2, h1);
+    			append_dev(h1, strong);
+    			append_dev(div2, t3);
+    			append_dev(div2, div1);
+    			append_dev(div1, div0);
+    			info.block.m(div0, info.anchor = null);
+    			info.mount = () => div0;
+    			info.anchor = null;
+    			current = true;
     		},
     		p: function update(new_ctx, [dirty]) {
     			ctx = new_ctx;
     			info.ctx = ctx;
 
-    			if (dirty & /*$token*/ 1 && promise !== (promise = /*$token*/ ctx[0]) && handle_promise(promise, info)) ; else {
+    			if (dirty & /*$token*/ 4 && promise !== (promise = /*$token*/ ctx[2]) && handle_promise(promise, info)) ; else {
     				const child_ctx = ctx.slice();
-    				child_ctx[5] = info.resolved;
+    				child_ctx[8] = info.resolved;
     				info.block.p(child_ctx, dirty);
     			}
     		},
-    		i: noop,
-    		o: noop,
+    		i: function intro(local) {
+    			if (current) return;
+    			transition_in(navbar.$$.fragment, local);
+    			current = true;
+    		},
+    		o: function outro(local) {
+    			transition_out(navbar.$$.fragment, local);
+    			current = false;
+    		},
     		d: function destroy(detaching) {
-    			if (detaching) detach_dev(h1);
-    			if (detaching) detach_dev(t1);
-    			info.block.d(detaching);
+    			if (detaching) detach_dev(link);
+    			if (detaching) detach_dev(t0);
+    			if (detaching) detach_dev(body);
+    			destroy_component(navbar);
+    			info.block.d();
     			info.token = null;
     			info = null;
-    			if (detaching) detach_dev(t2);
-    			if (detaching) detach_dev(input);
-    			if (detaching) detach_dev(t3);
-    			if (detaching) detach_dev(button);
-    			dispose();
     		}
     	};
 
@@ -37619,7 +37756,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	});
 
     	validate_store(token, "token");
-    	component_subscribe($$self, token, value => $$invalidate(0, $token = value));
+    	component_subscribe($$self, token, value => $$invalidate(2, $token = value));
+    	let email = "";
+    	let mailBody = "";
     	const writable_props = ["currentRoute"];
 
     	Object.keys($$props).forEach(key => {
@@ -37629,9 +37768,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	let { $$slots = {}, $$scope } = $$props;
     	validate_slots("Send_test", $$slots, []);
 
-    	const click_handler = async () => {
-    		let email = document.getElementById("email").value;
-    		let mailBody = document.getElementById("mailBody").value;
+    	function input1_input_handler() {
+    		email = this.value;
+    		$$invalidate(0, email);
+    	}
+
+    	const click_handler = async result => {
+    		$$invalidate(1, mailBody = `localhost:5000/givetest/${result.data.getToken.token}`);
     		console.log(email, mailBody);
 
     		try {
@@ -37645,7 +37788,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	};
 
     	$$self.$set = $$props => {
-    		if ("currentRoute" in $$props) $$invalidate(3, currentRoute = $$props.currentRoute);
+    		if ("currentRoute" in $$props) $$invalidate(5, currentRoute = $$props.currentRoute);
     	};
 
     	$$self.$capture_state = () => ({
@@ -37654,26 +37797,40 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		query,
     		mutate,
     		apolloClient,
+    		Navbar,
     		client,
     		token,
+    		email,
+    		mailBody,
     		$token
     	});
 
     	$$self.$inject_state = $$props => {
-    		if ("currentRoute" in $$props) $$invalidate(3, currentRoute = $$props.currentRoute);
+    		if ("currentRoute" in $$props) $$invalidate(5, currentRoute = $$props.currentRoute);
+    		if ("email" in $$props) $$invalidate(0, email = $$props.email);
+    		if ("mailBody" in $$props) $$invalidate(1, mailBody = $$props.mailBody);
     	};
 
     	if ($$props && "$$inject" in $$props) {
     		$$self.$inject_state($$props.$$inject);
     	}
 
-    	return [$token, client, token, currentRoute, click_handler];
+    	return [
+    		email,
+    		mailBody,
+    		$token,
+    		client,
+    		token,
+    		currentRoute,
+    		input1_input_handler,
+    		click_handler
+    	];
     }
 
     class Send_test extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$j, create_fragment$j, safe_not_equal, { currentRoute: 3 });
+    		init(this, options, instance$j, create_fragment$j, safe_not_equal, { currentRoute: 5 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
@@ -37685,7 +37842,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		const { ctx } = this.$$;
     		const props = options.props || {};
 
-    		if (/*currentRoute*/ ctx[3] === undefined && !("currentRoute" in props)) {
+    		if (/*currentRoute*/ ctx[5] === undefined && !("currentRoute" in props)) {
     			console_1$7.warn("<Send_test> was created without expected prop 'currentRoute'");
     		}
     	}

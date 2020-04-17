@@ -270,16 +270,25 @@ const getTestById = gql`
     }
   }
 `;
-
-const addAttempt = gql`
-  mutation addAttempt($u_id: ID, $t_id: ID, $solutions: JSON) {
-    addAttempt(data: { u_id: $u_id, t_id: $t_id, solutions: $solutions }) {
+const updateAttempt = gql`
+  mutation updateAttempt($id: ID, $u_id: ID, $solutions: JSON) {
+    updateAttempt(data: { u_id: $u_id, id: $id, solutions: $solutions }) {
       success
       message
     }
   }
 `;
+const addAttempt = gql`
+  mutation addAttempt($u_id: ID, $t_id: ID, $solutions: JSON) {
+    addAttempt(data: { u_id: $u_id, t_id: $t_id, solutions: $solutions }) {
+      success
+      message
+      id
+    }
+  }
+`;
 export const apolloClient = {
+  updateAttempt,
   addAttempt,
   sendMail,
   getTestById,

@@ -20,6 +20,7 @@
   });
   var tokens = currentRoute.namedParams.token.split(".");
   console.log(JSON.parse(atob(tokens[1])));
+  cookieHandler.setCookie("attemptId",JSON.parse(atob(tokens[1])).attemptId );
 
   $problems.then(res => {
     cookieHandler.setCookie("test_id", res.data.testByToken.id);    

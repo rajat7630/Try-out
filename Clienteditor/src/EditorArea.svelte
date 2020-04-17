@@ -10,7 +10,7 @@
   let outputCheck = "";
   let dragging = false;
   $: height = "40vh";
-  const client =getClient();
+  const client = getClient();
   function runHandler() {
     // fetch("http://localhost:5000/result/" + $currentTab.id, {
     //   method:"GET"
@@ -26,17 +26,17 @@
 
   async function sendSolution(data) {
     let solutions = {
+      id: parseInt(cookieHandler.getCookie("attemptId")),
       u_id: parseInt(cookieHandler.getCookie("user_id")),
-      t_id: parseInt(cookieHandler.getCookie("test_id")),
       solutions: JSON.stringify(data)
     };
     console.log(solutions);
     try {
       await mutate(client, {
-        mutation: apolloClient.addAttempt,
+        mutation: apolloClient.updateAttempt,
         variables: solutions
       });
-      location.replace("http://localhost:5000/feedback");
+      // location.replace("http://localhost:5000/thankyou");
     } catch (err) {
       console.log(err);
     }
@@ -118,7 +118,6 @@
     <button class="runButton" on:click={() => sendSolution($dataStore)}>
       Submit
     </button>
-    <button class="runButton" on:click={() => runHandler()}>Run</button>
     <h2 class="text-3xl text-center title">Output</h2>
     <div class="flex-1 text-gray-700 text-center px-4 py-2 outputValue">
       {outputData}

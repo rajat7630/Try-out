@@ -2,7 +2,7 @@
   import { getContext } from "svelte";
   import { getClient, mutate, subscribe } from "svelte-apollo";
   import { apolloClient } from "../apolloClient.js";
-  import {cookieHandler} from "../helperFunctions/cookie_handler.js";
+  import { cookieHandler } from "../helperFunctions/cookie_handler.js";
   const { close } = getContext("simple-modal");
   let user = {
     name: "",
@@ -11,15 +11,18 @@
   };
   const client = getClient();
   async function clickHandler() {
+    if(user.name===""||user.email===""||user.collegeName==="")
+    {
+      return;
+    }
     console.log(user);
     try {
-      const res=await mutate(client, {
+      const res = await mutate(client, {
         mutation: apolloClient.addUser,
         variables: user
       });
       console.log(res);
       cookieHandler.setCookie("user_id", res.data.addUser.user.id);
-      
     } catch (err) {
       console.log(err);
     }
@@ -49,7 +52,8 @@
           id="inline-full-name"
           type="text"
           bind:value={user.name}
-          placeholder="Name" />
+          placeholder="Name"
+          required />
       </div>
     </div>
     <div class="md:flex md:items-center mb-6">
@@ -68,7 +72,8 @@
           id="inline-username"
           type="text-area"
           bind:value={user.collegeName}
-          placeholder="College Name" />
+          placeholder="College Name"
+          required />
       </div>
     </div>
     <div class="md:flex md:items-center mb-6">
@@ -87,7 +92,8 @@
           id="inline-username"
           type="text-area"
           bind:value={user.email}
-          placeholder="E-mail" />
+          placeholder="E-mail"
+          required />
       </div>
     </div>
   </form>

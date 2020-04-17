@@ -60,6 +60,16 @@ const typeDefs = gql`
     addUser(data:addUserInputs):userDetail
     sendMail(mailBody: String, email: String):mailSent
     addTestProblem(data:addTestProblemsInputs):testProblemOutput!
+    updateAttempt(data:updateAttemptInput):updateAttemptOutput
+  }
+  input updateAttemptInput{
+    id:ID
+    u_id:ID
+    solutions:JSON
+  }
+  type updateAttemptOutput{
+    success:Boolean
+    message:String
   }
   input addProblemInputs {
     problemName: String
@@ -82,6 +92,7 @@ const typeDefs = gql`
   type addAttemptOutput{
     message:String
     success:Boolean
+    id:ID
   }
   input addUserInputs {
     name: String 

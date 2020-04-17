@@ -111,7 +111,7 @@ async function addNewUser(user) {
   return {
     success: true,
     message: 'User Added Successfully',
-    user: res
+    user: res,
   };
 }
 
@@ -127,7 +127,7 @@ async function addTestProblem(testProblem) {
     test: test,
   };
 }
-async function problemReducer(prob) {
+function problemReducer(prob) {
   return {
     id: prob.id,
     problemName: prob.problemName,
@@ -195,17 +195,21 @@ async function getProblemsByAuthor(email) {
   });
 }
 
-function getToken(id) {
-  const token = jwt.sign({ testId: id }, 'helloo', {
+async function getToken(id) {
+  const res = await getTestById(parseInt(id));
+  const attempt = await addNewAttempt(res);
+  console.log(attempt);
+  const token = jwt.sign({ testId: id, attemptId: attempt.id }, 'helloo', {
     expiresIn: 60 * 60,
   });
   return { token: token };
 }
 
-function getTestByToken(token) {
+async function getTestByToken(token) {
   const decode = jwt.decode(token);
   console.log(decode);
-  return getTestById(decode.testId);
+  const res = await getTestById(parseInt(decode.testId));
+  return res;
 }
 
 function sendMail(mailDetails) {
@@ -227,19 +231,52 @@ function sendMail(mailDetails) {
 }
 
 async function addNewAttempt(data) {
+  let tt = JSON.stringify(data.problems);
   const res = await Attempt.query().insert({
-    u_id: parseInt(data.u_id),
-    t_id: parseInt(data.t_id),
-    solutions: data.solutions
+    t_id: parseInt(data.id),
+    solutions: tt,
   });
   console.log(res);
   return {
     success: true,
     message: 'Attempt successfully added',
+    id: res.id,
+  };
+}
+
+async function updateAttempt(data) {
+  let res = await Attempt.query().findById(parseInt(data.id));
+  let rr = [...res.solutions];
+  let tt = [...JSON.parse(data.solutions)];
+  console.log(rr);
+  let score=0;
+  rr = [
+    ...rr.map((ele, index) => {
+      
+      let result = eval(`${tt[index].solution} Solution(JSON.stringify(${ele.problemTests.testcase}))`);
+      console.log(result);
+      if(result===JSON.parse(ele.problemTests.output))
+      {
+        score+=100;
+      }
+      return { ...ele, solution: tt[index].solution };
+    }),
+  ];
+  console.log(score);
+  let res2= await Attempt.query().patchAndFetchById(parseInt(data.id), {
+    u_id:parseInt(data.u_id),
+    solutions:JSON.stringify(rr),
+    Score:score
+  });
+  console.log(res2);
+  return {
+    success: true,
+    message: 'Attempt updated',
   };
 }
 
 module.exports = {
+  updateAttempt,
   addNewAttempt,
   getProblemById,
   getAllProblems,

@@ -70,5 +70,9 @@ module.exports = {
     sendMail: (_, mailDetails) => {
       return store.sendMail(mailDetails);
     },
+
+    updateAttempt:(_, {data})=>{
+      return store.updateAttempt(data);
+    }
   },
 };
