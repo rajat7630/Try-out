@@ -13,13 +13,10 @@ Downoad the dependencies
 ```node
 pnpm install
 ```
-Setting up docker for postgresQL
+Setting up docker for postgresQL and Localstack
 
 ```bash
-docker pull postgres
-docker run --name editordb2 -e POSTGRES_PASSWORD=newPassword -d postgres
-docker start editordb2
-docker exec -it editordb2 psql -U postgres
+sudo docker-compose up -d
 ```
 Setting up knex File
 
