@@ -1,17 +1,23 @@
 {
   "name": "server",
   "version": "1.0.0",
+  "description": "",
   "main": "index.js",
   "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "nodemon app.js"
   },
+  "author": "",
+  "license": "ISC",
   "dependencies": {
     "apollo": "^2.22.1",
     "apollo-datasource-rest": "^0.7.0",
     "apollo-server": "^2.10.0",
+    "aws-sdk": "^2.644.0",
     "body-parser": "^1.19.0",
-    "cookies": "^0.8.0",
+    "concurrently": "^5.1.0",
     "cors": "^2.8.5",
+    "dotenv": "^8.2.0",
     "express": "^4.17.1",
     "graphql-type-json": "^0.3.1",
     "jsonwebtoken": "^8.5.1",
@@ -29,5 +35,10 @@
     "redis": "^3.0.2",
     "redis-server": "^1.2.2",
     "typescript": "^3.8.3"
+  },
+  "devDependencies": {
+    "eslint": "^6.8.0",
+    "eslint-config-airbnb-base": "^14.1.0",
+    "eslint-plugin-import": "^2.20.1"
   }
 }

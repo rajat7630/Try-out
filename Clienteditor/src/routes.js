@@ -9,6 +9,7 @@ import EditTest from './routes/editTest.svelte';
 import NewProblem from './routes/addProblem.svelte';
 import EditProblem from './routes/editProblem.svelte';
 import Thankyou from './routes/thankyou.svelte';
+import Pubnub from './routes/pubnub.svelte';
 
 function userIsAdmin() {
   //check if user is admin and returns true or false
@@ -22,7 +23,7 @@ const routes = [
   {
     name: '/',
     component: Login,
-    // onlyIf: { guard: notAdmin,redirect: '/admin' }
+    onlyIf: { guard: notAdmin, redirect: '/admin' },
   },
   {
     name: '/newtest',
@@ -43,6 +44,7 @@ const routes = [
   {
     name: '/admin',
     component: Admin,
+    onlyIf: { guard: userIsAdmin, redirect: '/' },
   },
   {
     name: '/test/:id',
@@ -63,6 +65,20 @@ const routes = [
   {
     name: '/thankyou',
     component: Thankyou,
+  },
+  {
+    name: '/pubnub',
+    component: Pubnub,
+    onlyIf: { guard: userIsAdmin, redirect: '/' },
+  },
+  {
+    name: '/home',
+    component: Home,
+    onlyIf: { guard: userIsAdmin, redirect: '/' },
+  },
+  {
+    name: '/sendtest/:id',
+    component: SendTest,
   },
 ];
 

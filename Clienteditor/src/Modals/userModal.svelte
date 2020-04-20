@@ -3,6 +3,9 @@
   import { getClient, mutate, subscribe } from "svelte-apollo";
   import { apolloClient } from "../apolloClient.js";
   import { cookieHandler } from "../helperFunctions/cookie_handler.js";
+  import { publish, grantPermissions } from "../../pubnubClient.js";
+  import pubnub from "../../pubnubinit.js";
+
   const { close } = getContext("simple-modal");
   let user = {
     name: "",
@@ -11,8 +14,7 @@
   };
   const client = getClient();
   async function clickHandler() {
-    if(user.name===""||user.email===""||user.collegeName==="")
-    {
+    if (user.name === "" || user.email === "" || user.collegeName === "") {
       return;
     }
     console.log(user);
@@ -23,6 +25,7 @@
       });
       console.log(res);
       cookieHandler.setCookie("user_id", res.data.addUser.user.id);
+      cookieHandler.setCookie("access_email", user.email);
     } catch (err) {
       console.log(err);
     }
