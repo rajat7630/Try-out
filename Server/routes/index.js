@@ -15,7 +15,7 @@ client.on('error', (error) => {
   console.log('Redis not connected');
 });
 
-router.get('/', function(req, res, next) {
+router.get('/', function (req, res, next) {
   res.render('index', { title: 'Express' });
 });
 
@@ -28,7 +28,7 @@ router.get(
 router.get(
   '/auth/google/callback',
   passport.authenticate('google', { failureRedirect: '/', session: false }),
-  function(req, res) {
+  function (req, res) {
     var token = req.user.token;
     console.log(req.user);
 
@@ -39,31 +39,31 @@ router.get(
     //let refresh_token = generate_refresh_token(64);
     // let refresh_token_maxage = new Date() + jwt_refresh_expiration;
 
-    let token1 = jwt.sign({ uid: token }, jwt_secret, {
-      expiresIn: jwt_expiration
+    let token1 = jwt.sign({ uid: token, username: req.user.name }, jwt_secret, {
+      expiresIn: jwt_expiration,
     });
     console.log(token1);
     console.log(jwt.decode(token1));
     client.set(
       token1,
       JSON.stringify({
-        expires: jwt_expiration
+        expires: jwt_expiration,
       }),
       redis.print
     );
 
     res.cookie('access_token', token1, {
-      httpOnly: false
+      httpOnly: false,
     });
     res.cookie('admin_name', req.user.name, {
-      httpOnly: false
+      httpOnly: false,
     });
 
     res.redirect('http://localhost:5000/admin');
   }
 );
 
-router.get('/logout', function(req, res) {
+router.get('/logout', function (req, res) {
   req.logout();
   res.clearCookie('access_token', 'admin_email');
   res.redirect('http://localhost:5000');

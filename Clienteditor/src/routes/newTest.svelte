@@ -12,6 +12,10 @@
   const Problems = subscribe(client, { query: apolloClient.getProblems });
   async function clickHandler() {
     console.log(test);
+    if(test.testName===""||test.difficultyLevel===""||test.email===""||test.problems.length===0)
+    {
+      return false;
+    }
     try {
       await mutate(client, {
         mutation: apolloClient.addTest,
@@ -20,7 +24,7 @@
     } catch (err) {
       console.log(err);
     }
-    // location.replace("http://localhost:5000/admin")
+    location.replace("http://localhost:5000/admin")
   }
   $: ppp = [];
   function changeHandler(name) {

@@ -6,7 +6,7 @@
   export let currentRoute;
 
   let problemInitial = {
-    id:currentRoute.namedParams.id,
+    id: currentRoute.namedParams.id,
     problemName: "",
     description: "",
     problemTests: "",
@@ -15,6 +15,14 @@
   const client = getClient();
   async function clickHandler() {
     console.log(problem);
+    if (
+      problemInitial.problemName === "" ||
+      problemInitial.description === "" ||
+      problemInitial.problemTests === "" ||
+      problemInitial.difficultyLevel === ""
+    ) {
+      return false;
+    }
     try {
       await mutate(client, {
         mutation: apolloClient.updateProblem,
@@ -147,7 +155,9 @@
           type="text-area"
           bind:value={problem.problemTests}
           placeholder="eg : [1,3]" /> -->
-        <InputWindow inputChange={handleInputChange} inputVal={problemInitial.problemTests} />
+        <InputWindow
+          inputChange={handleInputChange}
+          inputVal={problemInitial.problemTests} />
       </div>
     </div>
     <div class="md:flex md:items-center mb-6">

@@ -5,8 +5,10 @@
   import Content from "../Modals/problemModal.svelte";
   import TestModal from "../Modals/testModal.svelte";
   import Navbar from "../components/navbar.svelte";
+  import { cookieHandler } from "../helperFunctions/cookie_handler.js";
   const client = getClient();
-
+  const tokens=cookieHandler.getCookie("access_token").split('.');
+  console.log(atob(tokens[1]));
   const Test = query(client, { query: apolloClient.allTests });
   const Problem = query(client, { query: apolloClient.getProblems });
   const handleProblemAdd = () => {

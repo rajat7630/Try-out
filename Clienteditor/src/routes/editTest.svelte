@@ -31,6 +31,13 @@
   const Problems = subscribe(client, { query: apolloClient.getProblems });
   async function clickHandler() {
     console.log(testInitial);
+    if (
+      testInitial.testName === "" ||
+      testInitial.difficultyLevel === "" ||
+      testInitial.problems.length === 0
+    ) {
+      return false;
+    }
     try {
       await mutate(client, {
         mutation: apolloClient.updateTest,

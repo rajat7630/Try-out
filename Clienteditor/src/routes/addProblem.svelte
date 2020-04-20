@@ -13,11 +13,18 @@
   const client = getClient();
   async function clickHandler() {
     console.log(problem);
+    if (
+      problem.problemName === "" ||
+      problem.description === "" ||
+      problem.problemTests === "" ||
+      problem.difficultyLevel === ""
+    ) {
+      return false;
+    }
     try {
-      await mutate(client, {
+      await mutate(client, {  
         mutation: apolloClient.addProblem,
         variables: problem
-
       });
       location.replace("http://localhost:5000/admin");
     } catch (err) {
@@ -31,7 +38,7 @@
 
 <style>
   .savebutton {
-      margin-left: 80vw;
+    margin-left: 80vw;
   }
   .btn {
     @apply font-bold py-2 px-4 rounded;
@@ -135,7 +142,9 @@
           type="text-area"
           bind:value={problem.problemTests}
           placeholder="eg : [1,3]" /> -->
-        <InputWindow inputChange={handleInputChange} inputVal={problem.problemTests}/>
+        <InputWindow
+          inputChange={handleInputChange}
+          inputVal={problem.problemTests} />
       </div>
     </div>
     <div class="md:flex md:items-center mb-6">
