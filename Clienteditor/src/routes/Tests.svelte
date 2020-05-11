@@ -9,19 +9,20 @@
     query: apolloClient.getTestById,
     variables: { id: currentRoute.namedParams.id }
   });
-  async function deleteTestHandler()
-  {
-    try{
+  const attempt = query(client, {
+    query: apolloClient.getAttempts,
+    variables: { id: currentRoute.namedParams.id }
+  });
+  async function deleteTestHandler() {
+    try {
       mutate(client, {
-        mutation:apolloClient.deleteTest,
-        variables:{id: currentRoute.namedParams.id}
+        mutation: apolloClient.deleteTest,
+        variables: { id: currentRoute.namedParams.id }
       });
+    } catch (err) {
+      Error: -{ err };
     }
-    catch(err)
-    {
-      Error:- {err}
-    }
-    location.replace("http://localhost:5000/admin")
+    location.replace("http://localhost:5000/admin");
   }
 </script>
 
@@ -41,7 +42,7 @@
   .savebutton {
     margin-right: 3vw;
   }
-  .deleteButton{
+  .deleteButton {
     margin-left: 3vw;
   }
   #blk {
@@ -61,8 +62,8 @@
     {:then result}
       <Navbar />
       <!-- style="margin-left:23%;margin-top:7%; -->
-      <div class="">
-        <div class="h-12">
+      <div class="flex mb-4 h-12">
+        <div class="h-12 w-1/2">
 
           <div class="p-8 mx-2 mt-24 items-center">
             <div class="max-w-auto rounded overflow-hidden shadow-lg">
@@ -101,68 +102,60 @@
 
             </div>
           </div>
-          <div class="px-4 py-2">
-            <div class="flex buttonbox">
-              <button
-                on:click={() => {
-                  location.replace(`http://localhost:5000/editTest/${result.data.testById.id}`);
-                }}
-                class="savebutton bg-red-500 hover:bg-red-700 text-white
-                font-bold py-2 px-4 border border-red-700 rounded">
-                Edit
-              </button>
-              <a
-                href="http://localhost:5000/sendtest/{result.data.testById.id}">
-                <button
-                  class="bg-red-500 hover:bg-red-700 text-white font-bold py-2
-                  px-4 border border-red-700 rounded">
-                  Send Test
-                </button>
-              </a>
-              <button
-                on:click={deleteTestHandler}
-                class="deleteButton bg-red-500 hover:bg-red-700 text-white font-bold py-2
-                px-4 border border-red-700 rounded">
-                Delete
-              </button>
-            </div>
-          </div>
 
-        </div>
-        <!-- <div class="w-1/2 h-12">
-          <div class="p-8 mx-2 mt-24 items-center">
-            <div class="max-w-auto rounded overflow-hidden shadow-lg">
-              <div class="px-6 py-4">
-                <div class="flex">
-                  <div class="flex-initial text-center px-4 py-2 m-2">
-                    <div class="font-bold text-3xl mb-2">All Problems</div>
+          <div class="w-1/2 h-12">
+            <div class="p-8 mx-2 mt-24 items-center">
+              <div class="max-w-auto rounded overflow-hidden shadow-lg">
+                <div class="px-6 py-4">
+                  <div class="flex">
+                    <div class="flex-initial text-center px-4 py-2 m-2">
+                      <div class="font-bold text-3xl mb-2">Test Submission</div>
+                    </div>
                   </div>
+                  <ol>
+                    {#await $attempt}
+                      Loading...
+                    {:then result}
+                      {#each result.data.getAttempt as attempt}
+                        <label>
+                          <li>{attempt.user.name} :- {attempt.score}</li>
+                        </label>
+                      {/each}
+                    {:catch err}
+                      Error: {err}
+                    {/await}
+                  </ol>
                 </div>
-                <ol>
-                  {#await $Problem}
-                    Loading...
-                  {:then result}
-                    {#each result.data.allProblems as prob}
-                      <label>
-                        <li>
-                          <a href="http://localhost:5000/problem/{prob.id}">
-                            <input
-                              type="checkbox"
-                              bind:group={problems}
-                              value={prob} />
-                            {prob.problemName}
-                          </a>
-                        </li>
-                      </label>
-                    {/each}
-                  {:catch err}
-                    Error: {err}
-                  {/await}
-                </ol>
               </div>
             </div>
           </div>
-        </div> -->
+        </div>
+        <div class="px-4 py-2">
+          <div class="flex buttonbox">
+            <button
+              on:click={() => {
+                location.replace(`http://localhost:5000/editTest/${result.data.testById.id}`);
+              }}
+              class="savebutton bg-red-500 hover:bg-red-700 text-white font-bold
+              py-2 px-4 border border-red-700 rounded">
+              Edit
+            </button>
+            <a href="http://localhost:5000/sendtest/{result.data.testById.id}">
+              <button
+                class="bg-red-500 hover:bg-red-700 text-white font-bold py-2
+                px-4 border border-red-700 rounded">
+                Send Test
+              </button>
+            </a>
+            <button
+              on:click={deleteTestHandler}
+              class="deleteButton bg-red-500 hover:bg-red-700 text-white
+              font-bold py-2 px-4 border border-red-700 rounded">
+              Delete
+            </button>
+          </div>
+        </div>
+
       </div>
 
     {:catch err}

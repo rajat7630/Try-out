@@ -24,10 +24,13 @@ async function addNewProblem(problem) {
     problemName: problem.problemName,
     description: problem.description,
     problemTests: JSON.stringify(problem.problemTests),
-    difficultyLevel: problem.difficultyLevel,
+    tags: problem.tags,
+    solution: problem.solution,
+    timelimit: problem.timelimit,
+    datalimit: problem.datalimit,
     email: problem.email,
   });
-
+  console.log(res);
   return {
     success: true,
     message: 'Problem Added Successfully',
@@ -249,24 +252,24 @@ async function updateAttempt(data) {
   let rr = [...res.solutions];
   let tt = [...JSON.parse(data.solutions)];
   console.log(rr);
-  let score=0;
+  let score = 0;
   rr = [
     ...rr.map((ele, index) => {
-      
-      let result = eval(`${tt[index].solution} Solution(JSON.stringify(${ele.problemTests.testcase}))`);
+      let result = eval(
+        `${tt[index].solution} Solution(JSON.stringify(${ele.problemTests.testcase}))`
+      );
       console.log(result);
-      if(result===JSON.parse(ele.problemTests.output))
-      {
-        score+=100;
+      if (result === JSON.parse(ele.problemTests.output)) {
+        score += 100;
       }
       return { ...ele, solution: tt[index].solution };
     }),
   ];
   console.log(score);
-  let res2= await Attempt.query().patchAndFetchById(parseInt(data.id), {
-    u_id:parseInt(data.u_id),
-    solutions:JSON.stringify(rr),
-    Score:score
+  let res2 = await Attempt.query().patchAndFetchById(parseInt(data.id), {
+    u_id: parseInt(data.u_id),
+    solutions: JSON.stringify(rr),
+    Score: score,
   });
   console.log(res2);
   return {
@@ -275,7 +278,43 @@ async function updateAttempt(data) {
   };
 }
 
+async function attemptReducer(attempt) {
+  const res = await User.query().where('id', parseInt(attempt.u_id));
+  console.log(res);
+  return {
+    ...attempt,
+    id: attempt.id,
+    user: { ...res[0] },
+    score: attempt.Score,
+  };
+}
+
+async function getAttempt(id) {
+  const res = await Attempt.query().where('t_id', parseInt(id));
+  console.log(res);
+  return res.map((attempt) => {
+    return attemptReducer(attempt);
+  });
+}
+
+async function checkProblemIfExists(problemName) {
+  console.log(problemName);
+  const res = await Problem.query().where('problemName', problemName);
+  console.log(res);
+  if (res.length === 0) {
+    return {
+      success: false,
+      message: 'Problem Name do not exist',
+    };
+  }
+  return {
+    success: true,
+    message: 'Problem Name exist',
+  };
+}
 module.exports = {
+  checkProblemIfExists,
+  getAttempt,
   updateAttempt,
   addNewAttempt,
   getProblemById,

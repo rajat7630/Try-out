@@ -69,6 +69,7 @@
         console.log("different channel");
         output = [m.message];
         channels = [...channels, m.channel];
+        newMessage = "";
       } else {
         output = [...output, m.message];
         newMessage = "";
@@ -85,6 +86,9 @@
 </script>
 
 <style>
+  :root {
+  }
+
   html {
     box-sizing: border-box;
   }
@@ -289,7 +293,6 @@
             <p>Enter chat and press enter.</p>
             <form on:submit|preventDefault={publish(newMessage, channelName)}>
               <input bind:value={newMessage} placeholder="Your Message Here" />
-              <button type="submit">Send</button>
             </form>
             <p>Chat Output:</p>
             <div class="message-form">

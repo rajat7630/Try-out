@@ -84,16 +84,22 @@ const addProblem = gql`
     $problemName: String
     $description: String
     $problemTests: JSON
-    $difficultyLevel: String
     $email: String
+    $timelimit: String
+    $datalimit: String
+    $tags: String
+    $solution: String
   ) {
     addProblem(
       data: {
         problemName: $problemName
         description: $description
         problemTests: $problemTests
-        difficultyLevel: $difficultyLevel
         email: $email
+        timelimit: $timelimit
+        datalimit: $datalimit
+        tags: $tags
+        solution: $solution
       }
     ) {
       success
@@ -103,7 +109,6 @@ const addProblem = gql`
         problemName
         problemTests
         description
-        difficultyLevel
         email
       }
     }
@@ -270,6 +275,23 @@ const getTestById = gql`
     }
   }
 `;
+
+const getAttempts = gql`
+  query getAttempts($id: ID) {
+    getAttempt(id: $id) {
+      id
+      user {
+        id
+        email
+        name
+        collegeName
+      }
+      solutions
+      attemptTime
+      score
+    }
+  }
+`;
 const updateAttempt = gql`
   mutation updateAttempt($id: ID, $u_id: ID, $solutions: JSON) {
     updateAttempt(data: { u_id: $u_id, id: $id, solutions: $solutions }) {
@@ -287,7 +309,18 @@ const addAttempt = gql`
     }
   }
 `;
+
+const checkIfAvailable = gql`
+  mutation checkIfAvailable($problemName: String) {
+    checkProblemIfExists(problemName: $problemName) {
+      success
+      message
+    }
+  }
+`;
 export const apolloClient = {
+  checkIfAvailable,
+  getAttempts,
   updateAttempt,
   addAttempt,
   sendMail,

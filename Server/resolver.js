@@ -27,8 +27,16 @@ module.exports = {
     problemsByAuthor: (_, { email }) => {
       return store.getProblemsByAuthor(email);
     },
+
+    getAttempt: (_, { id }) => {
+      console.log(id);
+      return store.getAttempt(id);
+    },
   },
   Mutation: {
+    checkProblemIfExists: (_, {problemName})=>{
+      return store.checkProblemIfExists(problemName);
+    },
     addAttempt: (_, { data }) => {
       console.log(data);
       return store.addNewAttempt(data);
@@ -71,8 +79,8 @@ module.exports = {
       return store.sendMail(mailDetails);
     },
 
-    updateAttempt:(_, {data})=>{
+    updateAttempt: (_, { data }) => {
       return store.updateAttempt(data);
-    }
+    },
   },
 };

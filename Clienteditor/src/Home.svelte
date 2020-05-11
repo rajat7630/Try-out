@@ -90,7 +90,7 @@
 
 <style>
   .App {
-    color: #fff;
+    background-color: #fff;
   }
   html {
     box-sizing: border-box;
@@ -134,6 +134,7 @@
   }
   .chat {
     position: absolute;
+    background-color: #fff;
     bottom: 50px;
     right: 50px;
     height: 400px;
@@ -260,8 +261,8 @@
         <div class="header">
           <button
             on:click={close}
-            class="btm2 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2
-            px-4 rounded-full">
+            class="btm2 bg-blue-500 hover:bg-blue-700 font-bold py-2 px-4
+            rounded-full">
             Close
           </button>
         </div>
@@ -278,7 +279,6 @@
         <form
           on:submit|preventDefault={publish(newMessage, 'channel.' + userName)}>
           <input bind:value={newMessage} placeholder="Your Message Here" />
-          <button type="submit">Send</button>
         </form>
         <p>Chat Output:</p>
         <div class="message-form">
