@@ -124,8 +124,8 @@
   }
   .btm {
     position: fixed;
-    right: 120px;
-    bottom: 60px;
+    right: 3%;
+    bottom: 5%;
   }
   .btm2 {
     position: absolute;
@@ -133,9 +133,9 @@
     bottom: 359px;
   }
   .chat {
-    position: absolute;
+    position: fixed;
     background-color: #fff;
-    bottom: 50px;
+    bottom: 120px;
     right: 50px;
     height: 400px;
     display: flex;
@@ -173,12 +173,9 @@
   }
   .message-form {
     border-top: 1px solid #dcc;
-    position: relative;
-    bottom: 0;
   }
   .message-form input {
     border: none;
-    margin-bottom: 0;
   }
   .btn {
     @apply font-bold py-2 px-4 rounded;
@@ -199,6 +196,39 @@
   }
   #btn {
     float: right;
+  }
+
+  /* chit chat */
+  .chat-notification {
+    display: flex;
+    max-width: 14rem;
+    margin: 0 auto;
+    padding: 1.5rem;
+    border-radius: 0.5rem;
+    background-color: #fff;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1),
+      0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  }
+  .chat-notification-logo-wrapper {
+    flex-shrink: 0;
+  }
+  .chat-notification-logo {
+    height: 1.5rem;
+    width: 1.5rem;
+  }
+  .chat-notification-content {
+    margin-left: 1.5rem;
+    padding-top: 0.25rem;
+  }
+  .chat-notification-title {
+    color: #1a202c;
+    font-size: 1.25rem;
+    line-height: 1;
+  }
+  .chat-notification-message {
+    color: #718096;
+    font-size: 1rem;
+    line-height: 1.5;
   }
 </style>
 
@@ -255,50 +285,105 @@
     <h1>Error :- Contact Admin</h1>
   {/await}
 
-  <div class="App">
+  <div class="container">
     {#if hasJoinedChat}
-      <div class="chat">
-        <div class="header">
-          <button
-            on:click={close}
-            class="btm2 bg-blue-500 hover:bg-blue-700 font-bold py-2 px-4
-            rounded-full">
-            Close
-          </button>
-        </div>
-        <p>
-          <a href="https://www.pubnub.com/?devrel_pbpn=javascript-chat">
+      <div class="chat shadow-xl rounded-lg">
+
+        <!-- //header -->
+        <div
+          class="px-3 flex items-center bg-grey-light cursor-pointer rounded-lg">
+          <div>
             <img
-              src="https://d2c805weuec6z7.cloudfront.net/Powered_By_PubNub.png"
-              alt="Powered By PubNub"
-              width="150" />
-          </a>
-        </p>
-        <p />
-        <p>Enter chat and press enter.</p>
-        <form
-          on:submit|preventDefault={publish(newMessage, 'channel.' + userName)}>
-          <input bind:value={newMessage} placeholder="Your Message Here" />
-        </form>
-        <p>Chat Output:</p>
-        <div class="message-form">
-          <ul class="messages">
-            {#each output as message}
-              <li>
-                <span>{message}</span>
-              </li>
-            {/each}
-          </ul>
+              alt="admin photo"
+              class="h-12 w-12 rounded-full"
+              src="https://darrenjameseeley.files.wordpress.com/2014/09/expendables3.jpeg" />
+          </div>
+          <div class="ml-4 flex-1 border-b border-grey-lighter py-4">
+            <div class="flex items-bottom justify-between">
+              <p class="text-grey-darkest">Helpdesk</p>
+            </div>
+            <p class="text-grey-dark mt-1 text-sm">User Assitant</p>
+          </div>
+        </div>
+
+        <!-- message box -->
+        <div
+          class="container mx-auto overflow-auto margin-bottom:10%;"
+          style=" bottom: 120px; right: 55px; height: 280px; width: 295px;">
+          <div class="message-form">
+            <div class="flex-1 overflow-auto">
+              <div class="ml-4 flex-1 border-b border-grey-lighter py-4">
+                <div class="flex items-bottom justify-between">
+                  <p class="text-grey-darkest">Admin</p>
+
+                </div>
+                <p class="text-grey-dark mt-1 text-sm">
+                  Hey! if you need any help,Please message me
+                </p>
+              </div>
+              {#each output as message}
+                <div class="flex justify-end mb-2">
+                  <div
+                    class="rounded py-2 px-3"
+                    style="background-color: #E2F7CB">
+                    <p class="text-sm mt-1">{message}</p>
+                  </div>
+                </div>
+              {/each}
+            </div>
+          </div>
+        </div>
+
+        <!-- message box end -->
+
+        <!-- bottom container -->
+        <div class="container block" style=" position: absolute; bottom: 0;">
+          <div class="relative text-gray-600">
+            <form
+              on:submit|preventDefault={publish(newMessage, 'channel.' + userName)}>
+              <input
+                type="search"
+                bind:value={newMessage}
+                name="serch"
+                placeholder="Type Message and Press Enter"
+                class="bg-white h-10 px-5 pr-10 rounded-full text-sm
+                focus:outline-none" />
+
+            </form>
+
+          </div>
+        </div>
+
+      </div>
+
+      <!-- chat end -->
+
+      <!-- header end -->
+
+      <!-- button half -->
+      <div class="btm" on:click={close}>
+        <div class="chat-notification">
+          <div class="chat-notification-logo-wrapper">
+            <img
+              class="chat-notification-logo"
+              src="https://img.icons8.com/cute-clipart/50/000000/close-window.png"
+              alt="ChitChat Logo" />
+          </div>
         </div>
       </div>
     {:else}
-      <div class="btm">
-        <button
-          on:click={joined}
-          class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4
-          rounded-full">
-          Helpdesk...
-        </button>
+      <div class="btm" on:click={joined}>
+        <div class="chat-notification">
+          <div class="chat-notification-logo-wrapper">
+            <img
+              class="chat-notification-logo"
+              src="https://img.icons8.com/cotton/50/000000/filled-chat.png"
+              alt="ChitChat Logo" />
+          </div>
+          <div class="chat-notification-content">
+            <h4 class="chat-notification-title">Helpdesk</h4>
+          </div>
+        </div>
       </div>
     {/if}
   </div>
