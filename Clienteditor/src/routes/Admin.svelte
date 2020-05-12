@@ -1,10 +1,11 @@
-<script>
+<!-- <script>
   import { apolloClient } from "../apolloClient.js";
   import { getClient, query } from "svelte-apollo";
   import Modal from "svelte-simple-modal";
   import Content from "../Modals/problemModal.svelte";
   import TestModal from "../Modals/testModal.svelte";
   import Navbar from "../components/navbar.svelte";
+  import Sidebar from "../components/Side.svelte"
   import { publish, grantPermissions } from "../../pubnubClient.js";
   import pubnub from "../../pubnubinit.js";
 
@@ -199,11 +200,10 @@
 <link
   href="https://unpkg.com/tailwindcss@^1.0/dist/tailwind.min.css"
   rel="stylesheet" />
+
 <body>
-
-  <Navbar />
-
-  <div id="blk" class="flex mb-4">
+<Sidebar/>
+   <div id="blk" class="flex mb-4">
     <div class="w-1/2 h-12">
       <div class="max-w-lg rounded overflow-hidden shadow-lg">
         <div class="px-6 py-4">
@@ -316,4 +316,17 @@
       </div>
     {/if}
   </div>
-</body>
+</body> -->
+<script>
+import Sidebar from "../components/Side.svelte"
+import Navbar from "../components/navbar.svelte"
+</script>
+<style>
+   .main {
+     margin-left: 300px;
+     padding:100px;
+   }
+</style>
+ <Sidebar>
+<div>prince ByteLengthQueuingStrategy.ByteLengthQueuingStrategy.....</div>
+</Sidebar>

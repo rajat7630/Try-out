@@ -5,6 +5,7 @@ importers:
       aws-sdk: 2.654.0
       concurrently: 5.1.0
       dotenv: 8.2.0
+      feather-icons: 4.28.0
       nodemailer: 6.4.6
       pubnub: 4.27.6
     devDependencies:
@@ -25,6 +26,7 @@ importers:
       eslint: ^6.8.0
       eslint-config-airbnb-base: ^14.1.0
       eslint-plugin-import: ^2.20.2
+      feather-icons: ^4.28.0
       husky: ^4.2.3
       lint-staged: ^10.1.1
       nodemailer: ^6.4.5
@@ -1402,8 +1404,6 @@ packages:
       apollo-link-http-common: 0.2.15
       tslib: 1.11.1
     dev: false
-    peerDependencies:
-      graphql: '*'
     resolution:
       integrity: sha512-psNmHyuy3valGikt/XHJfe0pKJnRX19tLLs6P6EHRxg+6q6JMXNVLYPaQBkL0FkwdTCB0cbFJAGRYCBviG8TDA==
   /apollo-link-error/1.1.12_graphql@14.6.0:
@@ -2287,6 +2287,10 @@ packages:
       node: '>=0.10.0'
     resolution:
       integrity: sha512-qOhPa/Fj7s6TY8H8esGu5QNpMMQxz79h+urzrNYN6mn+9BnxlDGf5QZ+XeCDsxSjPqsSR56XOZOJmpeurnLMeg==
+  /classnames/2.2.6:
+    dev: false
+    resolution:
+      integrity: sha512-JR/iSQOSt+LQIWwrwEzJ9uk0xfN3mTVYMwt1Ir5mUcSN6pU+V4zQFFaJsclJbPuAUQH+yfWef6tm7l1quW3C8Q==
   /clean-stack/1.3.0:
     dev: false
     engines:
@@ -2626,6 +2630,11 @@ packages:
     requiresBuild: true
     resolution:
       integrity: sha512-4paDGScNgZP2IXXilaffL9X7968RuvwlkK3xWtZRVqgd8SYNiVKRJvkFd1aqqEuPfN7E68ZHEp9hDj6lHj4Hyw==
+  /core-js/3.6.5:
+    dev: false
+    requiresBuild: true
+    resolution:
+      integrity: sha512-vZVEEwZoIsI+vPEuoF9Iqf5H7/M3eeQqWlQnYa8FSKKePuYTf5MWnxb5SDAzCa60b3JBRS5g9b+Dq7b1y/RCrA==
   /core-util-is/1.0.2:
     resolution:
       integrity: sha1-tf1UIgqivFq1eqtxQMlAdUUDwac=
@@ -3484,6 +3493,13 @@ packages:
     dev: false
     resolution:
       integrity: sha512-Utm6CdzT+6xsDk2m8S6uL8VHxNwI6Jub+e9NYTcAms28T84pTa25GJQV9j0CY0N1rM8hK4x6grpF2BQf+2qwVA==
+  /feather-icons/4.28.0:
+    dependencies:
+      classnames: 2.2.6
+      core-js: 3.6.5
+    dev: false
+    resolution:
+      integrity: sha512-gRdqKESXRBUZn6Nl0VBq2wPHKRJgZz7yblrrc2lYsS6odkNFDnA4bqvrlEVRUPjE1tFax+0TdbJKZ31ziJuzjg==
   /figures/1.7.0:
     dependencies:
       escape-string-regexp: 1.0.5
