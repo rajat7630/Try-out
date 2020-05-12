@@ -7,7 +7,7 @@ import SendTest from './routes/send_test.svelte';
 import NewTest from './routes/newTest.svelte';
 import EditTest from './routes/editTest.svelte';
 import NewProblem from './routes/problem/add_problem.svelte';
-import EditProblem from './routes/problem/edit_problem.svelte';
+import EditProblem from './routes/update_problem/edit_problem.svelte';
 import Thankyou from './routes/thankyou.svelte';
 import Pubnub from './routes/pubnub.svelte';
 

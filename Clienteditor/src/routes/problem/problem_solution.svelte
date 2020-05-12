@@ -39,6 +39,7 @@
 
   afterUpdate(() => {
     var pos = editor.session.selection.toJSON();
+    console.log($problemStore.solution)
     editor.session.setValue($problemStore.solution);
     editor.session.selection.fromJSON(pos);
   });

@@ -34,7 +34,7 @@
     }
     hastTagString = "";
     selectedTags.forEach(ind => {
-      hastTagString += " #" + tagList[ind];
+      hastTagString += "#" + tagList[ind];
     });
 
     $problemStore.tags = hastTagString;

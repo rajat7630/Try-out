@@ -9,14 +9,15 @@
   const client = getClient();
   const problem = query(client, {
     query: apolloClient.getProblemById,
-    variables: { id: currentRoute.namedParams.id }
+    variables: { id: parseInt(currentRoute.namedParams.id) }
   });
+
   async function deleteProblemHandler() {
     try {
       console.log("ddd");
       mutate(client, {
         mutation: apolloClient.deleteProblem,
-        variables: { id: currentRoute.namedParams.id }
+        variables: { id: parseInt(currentRoute.namedParams.id) }
       });
       console.log("hp");
       location.replace("http://localhost:5000/admin");
@@ -27,27 +28,8 @@
 </script>
 
 <style>
-  .btn {
-    @apply font-bold py-2 px-4 rounded;
-  }
-  .btn-blue {
-    @apply bg-blue-500 text-white;
-  }
-  .btn-blue:hover {
-    @apply bg-blue-700;
-  }
-
-  .buttonbox {
-    margin-top: 2vh;
-    margin-left: 50vw;
-  }
-  .deleteButton {
-    margin-left: 1.5vw;
-  }
-  #blk {
-    margin-top: 6%;
-    margin-left: 10%;
-    margin-right: 6%;
+  .savebutton {
+    @apply text-white ml-4 outline-none px-4;
   }
 </style>
 
@@ -55,53 +37,84 @@
   href="https://unpkg.com/tailwindcss@^1.0/dist/tailwind.min.css"
   rel="stylesheet" />
 
-<Navbar />
-
-<!-- style="margin-left:23%;margin-top:7%; -->
-{#await $problem}
-  Loading...
-{:then result}
-  <div class="p-8 mx-56 mt-24 items-center">
-    <div class="w-auto rounded overflow-hidden shadow-lg">
-      <div class="px-12 py-8">
-        <div class="font-bold text-3xl mb-2">
+<div class="bg-edark h-full flex flex-col box-border">
+  <header>
+    <Navbar />
+  </header>
+  <div class="bg-edark flex flex-col overflow-auto">
+    {#await $problem}
+      Loading...
+    {:then result}
+      <div class="mx-auto mt-8 max-w-xl flex flex-col">
+        <div class="font-bold text-2xl text-elight mx-auto">
           {result.data.problemById.problemName}
         </div>
-        <br class="my-24" />
-        <p class="text-gray-700 text-2xl">
-          {result.data.problemById.description}
-        </p>
-        <br class="my-24" />
-        <div class="text-xl mb-2 font-bold pointer-events-none">
-          Test Cases :
-          <InputWindow inputVal={result.data.problemById.problemTests} />
-          <!-- {JSON.parse(result.data.problemById.problemTests)} -->
-
+        <div class=" text-xl text-elight mx-auto">
+          Data Limit :- {result.data.problemById.datalimit} Mb
         </div>
-        <br class="my-24" />
+        <div class=" text-xl text-elight mx-auto">
+          Time Limit :- {result.data.problemById.timelimit} ms
+        </div>
+      </div>
+      <div class="bg-dark max-w-6xl mt-12 mx-auto">
 
-        <div class="text-xl mb-2 font-bold">Output :</div>
+        <div class="rounded shadow-lg">
+          <div class="px-12 py-8">
+            <div class="w-full h-full px-3 flex flex-col">
+              <label class=" text-2xl text-elight mb-3 my-2">Description</label>
+              <p class="text-xl text-elight">
+                {result.data.problemById.description}
+              </p>
+            </div>
+
+            <div class="w-full h-full px-3 flex flex-col">
+              <label class=" text-2xl text-elight mb-3 my-2">TestCases</label>
+              <textarea
+                value={JSON.parse(result.data.problemById.problemTests)}
+                class=" w-full bg-edark flex-grow text-elight text-2xl border
+                rounded py-3 px-4 mb-3 leading-tight focus:outline-none
+                focus:border-white h-48 resize-none"
+                id="message"
+                readonly />
+            </div>
+            <div class="flex flex-col w-full h-full px-3">
+              <label class=" text-2xl text-elight mb-3 my-2">Solution</label>
+              <textarea
+                value={result.data.problemById.solution}
+                class=" flex-grow w-full bg-edark text-elight text-2xl border
+                rounded py-3 px-4 mb-3 leading-tight focus:outline-none
+                focus:border-white h-48 resize-none"
+                id="message"
+                readonly />
+            </div>
+
+            <div class="w-full h-full px-3 flex flex-col">
+              <label class=" text-2xl text-elight mb-3 my-2">Tags</label>
+              <p class="text-xl text-elight">{result.data.problemById.tags}</p>
+            </div>
+          </div>
+        </div>
       </div>
-    </div>
-    <div class="px-4 py-2">
-      <div class="flex buttonbox">
-        <button
-          on:click={() => {
-            location.replace(`http://localhost:5000/editProblem/${currentRoute.namedParams.id}`);
-          }}
-          class="savebutton bg-red-500 hover:bg-red-700 text-white font-bold
-          py-2 px-4 border border-red-700 rounded">
-          Edit
-        </button>
-        <button
-          on:click={deleteProblemHandler}
-          class="deleteButton bg-red-500 hover:bg-red-700 text-white font-bold
-          py-2 px-4 border border-red-700 rounded">
-          Delete
-        </button>
+      <div class="max-w-6xl my-4 mb-32 flex flex-col mx-auto">
+        <div class="float-right ">
+          <button
+            on:click={() => {
+              location.replace(`http://localhost:5000/editProblem/${currentRoute.namedParams.id}`);
+            }}
+            class="savebutton hover:bg-white hover:text-edark font-bold py-2
+            px-4 border rounded">
+            Edit
+          </button>
+          <button
+            on:click={deleteProblemHandler}
+            class="savebutton hover:bg-white hover:text-edark font-bold py-2
+            px-4 border rounded">
+            Delete
+          </button>
+        </div>
       </div>
-    </div>
+    {:catch err}
+      Error : {err}
+    {/await}
   </div>
-{:catch err}
-  Error : {err}
-{/await}
+</div>

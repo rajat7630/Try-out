@@ -122,8 +122,6 @@ const deleteProblem = gql`
       problemName
       problemTests
       description
-      difficultyLevel
-      email
     }
   }
 `;
@@ -134,7 +132,11 @@ const updateProblem = gql`
     $problemName: String
     $description: String
     $problemTests: JSON
-    $difficultyLevel: String
+    $solution: String
+    $timelimit: String
+    $datalimit: String
+    $tags:String
+
   ) {
     updateProblem(
       id: $id
@@ -142,7 +144,10 @@ const updateProblem = gql`
         problemName: $problemName
         description: $description
         problemTests: $problemTests
-        difficultyLevel: $difficultyLevel
+        solution:$solution
+        datalimit:$datalimit
+        timelimit:$timelimit
+        tags:$tags
       }
     ) {
       success
@@ -251,9 +256,12 @@ const getProblemById = gql`
       id
       description
       createdAt
-      difficultyLevel
+      tags
+      timelimit
+      datalimit
       problemName
       problemTests
+      solution
     }
   }
 `;

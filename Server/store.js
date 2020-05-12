@@ -54,7 +54,10 @@ async function updateProblem(id, problem) {
     problemName: problem.problemName,
     description: problem.description,
     problemTests: JSON.stringify(problem.problemTests),
-    difficultyLevel: problem.difficultyLevel,
+    tags: problem.tags,
+    solution: problem.solution,
+    timelimit: problem.timelimit,
+    datalimit: problem.datalimit,
   });
 
   return {
@@ -136,9 +139,12 @@ function problemReducer(prob) {
     problemName: prob.problemName,
     description: prob.description,
     problemTests: prob.problemTests,
-    difficultyLevel: prob.difficultyLevel,
     createdAt: prob.createdAt,
     email: prob.email,
+    datalimit: prob.datalimit,
+    solution: prob.solution,
+    tags: prob.tags,
+    timelimit: prob.timelimit,
   };
 }
 async function testReducer(test) {

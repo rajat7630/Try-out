@@ -120,7 +120,10 @@ const typeDefs = gql`
     problemName: String
     description: String
     problemTests: JSON
-    difficultyLevel: String
+    timelimit: String
+    datalimit: String
+    solution: String
+    tags: String
   }
   input updateTestInputs {
     testName: String
