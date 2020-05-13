@@ -14,16 +14,14 @@
 }
 
 .sidebar{
-  width: 200px;
+  width: 250px;
   height: 100%;
-  padding: 40px;
+  padding: 60px;
   position: fixed;
-  background-color:#7B8788;
 }
 
 .sidebar li a{
   padding:20px;
-  margin:auto;
   display: block;
   padding-bottom: 40px;
 }    
@@ -32,10 +30,10 @@
 }
 
 .sidebar li a .icon{
-  margin:auto;
-  padding-left: 25px;
-  padding-bottom: 5px;
-}
+  display:flex;
+  padding-left:30px;
+  padding-bottom: 10px;
+} 
 .sidebar li a .name{
   margin:auto;
   text-align: center;
@@ -45,8 +43,8 @@
   color:#dbd7d7;
   background-color: grey;
 }
-.sidebar li a:active,a:visited ,a:focus{
-  background-color:red;
+.sidebar li a:active{
+  color:red;
 }
     
 /* .sidebar li:hover a{
@@ -61,12 +59,9 @@
 }
 
 </style>
-<body>
-  <Navbar/>
-  <div>
     <div class="sidebar">
         <ul>
-            <li><a href="/" class="active">
+            <li><a href="/admin" class="active">
                 <span class ="icon">
                  <Icon icon="home"/>
                  </span>
@@ -87,7 +82,7 @@
                  <div class ="name">Tests</div>
                  </a>
             </li>
-            <li><a href="/results">
+            <li><a href="/showresults">
                  <span class ="icon">
                  <Icon icon="user-check"/>
                  </span>
@@ -96,8 +91,3 @@
             </li>
         </ul> 
     </div>
-     <div class="main_content">
-        <slot></slot>
-    </div>
-  </div>
-</body>

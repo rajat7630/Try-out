@@ -7,7 +7,10 @@ const getProblems = gql `
       problemName
       description
       problemTests
-      difficultyLevel
+      tags
+      datalimit
+      timelimit
+      createdAt
     }
   }
 `;
@@ -85,16 +88,22 @@ const addProblem = gql `
     $problemName: String
     $description: String
     $problemTests: JSON
-    $difficultyLevel: String
     $email: String
+    $timelimit: String
+    $datalimit: String
+    $tags: String
+    $solution: String
   ) {
     addProblem(
       data: {
         problemName: $problemName
         description: $description
         problemTests: $problemTests
-        difficultyLevel: $difficultyLevel
         email: $email
+        timelimit: $timelimit
+        datalimit: $datalimit
+        tags: $tags
+        solution: $solution
       }
     ) {
       success
@@ -104,7 +113,6 @@ const addProblem = gql `
         problemName
         problemTests
         description
-        difficultyLevel
         email
       }
     }
@@ -118,8 +126,6 @@ const deleteProblem = gql `
       problemName
       problemTests
       description
-      difficultyLevel
-      email
     }
   }
 `;
@@ -130,7 +136,11 @@ const updateProblem = gql `
     $problemName: String
     $description: String
     $problemTests: JSON
-    $difficultyLevel: String
+    $solution: String
+    $timelimit: String
+    $datalimit: String
+    $tags:String
+
   ) {
     updateProblem(
       id: $id
@@ -138,7 +148,10 @@ const updateProblem = gql `
         problemName: $problemName
         description: $description
         problemTests: $problemTests
-        difficultyLevel: $difficultyLevel
+        solution:$solution
+        datalimit:$datalimit
+        timelimit:$timelimit
+        tags:$tags
       }
     ) {
       success
@@ -179,7 +192,6 @@ const deleteTest = gql `
         problemName
         problemTests
         description
-        difficultyLevel
         email
       }
     }
@@ -233,7 +245,6 @@ const addTestProblem = gql `
           problemName
           problemTests
           description
-          difficultyLevel
           email
         }
       }
@@ -242,16 +253,19 @@ const addTestProblem = gql `
 `;
 
 const getProblemById = gql `
-  query getProblemById($id: ID!) {
-    problemById(id: $id) {
-      id
-      description
-      createdAt
-      difficultyLevel
-      problemName
-      problemTests
-    }
-  }
+      query getProblemById($id: ID!) {
+        problemById(id: $id) {
+          id
+          description
+          createdAt
+          tags
+          timelimit
+          datalimit
+          problemName
+          problemTests
+          solution
+        }
+      }
 `;
 
 const getTestById = gql `
@@ -265,9 +279,66 @@ const getTestById = gql `
         problemName
         problemTests
         description
-        difficultyLevel
         email
       }
+    }
+  }
+`;
+
+const getAttempts = gql `
+  query getAttempts($id: ID) {
+    getAttempt(id: $id) {
+      id
+      user {
+        id
+        email
+        name
+        collegeName
+      }
+      test {
+      id
+      testName
+      difficultyLevel
+      problems {
+        id
+        problemName
+        problemTests
+        description
+        email
+      }
+      }
+      solutions
+      attemptTime
+      score
+    }
+  }
+`;
+
+const getAllAttempts = gql `
+  query getAllAttempts {
+    getAllAttempt {
+      id
+      user {
+        id
+        email
+        name
+        collegeName
+      }
+      test {
+      id
+      testName
+      difficultyLevel
+      problems {
+        id
+        problemName
+        problemTests
+        description
+        email
+      }
+      }
+      solutions
+      attemptTime
+      score
     }
   }
 `;
@@ -288,7 +359,19 @@ const addAttempt = gql `
     }
   }
 `;
+
+const checkIfAvailable = gql `
+  mutation checkIfAvailable($problemName: String) {
+    checkProblemIfExists(problemName: $problemName) {
+      success
+      message
+    }
+  }
+`;
 export const apolloClient = {
+    checkIfAvailable,
+    getAttempts,
+    getAllAttempts,
     updateAttempt,
     addAttempt,
     sendMail,

@@ -2,7 +2,7 @@ const BaseModel = require('./BaseModel');
 
 class Problem extends BaseModel {
   static get tableName() {
-    return 'problems'
+    return 'problems';
   }
 
   static get relationMappings() {
@@ -14,10 +14,10 @@ class Problem extends BaseModel {
           from: 'problems.id',
           through: {
             from: 'test_problems.p_id',
-            to: 'test_problems.t_id.'
+            to: 'test_problems.t_id.',
           },
-          to: 'tests.id'
-        }
+          to: 'tests.id',
+        },
       },
 
       testProblem: {
@@ -25,14 +25,13 @@ class Problem extends BaseModel {
         modelClass: 'TestProblem',
         join: {
           from: 'problems.id',
-          to: 'testProblems.p_id'
-        }
-      }
-    }
+          to: 'testProblems.p_id',
+        },
+      },
+    };
   }
 
   static get jsonSchema() {
-
     return {
       type: 'object',
 
@@ -41,11 +40,13 @@ class Problem extends BaseModel {
         problemName: { type: 'string' },
         description: { type: 'string' },
         problemTests: { type: 'json' },
-        difficultyLevel: { type: ['string', 'null'] },
         createdAt: { type: 'timestamp' },
-        email: { type: 'string' }
-      }
-
+        email: { type: 'string' },
+        timelimit: { type: 'string' },
+        datalimit: { type: 'string' },
+        tags: { type: 'string' },
+        solution: { type: 'string' },
+      },
     };
   }
 }

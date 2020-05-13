@@ -6,12 +6,11 @@ import Tests from './routes/Tests.svelte';
 import SendTest from './routes/send_test.svelte';
 import NewTest from './routes/newTest.svelte';
 import EditTest from './routes/editTest.svelte';
-import NewProblem from './routes/addProblem.svelte';
-import EditProblem from './routes/editProblem.svelte';
+import NewProblem from './routes/problem/add_problem.svelte';
+import EditProblem from './routes/update_problem/edit_problem.svelte';
 import Thankyou from './routes/thankyou.svelte';
 import Pubnub from './routes/pubnub.svelte';
-import ShowProblems from './routes/ShowProblems.svelte';
-import ShowTests from './routes/ShowTests.svelte';
+import AdminPanel from './routes/AdminPanel.svelte';
 
 function userIsAdmin() {
     //check if user is admin and returns true or false
@@ -25,7 +24,6 @@ function notAdmin() {
 const routes = [{
         name: '/',
         component: Login,
-        onlyIf: { guard: notAdmin, redirect: '/admin' },
     },
     {
         name: '/newtest',
@@ -46,7 +44,6 @@ const routes = [{
     {
         name: '/admin',
         component: Admin,
-        onlyIf: { guard: userIsAdmin, redirect: '/' },
     },
     {
         name: '/test/:id',
@@ -71,12 +68,10 @@ const routes = [{
     {
         name: '/pubnub',
         component: Pubnub,
-        onlyIf: { guard: userIsAdmin, redirect: '/' },
     },
     {
         name: '/home',
         component: Home,
-        onlyIf: { guard: userIsAdmin, redirect: '/' },
     },
     {
         name: '/sendtest/:id',
@@ -84,11 +79,15 @@ const routes = [{
     },
     {
         name: '/showproblems',
-        component: ShowProblems,
+        component: AdminPanel,
     },
     {
         name: '/showtests',
-        component: ShowTests,
+        component: AdminPanel,
+    },
+    {
+        name: '/showresults',
+        component: AdminPanel,
     },
 ];
 

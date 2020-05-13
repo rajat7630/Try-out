@@ -15,13 +15,21 @@
   import ApolloClient from "apollo-boost";
   import { setClient } from "svelte-apollo";
   import gql from "graphql-tag";
+  import Theme from "./theme_change.svelte";
   const client = new ApolloClient({
     uri: "http://localhost:3000/graphql"
   });
 
   setClient(client);
   export let currentRoute;
+  $: num = 0;
 </script>
+
+<style global>
+  @tailwind base;
+  @tailwind components;
+  @tailwind utilities;
+</style>
 
 <!-- <svelte:window
   on:keydown={evt => {
