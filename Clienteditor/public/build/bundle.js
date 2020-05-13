@@ -68,7 +68,10 @@ var app = (function () {
     function get_slot_changes(definition, $$scope, dirty, fn) {
         if (definition[2] && fn) {
             const lets = definition[2](fn(dirty));
-            if (typeof $$scope.dirty === 'object') {
+            if ($$scope.dirty === undefined) {
+                return lets;
+            }
+            if (typeof lets === 'object') {
                 const merged = [];
                 const len = Math.max($$scope.dirty.length, lets.length);
                 for (let i = 0; i < len; i += 1) {
@@ -79,6 +82,13 @@ var app = (function () {
             return $$scope.dirty | lets;
         }
         return $$scope.dirty;
+    }
+    function exclude_internal_props(props) {
+        const result = {};
+        for (const k in props)
+            if (k[0] !== '$')
+                result[k] = props[k];
+        return result;
     }
     function set_store_value(store, ret, value = ret) {
         store.set(value);
@@ -194,10 +204,34 @@ var app = (function () {
         e.initCustomEvent(type, false, false, detail);
         return e;
     }
+    class HtmlTag {
+        constructor(html, anchor = null) {
+            this.e = element('div');
+            this.a = anchor;
+            this.u(html);
+        }
+        m(target, anchor = null) {
+            for (let i = 0; i < this.n.length; i += 1) {
+                insert(target, this.n[i], anchor);
+            }
+            this.t = target;
+        }
+        u(html) {
+            this.e.innerHTML = html;
+            this.n = Array.from(this.e.childNodes);
+        }
+        p(html) {
+            this.d();
+            this.u(html);
+            this.m(this.t, this.a);
+        }
+        d() {
+            this.n.forEach(detach);
+        }
+    }
 
-    let stylesheet;
+    const active_docs = new Set();
     let active = 0;
-    let current_rules = {};
     // https://github.com/darkskyapp/string-hash/blob/master/index.js
     function hash(str) {
         let hash = 5381;
@@ -215,12 +249,11 @@ var app = (function () {
         }
         const rule = keyframes + `100% {${fn(b, 1 - b)}}\n}`;
         const name = `__svelte_${hash(rule)}_${uid}`;
+        const doc = node.ownerDocument;
+        active_docs.add(doc);
+        const stylesheet = doc.__svelte_stylesheet || (doc.__svelte_stylesheet = doc.head.appendChild(element('style')).sheet);
+        const current_rules = doc.__svelte_rules || (doc.__svelte_rules = {});
         if (!current_rules[name]) {
-            if (!stylesheet) {
-                const style = element('style');
-                document.head.appendChild(style);
-                stylesheet = style.sheet;
-            }
             current_rules[name] = true;
             stylesheet.insertRule(`@keyframes ${name} ${rule}`, stylesheet.cssRules.length);
         }
@@ -230,24 +263,31 @@ var app = (function () {
         return name;
     }
     function delete_rule(node, name) {
-        node.style.animation = (node.style.animation || '')
-            .split(', ')
-            .filter(name
+        const previous = (node.style.animation || '').split(', ');
+        const next = previous.filter(name
             ? anim => anim.indexOf(name) < 0 // remove specific animation
             : anim => anim.indexOf('__svelte') === -1 // remove all Svelte animations
-        )
-            .join(', ');
-        if (name && !--active)
-            clear_rules();
+        );
+        const deleted = previous.length - next.length;
+        if (deleted) {
+            node.style.animation = next.join(', ');
+            active -= deleted;
+            if (!active)
+                clear_rules();
+        }
     }
     function clear_rules() {
         raf(() => {
             if (active)
                 return;
-            let i = stylesheet.cssRules.length;
-            while (i--)
-                stylesheet.deleteRule(i);
-            current_rules = {};
+            active_docs.forEach(doc => {
+                const stylesheet = doc.__svelte_stylesheet;
+                let i = stylesheet.cssRules.length;
+                while (i--)
+                    stylesheet.deleteRule(i);
+                doc.__svelte_rules = {};
+            });
+            active_docs.clear();
         });
     }
 
@@ -260,6 +300,9 @@ var app = (function () {
             throw new Error(`Function called outside component initialization`);
         return current_component;
     }
+    function beforeUpdate(fn) {
+        get_current_component().$$.before_update.push(fn);
+    }
     function onMount(fn) {
         get_current_component().$$.on_mount.push(fn);
     }
@@ -271,6 +314,15 @@ var app = (function () {
     }
     function getContext(key) {
         return get_current_component().$$.context.get(key);
+    }
+    // TODO figure out if we still want to support
+    // shorthand events, or if we want to implement
+    // a real bubbling mechanism
+    function bubble(component, event) {
+        const callbacks = component.$$.callbacks[event.type];
+        if (callbacks) {
+            callbacks.slice().forEach(fn => fn(event));
+        }
     }
 
     const dirty_components = [];
@@ -288,16 +340,21 @@ var app = (function () {
     function add_render_callback(fn) {
         render_callbacks.push(fn);
     }
+    let flushing = false;
     const seen_callbacks = new Set();
     function flush() {
+        if (flushing)
+            return;
+        flushing = true;
         do {
             // first, call beforeUpdate functions
             // and update components
-            while (dirty_components.length) {
-                const component = dirty_components.shift();
+            for (let i = 0; i < dirty_components.length; i += 1) {
+                const component = dirty_components[i];
                 set_current_component(component);
                 update(component.$$);
             }
+            dirty_components.length = 0;
             while (binding_callbacks.length)
                 binding_callbacks.pop()();
             // then, once components are updated, call
@@ -317,6 +374,7 @@ var app = (function () {
             flush_callbacks.pop()();
         }
         update_scheduled = false;
+        flushing = false;
         seen_callbacks.clear();
     }
     function update($$) {
@@ -673,8 +731,10 @@ var app = (function () {
         $$.fragment = create_fragment ? create_fragment($$.ctx) : false;
         if (options.target) {
             if (options.hydrate) {
+                const nodes = children(options.target);
                 // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-                $$.fragment && $$.fragment.l(children(options.target));
+                $$.fragment && $$.fragment.l(nodes);
+                nodes.forEach(detach);
             }
             else {
                 // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
@@ -707,7 +767,7 @@ var app = (function () {
     }
 
     function dispatch_dev(type, detail) {
-        document.dispatchEvent(custom_event(type, Object.assign({ version: '3.18.1' }, detail)));
+        document.dispatchEvent(custom_event(type, Object.assign({ version: '3.20.1' }, detail)));
     }
     function append_dev(target, node) {
         dispatch_dev("SvelteDOMInsert", { target, node });
@@ -752,6 +812,22 @@ var app = (function () {
         dispatch_dev("SvelteDOMSetData", { node: text, data });
         text.data = data;
     }
+    function validate_each_argument(arg) {
+        if (typeof arg !== 'string' && !(arg && typeof arg === 'object' && 'length' in arg)) {
+            let msg = '{#each} only iterates over array-like objects.';
+            if (typeof Symbol === 'function' && arg && Symbol.iterator in arg) {
+                msg += ' You can use a spread to convert this iterable into an array.';
+            }
+            throw new Error(msg);
+        }
+    }
+    function validate_slots(name, slot, keys) {
+        for (const slot_key of Object.keys(slot)) {
+            if (!~keys.indexOf(slot_key)) {
+                console.warn(`<${name}> received an unexpected slot "${slot_key}".`);
+            }
+        }
+    }
     class SvelteComponentDev extends SvelteComponent {
         constructor(options) {
             if (!options || (!options.target && !options.$$inline)) {
@@ -765,6 +841,8 @@ var app = (function () {
                 console.warn(`Component was already destroyed`); // eslint-disable-line no-console
             };
         }
+        $capture_state() { }
+        $inject_state() { }
     }
 
     const subscriber_queue = [];
@@ -877,6 +955,8 @@ var app = (function () {
         writable: writable,
         get: get_store_value
     });
+
+    var commonjsGlobal = typeof globalThis !== 'undefined' ? globalThis : typeof window !== 'undefined' ? window : typeof global !== 'undefined' ? global : typeof self !== 'undefined' ? self : {};
 
     function unwrapExports (x) {
     	return x && x.__esModule && Object.prototype.hasOwnProperty.call(x, 'default') ? x['default'] : x;
@@ -1215,6 +1295,15 @@ var app = (function () {
     }
 
     /**
+     * Return the path name excluding query params
+     * @param name
+     **/
+    function pathWithoutQueryParams(currentRoute) {
+      const path = currentRoute.path.split('?');
+      return path[0]
+    }
+
+    /**
      * Return the path name including query params
      * @param name
      **/
@@ -1355,6 +1444,7 @@ var app = (function () {
       getPathNames,
       nameToPath,
       pathWithQueryParams,
+      pathWithoutQueryParams,
       removeExtraPaths,
       removeSlash,
       routeNameLocalised,
@@ -1406,6 +1496,7 @@ var app = (function () {
       function pushActiveRoute(newRoute) {
         if (typeof window !== 'undefined') {
           const pathAndSearch = pathWithQueryParams$1(newRoute);
+          //if (window.history && window.history.state && window.history.state.page !== pathAndSearch) {
           window.history.pushState({ page: pathAndSearch }, '', pathAndSearch);
           if (trackPageview) {
             gaTracking(pathAndSearch);
@@ -1582,24 +1673,25 @@ var app = (function () {
     const { RouterRedirect: RouterRedirect$1 } = redirect;
     const { RouterRoute: RouterRoute$1 } = route;
     const { RouterPath: RouterPath$1 } = path;
-    const { anyEmptyNestedRoutes: anyEmptyNestedRoutes$1, pathWithQueryParams: pathWithQueryParams$2 } = utils;
+    const { anyEmptyNestedRoutes: anyEmptyNestedRoutes$1, pathWithoutQueryParams: pathWithoutQueryParams$1 } = utils;
 
     const NotFoundPage = '/404.html';
 
-    function RouterFinder(routes, currentUrl, language, convert) {
+    function RouterFinder({ routes, currentUrl, routerOptions, convert }) {
+      const defaultLanguage = routerOptions.defaultLanguage;
+      const urlParser = UrlParser$4(currentUrl);
       let redirectTo = '';
       let routeNamedParams = {};
-      const urlParser = UrlParser$4(currentUrl);
 
       function findActiveRoute() {
-        let searchActiveRoute = searchActiveRoutes(routes, '', urlParser.pathNames, language, convert);
+        let searchActiveRoute = searchActiveRoutes(routes, '', urlParser.pathNames, routerOptions.lang, convert);
 
         if (!searchActiveRoute || !Object.keys(searchActiveRoute).length || anyEmptyNestedRoutes$1(searchActiveRoute)) {
           if (typeof window !== 'undefined') {
             searchActiveRoute = { name: '404', component: '', path: '404', redirectTo: NotFoundPage };
           }
         } else {
-          searchActiveRoute.path = pathWithQueryParams$2(searchActiveRoute);
+          searchActiveRoute.path = pathWithoutQueryParams$1(searchActiveRoute);
         }
 
         return searchActiveRoute
@@ -1677,7 +1769,7 @@ var app = (function () {
           path: routePath,
           routeNamedParams,
           namedPath,
-          language: routeLanguage
+          language: routeLanguage || defaultLanguage
         });
         routeNamedParams = routerRoute.namedParams();
 
@@ -1725,7 +1817,7 @@ var app = (function () {
           convert = true;
         }
 
-        return RouterFinder$1(routes, currentUrl, routerOptions.lang, convert).findActiveRoute()
+        return RouterFinder$1({ routes, currentUrl, routerOptions, convert }).findActiveRoute()
       }
 
       /**
@@ -1784,9 +1876,8 @@ var app = (function () {
       if (language) {
         routerOptions.langConvertTo = language;
       }
-      const activeRoute = SpaRouter(userDefinedRoutes, 'http://fake.com/' + pathName, routerOptions).setActiveRoute();
 
-      return activeRoute
+      return SpaRouter(userDefinedRoutes, 'http://fake.com/' + pathName, routerOptions).setActiveRoute()
     }
 
     /**
@@ -1819,7 +1910,7 @@ var app = (function () {
     var spa_router_3 = spa_router.navigateTo;
     var spa_router_4 = spa_router.routeIsActive;
 
-    /* node_modules/svelte-router-spa/src/components/route.svelte generated by Svelte v3.18.1 */
+    /* home/princekumar/Desktop/tryout/node_modules/.pnpm/registry.npmjs.org/svelte-router-spa/5.5.0_svelte@3.20.1/node_modules/svelte-router-spa/src/components/route.svelte generated by Svelte v3.20.1 */
 
     // (10:34) 
     function create_if_block_2(ctx) {
@@ -2163,19 +2254,24 @@ var app = (function () {
     		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<Route> was created with unknown prop '${key}'`);
     	});
 
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Route", $$slots, []);
+
     	$$self.$set = $$props => {
     		if ("currentRoute" in $$props) $$invalidate(0, currentRoute = $$props.currentRoute);
     		if ("params" in $$props) $$invalidate(1, params = $$props.params);
     	};
 
-    	$$self.$capture_state = () => {
-    		return { currentRoute, params };
-    	};
+    	$$self.$capture_state = () => ({ currentRoute, params });
 
     	$$self.$inject_state = $$props => {
     		if ("currentRoute" in $$props) $$invalidate(0, currentRoute = $$props.currentRoute);
     		if ("params" in $$props) $$invalidate(1, params = $$props.params);
     	};
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
 
     	return [currentRoute, params];
     }
@@ -2215,7 +2311,7 @@ var app = (function () {
         'default': Route
     });
 
-    /* node_modules/svelte-router-spa/src/components/router.svelte generated by Svelte v3.18.1 */
+    /* home/princekumar/Desktop/tryout/node_modules/.pnpm/registry.npmjs.org/svelte-router-spa/5.5.0_svelte@3.20.1/node_modules/svelte-router-spa/src/components/router.svelte generated by Svelte v3.20.1 */
 
     function create_fragment$1(ctx) {
     	let current;
@@ -2283,20 +2379,32 @@ var app = (function () {
     		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<Router> was created with unknown prop '${key}'`);
     	});
 
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Router", $$slots, []);
+
     	$$self.$set = $$props => {
     		if ("routes" in $$props) $$invalidate(1, routes = $$props.routes);
     		if ("options" in $$props) $$invalidate(2, options = $$props.options);
     	};
 
-    	$$self.$capture_state = () => {
-    		return { routes, options, $activeRoute };
-    	};
+    	$$self.$capture_state = () => ({
+    		onMount,
+    		SpaRouter: spa_router_1,
+    		Route,
+    		activeRoute: store_1,
+    		routes,
+    		options,
+    		$activeRoute
+    	});
 
     	$$self.$inject_state = $$props => {
     		if ("routes" in $$props) $$invalidate(1, routes = $$props.routes);
     		if ("options" in $$props) $$invalidate(2, options = $$props.options);
-    		if ("$activeRoute" in $$props) store_1.set($activeRoute = $$props.$activeRoute);
     	};
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
 
     	return [$activeRoute, routes, options];
     }
@@ -2336,8 +2444,8 @@ var app = (function () {
         'default': Router
     });
 
-    /* node_modules/svelte-router-spa/src/components/navigate.svelte generated by Svelte v3.18.1 */
-    const file = "node_modules/svelte-router-spa/src/components/navigate.svelte";
+    /* home/princekumar/Desktop/tryout/node_modules/.pnpm/registry.npmjs.org/svelte-router-spa/5.5.0_svelte@3.20.1/node_modules/svelte-router-spa/src/components/navigate.svelte generated by Svelte v3.20.1 */
+    const file = "home/princekumar/Desktop/tryout/node_modules/.pnpm/registry.npmjs.org/svelte-router-spa/5.5.0_svelte@3.20.1/node_modules/svelte-router-spa/src/components/navigate.svelte";
 
     function create_fragment$2(ctx) {
     	let a;
@@ -2359,7 +2467,7 @@ var app = (function () {
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, a, anchor);
 
     			if (default_slot) {
@@ -2367,11 +2475,14 @@ var app = (function () {
     			}
 
     			current = true;
+    			if (remount) dispose();
     			dispose = listen_dev(a, "click", /*navigate*/ ctx[3], false, false, false);
     		},
     		p: function update(ctx, [dirty]) {
-    			if (default_slot && default_slot.p && dirty & /*$$scope*/ 32) {
-    				default_slot.p(get_slot_context(default_slot_template, ctx, /*$$scope*/ ctx[5], null), get_slot_changes(default_slot_template, /*$$scope*/ ctx[5], dirty, null));
+    			if (default_slot) {
+    				if (default_slot.p && dirty & /*$$scope*/ 32) {
+    					default_slot.p(get_slot_context(default_slot_template, ctx, /*$$scope*/ ctx[5], null), get_slot_changes(default_slot_template, /*$$scope*/ ctx[5], dirty, null));
+    				}
     			}
 
     			if (!current || dirty & /*to*/ 1) {
@@ -2446,6 +2557,7 @@ var app = (function () {
     	});
 
     	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Navigate", $$slots, ['default']);
 
     	$$self.$set = $$props => {
     		if ("to" in $$props) $$invalidate(0, to = $$props.to);
@@ -2455,9 +2567,17 @@ var app = (function () {
     		if ("$$scope" in $$props) $$invalidate(5, $$scope = $$props.$$scope);
     	};
 
-    	$$self.$capture_state = () => {
-    		return { to, title, styles, lang };
-    	};
+    	$$self.$capture_state = () => ({
+    		onMount,
+    		localisedRoute: spa_router_2,
+    		navigateTo: spa_router_3,
+    		routeIsActive: spa_router_4,
+    		to,
+    		title,
+    		styles,
+    		lang,
+    		navigate
+    	});
 
     	$$self.$inject_state = $$props => {
     		if ("to" in $$props) $$invalidate(0, to = $$props.to);
@@ -2465,6 +2585,10 @@ var app = (function () {
     		if ("styles" in $$props) $$invalidate(2, styles = $$props.styles);
     		if ("lang" in $$props) $$invalidate(4, lang = $$props.lang);
     	};
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
 
     	return [to, title, styles, navigate, lang, $$scope, $$slots];
     }
@@ -3794,7 +3918,8 @@ var app = (function () {
 
             KEY_MODS: {
                 "ctrl": 1, "alt": 2, "option" : 2, "shift": 4,
-                "super": 8, "meta": 8, "command": 8, "cmd": 8
+                "super": 8, "meta": 8, "command": 8, "cmd": 8, 
+                "control": 1
             },
 
             FUNCTION_KEYS : {
@@ -4676,6 +4801,7 @@ var app = (function () {
     var MODS = KEYS.KEY_MODS;
     var isIOS = useragent.isIOS;
     var valueResetRegex = isIOS ? /\s/ : /\n/;
+    var isMobile = useragent.isMobile;
 
     var TextInput = function(parentNode, host) {
         var text = dom.createElement("textarea");
@@ -4695,7 +4821,7 @@ var app = (function () {
         var sendingText = false;
         var tempStyle = '';
         
-        if (!useragent.isMobile)
+        if (!isMobile)
             text.style.fontSize = "1px";
 
         var commandMode = false;
@@ -4825,6 +4951,11 @@ var app = (function () {
                 selectionEnd += line.length + 1;
                 line = line + "\n" + nextLine;
             }
+            else if (isMobile) {
+                line = "\n" + line;
+                selectionEnd += 1;
+                selectionStart += 1;
+            }
 
             if (line.length > MAX_LINE_LENGTH) {
                 if (selectionStart < MAX_LINE_LENGTH && selectionEnd < MAX_LINE_LENGTH) {
@@ -4876,6 +5007,8 @@ var app = (function () {
                 copied = false;
             } else if (isAllSelected(text)) {
                 host.selectAll();
+                resetSelection();
+            } else if (isMobile && text.selectionStart != lastSelectionStart) {
                 resetSelection();
             }
         };
@@ -4955,8 +5088,13 @@ var app = (function () {
             }
             var data = text.value;
             var inserted = sendText(data, true);
-            if (data.length > MAX_LINE_LENGTH + 100 || valueResetRegex.test(inserted))
+            if (
+                data.length > MAX_LINE_LENGTH + 100 
+                || valueResetRegex.test(inserted)
+                || isMobile && lastSelectionStart < 1 && lastSelectionStart == lastSelectionEnd
+            ) {
                 resetSelection();
+            }
         };
         
         var handleClipboardData = function(e, data, forceIEMime) {
@@ -6479,7 +6617,6 @@ var app = (function () {
                 showContextMenu();
             } else if (mode == "scroll") {
                 animate();
-                e.preventDefault();
                 hideContextMenu();
             } else {
                 showContextMenu();
@@ -7047,7 +7184,7 @@ var app = (function () {
         return str.replace(/-(.)/g, function(m, m1) { return m1.toUpperCase(); });
     }
 
-    exports.version = "1.4.8";
+    exports.version = "1.4.9";
 
     });
 
@@ -7513,7 +7650,7 @@ var app = (function () {
     			if(condPos == -1){
     				condPos = ix;
     			}
-    		}else{
+    		}else {
     			if (condPos > -1){
     				for(i = condPos; i < ix; i++){
     					levels[i] = newLevel;
@@ -7533,7 +7670,7 @@ var app = (function () {
     				for(var j = i - 1; j >= 0; j--){
     					if(charTypes[j] == WS){
     						levels[j] = dir;
-    					}else{
+    					}else {
     						break;
     					}
     				}
@@ -10514,6 +10651,16 @@ var app = (function () {
             }
         };
         
+        this.$safeApplyDelta = function(delta) {
+            var docLength = this.$lines.length;
+            if (
+                delta.action == "remove" && delta.start.row < docLength && delta.end.row < docLength
+                || delta.action == "insert" && delta.start.row <= docLength
+            ) {
+                this.applyDelta(delta);
+            }
+        };
+        
         this.$splitAndapplyLargeDelta = function(delta, MAX) {
             var lines = delta.lines;
             var l = lines.length - MAX + 1;
@@ -10536,7 +10683,7 @@ var app = (function () {
             this.applyDelta(delta, true);
         };
         this.revertDelta = function(delta) {
-            this.applyDelta({
+            this.$safeApplyDelta({
                 start: this.clonePos(delta.start),
                 end: this.clonePos(delta.end),
                 action: (delta.action == "insert" ? "remove" : "insert"),
@@ -12961,7 +13108,7 @@ var app = (function () {
             for (var i = 0; i < deltas.length; i++) {
                 var delta = deltas[i];
                 if (delta.action == "insert" || delta.action == "remove") {
-                    this.doc.applyDelta(delta);
+                    this.doc.$safeApplyDelta(delta);
                 }
             }
 
@@ -15373,6 +15520,13 @@ var app = (function () {
         multiSelectAction: "forEach",
         scrollIntoView: "cursor"
     }, {
+        name: "autoindent",
+        description: "Auto Indent",
+        bindKey: bindKey(null, null),
+        exec: function(editor) { editor.autoIndent(); },
+        multiSelectAction: "forEachLine",
+        scrollIntoView: "animate"
+    }, {
         name: "expandtoline",
         description: "Expand to line",
         bindKey: bindKey("Ctrl-Shift-L", "Command-Shift-L"),
@@ -15618,7 +15772,7 @@ var app = (function () {
 
         this.endOperation = function(e) {
             if (this.curOp) {
-                if (e && e.returnValue === false)
+                if (e && e.returnValue === false || !this.session)
                     return (this.curOp = null);
                 if (e == true && this.curOp.command && this.curOp.command.name == "mouse")
                     return;
@@ -16299,15 +16453,61 @@ var app = (function () {
                                   transform.selection[3]));
                 }
             }
+            if (this.$enableAutoIndent) {
+                if (session.getDocument().isNewLine(text)) {
+                    var lineIndent = mode.getNextLineIndent(lineState, line.slice(0, cursor.column), session.getTabString());
 
-            if (session.getDocument().isNewLine(text)) {
-                var lineIndent = mode.getNextLineIndent(lineState, line.slice(0, cursor.column), session.getTabString());
-
-                session.insert({row: cursor.row+1, column: 0}, lineIndent);
+                    session.insert({row: cursor.row+1, column: 0}, lineIndent);
+                }
+                if (shouldOutdent)
+                    mode.autoOutdent(lineState, session, cursor.row);
             }
-            if (shouldOutdent)
-                mode.autoOutdent(lineState, session, cursor.row);
         };
+
+        this.autoIndent = function () {
+            var session = this.session;
+            var mode = session.getMode();
+
+            var startRow, endRow;
+            if (this.selection.isEmpty()) {
+                startRow = 0;
+                endRow = session.doc.getLength() - 1;
+            } else {
+                var selectedRange = this.getSelectionRange();
+
+                startRow = selectedRange.start.row;
+                endRow = selectedRange.end.row;
+            }
+
+            var prevLineState = "";
+            var prevLine = "";
+            var lineIndent = "";
+            var line, currIndent, range;
+            var tab = session.getTabString();
+
+            for (var row = startRow; row <= endRow; row++) {
+                if (row > 0) {
+                    prevLineState = session.getState(row - 1);
+                    prevLine = session.getLine(row - 1);
+                    lineIndent = mode.getNextLineIndent(prevLineState, prevLine, tab);
+                }
+
+                line = session.getLine(row);
+                currIndent = mode.$getIndent(line);
+                if (lineIndent !== currIndent) {
+                    if (currIndent.length > 0) {
+                        range = new Range(row, 0, row, currIndent.length);
+                        session.remove(range);
+                    }
+                    if (lineIndent.length > 0) {
+                        session.insert({row: row, column: 0}, lineIndent);
+                    }
+                }
+
+                mode.autoOutdent(prevLineState, session, row);
+            }
+        };
+
 
         this.onTextInput = function(text, composition) {
             if (!composition)
@@ -16327,6 +16527,10 @@ var app = (function () {
                 var r = this.selection.getRange();
                 r.start.column -= composition.extendLeft;
                 r.end.column += composition.extendRight;
+                if (r.start.column < 0) {
+                    r.start.row--;
+                    r.start.column += this.session.getLine(r.start.row).length + 1;
+                }
                 this.selection.setRange(r);
                 if (!text && !r.isEmpty())
                     this.remove();
@@ -17454,6 +17658,7 @@ var app = (function () {
         },
         behavioursEnabled: {initialValue: true},
         wrapBehavioursEnabled: {initialValue: true},
+        enableAutoIndent: {initialValue: true},
         autoScrollEditorIntoView: {
             set: function(val) {this.setAutoScrollEditorIntoView(val);}
         },
@@ -17498,7 +17703,7 @@ var app = (function () {
             set: function(message) {
                 if (!this.$updatePlaceholder) {
                     this.$updatePlaceholder = function() {
-                        var value = this.renderer.$composition || this.getValue();
+                        var value = this.session && (this.renderer.$composition || this.getValue());
                         if (value && this.renderer.placeholderNode) {
                             this.renderer.off("afterRender", this.$updatePlaceholder);
                             dom.removeCssClass(this.container, "ace_hasPlaceholder");
@@ -17512,6 +17717,8 @@ var app = (function () {
                             el.textContent = this.$placeholder || "";
                             this.renderer.placeholderNode = el;
                             this.renderer.content.appendChild(this.renderer.placeholderNode);
+                        } else if (!value && this.renderer.placeholderNode) {
+                            this.renderer.placeholderNode.textContent = this.$placeholder || "";
                         }
                     }.bind(this);
                     this.on("input", this.$updatePlaceholder);
@@ -17685,25 +17892,6 @@ var app = (function () {
             if (to == null) to = this.$rev + 1;
             
         };
-
-        this.validateDeltaBoundaries = function(deltaSet, docLength, invertAction) {
-            if (!deltaSet) {
-                return false;
-            }
-            return deltaSet.every(function(delta) {
-                var action = delta.action;
-                if (invertAction && delta.action === "insert") action = "remove";
-                if (invertAction && delta.action === "remove") action = "insert";
-                switch(action) {
-                    case "insert":
-                        return delta.start.row <= docLength;
-                    case "remove":
-                        return delta.start.row < docLength && delta.end.row < docLength;
-                    default:
-                        return true;
-                }
-            });
-        };
         this.undo = function(session, dontSelect) {
             this.lastDeltas = null;
             var stack = this.$undoStack;
@@ -17721,7 +17909,7 @@ var app = (function () {
             
             var deltaSet = stack.pop();
             var undoSelectionRange = null;
-            if (this.validateDeltaBoundaries(deltaSet, session.getLength(), true)) {
+            if (deltaSet) {
                 undoSelectionRange = session.undoChanges(deltaSet, dontSelect);
                 this.$redoStack.push(deltaSet);
                 this.$syncRev();
@@ -17749,7 +17937,7 @@ var app = (function () {
             var deltaSet = this.$redoStack.pop();
             var redoSelectionRange = null;
             
-            if (this.validateDeltaBoundaries(deltaSet, session.getLength(), false)) {
+            if (deltaSet) {
                 redoSelectionRange = session.redoChanges(deltaSet, dontSelect);
                 this.$undoStack.push(deltaSet);
                 this.$syncRev();
@@ -18893,11 +19081,21 @@ var app = (function () {
         };
 
         this.showInvisibles = false;
+        this.showSpaces = false;
+        this.showTabs = false;
+        this.showEOL = false;
         this.setShowInvisibles = function(showInvisibles) {
             if (this.showInvisibles == showInvisibles)
                 return false;
 
             this.showInvisibles = showInvisibles;
+            if (typeof showInvisibles == "string") {
+                this.showSpaces = /tab/i.test(showInvisibles);
+                this.showTabs = /space/i.test(showInvisibles);
+                this.showEOL = /eol/i.test(showInvisibles);
+            } else {
+                this.showSpaces = this.showTabs = this.showEOL = showInvisibles;
+            }
             this.$computeTabString();
             return true;
         };
@@ -18919,7 +19117,7 @@ var app = (function () {
             this.tabSize = tabSize;
             var tabStr = this.$tabStrings = [0];
             for (var i = 1; i < tabSize + 1; i++) {
-                if (this.showInvisibles) {
+                if (this.showTabs) {
                     var span = this.dom.createElement("span");
                     span.className = "ace_invisible ace_invisible_tab";
                     span.textContent = lang.stringRepeat(this.TAB_CHAR, i);
@@ -18931,18 +19129,15 @@ var app = (function () {
             if (this.displayIndentGuides) {
                 this.$indentGuideRe =  /\s\S| \t|\t |\s$/;
                 var className = "ace_indent-guide";
-                var spaceClass = "";
-                var tabClass = "";
-                if (this.showInvisibles) {
-                    className += " ace_invisible";
-                    spaceClass = " ace_invisible_space";
-                    tabClass = " ace_invisible_tab";
-                    var spaceContent = lang.stringRepeat(this.SPACE_CHAR, this.tabSize);
-                    var tabContent = lang.stringRepeat(this.TAB_CHAR, this.tabSize);
-                } else {
-                    var spaceContent = lang.stringRepeat(" ", this.tabSize);
-                    var tabContent = spaceContent;
-                }
+                var spaceClass = this.showSpaces ? " ace_invisible ace_invisible_space" : "";
+                var spaceContent = this.showSpaces
+                    ? lang.stringRepeat(this.SPACE_CHAR, this.tabSize)
+                    : lang.stringRepeat(" ", this.tabSize);
+
+                var tabClass = this.showTabs ? " ace_invisible ace_invisible_tab" : "";
+                var tabContent = this.showTabs 
+                    ? lang.stringRepeat(this.TAB_CHAR, this.tabSize)
+                    : spaceContent;
 
                 var span = this.dom.createElement("span");
                 span.className = className + spaceClass;
@@ -19135,7 +19330,7 @@ var app = (function () {
                 var cjkSpace = m[4];
                 var cjk = m[5];
                 
-                if (!self.showInvisibles && simpleSpace)
+                if (!self.showSpaces && simpleSpace)
                     continue;
 
                 var before = i != m.index ? value.slice(i, m.index) : "";
@@ -19151,7 +19346,7 @@ var app = (function () {
                     valueFragment.appendChild(self.$tabStrings[tabSize].cloneNode(true));
                     screenColumn += tabSize - 1;
                 } else if (simpleSpace) {
-                    if (self.showInvisibles) {
+                    if (self.showSpaces) {
                         var span = this.dom.createElement("span");
                         span.className = "ace_invisible ace_invisible_space";
                         span.textContent = lang.stringRepeat(self.SPACE_CHAR, simpleSpace.length);
@@ -19169,8 +19364,8 @@ var app = (function () {
                     
                     var span = this.dom.createElement("span");
                     span.style.width = (self.config.characterWidth * 2) + "px";
-                    span.className = self.showInvisibles ? "ace_cjk ace_invisible ace_invisible_space" : "ace_cjk";
-                    span.textContent = self.showInvisibles ? self.SPACE_CHAR : cjkSpace;
+                    span.className = self.showSpaces ? "ace_cjk ace_invisible ace_invisible_space" : "ace_cjk";
+                    span.textContent = self.showSpaces ? self.SPACE_CHAR : cjkSpace;
                     valueFragment.appendChild(span);
                 } else if (cjk) {
                     screenColumn += 1;
@@ -19339,7 +19534,7 @@ var app = (function () {
                 parent.appendChild(lastLineEl);
             }
 
-            if (this.showInvisibles && lastLineEl) {
+            if (this.showEOL && lastLineEl) {
                 if (foldLine)
                     row = foldLine.end.row;
 
@@ -19867,7 +20062,7 @@ var app = (function () {
         this.el.appendChild(this.$measureNode);
         parentEl.appendChild(this.el);
         
-        this.$measureNode.innerHTML = lang.stringRepeat("X", CHAR_COUNT);
+        this.$measureNode.textContent = lang.stringRepeat("X", CHAR_COUNT);
         
         this.$characterSize = {width: 0, height: 0};
         
@@ -19956,7 +20151,7 @@ var app = (function () {
         };
 
         this.$measureCharWidth = function(ch) {
-            this.$main.innerHTML = lang.stringRepeat(ch, CHAR_COUNT);
+            this.$main.textContent = lang.stringRepeat(ch, CHAR_COUNT);
             var rect = this.$main.getBoundingClientRect();
             return rect.width / CHAR_COUNT;
         };
@@ -20072,6 +20267,7 @@ var app = (function () {
 .ace_editor {\
 position: relative;\
 overflow: hidden;\
+padding: 0;\
 font: 12px/normal 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', 'source-code-pro', monospace;\
 direction: ltr;\
 text-align: left;\
@@ -24871,6 +25067,12 @@ background: url(\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZ
                 }
                 snippetMap[scope].push(s);
 
+                if (s.prefix)
+                    s.tabTrigger = s.prefix;
+
+                if (!s.content && s.body)
+                    s.content = Array.isArray(s.body) ? s.body.join("\n") : s.body;
+
                 if (s.tabTrigger && !s.trigger) {
                     if (!s.guard && /^\w/.test(s.tabTrigger))
                         s.guard = "\\b";
@@ -24887,10 +25089,13 @@ background: url(\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZ
                 s.endTriggerRe = new RegExp(s.endTrigger);
             }
 
-            if (snippets && snippets.content)
-                addSnippet(snippets);
-            else if (Array.isArray(snippets))
+            if (Array.isArray(snippets)) {
                 snippets.forEach(addSnippet);
+            } else {
+                Object.keys(snippets).forEach(function(key) {
+                    addSnippet(snippets[key]);
+                });
+            }
             
             this._signal("registerSnippets", {scope: scope});
         };
@@ -24940,7 +25145,7 @@ background: url(\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZ
                         snippet.tabTrigger = val.match(/^\S*/)[0];
                         if (!snippet.name)
                             snippet.name = val;
-                    } else {
+                    } else if (key) {
                         snippet[key] = val;
                     }
                 }
@@ -26284,31 +26489,33 @@ background: url(\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZ
     };
 
     var loadSnippetsForMode = function(mode) {
-        var id = mode.$id;
+        if (typeof mode == "string")
+            mode = config.$modes[mode];
+        if (!mode)
+            return;
         if (!snippetManager.files)
             snippetManager.files = {};
-        loadSnippetFile(id);
+        
+        loadSnippetFile(mode.$id, mode.snippetFileId);
         if (mode.modes)
             mode.modes.forEach(loadSnippetsForMode);
     };
 
-    var loadSnippetFile = function(id) {
-        if (!id || snippetManager.files[id])
+    var loadSnippetFile = function(id, snippetFilePath) {
+        if (!snippetFilePath || !id || snippetManager.files[id])
             return;
-        var snippetFilePath = id.replace("mode", "snippets");
         snippetManager.files[id] = {};
         config.loadModule(snippetFilePath, function(m) {
-            if (m) {
-                snippetManager.files[id] = m;
-                if (!m.snippets && m.snippetText)
-                    m.snippets = snippetManager.parseSnippetFile(m.snippetText);
-                snippetManager.register(m.snippets || [], m.scope);
-                if (m.includeScopes) {
-                    snippetManager.snippetMap[m.scope].includeScopes = m.includeScopes;
-                    m.includeScopes.forEach(function(x) {
-                        loadSnippetFile("ace/mode/" + x);
-                    });
-                }
+            if (!m) return;
+            snippetManager.files[id] = m;
+            if (!m.snippets && m.snippetText)
+                m.snippets = snippetManager.parseSnippetFile(m.snippetText);
+            snippetManager.register(m.snippets || [], m.scope);
+            if (m.includeScopes) {
+                snippetManager.snippetMap[m.scope].includeScopes = m.includeScopes;
+                m.includeScopes.forEach(function(x) {
+                    loadSnippetsForMode("ace/mode/" + x);
+                });
             }
         });
     };
@@ -27386,6 +27593,7 @@ guard ^\\s*\n\
         };
 
         this.$id = "ace/mode/javascript";
+        this.snippetFileId = "ace/snippets/javascript";
     }).call(Mode.prototype);
 
     exports.Mode = Mode;
@@ -27710,7 +27918,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
       $dataStore.find(({ active }) => active)
     );
 
-    /* src/EditorWindow.svelte generated by Svelte v3.18.1 */
+    /* src/EditorWindow.svelte generated by Svelte v3.20.1 */
     const file$1 = "src/EditorWindow.svelte";
 
     function create_fragment$3(ctx) {
@@ -27727,8 +27935,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, div, anchor);
+    			if (remount) dispose();
     			dispose = listen_dev(div, "keydown", /*onInput*/ ctx[0], false, false, false);
     		},
     		p: noop,
@@ -27794,14 +28003,33 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		};
     	})();
 
-    	$$self.$capture_state = () => {
-    		return {};
-    	};
+    	const writable_props = [];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<EditorWindow> was created with unknown prop '${key}'`);
+    	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("EditorWindow", $$slots, []);
+
+    	$$self.$capture_state = () => ({
+    		onMount,
+    		afterUpdate,
+    		beforeUpdate,
+    		dataStore,
+    		currentTab,
+    		editor,
+    		onInput,
+    		$currentTab
+    	});
 
     	$$self.$inject_state = $$props => {
     		if ("editor" in $$props) editor = $$props.editor;
-    		if ("$currentTab" in $$props) currentTab.set($currentTab = $$props.$currentTab);
     	};
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
 
     	return [onInput];
     }
@@ -30843,18 +31071,22 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     var src$1 = gql;
 
-    const getProblems = src$1`
+    const getProblems = src$1 `
   query getAllProblems {
     allProblems {
       id
       problemName
       description
       problemTests
+      tags
+      datalimit
+      timelimit
+      createdAt
     }
   }
 `;
 
-    const problemsByAuthor = src$1`
+    const problemsByAuthor = src$1 `
   query problemsByAuthor($email: String) {
     problemsByAuthor(email: $email) {
       id
@@ -30867,7 +31099,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
   }
 `;
 
-    const getToken = src$1`
+    const getToken = src$1 `
   query getToken($id: ID!) {
     getToken(id: $id) {
       token
@@ -30875,7 +31107,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
   }
 `;
 
-    const allTests = src$1`
+    const allTests = src$1 `
   query getTest {
     allTests {
       id
@@ -30890,7 +31122,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
   }
 `;
 
-    const testsByAuthor = src$1`
+    const testsByAuthor = src$1 `
   query testsByAuthor($email: String) {
     testsByAuthor(email: $email) {
       id
@@ -30900,7 +31132,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
   }
 `;
 
-    const testByToken = src$1`
+    const testByToken = src$1 `
   query getTest($token: String) {
     testByToken(token: $token) {
       id
@@ -30913,7 +31145,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
   }
 `;
 
-    const sendMail = src$1`
+    const sendMail = src$1 `
   mutation mailSender($mailBody: String, $email: String) {
     sendMail(mailBody: $mailBody, email: $email) {
       success
@@ -30922,7 +31154,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
   }
 `;
 
-    const addProblem = src$1`
+    const addProblem = src$1 `
   mutation addNewProblem(
     $problemName: String
     $description: String
@@ -30958,7 +31190,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
   }
 `;
 
-    const deleteProblem = src$1`
+    const deleteProblem = src$1 `
   mutation deleteProblem($id: ID) {
     deleteProblem(id: $id) {
       id
@@ -30969,7 +31201,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
   }
 `;
 
-    const updateProblem = src$1`
+    const updateProblem = src$1 `
   mutation updateProblem(
     $id: ID!
     $problemName: String
@@ -30999,7 +31231,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
   }
 `;
 
-    const addTest = src$1`
+    const addTest = src$1 `
   mutation addNewTest(
     $testName: String
     $difficultyLevel: String
@@ -31020,7 +31252,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
   }
 `;
 
-    const deleteTest = src$1`
+    const deleteTest = src$1 `
   mutation deleteTest($id: ID) {
     deleteTest(id: $id) {
       id
@@ -31031,13 +31263,12 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
         problemName
         problemTests
         description
-        difficultyLevel
         email
       }
     }
   }
 `;
-    const updateTest = src$1`
+    const updateTest = src$1 `
   mutation updateTest(
     $id: ID
     $testName: String
@@ -31058,7 +31289,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
   }
 `;
 
-    const addUser = src$1`
+    const addUser = src$1 `
   mutation addNewUser($name: String, $email: String, $collegeName: String) {
     addUser(data: { name: $name, email: $email, collegeName: $collegeName }) {
       success
@@ -31071,7 +31302,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
   }
 `;
-    const addTestProblem = src$1`
+    const addTestProblem = src$1 `
   mutation addTestProblem($t_id: Int, $p_id: Int) {
     addTestProblem(data: { t_id: $t_id, p_id: $p_id }) {
       success
@@ -31085,7 +31316,6 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
           problemName
           problemTests
           description
-          difficultyLevel
           email
         }
       }
@@ -31093,23 +31323,23 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
   }
 `;
 
-    const getProblemById = src$1`
-  query getProblemById($id: ID!) {
-    problemById(id: $id) {
-      id
-      description
-      createdAt
-      tags
-      timelimit
-      datalimit
-      problemName
-      problemTests
-      solution
-    }
-  }
+    const getProblemById = src$1 `
+      query getProblemById($id: ID!) {
+        problemById(id: $id) {
+          id
+          description
+          createdAt
+          tags
+          timelimit
+          datalimit
+          problemName
+          problemTests
+          solution
+        }
+      }
 `;
 
-    const getTestById = src$1`
+    const getTestById = src$1 `
   query getTestById($id: ID!) {
     testById(id: $id) {
       id
@@ -31120,14 +31350,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
         problemName
         problemTests
         description
-        difficultyLevel
         email
       }
     }
   }
 `;
 
-    const getAttempts = src$1`
+    const getAttempts = src$1 `
   query getAttempts($id: ID) {
     getAttempt(id: $id) {
       id
@@ -31137,13 +31366,54 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
         name
         collegeName
       }
+      test {
+      id
+      testName
+      difficultyLevel
+      problems {
+        id
+        problemName
+        problemTests
+        description
+        email
+      }
+      }
       solutions
       attemptTime
       score
     }
   }
 `;
-    const updateAttempt = src$1`
+
+    const getAllAttempts = src$1 `
+  query getAllAttempts {
+    getAllAttempt {
+      id
+      user {
+        id
+        email
+        name
+        collegeName
+      }
+      test {
+      id
+      testName
+      difficultyLevel
+      problems {
+        id
+        problemName
+        problemTests
+        description
+        email
+      }
+      }
+      solutions
+      attemptTime
+      score
+    }
+  }
+`;
+    const updateAttempt = src$1 `
   mutation updateAttempt($id: ID, $u_id: ID, $solutions: JSON) {
     updateAttempt(data: { u_id: $u_id, id: $id, solutions: $solutions }) {
       success
@@ -31151,7 +31421,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
   }
 `;
-    const addAttempt = src$1`
+    const addAttempt = src$1 `
   mutation addAttempt($u_id: ID, $t_id: ID, $solutions: JSON) {
     addAttempt(data: { u_id: $u_id, t_id: $t_id, solutions: $solutions }) {
       success
@@ -31161,7 +31431,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
   }
 `;
 
-    const checkIfAvailable = src$1`
+    const checkIfAvailable = src$1 `
   mutation checkIfAvailable($problemName: String) {
     checkProblemIfExists(problemName: $problemName) {
       success
@@ -31170,27 +31440,28 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
   }
 `;
     const apolloClient = {
-      checkIfAvailable,
-      getAttempts,
-      updateAttempt,
-      addAttempt,
-      sendMail,
-      getTestById,
-      getProblems,
-      getProblemById,
-      testsByAuthor,
-      deleteProblem,
-      updateProblem,
-      updateTest,
-      allTests,
-      problemsByAuthor,
-      addProblem,
-      addTest,
-      addTestProblem,
-      deleteTest,
-      addUser,
-      getToken,
-      testByToken,
+        checkIfAvailable,
+        getAttempts,
+        getAllAttempts,
+        updateAttempt,
+        addAttempt,
+        sendMail,
+        getTestById,
+        getProblems,
+        getProblemById,
+        testsByAuthor,
+        deleteProblem,
+        updateProblem,
+        updateTest,
+        allTests,
+        problemsByAuthor,
+        addProblem,
+        addTest,
+        addTestProblem,
+        deleteTest,
+        addUser,
+        getToken,
+        testByToken,
     };
 
     var QueryDocumentKeys = {
@@ -31571,10 +31842,11 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     function __awaiter(thisArg, _arguments, P, generator) {
+        function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
         return new (P || (P = Promise))(function (resolve, reject) {
             function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
             function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
-            function step(result) { result.done ? resolve(result.value) : new P(function (resolve) { resolve(result.value); }).then(fulfilled, rejected); }
+            function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
             step((generator = generator.apply(thisArg, _arguments || [])).next());
         });
     }
@@ -31670,6 +31942,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
             // extra care to replace process.env.NODE_ENV in their production builds,
             // or define an appropriate global.process polyfill.
         }
+    //# sourceMappingURL=invariant.esm.js.map
 
     var fastJsonStableStringify = function (data, opts) {
         if (!opts) opts = {};
@@ -31854,6 +32127,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
         bSet.add(b);
         return false;
     }
+    //# sourceMappingURL=equality.esm.js.map
 
     function isStringValue(value) {
         return value.kind === 'StringValue';
@@ -32637,6 +32911,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
         }
         return value;
     }
+    //# sourceMappingURL=bundle.esm.js.map
 
     var OBSERVABLE;
     function isObservable(value) {
@@ -32692,6 +32967,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
             return function () { return subscription.unsubscribe(); };
         });
     }
+    //# sourceMappingURL=svelte-observable.es.js.map
 
     var CLIENT = typeof Symbol !== 'undefined' ? Symbol('client') : '@@client';
     function getClient() {
@@ -32766,8 +33042,11 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
         var observable = client.subscribe(options);
         return observe(observable);
     }
+    //# sourceMappingURL=svelte-apollo.es.js.map
 
-    /* src/EditorArea.svelte generated by Svelte v3.18.1 */
+    /* src/EditorArea.svelte generated by Svelte v3.20.1 */
+
+    const { console: console_1 } = globals;
 
     const file$2 = "src/EditorArea.svelte";
 
@@ -32838,7 +33117,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, div4, anchor);
     			append_dev(div4, h1);
     			append_dev(h1, t0);
@@ -32856,6 +33135,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			append_dev(div3, t9);
     			append_dev(div3, div2);
     			current = true;
+    			if (remount) run_all(dispose);
 
     			dispose = [
     				listen_dev(window, "keydown", /*keydown_handler*/ ctx[8], false, false, false),
@@ -32898,6 +33178,10 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	return block;
     }
+
+    function runHandler() {
+    	
+    } // fetch("http://localhost:5000/result/" + $currentTab.id, {
     //   method:"GET"
 
     function instance$4($$self, $$props, $$invalidate) {
@@ -32939,6 +33223,15 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		}
     	}
 
+    	const writable_props = [];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1.warn(`<EditorArea> was created with unknown prop '${key}'`);
+    	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("EditorArea", $$slots, []);
+
     	const keydown_handler = e => {
     		if (!e.altKey || e.key !== "r") {
     			return;
@@ -32963,20 +33256,38 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		$$invalidate(0, dragging = false);
     	};
 
-    	$$self.$capture_state = () => {
-    		return {};
-    	};
+    	$$self.$capture_state = () => ({
+    		EditorWindow,
+    		dataStore,
+    		cookieHandler,
+    		apolloClient,
+    		mutate,
+    		getClient,
+    		currentTab,
+    		outputData,
+    		outputCheck,
+    		dragging,
+    		client,
+    		runHandler,
+    		sendSolution,
+    		height,
+    		$currentTab,
+    		$dataStore
+    	});
 
     	$$self.$inject_state = $$props => {
     		if ("outputData" in $$props) $$invalidate(4, outputData = $$props.outputData);
     		if ("outputCheck" in $$props) $$invalidate(5, outputCheck = $$props.outputCheck);
     		if ("dragging" in $$props) $$invalidate(0, dragging = $$props.dragging);
     		if ("height" in $$props) $$invalidate(1, height = $$props.height);
-    		if ("$currentTab" in $$props) currentTab.set($currentTab = $$props.$currentTab);
-    		if ("$dataStore" in $$props) dataStore.set($dataStore = $$props.$dataStore);
     	};
 
     	let height;
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
+
     	 $$invalidate(1, height = "40vh");
 
     	return [
@@ -33010,7 +33321,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	}
     }
 
-    /* src/Tabs.svelte generated by Svelte v3.18.1 */
+    /* src/Tabs.svelte generated by Svelte v3.20.1 */
     const file$3 = "src/Tabs.svelte";
 
     function get_each_context(ctx, list, i) {
@@ -33047,12 +33358,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			attr_dev(div, "class", "flex-grow flex parentDiv svelte-1ph5tii");
     			add_location(div, file$3, 78, 4, 3551);
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, div, anchor);
     			append_dev(div, li);
     			append_dev(li, t0);
     			append_dev(li, t1);
     			append_dev(div, t2);
+    			if (remount) dispose();
     			dispose = listen_dev(li, "click", click_handler, false, false, false);
     		},
     		p: function update(new_ctx, dirty) {
@@ -33083,6 +33395,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     function create_fragment$5(ctx) {
     	let ul;
     	let each_value = /*$dataStore*/ ctx[0];
+    	validate_each_argument(each_value);
     	let each_blocks = [];
 
     	for (let i = 0; i < each_value.length; i += 1) {
@@ -33113,6 +33426,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		p: function update(ctx, [dirty]) {
     			if (dirty & /*$dataStore, dataStore*/ 1) {
     				each_value = /*$dataStore*/ ctx[0];
+    				validate_each_argument(each_value);
     				let i;
 
     				for (i = 0; i < each_value.length; i += 1) {
@@ -33157,16 +33471,16 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	let $dataStore;
     	validate_store(dataStore, "dataStore");
     	component_subscribe($$self, dataStore, $$value => $$invalidate(0, $dataStore = $$value));
+    	const writable_props = [];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<Tabs> was created with unknown prop '${key}'`);
+    	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Tabs", $$slots, []);
     	const click_handler = tab => dataStore.activate(tab.id);
-
-    	$$self.$capture_state = () => {
-    		return {};
-    	};
-
-    	$$self.$inject_state = $$props => {
-    		if ("$dataStore" in $$props) dataStore.set($dataStore = $$props.$dataStore);
-    	};
-
+    	$$self.$capture_state = () => ({ dataStore, $dataStore });
     	return [$dataStore, click_handler];
     }
 
@@ -34609,7 +34923,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     var axios$1 = axios_1;
 
     var pubnub_min = createCommonjsModule(function (module, exports) {
-    !function(e,t){module.exports=t();}(window,function(){return r={},i.m=n=[function(e,t,n){e.exports={};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.default=void 0;t.default={PNTimeOperation:"PNTimeOperation",PNHistoryOperation:"PNHistoryOperation",PNDeleteMessagesOperation:"PNDeleteMessagesOperation",PNFetchMessagesOperation:"PNFetchMessagesOperation",PNMessageCounts:"PNMessageCountsOperation",PNSubscribeOperation:"PNSubscribeOperation",PNUnsubscribeOperation:"PNUnsubscribeOperation",PNPublishOperation:"PNPublishOperation",PNSignalOperation:"PNSignalOperation",PNAddMessageActionOperation:"PNAddActionOperation",PNRemoveMessageActionOperation:"PNRemoveMessageActionOperation",PNGetMessageActionsOperation:"PNGetMessageActionsOperation",PNCreateUserOperation:"PNCreateUserOperation",PNUpdateUserOperation:"PNUpdateUserOperation",PNDeleteUserOperation:"PNDeleteUserOperation",PNGetUserOperation:"PNGetUsersOperation",PNGetUsersOperation:"PNGetUsersOperation",PNCreateSpaceOperation:"PNCreateSpaceOperation",PNUpdateSpaceOperation:"PNUpdateSpaceOperation",PNDeleteSpaceOperation:"PNDeleteSpaceOperation",PNGetSpaceOperation:"PNGetSpacesOperation",PNGetSpacesOperation:"PNGetSpacesOperation",PNGetMembersOperation:"PNGetMembersOperation",PNUpdateMembersOperation:"PNUpdateMembersOperation",PNGetMembershipsOperation:"PNGetMembershipsOperation",PNUpdateMembershipsOperation:"PNUpdateMembershipsOperation",PNPushNotificationEnabledChannelsOperation:"PNPushNotificationEnabledChannelsOperation",PNRemoveAllPushNotificationsOperation:"PNRemoveAllPushNotificationsOperation",PNWhereNowOperation:"PNWhereNowOperation",PNSetStateOperation:"PNSetStateOperation",PNHereNowOperation:"PNHereNowOperation",PNGetStateOperation:"PNGetStateOperation",PNHeartbeatOperation:"PNHeartbeatOperation",PNChannelGroupsOperation:"PNChannelGroupsOperation",PNRemoveGroupOperation:"PNRemoveGroupOperation",PNChannelsForGroupOperation:"PNChannelsForGroupOperation",PNAddChannelsToGroupOperation:"PNAddChannelsToGroupOperation",PNRemoveChannelsFromGroupOperation:"PNRemoveChannelsFromGroupOperation",PNAccessManagerGrant:"PNAccessManagerGrant",PNAccessManagerGrantToken:"PNAccessManagerGrantToken",PNAccessManagerAudit:"PNAccessManagerAudit"},e.exports=t.default;},function(e,t,n){function r(e){return encodeURIComponent(e).replace(/[!~*'()]/g,function(e){return "%".concat(e.charCodeAt(0).toString(16).toUpperCase())})}function i(e){return function(e){var t=[];return Object.keys(e).forEach(function(e){return t.push(e)}),t}(e).sort()}e.exports={signPamFromParams:function(t){return i(t).map(function(e){return "".concat(e,"=").concat(r(t[e]))}).join("&")},endsWith:function(e,t){return -1!==e.indexOf(t,this.length-t.length)},createPromise:function(){var n,r;return {promise:new Promise(function(e,t){n=e,r=t;}),reject:r,fulfill:n}},encodeString:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.default=void 0;var r,i=(r=n(5))&&r.__esModule?r:{default:r};n(0);function o(e,t){for(var n=0;n<t.length;n++){var r=t[n];r.enumerable=r.enumerable||!1,r.configurable=!0,"value"in r&&(r.writable=!0),Object.defineProperty(e,r.key,r);}}function s(e,t,n){return t in e?Object.defineProperty(e,t,{value:n,enumerable:!0,configurable:!0,writable:!0}):e[t]=n,e}var a,u,f=(a=l,(u=[{key:"getAuthKey",value:function(){return this.authKey}},{key:"setAuthKey",value:function(e){return this.authKey=e,this}},{key:"setCipherKey",value:function(e){return this.cipherKey=e,this}},{key:"getUUID",value:function(){return this.UUID}},{key:"setUUID",value:function(e){return this._db&&this._db.set&&this._db.set("".concat(this.subscribeKey,"uuid"),e),this.UUID=e,this}},{key:"getFilterExpression",value:function(){return this.filterExpression}},{key:"setFilterExpression",value:function(e){return this.filterExpression=e,this}},{key:"getPresenceTimeout",value:function(){return this._presenceTimeout}},{key:"setPresenceTimeout",value:function(e){return 20<=e?this._presenceTimeout=e:(this._presenceTimeout=20,console.log("WARNING: Presence timeout is less than the minimum. Using minimum value: ",this._presenceTimeout)),this.setHeartbeatInterval(this._presenceTimeout/2-1),this}},{key:"setProxy",value:function(e){this.proxy=e;}},{key:"getHeartbeatInterval",value:function(){return this._heartbeatInterval}},{key:"setHeartbeatInterval",value:function(e){return this._heartbeatInterval=e,this}},{key:"getSubscribeTimeout",value:function(){return this._subscribeRequestTimeout}},{key:"setSubscribeTimeout",value:function(e){return this._subscribeRequestTimeout=e,this}},{key:"getTransactionTimeout",value:function(){return this._transactionalRequestTimeout}},{key:"setTransactionTimeout",value:function(e){return this._transactionalRequestTimeout=e,this}},{key:"isSendBeaconEnabled",value:function(){return this._useSendBeacon}},{key:"setSendBeaconConfig",value:function(e){return this._useSendBeacon=e,this}},{key:"getVersion",value:function(){return "4.27.3"}},{key:"_addPnsdkSuffix",value:function(e,t){this._PNSDKSuffix[e]=t;}},{key:"_getPnsdkSuffix",value:function(n){var r=this;return Object.keys(this._PNSDKSuffix).reduce(function(e,t){return e+n+r._PNSDKSuffix[t]},"")}},{key:"_decideUUID",value:function(e){return e||(this._db&&this._db.get&&this._db.get("".concat(this.subscribeKey,"uuid"))?this._db.get("".concat(this.subscribeKey,"uuid")):"pn-".concat(i.default.createUUID()))}}])&&o(a.prototype,u),l);function l(e){var t=e.setup,n=e.db;!function(e,t){if(!(e instanceof t))throw new TypeError("Cannot call a class as a function")}(this,l),s(this,"_db",void 0),s(this,"subscribeKey",void 0),s(this,"publishKey",void 0),s(this,"secretKey",void 0),s(this,"cipherKey",void 0),s(this,"authKey",void 0),s(this,"UUID",void 0),s(this,"proxy",void 0),s(this,"instanceId",void 0),s(this,"sdkName",void 0),s(this,"sdkFamily",void 0),s(this,"partnerId",void 0),s(this,"filterExpression",void 0),s(this,"suppressLeaveEvents",void 0),s(this,"secure",void 0),s(this,"origin",void 0),s(this,"logVerbosity",void 0),s(this,"useInstanceId",void 0),s(this,"useRequestId",void 0),s(this,"keepAlive",void 0),s(this,"keepAliveSettings",void 0),s(this,"autoNetworkDetection",void 0),s(this,"announceSuccessfulHeartbeats",void 0),s(this,"announceFailedHeartbeats",void 0),s(this,"_presenceTimeout",void 0),s(this,"_heartbeatInterval",void 0),s(this,"_subscribeRequestTimeout",void 0),s(this,"_transactionalRequestTimeout",void 0),s(this,"_useSendBeacon",void 0),s(this,"_PNSDKSuffix",void 0),s(this,"requestMessageCountThreshold",void 0),s(this,"restore",void 0),s(this,"dedupeOnSubscribe",void 0),s(this,"maximumCacheSize",void 0),s(this,"customEncrypt",void 0),s(this,"customDecrypt",void 0),this._PNSDKSuffix={},this._db=n,this.instanceId="pn-".concat(i.default.createUUID()),this.secretKey=t.secretKey||t.secret_key,this.subscribeKey=t.subscribeKey||t.subscribe_key,this.publishKey=t.publishKey||t.publish_key,this.sdkName=t.sdkName,this.sdkFamily=t.sdkFamily,this.partnerId=t.partnerId,this.setAuthKey(t.authKey),this.setCipherKey(t.cipherKey),this.setFilterExpression(t.filterExpression),this.origin=t.origin||"ps.pndsn.com",this.secure=t.ssl||!1,this.restore=t.restore||!1,this.proxy=t.proxy,this.keepAlive=t.keepAlive,this.keepAliveSettings=t.keepAliveSettings,this.autoNetworkDetection=t.autoNetworkDetection||!1,this.dedupeOnSubscribe=t.dedupeOnSubscribe||!1,this.maximumCacheSize=t.maximumCacheSize||100,this.customEncrypt=t.customEncrypt,this.customDecrypt=t.customDecrypt,"undefined"!=typeof location&&"https:"===location.protocol&&(this.secure=!0),this.logVerbosity=t.logVerbosity||!1,this.suppressLeaveEvents=t.suppressLeaveEvents||!1,this.announceFailedHeartbeats=t.announceFailedHeartbeats||!0,this.announceSuccessfulHeartbeats=t.announceSuccessfulHeartbeats||!1,this.useInstanceId=t.useInstanceId||!1,this.useRequestId=t.useRequestId||!1,this.requestMessageCountThreshold=t.requestMessageCountThreshold,this.setTransactionTimeout(t.transactionalRequestTimeout||15e3),this.setSubscribeTimeout(t.subscribeRequestTimeout||31e4),this.setSendBeaconConfig(t.useSendBeacon||!0),t.presenceTimeout?this.setPresenceTimeout(t.presenceTimeout):this._presenceTimeout=300,null!=t.heartbeatInterval&&this.setHeartbeatInterval(t.heartbeatInterval),this.setUUID(this._decideUUID(t.uuid));}t.default=f,e.exports=t.default;},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.default=void 0;t.default={PNNetworkUpCategory:"PNNetworkUpCategory",PNNetworkDownCategory:"PNNetworkDownCategory",PNNetworkIssuesCategory:"PNNetworkIssuesCategory",PNTimeoutCategory:"PNTimeoutCategory",PNBadRequestCategory:"PNBadRequestCategory",PNAccessDeniedCategory:"PNAccessDeniedCategory",PNUnknownCategory:"PNUnknownCategory",PNReconnectedCategory:"PNReconnectedCategory",PNConnectedCategory:"PNConnectedCategory",PNRequestMessageCountExceededCategory:"PNRequestMessageCountExceededCategory"},e.exports=t.default;},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.default=void 0;var r,i=(r=n(13))&&r.__esModule?r:{default:r};var o={createUUID:function(){return i.default.uuid?i.default.uuid():(0, i.default)()}};t.default=o,e.exports=t.default;},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.default=void 0;r(n(3));var u=r(n(14));function r(e){return e&&e.__esModule?e:{default:e}}function i(e,t){for(var n=0;n<t.length;n++){var r=t[n];r.enumerable=r.enumerable||!1,r.configurable=!0,"value"in r&&(r.writable=!0),Object.defineProperty(e,r.key,r);}}function o(e,t,n){return t in e?Object.defineProperty(e,t,{value:n,enumerable:!0,configurable:!0,writable:!0}):e[t]=n,e}var s,a,f=(s=l,(a=[{key:"HMACSHA256",value:function(e){return u.default.HmacSHA256(e,this._config.secretKey).toString(u.default.enc.Base64)}},{key:"SHA256",value:function(e){return u.default.SHA256(e).toString(u.default.enc.Hex)}},{key:"_parseOptions",value:function(e){var t=e||{};return t.hasOwnProperty("encryptKey")||(t.encryptKey=this._defaultOptions.encryptKey),t.hasOwnProperty("keyEncoding")||(t.keyEncoding=this._defaultOptions.keyEncoding),t.hasOwnProperty("keyLength")||(t.keyLength=this._defaultOptions.keyLength),t.hasOwnProperty("mode")||(t.mode=this._defaultOptions.mode),-1===this._allowedKeyEncodings.indexOf(t.keyEncoding.toLowerCase())&&(t.keyEncoding=this._defaultOptions.keyEncoding),-1===this._allowedKeyLengths.indexOf(parseInt(t.keyLength,10))&&(t.keyLength=this._defaultOptions.keyLength),-1===this._allowedModes.indexOf(t.mode.toLowerCase())&&(t.mode=this._defaultOptions.mode),t}},{key:"_decodeKey",value:function(e,t){return "base64"===t.keyEncoding?u.default.enc.Base64.parse(e):"hex"===t.keyEncoding?u.default.enc.Hex.parse(e):e}},{key:"_getPaddedKey",value:function(e,t){return e=this._decodeKey(e,t),t.encryptKey?u.default.enc.Utf8.parse(this.SHA256(e).slice(0,32)):e}},{key:"_getMode",value:function(e){return "ecb"===e.mode?u.default.mode.ECB:u.default.mode.CBC}},{key:"_getIV",value:function(e){return "cbc"===e.mode?u.default.enc.Utf8.parse(this._iv):null}},{key:"encrypt",value:function(e,t,n){return this._config.customEncrypt?this._config.customEncrypt(e):this.pnEncrypt(e,t,n)}},{key:"decrypt",value:function(e,t,n){return this._config.customDecrypt?this._config.customDecrypt(e):this.pnDecrypt(e,t,n)}},{key:"pnEncrypt",value:function(e,t,n){if(!t&&!this._config.cipherKey)return e;n=this._parseOptions(n);var r=this._getIV(n),i=this._getMode(n),o=this._getPaddedKey(t||this._config.cipherKey,n);return u.default.AES.encrypt(e,o,{iv:r,mode:i}).ciphertext.toString(u.default.enc.Base64)||e}},{key:"pnDecrypt",value:function(e,t,n){if(!t&&!this._config.cipherKey)return e;n=this._parseOptions(n);var r=this._getIV(n),i=this._getMode(n),o=this._getPaddedKey(t||this._config.cipherKey,n);try{var s=u.default.enc.Base64.parse(e),a=u.default.AES.decrypt({ciphertext:s},o,{iv:r,mode:i}).toString(u.default.enc.Utf8);return JSON.parse(a)}catch(e){return null}}}])&&i(s.prototype,a),l);function l(e){var t=e.config;!function(e,t){if(!(e instanceof t))throw new TypeError("Cannot call a class as a function")}(this,l),o(this,"_config",void 0),o(this,"_iv",void 0),o(this,"_allowedKeyEncodings",void 0),o(this,"_allowedKeyLengths",void 0),o(this,"_allowedModes",void 0),o(this,"_defaultOptions",void 0),this._config=t,this._iv="0123456789012345",this._allowedKeyEncodings=["hex","utf8","base64","binary"],this._allowedKeyLengths=[128,256],this._allowedModes=["ecb","cbc"],this._defaultOptions={encryptKey:!0,keyEncoding:"utf8",keyLength:256,mode:"cbc"};}t.default=f,e.exports=t.default;},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.default=void 0;n(0);var r,i=(r=n(4))&&r.__esModule?r:{default:r};function o(e,t){for(var n=0;n<t.length;n++){var r=t[n];r.enumerable=r.enumerable||!1,r.configurable=!0,"value"in r&&(r.writable=!0),Object.defineProperty(e,r.key,r);}}var s,a,c=(s=f,(a=[{key:"addListener",value:function(e){this._listeners.push(e);}},{key:"removeListener",value:function(t){var n=[];this._listeners.forEach(function(e){e!==t&&n.push(e);}),this._listeners=n;}},{key:"removeAllListeners",value:function(){this._listeners=[];}},{key:"announcePresence",value:function(t){this._listeners.forEach(function(e){e.presence&&e.presence(t);});}},{key:"announceStatus",value:function(t){this._listeners.forEach(function(e){e.status&&e.status(t);});}},{key:"announceMessage",value:function(t){this._listeners.forEach(function(e){e.message&&e.message(t);});}},{key:"announceSignal",value:function(t){this._listeners.forEach(function(e){e.signal&&e.signal(t);});}},{key:"announceMessageAction",value:function(t){this._listeners.forEach(function(e){e.messageAction&&e.messageAction(t);});}},{key:"announceUser",value:function(t){this._listeners.forEach(function(e){e.user&&e.user(t);});}},{key:"announceSpace",value:function(t){this._listeners.forEach(function(e){e.space&&e.space(t);});}},{key:"announceMembership",value:function(t){this._listeners.forEach(function(e){e.membership&&e.membership(t);});}},{key:"announceNetworkUp",value:function(){var e={};e.category=i.default.PNNetworkUpCategory,this.announceStatus(e);}},{key:"announceNetworkDown",value:function(){var e={};e.category=i.default.PNNetworkDownCategory,this.announceStatus(e);}}])&&o(s.prototype,a),f);function f(){!function(e,t){if(!(e instanceof t))throw new TypeError("Cannot call a class as a function")}(this,f),function(e,t,n){t in e?Object.defineProperty(e,t,{value:n,enumerable:!0,configurable:!0,writable:!0}):e[t]=n;}(this,"_listeners",void 0),this._listeners=[];}t.default=c,e.exports=t.default;},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNTimeOperation},t.getURL=function(){return "/time/0"},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.prepareParams=function(){return {}},t.isAuthSupported=function(){return !1},t.handleResponse=function(e,t){return {timetoken:t[0]}},t.validateParams=function(){};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,I,D){(function(e){var r=D(71),o=D(72),s=D(73);function n(){return l.TYPED_ARRAY_SUPPORT?2147483647:1073741823}function a(e,t){if(n()<t)throw new RangeError("Invalid typed array length");return l.TYPED_ARRAY_SUPPORT?(e=new Uint8Array(t)).__proto__=l.prototype:(null===e&&(e=new l(t)),e.length=t),e}function l(e,t,n){if(!(l.TYPED_ARRAY_SUPPORT||this instanceof l))return new l(e,t,n);if("number"!=typeof e)return i(this,e,t,n);if("string"==typeof t)throw new Error("If encoding is specified then the first argument must be a string");return c(this,e)}function i(e,t,n,r){if("number"==typeof t)throw new TypeError('"value" argument must not be a number');return "undefined"!=typeof ArrayBuffer&&t instanceof ArrayBuffer?function(e,t,n,r){if(t.byteLength,n<0||t.byteLength<n)throw new RangeError("'offset' is out of bounds");if(t.byteLength<n+(r||0))throw new RangeError("'length' is out of bounds");t=void 0===n&&void 0===r?new Uint8Array(t):void 0===r?new Uint8Array(t,n):new Uint8Array(t,n,r);l.TYPED_ARRAY_SUPPORT?(e=t).__proto__=l.prototype:e=f(e,t);return e}(e,t,n,r):"string"==typeof t?function(e,t,n){"string"==typeof n&&""!==n||(n="utf8");if(!l.isEncoding(n))throw new TypeError('"encoding" must be a valid string encoding');var r=0|p(t,n),i=(e=a(e,r)).write(t,n);i!==r&&(e=e.slice(0,i));return e}(e,t,n):function(e,t){if(l.isBuffer(t)){var n=0|h(t.length);return 0===(e=a(e,n)).length||t.copy(e,0,0,n),e}if(t){if("undefined"!=typeof ArrayBuffer&&t.buffer instanceof ArrayBuffer||"length"in t)return "number"!=typeof t.length||function(e){return e!=e}(t.length)?a(e,0):f(e,t);if("Buffer"===t.type&&s(t.data))return f(e,t.data)}throw new TypeError("First argument must be a string, Buffer, ArrayBuffer, Array, or array-like object.")}(e,t)}function u(e){if("number"!=typeof e)throw new TypeError('"size" argument must be a number');if(e<0)throw new RangeError('"size" argument must not be negative')}function c(e,t){if(u(t),e=a(e,t<0?0:0|h(t)),!l.TYPED_ARRAY_SUPPORT)for(var n=0;n<t;++n)e[n]=0;return e}function f(e,t){var n=t.length<0?0:0|h(t.length);e=a(e,n);for(var r=0;r<n;r+=1)e[r]=255&t[r];return e}function h(e){if(e>=n())throw new RangeError("Attempt to allocate Buffer larger than maximum size: 0x"+n().toString(16)+" bytes");return 0|e}function p(e,t){if(l.isBuffer(e))return e.length;if("undefined"!=typeof ArrayBuffer&&"function"==typeof ArrayBuffer.isView&&(ArrayBuffer.isView(e)||e instanceof ArrayBuffer))return e.byteLength;"string"!=typeof e&&(e=""+e);var n=e.length;if(0===n)return 0;for(var r=!1;;)switch(t){case"ascii":case"latin1":case"binary":return n;case"utf8":case"utf-8":case void 0:return x(e).length;case"ucs2":case"ucs-2":case"utf16le":case"utf-16le":return 2*n;case"hex":return n>>>1;case"base64":return U(e).length;default:if(r)return x(e).length;t=(""+t).toLowerCase(),r=!0;}}function d(e,t,n){var r=e[t];e[t]=e[n],e[n]=r;}function g(e,t,n,r,i){if(0===e.length)return -1;if("string"==typeof n?(r=n,n=0):2147483647<n?n=2147483647:n<-2147483648&&(n=-2147483648),n=+n,isNaN(n)&&(n=i?0:e.length-1),n<0&&(n=e.length+n),n>=e.length){if(i)return -1;n=e.length-1;}else if(n<0){if(!i)return -1;n=0;}if("string"==typeof t&&(t=l.from(t,r)),l.isBuffer(t))return 0===t.length?-1:y(e,t,n,r,i);if("number"==typeof t)return t&=255,l.TYPED_ARRAY_SUPPORT&&"function"==typeof Uint8Array.prototype.indexOf?i?Uint8Array.prototype.indexOf.call(e,t,n):Uint8Array.prototype.lastIndexOf.call(e,t,n):y(e,[t],n,r,i);throw new TypeError("val must be string, number or Buffer")}function y(e,t,n,r,i){var o,s=1,a=e.length,u=t.length;if(void 0!==r&&("ucs2"===(r=String(r).toLowerCase())||"ucs-2"===r||"utf16le"===r||"utf-16le"===r)){if(e.length<2||t.length<2)return -1;a/=s=2,u/=2,n/=2;}function c(e,t){return 1===s?e[t]:e.readUInt16BE(t*s)}if(i){var f=-1;for(o=n;o<a;o++)if(c(e,o)===c(t,-1===f?0:o-f)){if(-1===f&&(f=o),o-f+1===u)return f*s}else-1!==f&&(o-=o-f),f=-1;}else for(a<n+u&&(n=a-u),o=n;0<=o;o--){for(var l=!0,h=0;h<u;h++)if(c(e,o+h)!==c(t,h)){l=!1;break}if(l)return o}return -1}function v(e,t,n,r){n=Number(n)||0;var i=e.length-n;r?i<(r=Number(r))&&(r=i):r=i;var o=t.length;if(o%2!=0)throw new TypeError("Invalid hex string");o/2<r&&(r=o/2);for(var s=0;s<r;++s){var a=parseInt(t.substr(2*s,2),16);if(isNaN(a))return s;e[n+s]=a;}return s}function b(e,t,n,r){return B(function(e){for(var t=[],n=0;n<e.length;++n)t.push(255&e.charCodeAt(n));return t}(t),e,n,r)}function m(e,t,n){return 0===t&&n===e.length?r.fromByteArray(e):r.fromByteArray(e.slice(t,n))}function _(e,t,n){n=Math.min(e.length,n);for(var r=[],i=t;i<n;){var o,s,a,u,c=e[i],f=null,l=239<c?4:223<c?3:191<c?2:1;if(i+l<=n)switch(l){case 1:c<128&&(f=c);break;case 2:128==(192&(o=e[i+1]))&&127<(u=(31&c)<<6|63&o)&&(f=u);break;case 3:o=e[i+1],s=e[i+2],128==(192&o)&&128==(192&s)&&2047<(u=(15&c)<<12|(63&o)<<6|63&s)&&(u<55296||57343<u)&&(f=u);break;case 4:o=e[i+1],s=e[i+2],a=e[i+3],128==(192&o)&&128==(192&s)&&128==(192&a)&&65535<(u=(15&c)<<18|(63&o)<<12|(63&s)<<6|63&a)&&u<1114112&&(f=u);}null===f?(f=65533,l=1):65535<f&&(f-=65536,r.push(f>>>10&1023|55296),f=56320|1023&f),r.push(f),i+=l;}return function(e){var t=e.length;if(t<=k)return String.fromCharCode.apply(String,e);var n="",r=0;for(;r<t;)n+=String.fromCharCode.apply(String,e.slice(r,r+=k));return n}(r)}I.Buffer=l,I.SlowBuffer=function(e){+e!=e&&(e=0);return l.alloc(+e)},I.INSPECT_MAX_BYTES=50,l.TYPED_ARRAY_SUPPORT=void 0!==e.TYPED_ARRAY_SUPPORT?e.TYPED_ARRAY_SUPPORT:function(){try{var e=new Uint8Array(1);return e.__proto__={__proto__:Uint8Array.prototype,foo:function(){return 42}},42===e.foo()&&"function"==typeof e.subarray&&0===e.subarray(1,1).byteLength}catch(e){return !1}}(),I.kMaxLength=n(),l.poolSize=8192,l._augment=function(e){return e.__proto__=l.prototype,e},l.from=function(e,t,n){return i(null,e,t,n)},l.TYPED_ARRAY_SUPPORT&&(l.prototype.__proto__=Uint8Array.prototype,l.__proto__=Uint8Array,"undefined"!=typeof Symbol&&Symbol.species&&l[Symbol.species]===l&&Object.defineProperty(l,Symbol.species,{value:null,configurable:!0})),l.alloc=function(e,t,n){return function(e,t,n,r){return u(t),t<=0?a(e,t):void 0!==n?"string"==typeof r?a(e,t).fill(n,r):a(e,t).fill(n):a(e,t)}(null,e,t,n)},l.allocUnsafe=function(e){return c(null,e)},l.allocUnsafeSlow=function(e){return c(null,e)},l.isBuffer=function(e){return !(null==e||!e._isBuffer)},l.compare=function(e,t){if(!l.isBuffer(e)||!l.isBuffer(t))throw new TypeError("Arguments must be Buffers");if(e===t)return 0;for(var n=e.length,r=t.length,i=0,o=Math.min(n,r);i<o;++i)if(e[i]!==t[i]){n=e[i],r=t[i];break}return n<r?-1:r<n?1:0},l.isEncoding=function(e){switch(String(e).toLowerCase()){case"hex":case"utf8":case"utf-8":case"ascii":case"latin1":case"binary":case"base64":case"ucs2":case"ucs-2":case"utf16le":case"utf-16le":return !0;default:return !1}},l.concat=function(e,t){if(!s(e))throw new TypeError('"list" argument must be an Array of Buffers');if(0===e.length)return l.alloc(0);var n;if(void 0===t)for(n=t=0;n<e.length;++n)t+=e[n].length;var r=l.allocUnsafe(t),i=0;for(n=0;n<e.length;++n){var o=e[n];if(!l.isBuffer(o))throw new TypeError('"list" argument must be an Array of Buffers');o.copy(r,i),i+=o.length;}return r},l.byteLength=p,l.prototype._isBuffer=!0,l.prototype.swap16=function(){var e=this.length;if(e%2!=0)throw new RangeError("Buffer size must be a multiple of 16-bits");for(var t=0;t<e;t+=2)d(this,t,t+1);return this},l.prototype.swap32=function(){var e=this.length;if(e%4!=0)throw new RangeError("Buffer size must be a multiple of 32-bits");for(var t=0;t<e;t+=4)d(this,t,t+3),d(this,t+1,t+2);return this},l.prototype.swap64=function(){var e=this.length;if(e%8!=0)throw new RangeError("Buffer size must be a multiple of 64-bits");for(var t=0;t<e;t+=8)d(this,t,t+7),d(this,t+1,t+6),d(this,t+2,t+5),d(this,t+3,t+4);return this},l.prototype.toString=function(){var e=0|this.length;return 0==e?"":0===arguments.length?_(this,0,e):function(e,t,n){var r=!1;if((void 0===t||t<0)&&(t=0),t>this.length)return "";if((void 0===n||n>this.length)&&(n=this.length),n<=0)return "";if((n>>>=0)<=(t>>>=0))return "";for(e=e||"utf8";;)switch(e){case"hex":return T(this,t,n);case"utf8":case"utf-8":return _(this,t,n);case"ascii":return P(this,t,n);case"latin1":case"binary":return w(this,t,n);case"base64":return m(this,t,n);case"ucs2":case"ucs-2":case"utf16le":case"utf-16le":return O(this,t,n);default:if(r)throw new TypeError("Unknown encoding: "+e);e=(e+"").toLowerCase(),r=!0;}}.apply(this,arguments)},l.prototype.equals=function(e){if(!l.isBuffer(e))throw new TypeError("Argument must be a Buffer");return this===e||0===l.compare(this,e)},l.prototype.inspect=function(){var e="",t=I.INSPECT_MAX_BYTES;return 0<this.length&&(e=this.toString("hex",0,t).match(/.{2}/g).join(" "),this.length>t&&(e+=" ... ")),"<Buffer "+e+">"},l.prototype.compare=function(e,t,n,r,i){if(!l.isBuffer(e))throw new TypeError("Argument must be a Buffer");if(void 0===t&&(t=0),void 0===n&&(n=e?e.length:0),void 0===r&&(r=0),void 0===i&&(i=this.length),t<0||n>e.length||r<0||i>this.length)throw new RangeError("out of range index");if(i<=r&&n<=t)return 0;if(i<=r)return -1;if(n<=t)return 1;if(this===e)return 0;for(var o=(i>>>=0)-(r>>>=0),s=(n>>>=0)-(t>>>=0),a=Math.min(o,s),u=this.slice(r,i),c=e.slice(t,n),f=0;f<a;++f)if(u[f]!==c[f]){o=u[f],s=c[f];break}return o<s?-1:s<o?1:0},l.prototype.includes=function(e,t,n){return -1!==this.indexOf(e,t,n)},l.prototype.indexOf=function(e,t,n){return g(this,e,t,n,!0)},l.prototype.lastIndexOf=function(e,t,n){return g(this,e,t,n,!1)},l.prototype.write=function(e,t,n,r){if(void 0===t)r="utf8",n=this.length,t=0;else if(void 0===n&&"string"==typeof t)r=t,n=this.length,t=0;else{if(!isFinite(t))throw new Error("Buffer.write(string, encoding, offset[, length]) is no longer supported");t|=0,isFinite(n)?(n|=0,void 0===r&&(r="utf8")):(r=n,n=void 0);}var i=this.length-t;if((void 0===n||i<n)&&(n=i),0<e.length&&(n<0||t<0)||t>this.length)throw new RangeError("Attempt to write outside buffer bounds");r=r||"utf8";for(var o,s,a,u,c,f,l,h,p,d=!1;;)switch(r){case"hex":return v(this,e,t,n);case"utf8":case"utf-8":return h=t,p=n,B(x(e,(l=this).length-h),l,h,p);case"ascii":return b(this,e,t,n);case"latin1":case"binary":return b(this,e,t,n);case"base64":return u=this,c=t,f=n,B(U(e),u,c,f);case"ucs2":case"ucs-2":case"utf16le":case"utf-16le":return s=t,a=n,B(function(e,t){for(var n,r,i,o=[],s=0;s<e.length&&!((t-=2)<0);++s)n=e.charCodeAt(s),r=n>>8,i=n%256,o.push(i),o.push(r);return o}(e,(o=this).length-s),o,s,a);default:if(d)throw new TypeError("Unknown encoding: "+r);r=(""+r).toLowerCase(),d=!0;}},l.prototype.toJSON=function(){return {type:"Buffer",data:Array.prototype.slice.call(this._arr||this,0)}};var k=4096;function P(e,t,n){var r="";n=Math.min(e.length,n);for(var i=t;i<n;++i)r+=String.fromCharCode(127&e[i]);return r}function w(e,t,n){var r="";n=Math.min(e.length,n);for(var i=t;i<n;++i)r+=String.fromCharCode(e[i]);return r}function T(e,t,n){var r=e.length;(!t||t<0)&&(t=0),(!n||n<0||r<n)&&(n=r);for(var i="",o=t;o<n;++o)i+=N(e[o]);return i}function O(e,t,n){for(var r=e.slice(t,n),i="",o=0;o<r.length;o+=2)i+=String.fromCharCode(r[o]+256*r[o+1]);return i}function S(e,t,n){if(e%1!=0||e<0)throw new RangeError("offset is not uint");if(n<e+t)throw new RangeError("Trying to access beyond buffer length")}function M(e,t,n,r,i,o){if(!l.isBuffer(e))throw new TypeError('"buffer" argument must be a Buffer instance');if(i<t||t<o)throw new RangeError('"value" argument is out of bounds');if(n+r>e.length)throw new RangeError("Index out of range")}function E(e,t,n,r){t<0&&(t=65535+t+1);for(var i=0,o=Math.min(e.length-n,2);i<o;++i)e[n+i]=(t&255<<8*(r?i:1-i))>>>8*(r?i:1-i);}function A(e,t,n,r){t<0&&(t=4294967295+t+1);for(var i=0,o=Math.min(e.length-n,4);i<o;++i)e[n+i]=t>>>8*(r?i:3-i)&255;}function C(e,t,n,r){if(n+r>e.length)throw new RangeError("Index out of range");if(n<0)throw new RangeError("Index out of range")}function R(e,t,n,r,i){return i||C(e,0,n,4),o.write(e,t,n,r,23,4),n+4}function j(e,t,n,r,i){return i||C(e,0,n,8),o.write(e,t,n,r,52,8),n+8}l.prototype.slice=function(e,t){var n,r=this.length;if((e=~~e)<0?(e+=r)<0&&(e=0):r<e&&(e=r),(t=void 0===t?r:~~t)<0?(t+=r)<0&&(t=0):r<t&&(t=r),t<e&&(t=e),l.TYPED_ARRAY_SUPPORT)(n=this.subarray(e,t)).__proto__=l.prototype;else{var i=t-e;n=new l(i,void 0);for(var o=0;o<i;++o)n[o]=this[o+e];}return n},l.prototype.readUIntLE=function(e,t,n){e|=0,t|=0,n||S(e,t,this.length);for(var r=this[e],i=1,o=0;++o<t&&(i*=256);)r+=this[e+o]*i;return r},l.prototype.readUIntBE=function(e,t,n){e|=0,t|=0,n||S(e,t,this.length);for(var r=this[e+--t],i=1;0<t&&(i*=256);)r+=this[e+--t]*i;return r},l.prototype.readUInt8=function(e,t){return t||S(e,1,this.length),this[e]},l.prototype.readUInt16LE=function(e,t){return t||S(e,2,this.length),this[e]|this[e+1]<<8},l.prototype.readUInt16BE=function(e,t){return t||S(e,2,this.length),this[e]<<8|this[e+1]},l.prototype.readUInt32LE=function(e,t){return t||S(e,4,this.length),(this[e]|this[e+1]<<8|this[e+2]<<16)+16777216*this[e+3]},l.prototype.readUInt32BE=function(e,t){return t||S(e,4,this.length),16777216*this[e]+(this[e+1]<<16|this[e+2]<<8|this[e+3])},l.prototype.readIntLE=function(e,t,n){e|=0,t|=0,n||S(e,t,this.length);for(var r=this[e],i=1,o=0;++o<t&&(i*=256);)r+=this[e+o]*i;return (i*=128)<=r&&(r-=Math.pow(2,8*t)),r},l.prototype.readIntBE=function(e,t,n){e|=0,t|=0,n||S(e,t,this.length);for(var r=t,i=1,o=this[e+--r];0<r&&(i*=256);)o+=this[e+--r]*i;return (i*=128)<=o&&(o-=Math.pow(2,8*t)),o},l.prototype.readInt8=function(e,t){return t||S(e,1,this.length),128&this[e]?-1*(255-this[e]+1):this[e]},l.prototype.readInt16LE=function(e,t){t||S(e,2,this.length);var n=this[e]|this[e+1]<<8;return 32768&n?4294901760|n:n},l.prototype.readInt16BE=function(e,t){t||S(e,2,this.length);var n=this[e+1]|this[e]<<8;return 32768&n?4294901760|n:n},l.prototype.readInt32LE=function(e,t){return t||S(e,4,this.length),this[e]|this[e+1]<<8|this[e+2]<<16|this[e+3]<<24},l.prototype.readInt32BE=function(e,t){return t||S(e,4,this.length),this[e]<<24|this[e+1]<<16|this[e+2]<<8|this[e+3]},l.prototype.readFloatLE=function(e,t){return t||S(e,4,this.length),o.read(this,e,!0,23,4)},l.prototype.readFloatBE=function(e,t){return t||S(e,4,this.length),o.read(this,e,!1,23,4)},l.prototype.readDoubleLE=function(e,t){return t||S(e,8,this.length),o.read(this,e,!0,52,8)},l.prototype.readDoubleBE=function(e,t){return t||S(e,8,this.length),o.read(this,e,!1,52,8)},l.prototype.writeUIntLE=function(e,t,n,r){e=+e,t|=0,n|=0,r||M(this,e,t,n,Math.pow(2,8*n)-1,0);var i=1,o=0;for(this[t]=255&e;++o<n&&(i*=256);)this[t+o]=e/i&255;return t+n},l.prototype.writeUIntBE=function(e,t,n,r){e=+e,t|=0,n|=0,r||M(this,e,t,n,Math.pow(2,8*n)-1,0);var i=n-1,o=1;for(this[t+i]=255&e;0<=--i&&(o*=256);)this[t+i]=e/o&255;return t+n},l.prototype.writeUInt8=function(e,t,n){return e=+e,t|=0,n||M(this,e,t,1,255,0),l.TYPED_ARRAY_SUPPORT||(e=Math.floor(e)),this[t]=255&e,t+1},l.prototype.writeUInt16LE=function(e,t,n){return e=+e,t|=0,n||M(this,e,t,2,65535,0),l.TYPED_ARRAY_SUPPORT?(this[t]=255&e,this[t+1]=e>>>8):E(this,e,t,!0),t+2},l.prototype.writeUInt16BE=function(e,t,n){return e=+e,t|=0,n||M(this,e,t,2,65535,0),l.TYPED_ARRAY_SUPPORT?(this[t]=e>>>8,this[t+1]=255&e):E(this,e,t,!1),t+2},l.prototype.writeUInt32LE=function(e,t,n){return e=+e,t|=0,n||M(this,e,t,4,4294967295,0),l.TYPED_ARRAY_SUPPORT?(this[t+3]=e>>>24,this[t+2]=e>>>16,this[t+1]=e>>>8,this[t]=255&e):A(this,e,t,!0),t+4},l.prototype.writeUInt32BE=function(e,t,n){return e=+e,t|=0,n||M(this,e,t,4,4294967295,0),l.TYPED_ARRAY_SUPPORT?(this[t]=e>>>24,this[t+1]=e>>>16,this[t+2]=e>>>8,this[t+3]=255&e):A(this,e,t,!1),t+4},l.prototype.writeIntLE=function(e,t,n,r){if(e=+e,t|=0,!r){var i=Math.pow(2,8*n-1);M(this,e,t,n,i-1,-i);}var o=0,s=1,a=0;for(this[t]=255&e;++o<n&&(s*=256);)e<0&&0===a&&0!==this[t+o-1]&&(a=1),this[t+o]=(e/s>>0)-a&255;return t+n},l.prototype.writeIntBE=function(e,t,n,r){if(e=+e,t|=0,!r){var i=Math.pow(2,8*n-1);M(this,e,t,n,i-1,-i);}var o=n-1,s=1,a=0;for(this[t+o]=255&e;0<=--o&&(s*=256);)e<0&&0===a&&0!==this[t+o+1]&&(a=1),this[t+o]=(e/s>>0)-a&255;return t+n},l.prototype.writeInt8=function(e,t,n){return e=+e,t|=0,n||M(this,e,t,1,127,-128),l.TYPED_ARRAY_SUPPORT||(e=Math.floor(e)),e<0&&(e=255+e+1),this[t]=255&e,t+1},l.prototype.writeInt16LE=function(e,t,n){return e=+e,t|=0,n||M(this,e,t,2,32767,-32768),l.TYPED_ARRAY_SUPPORT?(this[t]=255&e,this[t+1]=e>>>8):E(this,e,t,!0),t+2},l.prototype.writeInt16BE=function(e,t,n){return e=+e,t|=0,n||M(this,e,t,2,32767,-32768),l.TYPED_ARRAY_SUPPORT?(this[t]=e>>>8,this[t+1]=255&e):E(this,e,t,!1),t+2},l.prototype.writeInt32LE=function(e,t,n){return e=+e,t|=0,n||M(this,e,t,4,2147483647,-2147483648),l.TYPED_ARRAY_SUPPORT?(this[t]=255&e,this[t+1]=e>>>8,this[t+2]=e>>>16,this[t+3]=e>>>24):A(this,e,t,!0),t+4},l.prototype.writeInt32BE=function(e,t,n){return e=+e,t|=0,n||M(this,e,t,4,2147483647,-2147483648),e<0&&(e=4294967295+e+1),l.TYPED_ARRAY_SUPPORT?(this[t]=e>>>24,this[t+1]=e>>>16,this[t+2]=e>>>8,this[t+3]=255&e):A(this,e,t,!1),t+4},l.prototype.writeFloatLE=function(e,t,n){return R(this,e,t,!0,n)},l.prototype.writeFloatBE=function(e,t,n){return R(this,e,t,!1,n)},l.prototype.writeDoubleLE=function(e,t,n){return j(this,e,t,!0,n)},l.prototype.writeDoubleBE=function(e,t,n){return j(this,e,t,!1,n)},l.prototype.copy=function(e,t,n,r){if(n=n||0,r||0===r||(r=this.length),t>=e.length&&(t=e.length),t=t||0,0<r&&r<n&&(r=n),r===n)return 0;if(0===e.length||0===this.length)return 0;if(t<0)throw new RangeError("targetStart out of bounds");if(n<0||n>=this.length)throw new RangeError("sourceStart out of bounds");if(r<0)throw new RangeError("sourceEnd out of bounds");r>this.length&&(r=this.length),e.length-t<r-n&&(r=e.length-t+n);var i,o=r-n;if(this===e&&n<t&&t<r)for(i=o-1;0<=i;--i)e[i+t]=this[i+n];else if(o<1e3||!l.TYPED_ARRAY_SUPPORT)for(i=0;i<o;++i)e[i+t]=this[i+n];else Uint8Array.prototype.set.call(e,this.subarray(n,n+o),t);return o},l.prototype.fill=function(e,t,n,r){if("string"==typeof e){if("string"==typeof t?(r=t,t=0,n=this.length):"string"==typeof n&&(r=n,n=this.length),1===e.length){var i=e.charCodeAt(0);i<256&&(e=i);}if(void 0!==r&&"string"!=typeof r)throw new TypeError("encoding must be a string");if("string"==typeof r&&!l.isEncoding(r))throw new TypeError("Unknown encoding: "+r)}else"number"==typeof e&&(e&=255);if(t<0||this.length<t||this.length<n)throw new RangeError("Out of range index");if(n<=t)return this;var o;if(t>>>=0,n=void 0===n?this.length:n>>>0,"number"==typeof(e=e||0))for(o=t;o<n;++o)this[o]=e;else{var s=l.isBuffer(e)?e:x(new l(e,r).toString()),a=s.length;for(o=0;o<n-t;++o)this[o+t]=s[o%a];}return this};var t=/[^+\/0-9A-Za-z-_]/g;function N(e){return e<16?"0"+e.toString(16):e.toString(16)}function x(e,t){var n;t=t||1/0;for(var r=e.length,i=null,o=[],s=0;s<r;++s){if(55295<(n=e.charCodeAt(s))&&n<57344){if(!i){if(56319<n){-1<(t-=3)&&o.push(239,191,189);continue}if(s+1===r){-1<(t-=3)&&o.push(239,191,189);continue}i=n;continue}if(n<56320){-1<(t-=3)&&o.push(239,191,189),i=n;continue}n=65536+(i-55296<<10|n-56320);}else i&&-1<(t-=3)&&o.push(239,191,189);if(i=null,n<128){if((t-=1)<0)break;o.push(n);}else if(n<2048){if((t-=2)<0)break;o.push(n>>6|192,63&n|128);}else if(n<65536){if((t-=3)<0)break;o.push(n>>12|224,n>>6&63|128,63&n|128);}else{if(!(n<1114112))throw new Error("Invalid code point");if((t-=4)<0)break;o.push(n>>18|240,n>>12&63|128,n>>6&63|128,63&n|128);}}return o}function U(e){return r.toByteArray(function(e){if((e=function(e){return e.trim?e.trim():e.replace(/^\s+|\s+$/g,"")}(e).replace(t,"")).length<2)return "";for(;e.length%4!=0;)e+="=";return e}(e))}function B(e,t,n,r){for(var i=0;i<r&&!(i+n>=t.length||i>=e.length);++i)t[i+n]=e[i];return i}}).call(this,D(70));},function(e,t,n){e.exports=function(e){return null!==e&&"object"==typeof e};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.default=void 0;var r=u(n(12)),i=u(n(67)),o=u(n(68)),s=u(n(69)),a=n(75);n(0);function u(e){return e&&e.__esModule?e:{default:e}}function c(e){return (c="function"==typeof Symbol&&"symbol"==typeof Symbol.iterator?function(e){return typeof e}:function(e){return e&&"function"==typeof Symbol&&e.constructor===Symbol&&e!==Symbol.prototype?"symbol":typeof e})(e)}function f(e,t){return !t||"object"!==c(t)&&"function"!=typeof t?function(e){if(void 0!==e)return e;throw new ReferenceError("this hasn't been initialised - super() hasn't been called")}(e):t}function l(e){return (l=Object.setPrototypeOf?Object.getPrototypeOf:function(e){return e.__proto__||Object.getPrototypeOf(e)})(e)}function h(e,t){return (h=Object.setPrototypeOf||function(e,t){return e.__proto__=t,e})(e,t)}function p(e){if(!navigator||!navigator.sendBeacon)return !1;navigator.sendBeacon(e);}var d=(function(e,t){if("function"!=typeof t&&null!==t)throw new TypeError("Super expression must either be null or a function");e.prototype=Object.create(t&&t.prototype,{constructor:{value:e,writable:!0,configurable:!0}}),t&&h(e,t);}(g,r.default),g);function g(e){var t;!function(e,t){if(!(e instanceof t))throw new TypeError("Cannot call a class as a function")}(this,g);var n=e.listenToBrowserNetworkEvents,r=void 0===n||n;return e.db=o.default,e.cbor=new s.default,e.sdkFamily="Web",e.networking=new i.default({del:a.del,get:a.get,post:a.post,patch:a.patch,sendBeacon:p}),t=f(this,l(g).call(this,e)),r&&(window.addEventListener("offline",function(){t.networkDownDetected();}),window.addEventListener("online",function(){t.networkUpDetected();})),t}t.default=d,e.exports=t.default;},function(e,t,n){function s(e){return (s="function"==typeof Symbol&&"symbol"==typeof Symbol.iterator?function(e){return typeof e}:function(e){return e&&"function"==typeof Symbol&&e.constructor===Symbol&&e!==Symbol.prototype?"symbol":typeof e})(e)}Object.defineProperty(t,"__esModule",{value:!0}),t.default=void 0;var y=f(n(3)),v=f(n(6)),b=f(n(15)),r=f(n(18)),m=f(n(7)),_=f(n(19)),k=f(n(20)),P=c(n(21)),w=c(n(22)),T=c(n(23)),O=c(n(24)),S=c(n(25)),M=c(n(26)),E=c(n(27)),A=c(n(28)),C=c(n(29)),R=c(n(30)),j=c(n(31)),N=c(n(32)),x=c(n(33)),U=c(n(34)),B=c(n(35)),I=c(n(36)),D=c(n(37)),K=c(n(38)),L=c(n(39)),F=c(n(40)),G=c(n(41)),H=c(n(42)),q=c(n(43)),z=c(n(44)),Y=c(n(45)),$=c(n(46)),W=c(n(47)),J=c(n(48)),X=c(n(49)),V=c(n(50)),Q=c(n(51)),Z=c(n(52)),ee=c(n(53)),te=c(n(54)),ne=c(n(55)),re=c(n(56)),ie=c(n(57)),oe=c(n(58)),se=c(n(59)),ae=c(n(60)),ue=c(n(61)),ce=c(n(62)),fe=c(n(63)),le=c(n(64)),he=c(n(65)),pe=c(n(8)),de=c(n(66)),i=f(n(1)),o=f(n(4)),a=(n(0),f(n(5)));function u(){if("function"!=typeof WeakMap)return null;var e=new WeakMap;return u=function(){return e},e}function c(e){if(e&&e.__esModule)return e;if(null===e||"object"!==s(e)&&"function"!=typeof e)return {default:e};var t=u();if(t&&t.has(e))return t.get(e);var n={},r=Object.defineProperty&&Object.getOwnPropertyDescriptor;for(var i in e)if(Object.prototype.hasOwnProperty.call(e,i)){var o=r?Object.getOwnPropertyDescriptor(e,i):null;o&&(o.get||o.set)?Object.defineProperty(n,i,o):n[i]=e[i];}return n.default=e,t&&t.set(e,n),n}function f(e){return e&&e.__esModule?e:{default:e}}function l(e,t){for(var n=0;n<t.length;n++){var r=t[n];r.enumerable=r.enumerable||!1,r.configurable=!0,"value"in r&&(r.writable=!0),Object.defineProperty(e,r.key,r);}}function ge(e,t,n){return t in e?Object.defineProperty(e,t,{value:n,enumerable:!0,configurable:!0,writable:!0}):e[t]=n,e}var h,p,d,g=(h=ye,d=[{key:"notificationPayload",value:function(e,t){return new r.default(e,t)}},{key:"generateUUID",value:function(){return a.default.createUUID()}}],(p=[{key:"getVersion",value:function(){return this._config.getVersion()}},{key:"_addPnsdkSuffix",value:function(e,t){this._config._addPnsdkSuffix(e,t);}},{key:"networkDownDetected",value:function(){this._listenerManager.announceNetworkDown(),this._config.restore?this.disconnect():this.destroy(!0);}},{key:"networkUpDetected",value:function(){this._listenerManager.announceNetworkUp(),this.reconnect();}}])&&l(h.prototype,p),void(d&&l(h,d)),ye);function ye(e){var n=this;!function(e,t){if(!(e instanceof t))throw new TypeError("Cannot call a class as a function")}(this,ye),ge(this,"_config",void 0),ge(this,"_listenerManager",void 0),ge(this,"_tokenManager",void 0),ge(this,"time",void 0),ge(this,"publish",void 0),ge(this,"fire",void 0),ge(this,"history",void 0),ge(this,"deleteMessages",void 0),ge(this,"messageCounts",void 0),ge(this,"fetchMessages",void 0),ge(this,"channelGroups",void 0),ge(this,"push",void 0),ge(this,"hereNow",void 0),ge(this,"whereNow",void 0),ge(this,"getState",void 0),ge(this,"setState",void 0),ge(this,"grant",void 0),ge(this,"grantToken",void 0),ge(this,"audit",void 0),ge(this,"subscribe",void 0),ge(this,"signal",void 0),ge(this,"presence",void 0),ge(this,"unsubscribe",void 0),ge(this,"unsubscribeAll",void 0),ge(this,"addMessageAction",void 0),ge(this,"removeMessageAction",void 0),ge(this,"getMessageActions",void 0),ge(this,"createUser",void 0),ge(this,"updateUser",void 0),ge(this,"deleteUser",void 0),ge(this,"getUser",void 0),ge(this,"getUsers",void 0),ge(this,"createSpace",void 0),ge(this,"updateSpace",void 0),ge(this,"deleteSpace",void 0),ge(this,"getSpaces",void 0),ge(this,"getSpace",void 0),ge(this,"getMembers",void 0),ge(this,"addMembers",void 0),ge(this,"updateMembers",void 0),ge(this,"removeMembers",void 0),ge(this,"getMemberships",void 0),ge(this,"joinSpaces",void 0),ge(this,"updateMemberships",void 0),ge(this,"leaveSpaces",void 0),ge(this,"disconnect",void 0),ge(this,"reconnect",void 0),ge(this,"destroy",void 0),ge(this,"stop",void 0),ge(this,"getSubscribedChannels",void 0),ge(this,"getSubscribedChannelGroups",void 0),ge(this,"addListener",void 0),ge(this,"removeListener",void 0),ge(this,"removeAllListeners",void 0),ge(this,"parseToken",void 0),ge(this,"setToken",void 0),ge(this,"setTokens",void 0),ge(this,"getToken",void 0),ge(this,"getTokens",void 0),ge(this,"clearTokens",void 0),ge(this,"getAuthKey",void 0),ge(this,"setAuthKey",void 0),ge(this,"setCipherKey",void 0),ge(this,"setUUID",void 0),ge(this,"getUUID",void 0),ge(this,"getFilterExpression",void 0),ge(this,"setFilterExpression",void 0),ge(this,"setHeartbeatInterval",void 0),ge(this,"setProxy",void 0),ge(this,"encrypt",void 0),ge(this,"decrypt",void 0);var t=e.db,r=e.networking,i=e.cbor,o=this._config=new y.default({setup:e,db:t}),s=new v.default({config:o});r.init(o);var a=this._tokenManager=new _.default(o,i),u={config:o,networking:r,crypto:s,tokenManager:a},c=k.default.bind(this,u,pe),f=k.default.bind(this,u,R),l=k.default.bind(this,u,N),h=k.default.bind(this,u,U),p=k.default.bind(this,u,de),d=this._listenerManager=new m.default,g=new b.default({timeEndpoint:c,leaveEndpoint:f,heartbeatEndpoint:l,setStateEndpoint:h,subscribeEndpoint:p,crypto:u.crypto,config:u.config,listenerManager:d});this.addListener=d.addListener.bind(d),this.removeListener=d.removeListener.bind(d),this.removeAllListeners=d.removeAllListeners.bind(d),this.parseToken=a.parseToken.bind(a),this.setToken=a.setToken.bind(a),this.setTokens=a.setTokens.bind(a),this.getToken=a.getToken.bind(a),this.getTokens=a.getTokens.bind(a),this.clearTokens=a.clearTokens.bind(a),this.channelGroups={listGroups:k.default.bind(this,u,O),listChannels:k.default.bind(this,u,S),addChannels:k.default.bind(this,u,P),removeChannels:k.default.bind(this,u,w),deleteGroup:k.default.bind(this,u,T)},this.push={addChannels:k.default.bind(this,u,M),removeChannels:k.default.bind(this,u,E),deleteDevice:k.default.bind(this,u,C),listChannels:k.default.bind(this,u,A)},this.hereNow=k.default.bind(this,u,B),this.whereNow=k.default.bind(this,u,j),this.getState=k.default.bind(this,u,x),this.setState=g.adaptStateChange.bind(g),this.grant=k.default.bind(this,u,oe),this.grantToken=k.default.bind(this,u,se),this.audit=k.default.bind(this,u,ie),this.publish=k.default.bind(this,u,ae),this.fire=function(e,t){return e.replicate=!1,e.storeInHistory=!1,n.publish(e,t)},this.signal=k.default.bind(this,u,ue),this.history=k.default.bind(this,u,ce),this.deleteMessages=k.default.bind(this,u,fe),this.messageCounts=k.default.bind(this,u,le),this.fetchMessages=k.default.bind(this,u,he),this.addMessageAction=k.default.bind(this,u,I),this.removeMessageAction=k.default.bind(this,u,D),this.getMessageActions=k.default.bind(this,u,K),this.createUser=k.default.bind(this,u,L),this.updateUser=k.default.bind(this,u,F),this.deleteUser=k.default.bind(this,u,G),this.getUser=k.default.bind(this,u,H),this.getUsers=k.default.bind(this,u,q),this.createSpace=k.default.bind(this,u,z),this.updateSpace=k.default.bind(this,u,Y),this.deleteSpace=k.default.bind(this,u,$),this.getSpaces=k.default.bind(this,u,W),this.getSpace=k.default.bind(this,u,J),this.addMembers=k.default.bind(this,u,V),this.updateMembers=k.default.bind(this,u,Q),this.removeMembers=k.default.bind(this,u,Z),this.getMembers=k.default.bind(this,u,X),this.getMemberships=k.default.bind(this,u,ee),this.joinSpaces=k.default.bind(this,u,ne),this.updateMemberships=k.default.bind(this,u,te),this.leaveSpaces=k.default.bind(this,u,re),this.time=c,this.subscribe=g.adaptSubscribeChange.bind(g),this.presence=g.adaptPresenceChange.bind(g),this.unsubscribe=g.adaptUnsubscribeChange.bind(g),this.disconnect=g.disconnect.bind(g),this.reconnect=g.reconnect.bind(g),this.destroy=function(e){g.unsubscribeAll(e),g.disconnect();},this.stop=this.destroy,this.unsubscribeAll=g.unsubscribeAll.bind(g),this.getSubscribedChannels=g.getSubscribedChannels.bind(g),this.getSubscribedChannelGroups=g.getSubscribedChannelGroups.bind(g),this.encrypt=s.encrypt.bind(s),this.decrypt=s.decrypt.bind(s),this.getAuthKey=u.config.getAuthKey.bind(u.config),this.setAuthKey=u.config.setAuthKey.bind(u.config),this.setCipherKey=u.config.setCipherKey.bind(u.config),this.getUUID=u.config.getUUID.bind(u.config),this.setUUID=u.config.setUUID.bind(u.config),this.getFilterExpression=u.config.getFilterExpression.bind(u.config),this.setFilterExpression=u.config.setFilterExpression.bind(u.config),this.setHeartbeatInterval=u.config.setHeartbeatInterval.bind(u.config),r.hasModule("proxy")&&(this.setProxy=function(e){u.config.setProxy(e),n.reconnect();});}ge(t.default=g,"OPERATIONS",i.default),ge(g,"CATEGORIES",o.default),e.exports=t.default;},function(e,t,n){var r,i,o;i=[t],void 0===(o="function"==typeof(r=function(e){var r={3:/^[0-9A-F]{8}-[0-9A-F]{4}-3[0-9A-F]{3}-[0-9A-F]{4}-[0-9A-F]{12}$/i,4:/^[0-9A-F]{8}-[0-9A-F]{4}-4[0-9A-F]{3}-[89AB][0-9A-F]{3}-[0-9A-F]{12}$/i,5:/^[0-9A-F]{8}-[0-9A-F]{4}-5[0-9A-F]{3}-[89AB][0-9A-F]{3}-[0-9A-F]{12}$/i,all:/^[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}$/i};function t(){var e,t,n="";for(e=0;e<32;e++)t=16*Math.random()|0,8!==e&&12!==e&&16!==e&&20!==e||(n+="-"),n+=(12===e?4:16===e?3&t|8:t).toString(16);return n}function n(e,t){var n=r[t||"all"];return n&&n.test(e)||!1}t.isUUID=n,t.VERSION="0.1.0",e.uuid=t,e.isUUID=n;})?r.apply(t,i):r)||(e.exports=o);},function(e,t,n){var r,c,i,u,o,s,a,f,l,h,E=E||function(a){function n(){}var e={},t=e.lib={},r=t.Base={extend:function(e){n.prototype=this;var t=new n;return e&&t.mixIn(e),t.hasOwnProperty("init")||(t.init=function(){t.$super.init.apply(this,arguments);}),(t.init.prototype=t).$super=this,t},create:function(){var e=this.extend();return e.init.apply(e,arguments),e},init:function(){},mixIn:function(e){for(var t in e)e.hasOwnProperty(t)&&(this[t]=e[t]);e.hasOwnProperty("toString")&&(this.toString=e.toString);},clone:function(){return this.init.prototype.extend(this)}},u=t.WordArray=r.extend({init:function(e,t){e=this.words=e||[],this.sigBytes=null!=t?t:4*e.length;},toString:function(e){return (e||o).stringify(this)},concat:function(e){var t=this.words,n=e.words,r=this.sigBytes;if(e=e.sigBytes,this.clamp(),r%4)for(var i=0;i<e;i++)t[r+i>>>2]|=(n[i>>>2]>>>24-i%4*8&255)<<24-(r+i)%4*8;else if(65535<n.length)for(i=0;i<e;i+=4)t[r+i>>>2]=n[i>>>2];else t.push.apply(t,n);return this.sigBytes+=e,this},clamp:function(){var e=this.words,t=this.sigBytes;e[t>>>2]&=4294967295<<32-t%4*8,e.length=a.ceil(t/4);},clone:function(){var e=r.clone.call(this);return e.words=this.words.slice(0),e},random:function(e){for(var t=[],n=0;n<e;n+=4)t.push(4294967296*a.random()|0);return new u.init(t,e)}}),i=e.enc={},o=i.Hex={stringify:function(e){var t=e.words;e=e.sigBytes;for(var n=[],r=0;r<e;r++){var i=t[r>>>2]>>>24-r%4*8&255;n.push((i>>>4).toString(16)),n.push((15&i).toString(16));}return n.join("")},parse:function(e){for(var t=e.length,n=[],r=0;r<t;r+=2)n[r>>>3]|=parseInt(e.substr(r,2),16)<<24-r%8*4;return new u.init(n,t/2)}},s=i.Latin1={stringify:function(e){var t=e.words;e=e.sigBytes;for(var n=[],r=0;r<e;r++)n.push(String.fromCharCode(t[r>>>2]>>>24-r%4*8&255));return n.join("")},parse:function(e){for(var t=e.length,n=[],r=0;r<t;r++)n[r>>>2]|=(255&e.charCodeAt(r))<<24-r%4*8;return new u.init(n,t)}},c=i.Utf8={stringify:function(e){try{return decodeURIComponent(escape(s.stringify(e)))}catch(e){throw Error("Malformed UTF-8 data")}},parse:function(e){return s.parse(unescape(encodeURIComponent(e)))}},f=t.BufferedBlockAlgorithm=r.extend({reset:function(){this._data=new u.init,this._nDataBytes=0;},_append:function(e){"string"==typeof e&&(e=c.parse(e)),this._data.concat(e),this._nDataBytes+=e.sigBytes;},_process:function(e){var t=this._data,n=t.words,r=t.sigBytes,i=this.blockSize,o=r/(4*i);if(e=(o=e?a.ceil(o):a.max((0|o)-this._minBufferSize,0))*i,r=a.min(4*e,r),e){for(var s=0;s<e;s+=i)this._doProcessBlock(n,s);s=n.splice(0,e),t.sigBytes-=r;}return new u.init(s,r)},clone:function(){var e=r.clone.call(this);return e._data=this._data.clone(),e},_minBufferSize:0});t.Hasher=f.extend({cfg:r.extend(),init:function(e){this.cfg=this.cfg.extend(e),this.reset();},reset:function(){f.reset.call(this),this._doReset();},update:function(e){return this._append(e),this._process(),this},finalize:function(e){return e&&this._append(e),this._doFinalize()},blockSize:16,_createHelper:function(n){return function(e,t){return new n.init(t).finalize(e)}},_createHmacHelper:function(n){return function(e,t){return new l.HMAC.init(n,t).finalize(e)}}});var l=e.algo={};return e}(Math);!function(i){for(var e=E,t=(r=e.lib).WordArray,n=r.Hasher,r=e.algo,o=[],d=[],s=function(e){return 4294967296*(e-(0|e))|0},a=2,u=0;u<64;){var c;e:{c=a;for(var f=i.sqrt(c),l=2;l<=f;l++)if(!(c%l)){c=!1;break e}c=!0;}c&&(u<8&&(o[u]=s(i.pow(a,.5))),d[u]=s(i.pow(a,1/3)),u++),a++;}var g=[];r=r.SHA256=n.extend({_doReset:function(){this._hash=new t.init(o.slice(0));},_doProcessBlock:function(e,t){for(var n=this._hash.words,r=n[0],i=n[1],o=n[2],s=n[3],a=n[4],u=n[5],c=n[6],f=n[7],l=0;l<64;l++){if(l<16)g[l]=0|e[t+l];else{var h=g[l-15],p=g[l-2];g[l]=((h<<25|h>>>7)^(h<<14|h>>>18)^h>>>3)+g[l-7]+((p<<15|p>>>17)^(p<<13|p>>>19)^p>>>10)+g[l-16];}h=f+((a<<26|a>>>6)^(a<<21|a>>>11)^(a<<7|a>>>25))+(a&u^~a&c)+d[l]+g[l],p=((r<<30|r>>>2)^(r<<19|r>>>13)^(r<<10|r>>>22))+(r&i^r&o^i&o),f=c,c=u,u=a,a=s+h|0,s=o,o=i,i=r,r=h+p|0;}n[0]=n[0]+r|0,n[1]=n[1]+i|0,n[2]=n[2]+o|0,n[3]=n[3]+s|0,n[4]=n[4]+a|0,n[5]=n[5]+u|0,n[6]=n[6]+c|0,n[7]=n[7]+f|0;},_doFinalize:function(){var e=this._data,t=e.words,n=8*this._nDataBytes,r=8*e.sigBytes;return t[r>>>5]|=128<<24-r%32,t[14+(64+r>>>9<<4)]=i.floor(n/4294967296),t[15+(64+r>>>9<<4)]=n,e.sigBytes=4*t.length,this._process(),this._hash},clone:function(){var e=n.clone.call(this);return e._hash=this._hash.clone(),e}});e.SHA256=n._createHelper(r),e.HmacSHA256=n._createHmacHelper(r);}(Math),c=(r=E).enc.Utf8,r.algo.HMAC=r.lib.Base.extend({init:function(e,t){e=this._hasher=new e.init,"string"==typeof t&&(t=c.parse(t));var n=e.blockSize,r=4*n;t.sigBytes>r&&(t=e.finalize(t)),t.clamp();for(var i=this._oKey=t.clone(),o=this._iKey=t.clone(),s=i.words,a=o.words,u=0;u<n;u++)s[u]^=1549556828,a[u]^=909522486;i.sigBytes=o.sigBytes=r,this.reset();},reset:function(){var e=this._hasher;e.reset(),e.update(this._iKey);},update:function(e){return this._hasher.update(e),this},finalize:function(e){var t=this._hasher;return e=t.finalize(e),t.reset(),t.finalize(this._oKey.clone().concat(e))}}),u=(i=E).lib.WordArray,i.enc.Base64={stringify:function(e){var t=e.words,n=e.sigBytes,r=this._map;e.clamp(),e=[];for(var i=0;i<n;i+=3)for(var o=(t[i>>>2]>>>24-i%4*8&255)<<16|(t[i+1>>>2]>>>24-(i+1)%4*8&255)<<8|t[i+2>>>2]>>>24-(i+2)%4*8&255,s=0;s<4&&i+.75*s<n;s++)e.push(r.charAt(o>>>6*(3-s)&63));if(t=r.charAt(64))for(;e.length%4;)e.push(t);return e.join("")},parse:function(e){var t=e.length,n=this._map;!(r=n.charAt(64))||-1!=(r=e.indexOf(r))&&(t=r);for(var r=[],i=0,o=0;o<t;o++)if(o%4){var s=n.indexOf(e.charAt(o-1))<<o%4*2,a=n.indexOf(e.charAt(o))>>>6-o%4*2;r[i>>>2]|=(s|a)<<24-i%4*8,i++;}return u.create(r,i)},_map:"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/="},function(o){function w(e,t,n,r,i,o,s){return ((e=e+(t&n|~t&r)+i+s)<<o|e>>>32-o)+t}function T(e,t,n,r,i,o,s){return ((e=e+(t&r|n&~r)+i+s)<<o|e>>>32-o)+t}function O(e,t,n,r,i,o,s){return ((e=e+(t^n^r)+i+s)<<o|e>>>32-o)+t}function S(e,t,n,r,i,o,s){return ((e=e+(n^(t|~r))+i+s)<<o|e>>>32-o)+t}for(var e=E,t=(r=e.lib).WordArray,n=r.Hasher,r=e.algo,M=[],i=0;i<64;i++)M[i]=4294967296*o.abs(o.sin(i+1))|0;r=r.MD5=n.extend({_doReset:function(){this._hash=new t.init([1732584193,4023233417,2562383102,271733878]);},_doProcessBlock:function(e,t){for(var n=0;n<16;n++){var r=e[s=t+n];e[s]=16711935&(r<<8|r>>>24)|4278255360&(r<<24|r>>>8);}n=this._hash.words;var i,o,s=e[t+0],a=(r=e[t+1],e[t+2]),u=e[t+3],c=e[t+4],f=e[t+5],l=e[t+6],h=e[t+7],p=e[t+8],d=e[t+9],g=e[t+10],y=e[t+11],v=e[t+12],b=e[t+13],m=e[t+14],_=e[t+15],k=n[0],P=S(P=S(P=S(P=S(P=O(P=O(P=O(P=O(P=T(P=T(P=T(P=T(P=w(P=w(P=w(P=w(P=n[1],o=w(o=n[2],i=w(i=n[3],k=w(k,P,o,i,s,7,M[0]),P,o,r,12,M[1]),k,P,a,17,M[2]),i,k,u,22,M[3]),o=w(o,i=w(i,k=w(k,P,o,i,c,7,M[4]),P,o,f,12,M[5]),k,P,l,17,M[6]),i,k,h,22,M[7]),o=w(o,i=w(i,k=w(k,P,o,i,p,7,M[8]),P,o,d,12,M[9]),k,P,g,17,M[10]),i,k,y,22,M[11]),o=w(o,i=w(i,k=w(k,P,o,i,v,7,M[12]),P,o,b,12,M[13]),k,P,m,17,M[14]),i,k,_,22,M[15]),o=T(o,i=T(i,k=T(k,P,o,i,r,5,M[16]),P,o,l,9,M[17]),k,P,y,14,M[18]),i,k,s,20,M[19]),o=T(o,i=T(i,k=T(k,P,o,i,f,5,M[20]),P,o,g,9,M[21]),k,P,_,14,M[22]),i,k,c,20,M[23]),o=T(o,i=T(i,k=T(k,P,o,i,d,5,M[24]),P,o,m,9,M[25]),k,P,u,14,M[26]),i,k,p,20,M[27]),o=T(o,i=T(i,k=T(k,P,o,i,b,5,M[28]),P,o,a,9,M[29]),k,P,h,14,M[30]),i,k,v,20,M[31]),o=O(o,i=O(i,k=O(k,P,o,i,f,4,M[32]),P,o,p,11,M[33]),k,P,y,16,M[34]),i,k,m,23,M[35]),o=O(o,i=O(i,k=O(k,P,o,i,r,4,M[36]),P,o,c,11,M[37]),k,P,h,16,M[38]),i,k,g,23,M[39]),o=O(o,i=O(i,k=O(k,P,o,i,b,4,M[40]),P,o,s,11,M[41]),k,P,u,16,M[42]),i,k,l,23,M[43]),o=O(o,i=O(i,k=O(k,P,o,i,d,4,M[44]),P,o,v,11,M[45]),k,P,_,16,M[46]),i,k,a,23,M[47]),o=S(o,i=S(i,k=S(k,P,o,i,s,6,M[48]),P,o,h,10,M[49]),k,P,m,15,M[50]),i,k,f,21,M[51]),o=S(o,i=S(i,k=S(k,P,o,i,v,6,M[52]),P,o,u,10,M[53]),k,P,g,15,M[54]),i,k,r,21,M[55]),o=S(o,i=S(i,k=S(k,P,o,i,p,6,M[56]),P,o,_,10,M[57]),k,P,l,15,M[58]),i,k,b,21,M[59]),o=S(o,i=S(i,k=S(k,P,o,i,c,6,M[60]),P,o,y,10,M[61]),k,P,a,15,M[62]),i,k,d,21,M[63]);n[0]=n[0]+k|0,n[1]=n[1]+P|0,n[2]=n[2]+o|0,n[3]=n[3]+i|0;},_doFinalize:function(){var e=this._data,t=e.words,n=8*this._nDataBytes,r=8*e.sigBytes;t[r>>>5]|=128<<24-r%32;var i=o.floor(n/4294967296);for(t[15+(r+64>>>9<<4)]=16711935&(i<<8|i>>>24)|4278255360&(i<<24|i>>>8),t[14+(r+64>>>9<<4)]=16711935&(n<<8|n>>>24)|4278255360&(n<<24|n>>>8),e.sigBytes=4*(t.length+1),this._process(),t=(e=this._hash).words,n=0;n<4;n++)r=t[n],t[n]=16711935&(r<<8|r>>>24)|4278255360&(r<<24|r>>>8);return e},clone:function(){var e=n.clone.call(this);return e._hash=this._hash.clone(),e}}),e.MD5=n._createHelper(r),e.HmacMD5=n._createHmacHelper(r);}(Math),a=(o=(s=E).lib).Base,f=o.WordArray,l=(o=s.algo).EvpKDF=a.extend({cfg:a.extend({keySize:4,hasher:o.MD5,iterations:1}),init:function(e){this.cfg=this.cfg.extend(e);},compute:function(e,t){for(var n=(s=this.cfg).hasher.create(),r=f.create(),i=r.words,o=s.keySize,s=s.iterations;i.length<o;){a&&n.update(a);var a=n.update(e).finalize(t);n.reset();for(var u=1;u<s;u++)a=n.finalize(a),n.reset();r.concat(a);}return r.sigBytes=4*o,r}}),s.EvpKDF=function(e,t,n){return l.create(n).compute(e,t)},E.lib.Cipher||function(){var e=(h=E).lib,t=e.Base,s=e.WordArray,n=e.BufferedBlockAlgorithm,r=h.enc.Base64,i=h.algo.EvpKDF,o=e.Cipher=n.extend({cfg:t.extend(),createEncryptor:function(e,t){return this.create(this._ENC_XFORM_MODE,e,t)},createDecryptor:function(e,t){return this.create(this._DEC_XFORM_MODE,e,t)},init:function(e,t,n){this.cfg=this.cfg.extend(n),this._xformMode=e,this._key=t,this.reset();},reset:function(){n.reset.call(this),this._doReset();},process:function(e){return this._append(e),this._process()},finalize:function(e){return e&&this._append(e),this._doFinalize()},keySize:4,ivSize:4,_ENC_XFORM_MODE:1,_DEC_XFORM_MODE:2,_createHelper:function(r){return {encrypt:function(e,t,n){return ("string"==typeof t?p:l).encrypt(r,e,t,n)},decrypt:function(e,t,n){return ("string"==typeof t?p:l).decrypt(r,e,t,n)}}}});e.StreamCipher=o.extend({_doFinalize:function(){return this._process(!0)},blockSize:1});function a(e,t,n){var r=this._iv;r?this._iv=void 0:r=this._prevBlock;for(var i=0;i<n;i++)e[t+i]^=r[i];}var u=h.mode={},c=(e.BlockCipherMode=t.extend({createEncryptor:function(e,t){return this.Encryptor.create(e,t)},createDecryptor:function(e,t){return this.Decryptor.create(e,t)},init:function(e,t){this._cipher=e,this._iv=t;}})).extend();c.Encryptor=c.extend({processBlock:function(e,t){var n=this._cipher,r=n.blockSize;a.call(this,e,t,r),n.encryptBlock(e,t),this._prevBlock=e.slice(t,t+r);}}),c.Decryptor=c.extend({processBlock:function(e,t){var n=this._cipher,r=n.blockSize,i=e.slice(t,t+r);n.decryptBlock(e,t),a.call(this,e,t,r),this._prevBlock=i;}}),u=u.CBC=c,c=(h.pad={}).Pkcs7={pad:function(e,t){for(var n,r=(n=(n=4*t)-e.sigBytes%n)<<24|n<<16|n<<8|n,i=[],o=0;o<n;o+=4)i.push(r);n=s.create(i,n),e.concat(n);},unpad:function(e){e.sigBytes-=255&e.words[e.sigBytes-1>>>2];}},e.BlockCipher=o.extend({cfg:o.cfg.extend({mode:u,padding:c}),reset:function(){o.reset.call(this);var e=(t=this.cfg).iv,t=t.mode;if(this._xformMode==this._ENC_XFORM_MODE)var n=t.createEncryptor;else n=t.createDecryptor,this._minBufferSize=1;this._mode=n.call(t,this,e&&e.words);},_doProcessBlock:function(e,t){this._mode.processBlock(e,t);},_doFinalize:function(){var e=this.cfg.padding;if(this._xformMode==this._ENC_XFORM_MODE){e.pad(this._data,this.blockSize);var t=this._process(!0);}else t=this._process(!0),e.unpad(t);return t},blockSize:4});var f=e.CipherParams=t.extend({init:function(e){this.mixIn(e);},toString:function(e){return (e||this.formatter).stringify(this)}}),l=(u=(h.format={}).OpenSSL={stringify:function(e){var t=e.ciphertext;return ((e=e.salt)?s.create([1398893684,1701076831]).concat(e).concat(t):t).toString(r)},parse:function(e){var t=(e=r.parse(e)).words;if(1398893684==t[0]&&1701076831==t[1]){var n=s.create(t.slice(2,4));t.splice(0,4),e.sigBytes-=16;}return f.create({ciphertext:e,salt:n})}},e.SerializableCipher=t.extend({cfg:t.extend({format:u}),encrypt:function(e,t,n,r){r=this.cfg.extend(r);var i=e.createEncryptor(n,r);return t=i.finalize(t),i=i.cfg,f.create({ciphertext:t,key:n,iv:i.iv,algorithm:e,mode:i.mode,padding:i.padding,blockSize:e.blockSize,formatter:r.format})},decrypt:function(e,t,n,r){return r=this.cfg.extend(r),t=this._parse(t,r.format),e.createDecryptor(n,r).finalize(t.ciphertext)},_parse:function(e,t){return "string"==typeof e?t.parse(e,this):e}})),h=(h.kdf={}).OpenSSL={execute:function(e,t,n,r){return r=r||s.random(8),e=i.create({keySize:t+n}).compute(e,r),n=s.create(e.words.slice(t),4*n),e.sigBytes=4*t,f.create({key:e,iv:n,salt:r})}},p=e.PasswordBasedCipher=l.extend({cfg:l.cfg.extend({kdf:h}),encrypt:function(e,t,n,r){return n=(r=this.cfg.extend(r)).kdf.execute(n,e.keySize,e.ivSize),r.iv=n.iv,(e=l.encrypt.call(this,e,t,n.key,r)).mixIn(n),e},decrypt:function(e,t,n,r){return r=this.cfg.extend(r),t=this._parse(t,r.format),n=r.kdf.execute(n,e.keySize,e.ivSize,t.salt),r.iv=n.iv,l.decrypt.call(this,e,t,n.key,r)}});}(),function(){for(var e=E,t=e.lib.BlockCipher,n=e.algo,s=[],r=[],i=[],o=[],a=[],u=[],c=[],f=[],l=[],h=[],p=[],d=0;d<256;d++)p[d]=d<128?d<<1:d<<1^283;var g=0,y=0;for(d=0;d<256;d++){var v=(v=y^y<<1^y<<2^y<<3^y<<4)>>>8^255&v^99;s[g]=v;var b=p[r[v]=g],m=p[b],_=p[m],k=257*p[v]^16843008*v;i[g]=k<<24|k>>>8,o[g]=k<<16|k>>>16,a[g]=k<<8|k>>>24,u[g]=k,k=16843009*_^65537*m^257*b^16843008*g,c[v]=k<<24|k>>>8,f[v]=k<<16|k>>>16,l[v]=k<<8|k>>>24,h[v]=k,g?(g=b^p[p[p[_^b]]],y^=p[p[y]]):g=y=1;}var P=[0,1,2,4,8,16,32,64,128,27,54];n=n.AES=t.extend({_doReset:function(){for(var e=(n=this._key).words,t=n.sigBytes/4,n=4*((this._nRounds=t+6)+1),r=this._keySchedule=[],i=0;i<n;i++)if(i<t)r[i]=e[i];else{var o=r[i-1];i%t?6<t&&4==i%t&&(o=s[o>>>24]<<24|s[o>>>16&255]<<16|s[o>>>8&255]<<8|s[255&o]):(o=s[(o=o<<8|o>>>24)>>>24]<<24|s[o>>>16&255]<<16|s[o>>>8&255]<<8|s[255&o],o^=P[i/t|0]<<24),r[i]=r[i-t]^o;}for(e=this._invKeySchedule=[],t=0;t<n;t++)i=n-t,o=t%4?r[i]:r[i-4],e[t]=t<4||i<=4?o:c[s[o>>>24]]^f[s[o>>>16&255]]^l[s[o>>>8&255]]^h[s[255&o]];},encryptBlock:function(e,t){this._doCryptBlock(e,t,this._keySchedule,i,o,a,u,s);},decryptBlock:function(e,t){var n=e[t+1];e[t+1]=e[t+3],e[t+3]=n,this._doCryptBlock(e,t,this._invKeySchedule,c,f,l,h,r),n=e[t+1],e[t+1]=e[t+3],e[t+3]=n;},_doCryptBlock:function(e,t,n,r,i,o,s,a){for(var u=this._nRounds,c=e[t]^n[0],f=e[t+1]^n[1],l=e[t+2]^n[2],h=e[t+3]^n[3],p=4,d=1;d<u;d++){var g=r[c>>>24]^i[f>>>16&255]^o[l>>>8&255]^s[255&h]^n[p++],y=r[f>>>24]^i[l>>>16&255]^o[h>>>8&255]^s[255&c]^n[p++],v=r[l>>>24]^i[h>>>16&255]^o[c>>>8&255]^s[255&f]^n[p++];h=r[h>>>24]^i[c>>>16&255]^o[f>>>8&255]^s[255&l]^n[p++],c=g,f=y,l=v;}g=(a[c>>>24]<<24|a[f>>>16&255]<<16|a[l>>>8&255]<<8|a[255&h])^n[p++],y=(a[f>>>24]<<24|a[l>>>16&255]<<16|a[h>>>8&255]<<8|a[255&c])^n[p++],v=(a[l>>>24]<<24|a[h>>>16&255]<<16|a[c>>>8&255]<<8|a[255&f])^n[p++],h=(a[h>>>24]<<24|a[c>>>16&255]<<16|a[f>>>8&255]<<8|a[255&l])^n[p++],e[t]=g,e[t+1]=y,e[t+2]=v,e[t+3]=h;},keySize:8});e.AES=t._createHelper(n);}(),E.mode.ECB=((h=E.lib.BlockCipherMode.extend()).Encryptor=h.extend({processBlock:function(e,t){this._cipher.encryptBlock(e,t);}}),h.Decryptor=h.extend({processBlock:function(e,t){this._cipher.decryptBlock(e,t);}}),h),e.exports=E;},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.default=void 0;r(n(6)),r(n(3)),r(n(7));var c=r(n(16)),f=r(n(17)),l=r(n(2)),a=(n(0),r(n(4)));function r(e){return e&&e.__esModule?e:{default:e}}function i(e,t){for(var n=0;n<t.length;n++){var r=t[n];r.enumerable=r.enumerable||!1,r.configurable=!0,"value"in r&&(r.writable=!0),Object.defineProperty(e,r.key,r);}}function h(e,t,n){return t in e?Object.defineProperty(e,t,{value:n,enumerable:!0,configurable:!0,writable:!0}):e[t]=n,e}var o,s,p=(o=d,(s=[{key:"adaptStateChange",value:function(e,t){var n=this,r=e.state,i=e.channels,o=void 0===i?[]:i,s=e.channelGroups,a=void 0===s?[]:s;return o.forEach(function(e){e in n._channels&&(n._channels[e].state=r);}),a.forEach(function(e){e in n._channelGroups&&(n._channelGroups[e].state=r);}),this._setStateEndpoint({state:r,channels:o,channelGroups:a},t)}},{key:"adaptPresenceChange",value:function(e){var t=this,n=e.connected,r=e.channels,i=void 0===r?[]:r,o=e.channelGroups,s=void 0===o?[]:o;n?(i.forEach(function(e){t._heartbeatChannels[e]={state:{}};}),s.forEach(function(e){t._heartbeatChannelGroups[e]={state:{}};})):(i.forEach(function(e){e in t._heartbeatChannels&&delete t._heartbeatChannels[e];}),s.forEach(function(e){e in t._heartbeatChannelGroups&&delete t._heartbeatChannelGroups[e];}),!1===this._config.suppressLeaveEvents&&this._leaveEndpoint({channels:i,channelGroups:s},function(e){t._listenerManager.announceStatus(e);})),this.reconnect();}},{key:"adaptSubscribeChange",value:function(e){var t=this,n=e.timetoken,r=e.channels,i=void 0===r?[]:r,o=e.channelGroups,s=void 0===o?[]:o,a=e.withPresence,u=void 0!==a&&a,c=e.withHeartbeats,f=void 0!==c&&c;this._config.subscribeKey&&""!==this._config.subscribeKey?(n&&(this._lastTimetoken=this._currentTimetoken,this._currentTimetoken=n),"0"!==this._currentTimetoken&&0!==this._currentTimetoken&&(this._storedTimetoken=this._currentTimetoken,this._currentTimetoken=0),i.forEach(function(e){t._channels[e]={state:{}},u&&(t._presenceChannels[e]={}),(f||t._config.getHeartbeatInterval())&&(t._heartbeatChannels[e]={}),t._pendingChannelSubscriptions.push(e);}),s.forEach(function(e){t._channelGroups[e]={state:{}},u&&(t._presenceChannelGroups[e]={}),(f||t._config.getHeartbeatInterval())&&(t._heartbeatChannelGroups[e]={}),t._pendingChannelGroupSubscriptions.push(e);}),this._subscriptionStatusAnnounced=!1,this.reconnect()):console&&console.log&&console.log("subscribe key missing; aborting subscribe");}},{key:"adaptUnsubscribeChange",value:function(e,t){var n=this,r=e.channels,i=void 0===r?[]:r,o=e.channelGroups,s=void 0===o?[]:o,a=[],u=[];i.forEach(function(e){e in n._channels&&(delete n._channels[e],a.push(e),e in n._heartbeatChannels&&delete n._heartbeatChannels[e]),e in n._presenceChannels&&(delete n._presenceChannels[e],a.push(e));}),s.forEach(function(e){e in n._channelGroups&&(delete n._channelGroups[e],u.push(e),e in n._heartbeatChannelGroups&&delete n._heartbeatChannelGroups[e]),e in n._presenceChannelGroups&&(delete n._channelGroups[e],u.push(e));}),0===a.length&&0===u.length||(!1!==this._config.suppressLeaveEvents||t||this._leaveEndpoint({channels:a,channelGroups:u},function(e){e.affectedChannels=a,e.affectedChannelGroups=u,e.currentTimetoken=n._currentTimetoken,e.lastTimetoken=n._lastTimetoken,n._listenerManager.announceStatus(e);}),0===Object.keys(this._channels).length&&0===Object.keys(this._presenceChannels).length&&0===Object.keys(this._channelGroups).length&&0===Object.keys(this._presenceChannelGroups).length&&(this._lastTimetoken=0,this._currentTimetoken=0,this._storedTimetoken=null,this._region=null,this._reconnectionManager.stopPolling()),this.reconnect());}},{key:"unsubscribeAll",value:function(e){this.adaptUnsubscribeChange({channels:this.getSubscribedChannels(),channelGroups:this.getSubscribedChannelGroups()},e);}},{key:"getHeartbeatChannels",value:function(){return Object.keys(this._heartbeatChannels)}},{key:"getHeartbeatChannelGroups",value:function(){return Object.keys(this._heartbeatChannelGroups)}},{key:"getSubscribedChannels",value:function(){return Object.keys(this._channels)}},{key:"getSubscribedChannelGroups",value:function(){return Object.keys(this._channelGroups)}},{key:"reconnect",value:function(){this._startSubscribeLoop(),this._registerHeartbeatTimer();}},{key:"disconnect",value:function(){this._stopSubscribeLoop(),this._stopHeartbeatTimer(),this._reconnectionManager.stopPolling();}},{key:"_registerHeartbeatTimer",value:function(){this._stopHeartbeatTimer(),0!==this._config.getHeartbeatInterval()&&(this._performHeartbeatLoop(),this._heartbeatTimer=setInterval(this._performHeartbeatLoop.bind(this),1e3*this._config.getHeartbeatInterval()));}},{key:"_stopHeartbeatTimer",value:function(){this._heartbeatTimer&&(clearInterval(this._heartbeatTimer),this._heartbeatTimer=null);}},{key:"_performHeartbeatLoop",value:function(){var n=this,e=this.getHeartbeatChannels(),t=this.getHeartbeatChannelGroups(),r={};0===e.length&&0===t.length||(this.getSubscribedChannels().forEach(function(e){var t=n._channels[e].state;Object.keys(t).length&&(r[e]=t);}),this.getSubscribedChannelGroups().forEach(function(e){var t=n._channelGroups[e].state;Object.keys(t).length&&(r[e]=t);}),this._heartbeatEndpoint({channels:e,channelGroups:t,state:r},function(e){e.error&&n._config.announceFailedHeartbeats&&n._listenerManager.announceStatus(e),e.error&&n._config.autoNetworkDetection&&n._isOnline&&(n._isOnline=!1,n.disconnect(),n._listenerManager.announceNetworkDown(),n.reconnect()),!e.error&&n._config.announceSuccessfulHeartbeats&&n._listenerManager.announceStatus(e);}.bind(this)));}},{key:"_startSubscribeLoop",value:function(){var n=this;this._stopSubscribeLoop();var r={},i=[],o=[];if(Object.keys(this._channels).forEach(function(e){var t=n._channels[e].state;Object.keys(t).length&&(r[e]=t),i.push(e);}),Object.keys(this._presenceChannels).forEach(function(e){i.push("".concat(e,"-pnpres"));}),Object.keys(this._channelGroups).forEach(function(e){var t=n._channelGroups[e].state;Object.keys(t).length&&(r[e]=t),o.push(e);}),Object.keys(this._presenceChannelGroups).forEach(function(e){o.push("".concat(e,"-pnpres"));}),0!==i.length||0!==o.length){var e={channels:i,channelGroups:o,state:r,timetoken:this._currentTimetoken,filterExpression:this._config.filterExpression,region:this._region};this._subscribeCall=this._subscribeEndpoint(e,this._processSubscribeResponse.bind(this));}}},{key:"_processSubscribeResponse",value:function(t,e){var c=this;if(t.error)t.category===a.default.PNTimeoutCategory?this._startSubscribeLoop():(t.category===a.default.PNNetworkIssuesCategory?(this.disconnect(),t.error&&this._config.autoNetworkDetection&&this._isOnline&&(this._isOnline=!1,this._listenerManager.announceNetworkDown()),this._reconnectionManager.onReconnection(function(){c._config.autoNetworkDetection&&!c._isOnline&&(c._isOnline=!0,c._listenerManager.announceNetworkUp()),c.reconnect(),c._subscriptionStatusAnnounced=!0;var e={category:a.default.PNReconnectedCategory,operation:t.operation,lastTimetoken:c._lastTimetoken,currentTimetoken:c._currentTimetoken};c._listenerManager.announceStatus(e);}),this._reconnectionManager.startPolling()):t.category===a.default.PNBadRequestCategory&&this._stopHeartbeatTimer(),this._listenerManager.announceStatus(t));else{if(this._storedTimetoken?(this._currentTimetoken=this._storedTimetoken,this._storedTimetoken=null):(this._lastTimetoken=this._currentTimetoken,this._currentTimetoken=e.metadata.timetoken),!this._subscriptionStatusAnnounced){var n={};n.category=a.default.PNConnectedCategory,n.operation=t.operation,n.affectedChannels=this._pendingChannelSubscriptions,n.subscribedChannels=this.getSubscribedChannels(),n.affectedChannelGroups=this._pendingChannelGroupSubscriptions,n.lastTimetoken=this._lastTimetoken,n.currentTimetoken=this._currentTimetoken,this._subscriptionStatusAnnounced=!0,this._listenerManager.announceStatus(n),this._pendingChannelSubscriptions=[],this._pendingChannelGroupSubscriptions=[];}var r=e.messages||[],i=this._config,o=i.requestMessageCountThreshold,f=i.dedupeOnSubscribe;if(o&&r.length>=o){var s={};s.category=a.default.PNRequestMessageCountExceededCategory,s.operation=t.operation,this._listenerManager.announceStatus(s);}r.forEach(function(e){var t=e.channel,n=e.subscriptionMatch,r=e.publishMetaData;if(t===n&&(n=null),f){if(c._dedupingManager.isDuplicate(e))return;c._dedupingManager.addEntry(e);}if(l.default.endsWith(e.channel,"-pnpres")){var i={channel:null,subscription:null};i.actualChannel=null!=n?t:null,i.subscribedChannel=null!=n?n:t,t&&(i.channel=t.substring(0,t.lastIndexOf("-pnpres"))),n&&(i.subscription=n.substring(0,n.lastIndexOf("-pnpres"))),i.action=e.payload.action,i.state=e.payload.data,i.timetoken=r.publishTimetoken,i.occupancy=e.payload.occupancy,i.uuid=e.payload.uuid,i.timestamp=e.payload.timestamp,e.payload.join&&(i.join=e.payload.join),e.payload.leave&&(i.leave=e.payload.leave),e.payload.timeout&&(i.timeout=e.payload.timeout),c._listenerManager.announcePresence(i);}else if(1===e.messageType){var o={channel:null,subscription:null};o.channel=t,o.subscription=n,o.timetoken=r.publishTimetoken,o.publisher=e.issuingClientId,e.userMetadata&&(o.userMetadata=e.userMetadata),o.message=e.payload,c._listenerManager.announceSignal(o);}else if(2===e.messageType){var s={channel:null,subscription:null};s.channel=t,s.subscription=n,s.timetoken=r.publishTimetoken,s.publisher=e.issuingClientId,e.userMetadata&&(s.userMetadata=e.userMetadata),s.message={event:e.payload.event,type:e.payload.type,data:e.payload.data},"user"===e.payload.type?c._listenerManager.announceUser(s):"space"===e.payload.type?c._listenerManager.announceSpace(s):"membership"===e.payload.type&&c._listenerManager.announceMembership(s);}else if(3===e.messageType){var a={};a.channel=t,a.subscription=n,a.timetoken=r.publishTimetoken,a.publisher=e.issuingClientId,a.data={messageTimetoken:e.payload.data.messageTimetoken,actionTimetoken:e.payload.data.actionTimetoken,type:e.payload.data.type,uuid:e.issuingClientId,value:e.payload.data.value},a.event=e.payload.event,c._listenerManager.announceMessageAction(a);}else{var u={channel:null,subscription:null};u.actualChannel=null!=n?t:null,u.subscribedChannel=null!=n?n:t,u.channel=t,u.subscription=n,u.timetoken=r.publishTimetoken,u.publisher=e.issuingClientId,e.userMetadata&&(u.userMetadata=e.userMetadata),c._config.cipherKey?u.message=c._crypto.decrypt(e.payload):u.message=e.payload,c._listenerManager.announceMessage(u);}}),this._region=e.metadata.region,this._startSubscribeLoop();}}},{key:"_stopSubscribeLoop",value:function(){this._subscribeCall&&("function"==typeof this._subscribeCall.abort&&this._subscribeCall.abort(),this._subscribeCall=null);}}])&&i(o.prototype,s),d);function d(e){var t=e.subscribeEndpoint,n=e.leaveEndpoint,r=e.heartbeatEndpoint,i=e.setStateEndpoint,o=e.timeEndpoint,s=e.config,a=e.crypto,u=e.listenerManager;!function(e,t){if(!(e instanceof t))throw new TypeError("Cannot call a class as a function")}(this,d),h(this,"_crypto",void 0),h(this,"_config",void 0),h(this,"_listenerManager",void 0),h(this,"_reconnectionManager",void 0),h(this,"_leaveEndpoint",void 0),h(this,"_heartbeatEndpoint",void 0),h(this,"_setStateEndpoint",void 0),h(this,"_subscribeEndpoint",void 0),h(this,"_channels",void 0),h(this,"_presenceChannels",void 0),h(this,"_heartbeatChannels",void 0),h(this,"_heartbeatChannelGroups",void 0),h(this,"_channelGroups",void 0),h(this,"_presenceChannelGroups",void 0),h(this,"_currentTimetoken",void 0),h(this,"_lastTimetoken",void 0),h(this,"_storedTimetoken",void 0),h(this,"_region",void 0),h(this,"_subscribeCall",void 0),h(this,"_heartbeatTimer",void 0),h(this,"_subscriptionStatusAnnounced",void 0),h(this,"_autoNetworkDetection",void 0),h(this,"_isOnline",void 0),h(this,"_pendingChannelSubscriptions",void 0),h(this,"_pendingChannelGroupSubscriptions",void 0),h(this,"_dedupingManager",void 0),this._listenerManager=u,this._config=s,this._leaveEndpoint=n,this._heartbeatEndpoint=r,this._setStateEndpoint=i,this._subscribeEndpoint=t,this._crypto=a,this._channels={},this._presenceChannels={},this._heartbeatChannels={},this._heartbeatChannelGroups={},this._channelGroups={},this._presenceChannelGroups={},this._pendingChannelSubscriptions=[],this._pendingChannelGroupSubscriptions=[],this._currentTimetoken=0,this._lastTimetoken=0,this._storedTimetoken=null,this._subscriptionStatusAnnounced=!1,this._isOnline=!0,this._reconnectionManager=new c.default({timeEndpoint:o}),this._dedupingManager=new f.default({config:s});}t.default=p,e.exports=t.default;},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.default=void 0;var r;(r=n(8))&&r.__esModule,n(0);function i(e,t){for(var n=0;n<t.length;n++){var r=t[n];r.enumerable=r.enumerable||!1,r.configurable=!0,"value"in r&&(r.writable=!0),Object.defineProperty(e,r.key,r);}}function o(e,t,n){return t in e?Object.defineProperty(e,t,{value:n,enumerable:!0,configurable:!0,writable:!0}):e[t]=n,e}var s,a,c=(s=f,(a=[{key:"onReconnection",value:function(e){this._reconnectionCallback=e;}},{key:"startPolling",value:function(){this._timeTimer=setInterval(this._performTimeLoop.bind(this),3e3);}},{key:"stopPolling",value:function(){clearInterval(this._timeTimer);}},{key:"_performTimeLoop",value:function(){var t=this;this._timeEndpoint(function(e){e.error||(clearInterval(t._timeTimer),t._reconnectionCallback());});}}])&&i(s.prototype,a),f);function f(e){var t=e.timeEndpoint;!function(e,t){if(!(e instanceof t))throw new TypeError("Cannot call a class as a function")}(this,f),o(this,"_reconnectionCallback",void 0),o(this,"_timeEndpoint",void 0),o(this,"_timeTimer",void 0),this._timeEndpoint=t;}t.default=c,e.exports=t.default;},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.default=void 0;var r;(r=n(3))&&r.__esModule,n(0);function i(e,t){for(var n=0;n<t.length;n++){var r=t[n];r.enumerable=r.enumerable||!1,r.configurable=!0,"value"in r&&(r.writable=!0),Object.defineProperty(e,r.key,r);}}function o(e,t,n){return t in e?Object.defineProperty(e,t,{value:n,enumerable:!0,configurable:!0,writable:!0}):e[t]=n,e}var s,a,c=(s=f,(a=[{key:"getKey",value:function(e){var t=function(e){var t=0;if(0===e.length)return t;for(var n=0;n<e.length;n+=1)t=(t<<5)-t+e.charCodeAt(n),t&=t;return t}(JSON.stringify(e.payload)).toString(),n=e.publishMetaData.publishTimetoken;return "".concat(n,"-").concat(t)}},{key:"isDuplicate",value:function(e){return this.hashHistory.includes(this.getKey(e))}},{key:"addEntry",value:function(e){this.hashHistory.length>=this._config.maximumCacheSize&&this.hashHistory.shift(),this.hashHistory.push(this.getKey(e));}},{key:"clearHistory",value:function(){this.hashHistory=[];}}])&&i(s.prototype,a),f);function f(e){var t=e.config;!function(e,t){if(!(e instanceof t))throw new TypeError("Cannot call a class as a function")}(this,f),o(this,"_config",void 0),o(this,"hashHistory",void 0),this.hashHistory=[],this._config=t;}t.default=c,e.exports=t.default;},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.default=t.FCMNotificationPayload=t.MPNSNotificationPayload=t.APNSNotificationPayload=void 0;n(0);function r(e){return (r="function"==typeof Symbol&&"symbol"==typeof Symbol.iterator?function(e){return typeof e}:function(e){return e&&"function"==typeof Symbol&&e.constructor===Symbol&&e!==Symbol.prototype?"symbol":typeof e})(e)}function i(e,t){if(null==e)return {};var n,r,i=function(e,t){if(null==e)return {};var n,r,i={},o=Object.keys(e);for(r=0;r<o.length;r++)n=o[r],0<=t.indexOf(n)||(i[n]=e[n]);return i}(e,t);if(Object.getOwnPropertySymbols){var o=Object.getOwnPropertySymbols(e);for(r=0;r<o.length;r++)n=o[r],0<=t.indexOf(n)||Object.prototype.propertyIsEnumerable.call(e,n)&&(i[n]=e[n]);}return i}function o(t,e){var n=Object.keys(t);if(Object.getOwnPropertySymbols){var r=Object.getOwnPropertySymbols(t);e&&(r=r.filter(function(e){return Object.getOwnPropertyDescriptor(t,e).enumerable})),n.push.apply(n,r);}return n}function s(t){for(var e=1;e<arguments.length;e++){var n=null!=arguments[e]?arguments[e]:{};e%2?o(Object(n),!0).forEach(function(e){g(t,e,n[e]);}):Object.getOwnPropertyDescriptors?Object.defineProperties(t,Object.getOwnPropertyDescriptors(n)):o(Object(n)).forEach(function(e){Object.defineProperty(t,e,Object.getOwnPropertyDescriptor(n,e));});}return t}function a(e,t){return !t||"object"!==r(t)&&"function"!=typeof t?c(e):t}function u(e){return (u=Object.setPrototypeOf?Object.getPrototypeOf:function(e){return e.__proto__||Object.getPrototypeOf(e)})(e)}function c(e){if(void 0===e)throw new ReferenceError("this hasn't been initialised - super() hasn't been called");return e}function f(e,t){if("function"!=typeof t&&null!==t)throw new TypeError("Super expression must either be null or a function");e.prototype=Object.create(t&&t.prototype,{constructor:{value:e,writable:!0,configurable:!0}}),t&&l(e,t);}function l(e,t){return (l=Object.setPrototypeOf||function(e,t){return e.__proto__=t,e})(e,t)}function h(e,t){if(!(e instanceof t))throw new TypeError("Cannot call a class as a function")}function p(e,t){for(var n=0;n<t.length;n++){var r=t[n];r.enumerable=r.enumerable||!1,r.configurable=!0,"value"in r&&(r.writable=!0),Object.defineProperty(e,r.key,r);}}function d(e,t,n){return t&&p(e.prototype,t),n&&p(e,n),e}function g(e,t,n){return t in e?Object.defineProperty(e,t,{value:n,enumerable:!0,configurable:!0,writable:!0}):e[t]=n,e}var y=(d(v,[{key:"payload",get:function(){return this._payload}},{key:"title",set:function(e){this._title=e;}},{key:"subtitle",set:function(e){this._subtitle=e;}},{key:"body",set:function(e){this._body=e;}},{key:"badge",set:function(e){this._badge=e;}},{key:"sound",set:function(e){this._sound=e;}}]),d(v,[{key:"_setDefaultPayloadStructure",value:function(){}},{key:"toObject",value:function(){return {}}}]),v);function v(e,t,n){h(this,v),g(this,"_subtitle",void 0),g(this,"_payload",void 0),g(this,"_badge",void 0),g(this,"_sound",void 0),g(this,"_title",void 0),g(this,"_body",void 0),this._payload=e,this._setDefaultPayloadStructure(),this.title=t,this.body=n;}var b=(f(m,y),d(m,[{key:"_setDefaultPayloadStructure",value:function(){this._payload.aps={alert:{}};}},{key:"toObject",value:function(){var t=this,e=s({},this._payload),n=e.aps,r=n.alert;if(this._isSilent&&(n["content-available"]=1),"apns2"===this._apnsPushType){if(!this._configurations||!this._configurations.length)throw new ReferenceError("APNS2 configuration is missing");var i=[];this._configurations.forEach(function(e){i.push(t._objectFromAPNS2Configuration(e));}),i.length&&(e.pn_push=i);}return r&&Object.keys(r).length||delete n.alert,this._isSilent&&(delete n.alert,delete n.badge,delete n.sound,r={}),this._isSilent||Object.keys(r).length?e:null}},{key:"_objectFromAPNS2Configuration",value:function(e){var t=this;if(!e.targets||!e.targets.length)throw new ReferenceError("At least one APNS2 target should be provided");var n=[];e.targets.forEach(function(e){n.push(t._objectFromAPNSTarget(e));});var r=e.collapseId,i=e.expirationDate,o={auth_method:"token",targets:n,version:"v2"};return r&&r.length&&(o.collapse_id=r),i&&(o.expiration=i.toISOString()),o}},{key:"_objectFromAPNSTarget",value:function(e){if(!e.topic||!e.topic.length)throw new TypeError("Target 'topic' undefined.");var t=e.topic,n=e.environment,r=void 0===n?"development":n,i=e.excludedDevices,o=void 0===i?[]:i,s={topic:t,environment:r};return o.length&&(s.excluded_devices=o),s}},{key:"configurations",set:function(e){e&&e.length&&(this._configurations=e);}},{key:"notification",get:function(){return this._payload.aps}},{key:"title",get:function(){return this._title},set:function(e){e&&e.length&&(this._payload.aps.alert.title=e,this._title=e);}},{key:"subtitle",get:function(){return this._subtitle},set:function(e){e&&e.length&&(this._payload.aps.alert.subtitle=e,this._subtitle=e);}},{key:"body",get:function(){return this._body},set:function(e){e&&e.length&&(this._payload.aps.alert.body=e,this._body=e);}},{key:"badge",get:function(){return this._badge},set:function(e){null!=e&&(this._payload.aps.badge=e,this._badge=e);}},{key:"sound",get:function(){return this._sound},set:function(e){e&&e.length&&(this._payload.aps.sound=e,this._sound=e);}},{key:"silent",set:function(e){this._isSilent=e;}}]),m);function m(){var e,t;h(this,m);for(var n=arguments.length,r=new Array(n),i=0;i<n;i++)r[i]=arguments[i];return g(c(t=a(this,(e=u(m)).call.apply(e,[this].concat(r)))),"_configurations",void 0),g(c(t),"_apnsPushType",void 0),g(c(t),"_isSilent",void 0),t}t.APNSNotificationPayload=b;var _=(f(k,y),d(k,[{key:"toObject",value:function(){return Object.keys(this._payload).length?s({},this._payload):null}},{key:"backContent",get:function(){return this._backContent},set:function(e){e&&e.length&&(this._payload.back_content=e,this._backContent=e);}},{key:"backTitle",get:function(){return this._backTitle},set:function(e){e&&e.length&&(this._payload.back_title=e,this._backTitle=e);}},{key:"count",get:function(){return this._count},set:function(e){null!=e&&(this._payload.count=e,this._count=e);}},{key:"title",get:function(){return this._title},set:function(e){e&&e.length&&(this._payload.title=e,this._title=e);}},{key:"type",get:function(){return this._type},set:function(e){e&&e.length&&(this._payload.type=e,this._type=e);}},{key:"subtitle",get:function(){return this.backTitle},set:function(e){this.backTitle=e;}},{key:"body",get:function(){return this.backContent},set:function(e){this.backContent=e;}},{key:"badge",get:function(){return this.count},set:function(e){this.count=e;}}]),k);function k(){var e,t;h(this,k);for(var n=arguments.length,r=new Array(n),i=0;i<n;i++)r[i]=arguments[i];return g(c(t=a(this,(e=u(k)).call.apply(e,[this].concat(r)))),"_backContent",void 0),g(c(t),"_backTitle",void 0),g(c(t),"_count",void 0),g(c(t),"_type",void 0),t}t.MPNSNotificationPayload=_;var P=(f(w,y),d(w,[{key:"_setDefaultPayloadStructure",value:function(){this._payload.notification={},this._payload.data={};}},{key:"toObject",value:function(){var e=s({},this._payload.data),t=null,n={};if(2<Object.keys(this._payload).length){var r=this._payload;r.notification,r.data,e=s({},e,{},i(r,["notification","data"]));}return this._isSilent?e.notification=this._payload.notification:t=this._payload.notification,Object.keys(e).length&&(n.data=e),t&&Object.keys(t).length&&(n.notification=t),Object.keys(n).length?n:null}},{key:"notification",get:function(){return this._payload.notification}},{key:"data",get:function(){return this._payload.data}},{key:"title",get:function(){return this._title},set:function(e){e&&e.length&&(this._payload.notification.title=e,this._title=e);}},{key:"body",get:function(){return this._body},set:function(e){e&&e.length&&(this._payload.notification.body=e,this._body=e);}},{key:"sound",get:function(){return this._sound},set:function(e){e&&e.length&&(this._payload.notification.sound=e,this._sound=e);}},{key:"icon",get:function(){return this._icon},set:function(e){e&&e.length&&(this._payload.notification.icon=e,this._icon=e);}},{key:"tag",get:function(){return this._tag},set:function(e){e&&e.length&&(this._payload.notification.tag=e,this._tag=e);}},{key:"silent",set:function(e){this._isSilent=e;}}]),w);function w(){var e,t;h(this,w);for(var n=arguments.length,r=new Array(n),i=0;i<n;i++)r[i]=arguments[i];return g(c(t=a(this,(e=u(w)).call.apply(e,[this].concat(r)))),"_isSilent",void 0),g(c(t),"_icon",void 0),g(c(t),"_tag",void 0),t}function T(e,t){h(this,T),g(this,"_payload",void 0),g(this,"_debugging",void 0),g(this,"_subtitle",void 0),g(this,"_badge",void 0),g(this,"_sound",void 0),g(this,"_title",void 0),g(this,"_body",void 0),g(this,"apns",void 0),g(this,"mpns",void 0),g(this,"fcm",void 0),this._payload={apns:{},mpns:{},fcm:{}},this._title=e,this._body=t,this.apns=new b(this._payload.apns,e,t),this.mpns=new _(this._payload.mpns,e,t),this.fcm=new P(this._payload.fcm,e,t);}t.FCMNotificationPayload=P;var O=(d(T,[{key:"debugging",set:function(e){this._debugging=e;}},{key:"title",get:function(){return this._title}},{key:"body",get:function(){return this._body}},{key:"subtitle",get:function(){return this._subtitle},set:function(e){this._subtitle=e,this.apns.subtitle=e,this.mpns.subtitle=e,this.fcm.subtitle=e;}},{key:"badge",get:function(){return this._badge},set:function(e){this._badge=e,this.apns.badge=e,this.mpns.badge=e,this.fcm.badge=e;}},{key:"sound",get:function(){return this._sound},set:function(e){this._sound=e,this.apns.sound=e,this.mpns.sound=e,this.fcm.sound=e;}}]),d(T,[{key:"buildPayload",value:function(e){var t={};if(e.includes("apns")||e.includes("apns2")){this.apns._apnsPushType=e.includes("apns")?"apns":"apns2";var n=this.apns.toObject();n&&Object.keys(n).length&&(t.pn_apns=n);}if(e.includes("mpns")){var r=this.mpns.toObject();r&&Object.keys(r).length&&(t.pn_mpns=r);}if(e.includes("fcm")){var i=this.fcm.toObject();i&&Object.keys(i).length&&(t.pn_gcm=i);}return Object.keys(t).length&&this._debugging&&(t.pn_debug=!0),t}}]),T);t.default=O;},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.default=void 0;var r;(r=n(3))&&r.__esModule,n(0);function i(e){return (i="function"==typeof Symbol&&"symbol"==typeof Symbol.iterator?function(e){return typeof e}:function(e){return e&&"function"==typeof Symbol&&e.constructor===Symbol&&e!==Symbol.prototype?"symbol":typeof e})(e)}function o(e,t){for(var n=0;n<t.length;n++){var r=t[n];r.enumerable=r.enumerable||!1,r.configurable=!0,"value"in r&&(r.writable=!0),Object.defineProperty(e,r.key,r);}}function s(e,t,n){return t in e?Object.defineProperty(e,t,{value:n,enumerable:!0,configurable:!0,writable:!0}):e[t]=n,e}var a,u,f=(a=l,(u=[{key:"_initializeTokens",value:function(){this._userTokens={},this._spaceTokens={},this._userToken=void 0,this._spaceToken=void 0;}},{key:"_setToken",value:function(t){var n=this,e=this.parseToken(t);e&&e.resources&&(e.resources.users&&Object.keys(e.resources.users).forEach(function(e){n._userTokens[e]=t;}),e.resources.spaces&&Object.keys(e.resources.spaces).forEach(function(e){n._spaceTokens[e]=t;})),e&&e.patterns&&(e.patterns.users&&0<Object.keys(e.patterns.users).length&&(this._userToken=t),e.patterns.spaces&&0<Object.keys(e.patterns.spaces).length&&(this._spaceToken=t));}},{key:"setToken",value:function(e){e&&0<e.length&&this._setToken(e);}},{key:"setTokens",value:function(e){var t=this;e&&e.length&&"object"===i(e)&&e.forEach(function(e){t.setToken(e);});}},{key:"getTokens",value:function(e){var t=this,n={users:{},spaces:{}};return e?(e.user&&(n.user=this._userToken),e.space&&(n.space=this._spaceToken),e.users&&e.users.forEach(function(e){n.users[e]=t._userTokens[e];}),e.space&&e.spaces.forEach(function(e){n.spaces[e]=t._spaceTokens[e];})):(this._userToken&&(n.user=this._userToken),this._spaceToken&&(n.space=this._spaceToken),Object.keys(this._userTokens).forEach(function(e){n.users[e]=t._userTokens[e];}),Object.keys(this._spaceTokens).forEach(function(e){n.spaces[e]=t._spaceTokens[e];})),n}},{key:"getToken",value:function(e,t){var n;return t?"user"===e?n=this._userTokens[t]:"space"===e&&(n=this._spaceTokens[t]):"user"===e?n=this._userToken:"space"===e&&(n=this._spaceToken),n}},{key:"extractPermissions",value:function(e){var t={create:!1,read:!1,write:!1,manage:!1,delete:!1};return 16==(16&e)&&(t.create=!0),8==(8&e)&&(t.delete=!0),4==(4&e)&&(t.manage=!0),2==(2&e)&&(t.write=!0),1==(1&e)&&(t.read=!0),t}},{key:"parseToken",value:function(e){var t=this,n=this._cbor.decodeToken(e);if(void 0!==n){var r=Object.keys(n.res.usr),i=Object.keys(n.res.spc),o=Object.keys(n.pat.usr),s=Object.keys(n.pat.spc),a={version:n.v,timestamp:n.t,ttl:n.ttl},u=0<r.length,c=0<i.length;(u||c)&&(a.resources={},u&&(a.resources.users={},r.forEach(function(e){a.resources.users[e]=t.extractPermissions(n.res.usr[e]);})),c&&(a.resources.spaces={},i.forEach(function(e){a.resources.spaces[e]=t.extractPermissions(n.res.spc[e]);})));var f=0<o.length,l=0<s.length;return (f||l)&&(a.patterns={},f&&(a.patterns.users={},o.forEach(function(e){a.patterns.users[e]=t.extractPermissions(n.pat.usr[e]);})),l&&(a.patterns.spaces={},s.forEach(function(e){a.patterns.spaces[e]=t.extractPermissions(n.pat.spc[e]);}))),0<Object.keys(n.meta).length&&(a.meta=n.meta),a.signature=n.sig,a}}},{key:"clearTokens",value:function(){this._initializeTokens();}}])&&o(a.prototype,u),l);function l(e,t){!function(e,t){if(!(e instanceof t))throw new TypeError("Cannot call a class as a function")}(this,l),s(this,"_config",void 0),s(this,"_cbor",void 0),s(this,"_userTokens",void 0),s(this,"_spaceTokens",void 0),s(this,"_userToken",void 0),s(this,"_spaceToken",void 0),this._config=e,this._cbor=t,this._initializeTokens();}t.default=f,e.exports=t.default;},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.default=function(r,i){var e=r.networking,t=r.config,o=null,s=null,a={};o=i.getOperation()===b.default.PNTimeOperation||i.getOperation()===b.default.PNChannelGroupsOperation?arguments.length<=2?void 0:arguments[2]:(a=arguments.length<=2?void 0:arguments[2],arguments.length<=3?void 0:arguments[3]);"undefined"==typeof Promise||o||(s=v.default.createPromise());var n=i.validateParams(r,a);if(n)return o?o(_(n)):s?(s.reject(new m("Validation failed, check status for details",_(n))),s.promise):void 0;var u,c=i.prepareParams(r,a),f=function(e,t,n){return e.usePost&&e.usePost(t,n)?e.postURL(t,n):e.usePatch&&e.usePatch(t,n)?e.patchURL(t,n):e.getURL(t,n)}(i,r,a),l={url:f,operation:i.getOperation(),timeout:i.getRequestTimeout(r),headers:i.getRequestHeaders?i.getRequestHeaders():{}};c.uuid=t.UUID,c.pnsdk=function(e){if(e.sdkName)return e.sdkName;var t="PubNub-JS-".concat(e.sdkFamily);e.partnerId&&(t+="-".concat(e.partnerId));t+="/".concat(e.getVersion());var n=e._getPnsdkSuffix(" ");0<n.length&&(t+=n);return t}(t),t.useInstanceId&&(c.instanceid=t.instanceId);t.useRequestId&&(c.requestid=y.default.createUUID());if(i.isAuthSupported()){var h=function(e,t,n){var r;e.getAuthToken&&(r=e.getAuthToken(t,n));return r}(i,r,a)||t.getAuthKey();h&&(c.auth=h);}t.secretKey&&function(e,t,n,r,i){var o=e.config,s=e.crypto,a=k(e,i,r);n.timestamp=Math.floor((new Date).getTime()/1e3);var u="".concat(a,"\n").concat(o.publishKey,"\n").concat(t,"\n").concat(v.default.signPamFromParams(n),"\n");if("POST"===a){var c=i.postPayload(e,r);u+="string"==typeof c?c:JSON.stringify(c);}else if("PATCH"===a){var f=i.patchPayload(e,r);u+="string"==typeof f?f:JSON.stringify(f);}var l="v2.".concat(s.HMACSHA256(u));l=(l=(l=l.replace(/\+/g,"-")).replace(/\//g,"_")).replace(/=+$/,""),n.signature=l;}(r,f,c,a,i);function p(e,t){if(e.error)o?o(e):s&&s.reject(new m("PubNub call failed, check status for details",e));else{var n=i.handleResponse(r,t,a);o?o(e,n):s&&s.fulfill(n);}}if("POST"===k(r,i,a)){var d=i.postPayload(r,a);u=e.POST(c,d,l,p);}else if("PATCH"===k(r,i,a)){var g=i.patchPayload(r,a);u=e.PATCH(c,g,l,p);}else u="DELETE"===k(r,i,a)?e.DELETE(c,l,p):e.GET(c,l,p);if(i.getOperation()===b.default.PNSubscribeOperation)return u;if(s)return s.promise};var y=r(n(5)),v=(n(0),r(n(2))),b=(r(n(3)),r(n(1)));function r(e){return e&&e.__esModule?e:{default:e}}function i(e){return (i="function"==typeof Symbol&&"symbol"==typeof Symbol.iterator?function(e){return typeof e}:function(e){return e&&"function"==typeof Symbol&&e.constructor===Symbol&&e!==Symbol.prototype?"symbol":typeof e})(e)}function o(e,t){return !t||"object"!==i(t)&&"function"!=typeof t?function(e){if(void 0!==e)return e;throw new ReferenceError("this hasn't been initialised - super() hasn't been called")}(e):t}function s(e){var n="function"==typeof Map?new Map:void 0;return (s=function(e){if(null===e||!function(e){return -1!==Function.toString.call(e).indexOf("[native code]")}(e))return e;if("function"!=typeof e)throw new TypeError("Super expression must either be null or a function");if(void 0!==n){if(n.has(e))return n.get(e);n.set(e,t);}function t(){return a(e,arguments,c(this).constructor)}return t.prototype=Object.create(e.prototype,{constructor:{value:t,enumerable:!1,writable:!0,configurable:!0}}),u(t,e)})(e)}function a(e,t,n){return (a=function(){if("undefined"==typeof Reflect||!Reflect.construct)return !1;if(Reflect.construct.sham)return !1;if("function"==typeof Proxy)return !0;try{return Date.prototype.toString.call(Reflect.construct(Date,[],function(){})),!0}catch(e){return !1}}()?Reflect.construct:function(e,t,n){var r=[null];r.push.apply(r,t);var i=new(Function.bind.apply(e,r));return n&&u(i,n.prototype),i}).apply(null,arguments)}function u(e,t){return (u=Object.setPrototypeOf||function(e,t){return e.__proto__=t,e})(e,t)}function c(e){return (c=Object.setPrototypeOf?Object.getPrototypeOf:function(e){return e.__proto__||Object.getPrototypeOf(e)})(e)}var m=(function(e,t){if("function"!=typeof t&&null!==t)throw new TypeError("Super expression must either be null or a function");e.prototype=Object.create(t&&t.prototype,{constructor:{value:e,writable:!0,configurable:!0}}),t&&u(e,t);}(f,s(Error)),f);function f(e,t){var n;return function(e,t){if(!(e instanceof t))throw new TypeError("Cannot call a class as a function")}(this,f),(n=o(this,c(f).call(this,e))).name=n.constructor.name,n.status=t,n.message=e,n}function _(e){return function(e,t){return e.type=t,e.error=!0,e}({message:e},"validationError")}function k(e,t,n){return t.usePost&&t.usePost(e,n)?"POST":t.usePatch&&t.usePatch(e,n)?"PATCH":t.useDelete&&t.useDelete(e,n)?"DELETE":"GET"}e.exports=t.default;},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return r.default.PNAddChannelsToGroupOperation},t.validateParams=function(e,t){var n=t.channels,r=t.channelGroup,i=e.config;if(!r)return "Missing Channel Group";if(!n||0===n.length)return "Missing Channels";if(!i.subscribeKey)return "Missing Subscribe Key"},t.getURL=function(e,t){var n=t.channelGroup,r=e.config;return "/v1/channel-registration/sub-key/".concat(r.subscribeKey,"/channel-group/").concat(i.default.encodeString(n))},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(e,t){var n=t.channels;return {add:(void 0===n?[]:n).join(",")}},t.handleResponse=function(){return {}};n(0);var r=o(n(1)),i=o(n(2));function o(e){return e&&e.__esModule?e:{default:e}}},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return r.default.PNRemoveChannelsFromGroupOperation},t.validateParams=function(e,t){var n=t.channels,r=t.channelGroup,i=e.config;if(!r)return "Missing Channel Group";if(!n||0===n.length)return "Missing Channels";if(!i.subscribeKey)return "Missing Subscribe Key"},t.getURL=function(e,t){var n=t.channelGroup,r=e.config;return "/v1/channel-registration/sub-key/".concat(r.subscribeKey,"/channel-group/").concat(i.default.encodeString(n))},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(e,t){var n=t.channels;return {remove:(void 0===n?[]:n).join(",")}},t.handleResponse=function(){return {}};n(0);var r=o(n(1)),i=o(n(2));function o(e){return e&&e.__esModule?e:{default:e}}},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return r.default.PNRemoveGroupOperation},t.validateParams=function(e,t){var n=t.channelGroup,r=e.config;if(!n)return "Missing Channel Group";if(!r.subscribeKey)return "Missing Subscribe Key"},t.getURL=function(e,t){var n=t.channelGroup,r=e.config;return "/v1/channel-registration/sub-key/".concat(r.subscribeKey,"/channel-group/").concat(i.default.encodeString(n),"/remove")},t.isAuthSupported=function(){return !0},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.prepareParams=function(){return {}},t.handleResponse=function(){return {}};n(0);var r=o(n(1)),i=o(n(2));function o(e){return e&&e.__esModule?e:{default:e}}},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNChannelGroupsOperation},t.validateParams=function(e){if(!e.config.subscribeKey)return "Missing Subscribe Key"},t.getURL=function(e){var t=e.config;return "/v1/channel-registration/sub-key/".concat(t.subscribeKey,"/channel-group")},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(){return {}},t.handleResponse=function(e,t){return {groups:t.payload.groups}};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return r.default.PNChannelsForGroupOperation},t.validateParams=function(e,t){var n=t.channelGroup,r=e.config;if(!n)return "Missing Channel Group";if(!r.subscribeKey)return "Missing Subscribe Key"},t.getURL=function(e,t){var n=t.channelGroup,r=e.config;return "/v1/channel-registration/sub-key/".concat(r.subscribeKey,"/channel-group/").concat(i.default.encodeString(n))},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(){return {}},t.handleResponse=function(e,t){return {channels:t.payload.channels}};n(0);var r=o(n(1)),i=o(n(2));function o(e){return e&&e.__esModule?e:{default:e}}},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNPushNotificationEnabledChannelsOperation},t.validateParams=function(e,t){var n=t.device,r=t.pushGateway,i=t.channels,o=t.topic,s=e.config;if(!n)return "Missing Device ID (device)";if(!r)return "Missing GW Type (pushGateway: gcm, apns or apns2)";if("apns2"===r&&!o)return "Missing APNS2 topic";if(!i||0===i.length)return "Missing Channels";if(!s.subscribeKey)return "Missing Subscribe Key"},t.getURL=function(e,t){var n=t.device,r=t.pushGateway,i=e.config;return "apns2"!==r?"/v1/push/sub-key/".concat(i.subscribeKey,"/devices/").concat(n):"/v2/push/sub-key/".concat(i.subscribeKey,"/devices-apns2/").concat(n)},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(e,t){var n=t.pushGateway,r=t.channels,i=void 0===r?[]:r,o=t.environment,s=void 0===o?"development":o,a=t.topic,u={type:n,add:i.join(",")};"apns2"===n&&delete(u=Object.assign({},u,{environment:s,topic:a})).type;return u},t.handleResponse=function(){return {}};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNPushNotificationEnabledChannelsOperation},t.validateParams=function(e,t){var n=t.device,r=t.pushGateway,i=t.channels,o=t.topic,s=e.config;if(!n)return "Missing Device ID (device)";if(!r)return "Missing GW Type (pushGateway: gcm, apns or apns2)";if("apns2"===r&&!o)return "Missing APNS2 topic";if(!i||0===i.length)return "Missing Channels";if(!s.subscribeKey)return "Missing Subscribe Key"},t.getURL=function(e,t){var n=t.device,r=t.pushGateway,i=e.config;return "apns2"!==r?"/v1/push/sub-key/".concat(i.subscribeKey,"/devices/").concat(n):"/v2/push/sub-key/".concat(i.subscribeKey,"/devices-apns2/").concat(n)},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(e,t){var n=t.pushGateway,r=t.channels,i=void 0===r?[]:r,o=t.environment,s=void 0===o?"development":o,a=t.topic,u={type:n,remove:i.join(",")};"apns2"===n&&delete(u=Object.assign({},u,{environment:s,topic:a})).type;return u},t.handleResponse=function(){return {}};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNPushNotificationEnabledChannelsOperation},t.validateParams=function(e,t){var n=t.device,r=t.pushGateway,i=t.topic,o=e.config;if(!n)return "Missing Device ID (device)";if(!r)return "Missing GW Type (pushGateway: gcm, apns or apns2)";if("apns2"===r&&!i)return "Missing APNS2 topic";if(!o.subscribeKey)return "Missing Subscribe Key"},t.getURL=function(e,t){var n=t.device,r=t.pushGateway,i=e.config;return "apns2"!==r?"/v1/push/sub-key/".concat(i.subscribeKey,"/devices/").concat(n):"/v2/push/sub-key/".concat(i.subscribeKey,"/devices-apns2/").concat(n)},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(e,t){var n=t.pushGateway,r=t.environment,i=void 0===r?"development":r,o=t.topic,s={type:n};"apns2"===n&&delete(s=Object.assign({},s,{environment:i,topic:o})).type;return s},t.handleResponse=function(e,t){return {channels:t}};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNRemoveAllPushNotificationsOperation},t.validateParams=function(e,t){var n=t.device,r=t.pushGateway,i=t.topic,o=e.config;if(!n)return "Missing Device ID (device)";if(!r)return "Missing GW Type (pushGateway: gcm, apns or apns2)";if("apns2"===r&&!i)return "Missing APNS2 topic";if(!o.subscribeKey)return "Missing Subscribe Key"},t.getURL=function(e,t){var n=t.device,r=t.pushGateway,i=e.config;return "apns2"!==r?"/v1/push/sub-key/".concat(i.subscribeKey,"/devices/").concat(n,"/remove"):"/v2/push/sub-key/".concat(i.subscribeKey,"/devices-apns2/").concat(n,"/remove")},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(e,t){var n=t.pushGateway,r=t.environment,i=void 0===r?"development":r,o=t.topic,s={type:n};"apns2"===n&&delete(s=Object.assign({},s,{environment:i,topic:o})).type;return s},t.handleResponse=function(){return {}};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return r.default.PNUnsubscribeOperation},t.validateParams=function(e){if(!e.config.subscribeKey)return "Missing Subscribe Key"},t.getURL=function(e,t){var n=e.config,r=t.channels,i=void 0===r?[]:r,o=0<i.length?i.join(","):",";return "/v2/presence/sub-key/".concat(n.subscribeKey,"/channel/").concat(s.default.encodeString(o),"/leave")},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(e,t){var n=t.channelGroups,r=void 0===n?[]:n,i={};0<r.length&&(i["channel-group"]=r.join(","));return i},t.handleResponse=function(){return {}};n(0);var r=i(n(1)),s=i(n(2));function i(e){return e&&e.__esModule?e:{default:e}}},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNWhereNowOperation},t.validateParams=function(e){if(!e.config.subscribeKey)return "Missing Subscribe Key"},t.getURL=function(e,t){var n=e.config,r=t.uuid,i=void 0===r?n.UUID:r;return "/v2/presence/sub-key/".concat(n.subscribeKey,"/uuid/").concat(i)},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(){return {}},t.handleResponse=function(e,t){return t.payload?{channels:t.payload.channels}:{channels:[]}};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return r.default.PNHeartbeatOperation},t.validateParams=function(e){if(!e.config.subscribeKey)return "Missing Subscribe Key"},t.getURL=function(e,t){var n=e.config,r=t.channels,i=void 0===r?[]:r,o=0<i.length?i.join(","):",";return "/v2/presence/sub-key/".concat(n.subscribeKey,"/channel/").concat(s.default.encodeString(o),"/heartbeat")},t.isAuthSupported=function(){return !0},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.prepareParams=function(e,t){var n=t.channelGroups,r=void 0===n?[]:n,i=t.state,o=void 0===i?{}:i,s=e.config,a={};0<r.length&&(a["channel-group"]=r.join(","));return a.state=JSON.stringify(o),a.heartbeat=s.getPresenceTimeout(),a},t.handleResponse=function(){return {}};n(0);var r=i(n(1)),s=i(n(2));function i(e){return e&&e.__esModule?e:{default:e}}},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return r.default.PNGetStateOperation},t.validateParams=function(e){if(!e.config.subscribeKey)return "Missing Subscribe Key"},t.getURL=function(e,t){var n=e.config,r=t.uuid,i=void 0===r?n.UUID:r,o=t.channels,s=void 0===o?[]:o,a=0<s.length?s.join(","):",";return "/v2/presence/sub-key/".concat(n.subscribeKey,"/channel/").concat(u.default.encodeString(a),"/uuid/").concat(i)},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(e,t){var n=t.channelGroups,r=void 0===n?[]:n,i={};0<r.length&&(i["channel-group"]=r.join(","));return i},t.handleResponse=function(e,t,n){var r=n.channels,i=void 0===r?[]:r,o=n.channelGroups,s=void 0===o?[]:o,a={};1===i.length&&0===s.length?a[i[0]]=t.payload:a=t.payload;return {channels:a}};n(0);var r=i(n(1)),u=i(n(2));function i(e){return e&&e.__esModule?e:{default:e}}},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return r.default.PNSetStateOperation},t.validateParams=function(e,t){var n=e.config,r=t.state,i=t.channels,o=void 0===i?[]:i,s=t.channelGroups,a=void 0===s?[]:s;if(!r)return "Missing State";if(!n.subscribeKey)return "Missing Subscribe Key";if(0===o.length&&0===a.length)return "Please provide a list of channels and/or channel-groups"},t.getURL=function(e,t){var n=e.config,r=t.channels,i=void 0===r?[]:r,o=0<i.length?i.join(","):",";return "/v2/presence/sub-key/".concat(n.subscribeKey,"/channel/").concat(s.default.encodeString(o),"/uuid/").concat(n.UUID,"/data")},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(e,t){var n=t.state,r=t.channelGroups,i=void 0===r?[]:r,o={};o.state=JSON.stringify(n),0<i.length&&(o["channel-group"]=i.join(","));return o},t.handleResponse=function(e,t){return {state:t.payload}};n(0);var r=i(n(1)),s=i(n(2));function i(e){return e&&e.__esModule?e:{default:e}}},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return r.default.PNHereNowOperation},t.validateParams=function(e){if(!e.config.subscribeKey)return "Missing Subscribe Key"},t.getURL=function(e,t){var n=e.config,r=t.channels,i=void 0===r?[]:r,o=t.channelGroups,s=void 0===o?[]:o,a="/v2/presence/sub-key/".concat(n.subscribeKey);if(0<i.length||0<s.length){var u=0<i.length?i.join(","):",";a+="/channel/".concat(c.default.encodeString(u));}return a},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(e,t){var n=t.channelGroups,r=void 0===n?[]:n,i=t.includeUUIDs,o=void 0===i||i,s=t.includeState,a=void 0!==s&&s,u={};o||(u.disable_uuids=1);a&&(u.state=1);0<r.length&&(u["channel-group"]=r.join(","));return u},t.handleResponse=function(e,i,t){var n,r=t.channels,o=void 0===r?[]:r,s=t.channelGroups,a=void 0===s?[]:s,u=t.includeUUIDs,c=void 0===u||u,f=t.includeState,l=void 0!==f&&f;n=1<o.length||0<a.length||0===a.length&&0===o.length?function(){var r={};return r.totalChannels=i.payload.total_channels,r.totalOccupancy=i.payload.total_occupancy,r.channels={},Object.keys(i.payload.channels).forEach(function(e){var t=i.payload.channels[e],n=[];return r.channels[e]={occupants:n,name:e,occupancy:t.occupancy},c&&t.uuids.forEach(function(e){l?n.push({state:e.state,uuid:e.uuid}):n.push({state:null,uuid:e});}),r}),r}():function(){var e={},t=[];return e.totalChannels=1,e.totalOccupancy=i.occupancy,e.channels={},e.channels[o[0]]={occupants:t,name:o[0],occupancy:i.occupancy},c&&i.uuids&&i.uuids.forEach(function(e){l?t.push({state:e.state,uuid:e.uuid}):t.push({state:null,uuid:e});}),e}();return n};n(0);var r=i(n(1)),c=i(n(2));function i(e){return e&&e.__esModule?e:{default:e}}},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNAddMessageActionOperation},t.validateParams=function(e,t){var n=e.config,r=t.action,i=t.channel;if(!t.messageTimetoken)return "Missing message timetoken";if(!n.subscribeKey)return "Missing Subscribe Key";if(!i)return "Missing message channel";if(!r)return "Missing Action";if(!r.value)return "Missing Action.value";if(!r.type)return "Missing Action.type";if(15<r.type.length)return "Action.type value exceed maximum length of 15"},t.usePost=function(){return !0},t.postURL=function(e,t){var n=e.config,r=t.channel,i=t.messageTimetoken;return "/v1/message-actions/".concat(n.subscribeKey,"/channel/").concat(r,"/message/").concat(i)},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.getRequestHeaders=function(){return {"Content-Type":"application/json"}},t.isAuthSupported=function(){return !0},t.prepareParams=function(){return {}},t.postPayload=function(e,t){return t.action},t.handleResponse=function(e,t){return {data:t.data}};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNRemoveMessageActionOperation},t.validateParams=function(e,t){var n=e.config,r=t.channel,i=t.actionTimetoken;if(!t.messageTimetoken)return "Missing message timetoken";if(!i)return "Missing action timetoken";if(!n.subscribeKey)return "Missing Subscribe Key";if(!r)return "Missing message channel"},t.useDelete=function(){return !0},t.getURL=function(e,t){var n=e.config,r=t.channel,i=t.actionTimetoken,o=t.messageTimetoken;return "/v1/message-actions/".concat(n.subscribeKey,"/channel/").concat(r,"/message/").concat(o,"/action/").concat(i)},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(){return {}},t.handleResponse=function(e,t){return {data:t.data}};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNGetMessageActionsOperation},t.validateParams=function(e,t){var n=e.config,r=t.channel;if(!n.subscribeKey)return "Missing Subscribe Key";if(!r)return "Missing message channel"},t.getURL=function(e,t){var n=e.config,r=t.channel;return "/v1/message-actions/".concat(n.subscribeKey,"/channel/").concat(r)},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(e,t){var n=t.limit,r=t.start,i=t.end,o={};n&&(o.limit=n);r&&(o.start=r);i&&(o.end=i);return o},t.handleResponse=function(e,t){var n={data:t.data,start:null,end:null};n.data.length&&(n.end=n.data[n.data.length-1].actionTimetoken,n.start=n.data[0].actionTimetoken);return n};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNCreateUserOperation},t.validateParams=function(e,t){var n=e.config,r=t.id,i=t.name,o=t.custom;if(!r)return "Missing User.id";if(!i)return "Missing User.name";if(!n.subscribeKey)return "Missing Subscribe Key";if(o&&!Object.values(o).every(function(e){return "string"==typeof e||"number"==typeof e||"boolean"==typeof e}))return "Invalid custom type, only string, number and boolean values are allowed."},t.usePost=function(){return !0},t.getURL=function(e){var t=e.config;return "/v1/objects/".concat(t.subscribeKey,"/users")},t.postURL=function(e){var t=e.config;return "/v1/objects/".concat(t.subscribeKey,"/users")},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.getAuthToken=function(e,t){return e.tokenManager.getToken("user",t.id)||e.tokenManager.getToken("user")},t.prepareParams=function(e,t){var n=t.include,r={};n?void 0===n.customFields&&(n.customFields=!0):n={customFields:!0};if(n){var i=[];n.customFields&&i.push("custom");var o=i.join(",");0<o.length&&(r.include=o);}return r},t.postPayload=function(e,t){return function(e,t){return t}(0,t)},t.handleResponse=function(e,t){return t};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNUpdateUserOperation},t.validateParams=function(e,t){var n=e.config,r=t.id,i=t.name,o=t.custom;if(!r)return "Missing User.id";if(!i)return "Missing User.name";if(!n.subscribeKey)return "Missing Subscribe Key";if(o&&!Object.values(o).every(function(e){return "string"==typeof e||"number"==typeof e||"boolean"==typeof e}))return "Invalid custom type, only string, number and boolean values are allowed."},t.usePatch=function(){return !0},t.getURL=function(e,t){var n=e.config,r=t.id;return "/v1/objects/".concat(n.subscribeKey,"/users/").concat(r)},t.patchURL=function(e,t){var n=e.config,r=t.id;return "/v1/objects/".concat(n.subscribeKey,"/users/").concat(r)},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.getAuthToken=function(e,t){return e.tokenManager.getToken("user",t.id)||e.tokenManager.getToken("user")},t.prepareParams=function(e,t){var n=t.include,r={};n?void 0===n.customFields&&(n.customFields=!0):n={customFields:!0};if(n){var i=[];n.customFields&&i.push("custom");var o=i.join(",");0<o.length&&(r.include=o);}return r},t.patchPayload=function(e,t){return function(e,t){return t}(0,t)},t.handleResponse=function(e,t){return t};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNDeleteUserOperation},t.validateParams=function(e,t){var n=e.config;if(!t)return "Missing UserId";if(!n.subscribeKey)return "Missing Subscribe Key"},t.useDelete=function(){return !0},t.getURL=function(e,t){var n=e.config;return "/v1/objects/".concat(n.subscribeKey,"/users/").concat(t)},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.getAuthToken=function(e,t){return e.tokenManager.getToken("user",t)||e.tokenManager.getToken("user")},t.prepareParams=function(){return {}},t.handleResponse=function(e,t){return t};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNGetUserOperation},t.validateParams=function(e,t){if(!t.userId)return "Missing userId"},t.getURL=function(e,t){var n=e.config;return "/v1/objects/".concat(n.subscribeKey,"/users/").concat(t.userId)},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.getAuthToken=function(e,t){return e.tokenManager.getToken("user",t.userId)||e.tokenManager.getToken("user")},t.prepareParams=function(e,t){var n=t.include,r={};n?void 0===n.customFields&&(n.customFields=!0):n={customFields:!0};if(n){var i=[];n.customFields&&i.push("custom");var o=i.join(",");0<o.length&&(r.include=o);}return r},t.handleResponse=function(e,t){return t};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNGetUsersOperation},t.validateParams=function(){},t.getURL=function(e){var t=e.config;return "/v1/objects/".concat(t.subscribeKey,"/users")},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.getAuthToken=function(e){return e.tokenManager.getToken("user")},t.prepareParams=function(e,t){var n=t.include,r=t.limit,i=t.page,o={};r&&(o.limit=r);if(n){var s=[];n.totalCount&&(o.count=!0),n.customFields&&s.push("custom");var a=s.join(",");0<a.length&&(o.include=a);}i&&(i.next&&(o.start=i.next),i.prev&&(o.end=i.prev));return o},t.handleResponse=function(e,t){return t};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNCreateSpaceOperation},t.validateParams=function(e,t){var n=e.config,r=t.id,i=t.name,o=t.custom;if(!r)return "Missing Space.id";if(!i)return "Missing Space.name";if(!n.subscribeKey)return "Missing Subscribe Key";if(o&&!Object.values(o).every(function(e){return "string"==typeof e||"number"==typeof e||"boolean"==typeof e}))return "Invalid custom type, only string, number and boolean values are allowed."},t.usePost=function(){return !0},t.getURL=function(e){var t=e.config;return "/v1/objects/".concat(t.subscribeKey,"/spaces")},t.postURL=function(e){var t=e.config;return "/v1/objects/".concat(t.subscribeKey,"/spaces")},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.getAuthToken=function(e,t){return e.tokenManager.getToken("space",t.id)||e.tokenManager.getToken("space")},t.prepareParams=function(e,t){var n=t.include,r={};n?void 0===n.customFields&&(n.customFields=!0):n={customFields:!0};if(n){var i=[];n.customFields&&i.push("custom");var o=i.join(",");0<o.length&&(r.include=o);}return r},t.postPayload=function(e,t){return function(e,t){return t}(0,t)},t.handleResponse=function(e,t){return t};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNUpdateSpaceOperation},t.validateParams=function(e,t){var n=e.config,r=t.id,i=t.name,o=t.custom;if(!r)return "Missing Space.id";if(!i)return "Missing Space.name";if(!n.subscribeKey)return "Missing Subscribe Key";if(o&&!Object.values(o).every(function(e){return "string"==typeof e||"number"==typeof e||"boolean"==typeof e}))return "Invalid custom type, only string, number and boolean values are allowed."},t.usePatch=function(){return !0},t.getURL=function(e,t){var n=e.config,r=t.id;return "/v1/objects/".concat(n.subscribeKey,"/spaces/").concat(r)},t.patchURL=function(e,t){var n=e.config,r=t.id;return "/v1/objects/".concat(n.subscribeKey,"/spaces/").concat(r)},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.getAuthToken=function(e,t){return e.tokenManager.getToken("space",t.id)||e.tokenManager.getToken("space")},t.prepareParams=function(e,t){var n=t.include,r={};n?void 0===n.customFields&&(n.customFields=!0):n={customFields:!0};if(n){var i=[];n.customFields&&i.push("custom");var o=i.join(",");0<o.length&&(r.include=o);}return r},t.patchPayload=function(e,t){return function(e,t){return t}(0,t)},t.handleResponse=function(e,t){return t};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNDeleteSpaceOperation},t.validateParams=function(e,t){var n=e.config;if(!t)return "Missing SpaceId";if(!n.subscribeKey)return "Missing Subscribe Key"},t.useDelete=function(){return !0},t.getURL=function(e,t){var n=e.config;return "/v1/objects/".concat(n.subscribeKey,"/spaces/").concat(t)},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.getAuthToken=function(e,t){return e.tokenManager.getToken("space",t)||e.tokenManager.getToken("space")},t.prepareParams=function(){return {}},t.handleResponse=function(e,t){return t};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNGetSpacesOperation},t.validateParams=function(){},t.getURL=function(e){var t=e.config;return "/v1/objects/".concat(t.subscribeKey,"/spaces")},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.getAuthToken=function(e){return e.tokenManager.getToken("space")},t.prepareParams=function(e,t){var n=t.include,r=t.limit,i=t.page,o={};r&&(o.limit=r);if(n){var s=[];n.totalCount&&(o.count=!0),n.customFields&&s.push("custom");var a=s.join(",");0<a.length&&(o.include=a);}i&&(i.next&&(o.start=i.next),i.prev&&(o.end=i.prev));return o},t.handleResponse=function(e,t){return t};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNGetSpaceOperation},t.validateParams=function(e,t){if(!t.spaceId)return "Missing spaceId"},t.getURL=function(e,t){var n=e.config;return "/v1/objects/".concat(n.subscribeKey,"/spaces/").concat(t.spaceId)},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.getAuthToken=function(e,t){return e.tokenManager.getToken("space",t.spaceId)||e.tokenManager.getToken("space")},t.prepareParams=function(e,t){var n=t.include,r={};n?void 0===n.customFields&&(n.customFields=!0):n={customFields:!0};if(n){var i=[];n.customFields&&i.push("custom");var o=i.join(",");0<o.length&&(r.include=o);}return r},t.handleResponse=function(e,t){return t};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNGetMembersOperation},t.validateParams=function(e,t){if(!t.spaceId)return "Missing spaceId"},t.getURL=function(e,t){var n=e.config;return "/v1/objects/".concat(n.subscribeKey,"/spaces/").concat(t.spaceId,"/users")},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.getAuthToken=function(e,t){return e.tokenManager.getToken("space",t.spaceId)||e.tokenManager.getToken("space")},t.prepareParams=function(e,t){var n=t.include,r=t.limit,i=t.page,o={};r&&(o.limit=r);if(n){var s=[];n.totalCount&&(o.count=!0),n.customFields&&s.push("custom"),n.userFields&&s.push("user"),n.customUserFields&&s.push("user.custom");var a=s.join(",");0<a.length&&(o.include=a);}i&&(i.next&&(o.start=i.next),i.prev&&(o.end=i.prev));return o},t.handleResponse=function(e,t){return t};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNUpdateMembersOperation},t.validateParams=function(e,t){var n=t.spaceId,r=t.users;if(!n)return "Missing spaceId";if(!r)return "Missing users"},t.getURL=function(e,t){var n=e.config;return "/v1/objects/".concat(n.subscribeKey,"/spaces/").concat(t.spaceId,"/users")},t.patchURL=function(e,t){var n=e.config;return "/v1/objects/".concat(n.subscribeKey,"/spaces/").concat(t.spaceId,"/users")},t.usePatch=function(){return !0},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.getAuthToken=function(e,t){return e.tokenManager.getToken("space",t.spaceId)||e.tokenManager.getToken("space")},t.prepareParams=function(e,t){var n=t.include,r=t.limit,i=t.page,o={};r&&(o.limit=r);if(n){var s=[];n.totalCount&&(o.count=!0),n.customFields&&s.push("custom"),n.spaceFields&&s.push("space"),n.customSpaceFields&&s.push("space.custom");var a=s.join(",");0<a.length&&(o.include=a);}i&&(i.next&&(o.start=i.next),i.prev&&(o.end=i.prev));return o},t.patchPayload=function(e,t){return function(e,t){var n=t.users,r={};n&&0<n.length&&(r.add=[],n.forEach(function(e){var t={id:e.id};e.custom&&(t.custom=e.custom),r.add.push(t);}));return r}(0,t)},t.handleResponse=function(e,t){return t};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNUpdateMembersOperation},t.validateParams=function(e,t){var n=t.spaceId,r=t.users;if(!n)return "Missing spaceId";if(!r)return "Missing users"},t.getURL=function(e,t){var n=e.config;return "/v1/objects/".concat(n.subscribeKey,"/spaces/").concat(t.spaceId,"/users")},t.patchURL=function(e,t){var n=e.config;return "/v1/objects/".concat(n.subscribeKey,"/spaces/").concat(t.spaceId,"/users")},t.usePatch=function(){return !0},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.getAuthToken=function(e,t){return e.tokenManager.getToken("space",t.spaceId)||e.tokenManager.getToken("space")},t.prepareParams=function(e,t){var n=t.include,r=t.limit,i=t.page,o={};r&&(o.limit=r);if(n){var s=[];n.totalCount&&(o.count=!0),n.customFields&&s.push("custom"),n.spaceFields&&s.push("space"),n.customSpaceFields&&s.push("space.custom");var a=s.join(",");0<a.length&&(o.include=a);}i&&(i.next&&(o.start=i.next),i.prev&&(o.end=i.prev));return o},t.patchPayload=function(e,t){return function(e,t){var n=t.addMembers,r=t.updateMembers,i=t.removeMembers,o=t.users,s={};n&&0<n.length&&(s.add=[],n.forEach(function(e){var t={id:e.id};e.custom&&(t.custom=e.custom),s.add.push(t);}));r&&0<r.length&&(s.update=[],r.forEach(function(e){var t={id:e.id};e.custom&&(t.custom=e.custom),s.update.push(t);}));o&&0<o.length&&(s.update=s.update||[],o.forEach(function(e){var t={id:e.id};e.custom&&(t.custom=e.custom),s.update.push(t);}));i&&0<i.length&&(s.remove=[],i.forEach(function(e){s.remove.push({id:e});}));return s}(0,t)},t.handleResponse=function(e,t){return t};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNUpdateMembersOperation},t.validateParams=function(e,t){var n=t.spaceId,r=t.users;if(!n)return "Missing spaceId";if(!r)return "Missing users"},t.getURL=function(e,t){var n=e.config;return "/v1/objects/".concat(n.subscribeKey,"/spaces/").concat(t.spaceId,"/users")},t.patchURL=function(e,t){var n=e.config;return "/v1/objects/".concat(n.subscribeKey,"/spaces/").concat(t.spaceId,"/users")},t.usePatch=function(){return !0},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.getAuthToken=function(e,t){return e.tokenManager.getToken("space",t.spaceId)||e.tokenManager.getToken("space")},t.prepareParams=function(e,t){var n=t.include,r=t.limit,i=t.page,o={};r&&(o.limit=r);if(n){var s=[];n.totalCount&&(o.count=!0),n.customFields&&s.push("custom"),n.spaceFields&&s.push("space"),n.customSpaceFields&&s.push("space.custom");var a=s.join(",");0<a.length&&(o.include=a);}i&&(i.next&&(o.start=i.next),i.prev&&(o.end=i.prev));return o},t.patchPayload=function(e,t){return function(e,t){var n=t.users,r={};n&&0<n.length&&(r.remove=[],n.forEach(function(e){r.remove.push({id:e});}));return r}(0,t)},t.handleResponse=function(e,t){return t};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNGetMembershipsOperation},t.validateParams=function(e,t){if(!t.userId)return "Missing userId"},t.getURL=function(e,t){var n=e.config;return "/v1/objects/".concat(n.subscribeKey,"/users/").concat(t.userId,"/spaces")},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.getAuthToken=function(e,t){return e.tokenManager.getToken("user",t.userId)||e.tokenManager.getToken("user")},t.prepareParams=function(e,t){var n=t.include,r=t.limit,i=t.page,o={};r&&(o.limit=r);if(n){var s=[];n.totalCount&&(o.count=!0),n.customFields&&s.push("custom"),n.spaceFields&&s.push("space"),n.customSpaceFields&&s.push("space.custom");var a=s.join(",");0<a.length&&(o.include=a);}i&&(i.next&&(o.start=i.next),i.prev&&(o.end=i.prev));return o},t.handleResponse=function(e,t){return t};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNUpdateMembershipsOperation},t.validateParams=function(e,t){var n=t.userId,r=t.spaces;if(!n)return "Missing userId";if(!r)return "Missing spaces"},t.getURL=function(e,t){var n=e.config;return "/v1/objects/".concat(n.subscribeKey,"/users/").concat(t.userId,"/spaces")},t.patchURL=function(e,t){var n=e.config;return "/v1/objects/".concat(n.subscribeKey,"/users/").concat(t.userId,"/spaces")},t.usePatch=function(){return !0},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.getAuthToken=function(e,t){return e.tokenManager.getToken("user",t.userId)||e.tokenManager.getToken("user")},t.prepareParams=function(e,t){var n=t.include,r=t.limit,i=t.page,o={};r&&(o.limit=r);if(n){var s=[];n.totalCount&&(o.count=!0),n.customFields&&s.push("custom"),n.spaceFields&&s.push("space"),n.customSpaceFields&&s.push("space.custom");var a=s.join(",");0<a.length&&(o.include=a);}i&&(i.next&&(o.start=i.next),i.prev&&(o.end=i.prev));return o},t.patchPayload=function(e,t){return function(e,t){var n=t.addMemberships,r=t.updateMemberships,i=t.removeMemberships,o=t.spaces,s={};n&&0<n.length&&(s.add=[],n.forEach(function(e){var t={id:e.id};e.custom&&(t.custom=e.custom),s.add.push(t);}));r&&0<r.length&&(s.update=[],r.forEach(function(e){var t={id:e.id};e.custom&&(t.custom=e.custom),s.update.push(t);}));o&&0<o.length&&(s.update=s.update||[],o.forEach(function(e){var t={id:e.id};e.custom&&(t.custom=e.custom),s.update.push(t);}));i&&0<i.length&&(s.remove=[],i.forEach(function(e){s.remove.push({id:e});}));return s}(0,t)},t.handleResponse=function(e,t){return t};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNUpdateMembershipsOperation},t.validateParams=function(e,t){var n=t.userId,r=t.spaces;if(!n)return "Missing userId";if(!r)return "Missing spaces"},t.getURL=function(e,t){var n=e.config;return "/v1/objects/".concat(n.subscribeKey,"/users/").concat(t.userId,"/spaces")},t.patchURL=function(e,t){var n=e.config;return "/v1/objects/".concat(n.subscribeKey,"/users/").concat(t.userId,"/spaces")},t.usePatch=function(){return !0},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.getAuthToken=function(e,t){return e.tokenManager.getToken("user",t.userId)||e.tokenManager.getToken("user")},t.prepareParams=function(e,t){var n=t.include,r=t.limit,i=t.page,o={};r&&(o.limit=r);if(n){var s=[];n.totalCount&&(o.count=!0),n.customFields&&s.push("custom"),n.spaceFields&&s.push("space"),n.customSpaceFields&&s.push("space.custom");var a=s.join(",");0<a.length&&(o.include=a);}i&&(i.next&&(o.start=i.next),i.prev&&(o.end=i.prev));return o},t.patchPayload=function(e,t){return function(e,t){var n=t.spaces,r={};n&&0<n.length&&(r.add=[],n.forEach(function(e){var t={id:e.id};e.custom&&(t.custom=e.custom),r.add.push(t);}));return r}(0,t)},t.handleResponse=function(e,t){return t};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNUpdateMembershipsOperation},t.validateParams=function(e,t){var n=t.userId,r=t.spaces;if(!n)return "Missing userId";if(!r)return "Missing spaces"},t.getURL=function(e,t){var n=e.config;return "/v1/objects/".concat(n.subscribeKey,"/users/").concat(t.userId,"/spaces")},t.patchURL=function(e,t){var n=e.config;return "/v1/objects/".concat(n.subscribeKey,"/users/").concat(t.userId,"/spaces")},t.usePatch=function(){return !0},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.getAuthToken=function(e,t){return e.tokenManager.getToken("user",t.userId)||e.tokenManager.getToken("user")},t.prepareParams=function(e,t){var n=t.include,r=t.limit,i=t.page,o={};r&&(o.limit=r);if(n){var s=[];n.totalCount&&(o.count=!0),n.customFields&&s.push("custom"),n.spaceFields&&s.push("space"),n.customSpaceFields&&s.push("space.custom");var a=s.join(",");0<a.length&&(o.include=a);}i&&(i.next&&(o.start=i.next),i.prev&&(o.end=i.prev));return o},t.patchPayload=function(e,t){return function(e,t){var n=t.spaces,r={};n&&0<n.length&&(r.remove=[],n.forEach(function(e){r.remove.push({id:e});}));return r}(0,t)},t.handleResponse=function(e,t){return t};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNAccessManagerAudit},t.validateParams=function(e){if(!e.config.subscribeKey)return "Missing Subscribe Key"},t.getURL=function(e){var t=e.config;return "/v2/auth/audit/sub-key/".concat(t.subscribeKey)},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !1},t.prepareParams=function(e,t){var n=t.channel,r=t.channelGroup,i=t.authKeys,o=void 0===i?[]:i,s={};n&&(s.channel=n);r&&(s["channel-group"]=r);0<o.length&&(s.auth=o.join(","));return s},t.handleResponse=function(e,t){return t.payload};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNAccessManagerGrant},t.validateParams=function(e){var t=e.config;if(!t.subscribeKey)return "Missing Subscribe Key";if(!t.publishKey)return "Missing Publish Key";if(!t.secretKey)return "Missing Secret Key"},t.getURL=function(e){var t=e.config;return "/v2/auth/grant/sub-key/".concat(t.subscribeKey)},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !1},t.prepareParams=function(e,t){var n=t.channels,r=void 0===n?[]:n,i=t.channelGroups,o=void 0===i?[]:i,s=t.ttl,a=t.read,u=void 0!==a&&a,c=t.write,f=void 0!==c&&c,l=t.manage,h=void 0!==l&&l,p=t.authKeys,d=void 0===p?[]:p,g={};g.r=u?"1":"0",g.w=f?"1":"0",g.m=h?"1":"0",0<r.length&&(g.channel=r.join(","));0<o.length&&(g["channel-group"]=o.join(","));0<d.length&&(g.auth=d.join(","));!s&&0!==s||(g.ttl=s);return g},t.handleResponse=function(){return {}};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNAccessManagerGrantToken},t.extractPermissions=l,t.validateParams=function(e,t){var n=e.config;if(!n.subscribeKey)return "Missing Subscribe Key";if(!n.publishKey)return "Missing Publish Key";if(!n.secretKey)return "Missing Secret Key";if(!t.resources&&!t.patterns)return "Missing either Resources or Patterns.";if(t.resources&&(!t.resources.users||0===Object.keys(t.resources.users).length)&&(!t.resources.spaces||0===Object.keys(t.resources.spaces).length)||t.patterns&&(!t.patterns.users||0===Object.keys(t.patterns.users).length)&&(!t.patterns.spaces||0===Object.keys(t.patterns.spaces).length))return "Missing values for either Resources or Patterns."},t.postURL=function(e){var t=e.config;return "/v3/pam/".concat(t.subscribeKey,"/grant")},t.usePost=function(){return !0},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !1},t.prepareParams=function(){return {}},t.postPayload=function(e,t){return function(e,t){var n=t.ttl,r=t.resources,i=t.patterns,o=t.meta,s={ttl:0,permissions:{resources:{channels:{},groups:{},users:{},spaces:{}},patterns:{channels:{},groups:{},users:{},spaces:{}},meta:{}}};if(r){var a=r.users,u=r.spaces;a&&Object.keys(a).forEach(function(e){s.permissions.resources.users[e]=l(a[e]);}),u&&Object.keys(u).forEach(function(e){s.permissions.resources.spaces[e]=l(u[e]);});}if(i){var c=i.users,f=i.spaces;c&&Object.keys(c).forEach(function(e){s.permissions.patterns.users[e]=l(c[e]);}),f&&Object.keys(f).forEach(function(e){s.permissions.patterns.spaces[e]=l(f[e]);});}!n&&0!==n||(s.ttl=n);o&&(s.permissions.meta=o);return s}(0,t)},t.handleResponse=function(e,t){return t.data.token};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};function l(e){var t=0;return e.create&&(t|=16),e.delete&&(t|=8),e.manage&&(t|=4),e.write&&(t|=2),e.read&&(t|=1),t}},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return r.default.PNPublishOperation},t.validateParams=function(e,t){var n=e.config,r=t.message;if(!t.channel)return "Missing Channel";if(!r)return "Missing Message";if(!n.subscribeKey)return "Missing Subscribe Key"},t.usePost=function(e,t){var n=t.sendByPost;return void 0!==n&&n},t.getURL=function(e,t){var n=e.config,r=t.channel,i=t.message,o=a(e,i);return "/publish/".concat(n.publishKey,"/").concat(n.subscribeKey,"/0/").concat(s.default.encodeString(r),"/0/").concat(s.default.encodeString(o))},t.postURL=function(e,t){var n=e.config,r=t.channel;return "/publish/".concat(n.publishKey,"/").concat(n.subscribeKey,"/0/").concat(s.default.encodeString(r),"/0")},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.postPayload=function(e,t){var n=t.message;return a(e,n)},t.prepareParams=function(e,t){var n=t.meta,r=t.replicate,i=void 0===r||r,o=t.storeInHistory,s=t.ttl,a={};null!=o&&(a.store=o?"1":"0");s&&(a.ttl=s);!1===i&&(a.norep="true");n&&"object"===u(n)&&(a.meta=JSON.stringify(n));return a},t.handleResponse=function(e,t){return {timetoken:t[2]}};n(0);var r=i(n(1)),s=i(n(2));function i(e){return e&&e.__esModule?e:{default:e}}function u(e){return (u="function"==typeof Symbol&&"symbol"==typeof Symbol.iterator?function(e){return typeof e}:function(e){return e&&"function"==typeof Symbol&&e.constructor===Symbol&&e!==Symbol.prototype?"symbol":typeof e})(e)}function a(e,t){var n=e.crypto,r=e.config,i=JSON.stringify(t);return r.cipherKey&&(i=n.encrypt(i),i=JSON.stringify(i)),i}},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return r.default.PNSignalOperation},t.validateParams=function(e,t){var n=e.config,r=t.message;if(!t.channel)return "Missing Channel";if(!r)return "Missing Message";if(!n.subscribeKey)return "Missing Subscribe Key"},t.getURL=function(e,t){var n=e.config,r=t.channel,i=t.message,o=function(e,t){return JSON.stringify(t)}(0,i);return "/signal/".concat(n.publishKey,"/").concat(n.subscribeKey,"/0/").concat(s.default.encodeString(r),"/0/").concat(s.default.encodeString(o))},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(){return {}},t.handleResponse=function(e,t){return {timetoken:t[2]}};n(0);var r=i(n(1)),s=i(n(2));function i(e){return e&&e.__esModule?e:{default:e}}},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return r.default.PNHistoryOperation},t.validateParams=function(e,t){var n=t.channel,r=e.config;if(!n)return "Missing channel";if(!r.subscribeKey)return "Missing Subscribe Key"},t.getURL=function(e,t){var n=t.channel,r=e.config;return "/v2/history/sub-key/".concat(r.subscribeKey,"/channel/").concat(i.default.encodeString(n))},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(e,t){var n=t.start,r=t.end,i=t.reverse,o=t.count,s=void 0===o?100:o,a=t.stringifiedTimeToken,u=void 0!==a&&a,c=t.includeMeta,f=void 0!==c&&c,l={include_token:"true"};l.count=s,n&&(l.start=n);r&&(l.end=r);u&&(l.string_message_token="true");null!=i&&(l.reverse=i.toString());f&&(l.include_meta="true");return l},t.handleResponse=function(n,e){var r={messages:[],startTimeToken:e[1],endTimeToken:e[2]};Array.isArray(e[0])&&e[0].forEach(function(e){var t={timetoken:e.timetoken,entry:function(e,t){var n=e.config,r=e.crypto;if(!n.cipherKey)return t;try{return r.decrypt(t)}catch(e){return t}}(n,e.message)};e.meta&&(t.meta=e.meta),r.messages.push(t);});return r};n(0);var r=o(n(1)),i=o(n(2));function o(e){return e&&e.__esModule?e:{default:e}}},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return r.default.PNDeleteMessagesOperation},t.validateParams=function(e,t){var n=t.channel,r=e.config;if(!n)return "Missing channel";if(!r.subscribeKey)return "Missing Subscribe Key"},t.useDelete=function(){return !0},t.getURL=function(e,t){var n=t.channel,r=e.config;return "/v3/history/sub-key/".concat(r.subscribeKey,"/channel/").concat(i.default.encodeString(n))},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(e,t){var n=t.start,r=t.end,i={};n&&(i.start=n);r&&(i.end=r);return i},t.handleResponse=function(e,t){return t.payload};n(0);var r=o(n(1)),i=o(n(2));function o(e){return e&&e.__esModule?e:{default:e}}},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return r.default.PNMessageCounts},t.validateParams=function(e,t){var n=t.channels,r=t.timetoken,i=t.channelTimetokens,o=e.config;if(!n)return "Missing channel";if(r&&i)return "timetoken and channelTimetokens are incompatible together";if(r&&i&&1<i.length&&n.length!==i.length)return "Length of channelTimetokens and channels do not match";if(!o.subscribeKey)return "Missing Subscribe Key"},t.getURL=function(e,t){var n=t.channels,r=e.config,i=n.join(",");return "/v3/history/sub-key/".concat(r.subscribeKey,"/message-counts/").concat(o.default.encodeString(i))},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(e,t){var n=t.timetoken,r=t.channelTimetokens,i={};if(r&&1===r.length){var o=function(e,t){return function(e){if(Array.isArray(e))return e}(e)||function(e,t){if(!(Symbol.iterator in Object(e)||"[object Arguments]"===Object.prototype.toString.call(e)))return;var n=[],r=!0,i=!1,o=void 0;try{for(var s,a=e[Symbol.iterator]();!(r=(s=a.next()).done)&&(n.push(s.value),!t||n.length!==t);r=!0);}catch(e){i=!0,o=e;}finally{try{r||null==a.return||a.return();}finally{if(i)throw o}}return n}(e,t)||function(){throw new TypeError("Invalid attempt to destructure non-iterable instance")}()}(r,1)[0];i.timetoken=o;}else r?i.channelsTimetoken=r.join(","):n&&(i.timetoken=n);return i},t.handleResponse=function(e,t){return {channels:t.channels}};var r=i(n(1)),o=i(n(2));function i(e){return e&&e.__esModule?e:{default:e}}},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return r.default.PNFetchMessagesOperation},t.validateParams=function(e,t){var n=t.channels,r=t.includeMessageActions,i=void 0!==r&&r,o=e.config;if(!n||0===n.length)return "Missing channels";if(!o.subscribeKey)return "Missing Subscribe Key";if(i&&1<n.length)throw new TypeError("History can return actions data for a single channel only. Either pass a single channel or disable the includeMessageActions flag.")},t.getURL=function(e,t){var n=t.channels,r=void 0===n?[]:n,i=t.includeMessageActions,o=void 0!==i&&i,s=e.config,a=o?"history-with-actions":"history",u=0<r.length?r.join(","):",";return "/v3/".concat(a,"/sub-key/").concat(s.subscribeKey,"/channel/").concat(c.default.encodeString(u))},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(e,t){var n=t.start,r=t.end,i=t.count,o=t.stringifiedTimeToken,s=void 0!==o&&o,a=t.includeMeta,u=void 0!==a&&a,c={};i&&(c.max=i);n&&(c.start=n);r&&(c.end=r);s&&(c.string_message_token="true");u&&(c.include_meta="true");return c},t.handleResponse=function(r,e){var i={channels:{}};return Object.keys(e.channels||{}).forEach(function(n){i.channels[n]=[],(e.channels[n]||[]).forEach(function(e){var t={};t.channel=n,t.timetoken=e.timetoken,t.message=function(e,t){var n=e.config,r=e.crypto;if(!n.cipherKey)return t;try{return r.decrypt(t)}catch(e){return t}}(r,e.message),e.actions&&(t.actions=e.actions,t.data=e.actions),e.meta&&(t.meta=e.meta),i.channels[n].push(t);});}),i};n(0);var r=i(n(1)),c=i(n(2));function i(e){return e&&e.__esModule?e:{default:e}}},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return r.default.PNSubscribeOperation},t.validateParams=function(e){if(!e.config.subscribeKey)return "Missing Subscribe Key"},t.getURL=function(e,t){var n=e.config,r=t.channels,i=void 0===r?[]:r,o=0<i.length?i.join(","):",";return "/v2/subscribe/".concat(n.subscribeKey,"/").concat(s.default.encodeString(o),"/0")},t.getRequestTimeout=function(e){return e.config.getSubscribeTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(e,t){var n=e.config,r=t.state,i=t.channelGroups,o=void 0===i?[]:i,s=t.timetoken,a=t.filterExpression,u=t.region,c={heartbeat:n.getPresenceTimeout()};0<o.length&&(c["channel-group"]=o.join(","));a&&0<a.length&&(c["filter-expr"]=a);Object.keys(r).length&&(c.state=JSON.stringify(r));s&&(c.tt=s);u&&(c.tr=u);return c},t.handleResponse=function(e,t){var r=[];t.m.forEach(function(e){var t={publishTimetoken:e.p.t,region:e.p.r},n={shard:parseInt(e.a,10),subscriptionMatch:e.b,channel:e.c,messageType:e.e,payload:e.d,flags:e.f,issuingClientId:e.i,subscribeKey:e.k,originationTimetoken:e.o,userMetadata:e.u,publishMetaData:t};r.push(n);});var n={timetoken:t.t.t,region:t.t.r};return {messages:r,metadata:n}};n(0);var r=i(n(1)),s=i(n(2));function i(e){return e&&e.__esModule?e:{default:e}}},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.default=void 0;i(n(3));var r=i(n(4));n(0);function i(e){return e&&e.__esModule?e:{default:e}}function o(e,t){for(var n=0;n<t.length;n++){var r=t[n];r.enumerable=r.enumerable||!1,r.configurable=!0,"value"in r&&(r.writable=!0),Object.defineProperty(e,r.key,r);}}function s(e,t,n){return t in e?Object.defineProperty(e,t,{value:n,enumerable:!0,configurable:!0,writable:!0}):e[t]=n,e}var a,u,f=(a=l,(u=[{key:"init",value:function(e){this._config=e,this._maxSubDomain=20,this._currentSubDomain=Math.floor(Math.random()*this._maxSubDomain),this._providedFQDN=(this._config.secure?"https://":"http://")+this._config.origin,this._coreParams={},this.shiftStandardOrigin();}},{key:"nextOrigin",value:function(){return this._providedFQDN.match(/ps\.pndsn\.com$/i)?(this._currentSubDomain=this._currentSubDomain+1,this._currentSubDomain>=this._maxSubDomain&&(this._currentSubDomain=1),e=this._currentSubDomain.toString(),this._providedFQDN.replace("ps.pndsn.com","ps".concat(e,".pndsn.com"))):this._providedFQDN;var e;}},{key:"hasModule",value:function(e){return e in this._modules}},{key:"shiftStandardOrigin",value:function(){return this._standardOrigin=this.nextOrigin(),this._standardOrigin}},{key:"getStandardOrigin",value:function(){return this._standardOrigin}},{key:"POST",value:function(e,t,n,r){return this._modules.post(e,t,n,r)}},{key:"PATCH",value:function(e,t,n,r){return this._modules.patch(e,t,n,r)}},{key:"GET",value:function(e,t,n){return this._modules.get(e,t,n)}},{key:"DELETE",value:function(e,t,n){return this._modules.del(e,t,n)}},{key:"_detectErrorCategory",value:function(e){if("ENOTFOUND"===e.code)return r.default.PNNetworkIssuesCategory;if("ECONNREFUSED"===e.code)return r.default.PNNetworkIssuesCategory;if("ECONNRESET"===e.code)return r.default.PNNetworkIssuesCategory;if("EAI_AGAIN"===e.code)return r.default.PNNetworkIssuesCategory;if(0===e.status||e.hasOwnProperty("status")&&void 0===e.status)return r.default.PNNetworkIssuesCategory;if(e.timeout)return r.default.PNTimeoutCategory;if("ETIMEDOUT"===e.code)return r.default.PNNetworkIssuesCategory;if(e.response){if(e.response.badRequest)return r.default.PNBadRequestCategory;if(e.response.forbidden)return r.default.PNAccessDeniedCategory}return r.default.PNUnknownCategory}}])&&o(a.prototype,u),l);function l(t){var n=this;!function(e,t){if(!(e instanceof t))throw new TypeError("Cannot call a class as a function")}(this,l),s(this,"_modules",void 0),s(this,"_config",void 0),s(this,"_maxSubDomain",void 0),s(this,"_currentSubDomain",void 0),s(this,"_standardOrigin",void 0),s(this,"_subscribeOrigin",void 0),s(this,"_providedFQDN",void 0),s(this,"_requestTimeout",void 0),s(this,"_coreParams",void 0),this._modules={},Object.keys(t).forEach(function(e){n._modules[e]=t[e].bind(n);});}t.default=f,e.exports=t.default;},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.default=void 0;var r={get:function(e){try{return localStorage.getItem(e)}catch(e){return null}},set:function(e,t){try{return localStorage.setItem(e,t)}catch(e){return null}}};t.default=r,e.exports=t.default;},function(f,l,h){(function(i){Object.defineProperty(l,"__esModule",{value:!0}),l.default=void 0;var e,o=(e=h(74))&&e.__esModule?e:{default:e};function s(e){return (s="function"==typeof Symbol&&"symbol"==typeof Symbol.iterator?function(e){return typeof e}:function(e){return e&&"function"==typeof Symbol&&e.constructor===Symbol&&e!==Symbol.prototype?"symbol":typeof e})(e)}function t(e,t){for(var n=0;n<t.length;n++){var r=t[n];r.enumerable=r.enumerable||!1,r.configurable=!0,"value"in r&&(r.writable=!0),Object.defineProperty(e,r.key,r);}}var n,r,u=(n=c,(r=[{key:"decodeToken",value:function(e){var t="";e.length%4==3?t="=":e.length%4==2&&(t="==");var n=e.replace("-","+").replace("_","/")+t,r=o.default.decode(new i.from(n,"base64"));if("object"===s(r))return r}}])&&t(n.prototype,r),c);function c(){!function(e,t){if(!(e instanceof t))throw new TypeError("Cannot call a class as a function")}(this,c);}l.default=u,f.exports=l.default;}).call(this,h(9).Buffer);},function(e,t){var n;n=function(){return this}();try{n=n||new Function("return this")();}catch(e){"object"==typeof window&&(n=window);}e.exports=n;},function(e,t,n){t.byteLength=function(e){var t=l(e),n=t[0],r=t[1];return 3*(n+r)/4-r},t.toByteArray=function(e){var t,n,r=l(e),i=r[0],o=r[1],s=new f(function(e,t,n){return 3*(t+n)/4-n}(0,i,o)),a=0,u=0<o?i-4:i;for(n=0;n<u;n+=4)t=c[e.charCodeAt(n)]<<18|c[e.charCodeAt(n+1)]<<12|c[e.charCodeAt(n+2)]<<6|c[e.charCodeAt(n+3)],s[a++]=t>>16&255,s[a++]=t>>8&255,s[a++]=255&t;2===o&&(t=c[e.charCodeAt(n)]<<2|c[e.charCodeAt(n+1)]>>4,s[a++]=255&t);1===o&&(t=c[e.charCodeAt(n)]<<10|c[e.charCodeAt(n+1)]<<4|c[e.charCodeAt(n+2)]>>2,s[a++]=t>>8&255,s[a++]=255&t);return s},t.fromByteArray=function(e){for(var t,n=e.length,r=n%3,i=[],o=0,s=n-r;o<s;o+=16383)i.push(u(e,o,s<o+16383?s:o+16383));1==r?(t=e[n-1],i.push(a[t>>2]+a[t<<4&63]+"==")):2==r&&(t=(e[n-2]<<8)+e[n-1],i.push(a[t>>10]+a[t>>4&63]+a[t<<2&63]+"="));return i.join("")};for(var a=[],c=[],f="undefined"!=typeof Uint8Array?Uint8Array:Array,r="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/",i=0,o=r.length;i<o;++i)a[i]=r[i],c[r.charCodeAt(i)]=i;function l(e){var t=e.length;if(0<t%4)throw new Error("Invalid string. Length must be a multiple of 4");var n=e.indexOf("=");return -1===n&&(n=t),[n,n===t?0:4-n%4]}function u(e,t,n){for(var r,i,o=[],s=t;s<n;s+=3)r=(e[s]<<16&16711680)+(e[s+1]<<8&65280)+(255&e[s+2]),o.push(a[(i=r)>>18&63]+a[i>>12&63]+a[i>>6&63]+a[63&i]);return o.join("")}c["-".charCodeAt(0)]=62,c["_".charCodeAt(0)]=63;},function(e,t){t.read=function(e,t,n,r,i){var o,s,a=8*i-r-1,u=(1<<a)-1,c=u>>1,f=-7,l=n?i-1:0,h=n?-1:1,p=e[t+l];for(l+=h,o=p&(1<<-f)-1,p>>=-f,f+=a;0<f;o=256*o+e[t+l],l+=h,f-=8);for(s=o&(1<<-f)-1,o>>=-f,f+=r;0<f;s=256*s+e[t+l],l+=h,f-=8);if(0===o)o=1-c;else{if(o===u)return s?NaN:1/0*(p?-1:1);s+=Math.pow(2,r),o-=c;}return (p?-1:1)*s*Math.pow(2,o-r)},t.write=function(e,t,n,r,i,o){var s,a,u,c=8*o-i-1,f=(1<<c)-1,l=f>>1,h=23===i?Math.pow(2,-24)-Math.pow(2,-77):0,p=r?0:o-1,d=r?1:-1,g=t<0||0===t&&1/t<0?1:0;for(t=Math.abs(t),isNaN(t)||t===1/0?(a=isNaN(t)?1:0,s=f):(s=Math.floor(Math.log(t)/Math.LN2),t*(u=Math.pow(2,-s))<1&&(s--,u*=2),2<=(t+=1<=s+l?h/u:h*Math.pow(2,1-l))*u&&(s++,u/=2),f<=s+l?(a=0,s=f):1<=s+l?(a=(t*u-1)*Math.pow(2,i),s+=l):(a=t*Math.pow(2,l-1)*Math.pow(2,i),s=0));8<=i;e[n+p]=255&a,p+=d,a/=256,i-=8);for(s=s<<i|a,c+=i;0<c;e[n+p]=255&s,p+=d,s/=256,c-=8);e[n+p-d]|=128*g;};},function(e,t){var n={}.toString;e.exports=Array.isArray||function(e){return "[object Array]"==n.call(e)};},function(r,i,e){(function(b){var e,t,n;t=[],void 0===(n="function"==typeof(e=function(){var e=function(){function o(e){this.$hex=e;}o.prototype={length:function(){return this.$hex.length/2},toString:function(e){if(!e||"hex"===e||16===e)return this.$hex;if("utf-8"===e){for(var t="",n=0;n<this.$hex.length;n+=2)t+="%"+this.$hex.substring(n,n+2);return decodeURIComponent(t)}if("latin"!==e)throw new Error("Unrecognised format: "+e);for(var t=[],n=0;n<this.$hex.length;n+=2)t.push(parseInt(this.$hex.substring(n,n+2),16));return String.fromCharCode.apply(String,t)}},o.fromLatinString=function(e){for(var t="",n=0;n<e.length;n++){var r=e.charCodeAt(n).toString(16);1===r.length&&(r="0"+r),t+=r;}return new o(t)},o.fromUtf8String=function(e){for(var t=encodeURIComponent(e),n="",r=0;r<t.length;r++)if("%"===t.charAt(r))n+=t.substring(r+1,r+3),r+=2;else{var i=t.charCodeAt(r).toString(16);i.length<2&&(i="0"+i),n+=i;}return new o(n)};var s=[],f={},r=function(e){return function(){throw new Error(e+" not implemented")}};function e(){}function t(){}function l(e,t){var n=e.value;return n<24?n:24==n?t.readByte():25==n?t.readUint16():26==n?t.readUint32():27==n?t.readUint64():31==n?null:void r("Additional info: "+n)()}function a(e,t,n){var r=e<<5;t<24?n.writeByte(r|t):t<256?(n.writeByte(24|r),n.writeByte(t)):t<65536?(n.writeByte(25|r),n.writeUint16(t)):t<4294967296?(n.writeByte(26|r),n.writeUint32(t)):(n.writeByte(27|r),n.writeUint64(t));}e.prototype={peekByte:r("peekByte"),readByte:r("readByte"),readChunk:r("readChunk"),readFloat16:function(){var e=this.readUint16(),t=(32767&e)>>10,n=1023&e,r=32768&e;if(31==t)return 0==n?r?-1/0:1/0:NaN;var i=t?Math.pow(2,t-25)*(1024+n):Math.pow(2,-24)*n;return r?-i:i},readFloat32:function(){var e=this.readUint32(),t=(2147483647&e)>>23,n=8388607&e,r=2147483648&e;if(255==t)return 0==n?r?-1/0:1/0:NaN;var i=t?Math.pow(2,t-23-127)*(8388608+n):Math.pow(2,-149)*n;return r?-i:i},readFloat64:function(){var e=this.readUint32(),t=this.readUint32(),n=e>>20&2047,r=4294967296*(1048575&e)+t,i=2147483648&e;if(2047==n)return 0===r?i?-1/0:1/0:NaN;var o=n?Math.pow(2,n-52-1023)*(4503599627370496+r):Math.pow(2,-1074)*r;return i?-o:o},readUint16:function(){return 256*this.readByte()+this.readByte()},readUint32:function(){return 65536*this.readUint16()+this.readUint16()},readUint64:function(){return 4294967296*this.readUint32()+this.readUint32()}},t.prototype={writeByte:r("writeByte"),result:r("result"),writeFloat16:r("writeFloat16"),writeFloat32:r("writeFloat32"),writeFloat64:r("writeFloat64"),writeUint16:function(e){this.writeByte(e>>8&255),this.writeByte(255&e);},writeUint32:function(e){this.writeUint16(e>>16&65535),this.writeUint16(65535&e);},writeUint64:function(e){if(9007199254740992<=e||e<=-9007199254740992)throw new Error("Cannot encode Uint64 of: "+e+" magnitude to big (floating point errors)");this.writeUint32(Math.floor(e/4294967296)),this.writeUint32(e%4294967296);},writeString:r("writeString"),canWriteBinary:function(e){return !1},writeBinary:r("writeChunk")};var h=new Error;function p(e){var t=function(e){var t=e.readByte();return {type:t>>5,value:31&t}}(e);switch(t.type){case 0:return l(t,e);case 1:return -1-l(t,e);case 2:return e.readChunk(l(t,e));case 3:var n=e.readChunk(l(t,e));return n.toString("utf-8");case 4:case 5:var r=l(t,e),i=[];if(null!==r){5===t.type&&(r*=2);for(var o=0;o<r;o++)i[o]=p(e);}else for(var s;(s=p(e))!==h;)i.push(s);if(5!==t.type)return i;for(var a={},o=0;o<i.length;o+=2)a[i[o]]=i[o+1];return a;case 6:var u=l(t,e),c=f[u],i=p(e);return c?c(i):i;case 7:if(25===t.value)return e.readFloat16();if(26===t.value)return e.readFloat32();if(27===t.value)return e.readFloat64();switch(l(t,e)){case 20:return !1;case 21:return !0;case 22:return null;case 23:return;case null:return h;default:throw new Error("Unknown fixed value: "+t.value)}default:throw new Error("Unsupported header: "+JSON.stringify(t))}throw new Error("not implemented yet")}function u(e,t){for(var n=0;n<s.length;n++){var r=s[n].fn(e);if(void 0!==r)return a(6,s[n].tag,t),u(r,t)}if(e&&"function"==typeof e.toCBOR&&(e=e.toCBOR()),!1===e)a(7,20,t);else if(!0===e)a(7,21,t);else if(null===e)a(7,22,t);else if(void 0===e)a(7,23,t);else if("number"==typeof e)Math.floor(e)===e&&e<9007199254740992&&-9007199254740992<e?e<0?a(1,-1-e,t):a(0,e,t):(function(e,t,n){n.writeByte(e<<5|t);}(7,27,t),t.writeFloat64(e));else if("string"==typeof e)t.writeString(e,function(e){a(3,e,t);});else if(t.canWriteBinary(e))t.writeBinary(e,function(e){a(2,e,t);});else{if("object"!=typeof e)throw new Error("CBOR encoding not supported: "+e);if(g.config.useToJSON&&"function"==typeof e.toJSON&&(e=e.toJSON()),Array.isArray(e)){a(4,e.length,t);for(var n=0;n<e.length;n++)u(e[n],t);}else{var i=Object.keys(e);a(5,i.length,t);for(var n=0;n<i.length;n++)u(i[n],t),u(e[i[n]],t);}}}var c=[],d=[],g={config:{useToJSON:!0},addWriter:function(t,n){"string"==typeof t?d.push(function(e){if(t===e)return n(e)}):d.push(t);},addReader:function(n,r){"string"==typeof n?c.push(function(e,t){if(n===t)return r(e,t)}):c.push(n);},encode:function(e,t){for(var n=0;n<d.length;n++){var r=d[n],i=r(t);if(i)return u(e,i),i.result()}throw new Error("Unsupported output format: "+t)},decode:function(e,t){for(var n=0;n<c.length;n++){var r=c[n],i=r(e,t);if(i)return p(i)}throw new Error("Unsupported input format: "+t)},addSemanticEncode:function(e,t){if("number"!=typeof e||e%1!=0||e<0)throw new Error("Tag must be a positive integer");return s.push({tag:e,fn:t}),this},addSemanticDecode:function(e,t){if("number"!=typeof e||e%1!=0||e<0)throw new Error("Tag must be a positive integer");return f[e]=t,this},Reader:e,Writer:t};function i(e){this.buffer=e,this.pos=0;}function n(e){this.byteLength=0,this.defaultBufferLength=16384,this.latestBuffer=b.alloc(this.defaultBufferLength),this.latestBufferOffset=0,this.completeBuffers=[],this.stringFormat=e;}function y(e){this.hex=e,this.pos=0;}function v(e){this.$hex="",this.finalFormat=e||"hex";}return (i.prototype=Object.create(e.prototype)).peekByte=function(){return this.buffer[this.pos]},i.prototype.readByte=function(){return this.buffer[this.pos++]},i.prototype.readUint16=function(){var e=this.buffer.readUInt16BE(this.pos);return this.pos+=2,e},i.prototype.readUint32=function(){var e=this.buffer.readUInt32BE(this.pos);return this.pos+=4,e},i.prototype.readFloat32=function(){var e=this.buffer.readFloatBE(this.pos);return this.pos+=4,e},i.prototype.readFloat64=function(){var e=this.buffer.readDoubleBE(this.pos);return this.pos+=8,e},i.prototype.readChunk=function(e){var t=b.alloc(e);return this.buffer.copy(t,0,this.pos,this.pos+=e),t},(n.prototype=Object.create(t.prototype)).writeByte=function(e){this.latestBuffer[this.latestBufferOffset++]=e,this.latestBufferOffset>=this.latestBuffer.length&&(this.completeBuffers.push(this.latestBuffer),this.latestBuffer=b.alloc(this.defaultBufferLength),this.latestBufferOffset=0),this.byteLength++;},n.prototype.writeFloat32=function(e){var t=b.alloc(4);t.writeFloatBE(e,0),this.writeBuffer(t);},n.prototype.writeFloat64=function(e){var t=b.alloc(8);t.writeDoubleBE(e,0),this.writeBuffer(t);},n.prototype.writeString=function(e,t){var n=b.from(e,"utf-8");t(n.length),this.writeBuffer(n);},n.prototype.canWriteBinary=function(e){return e instanceof b},n.prototype.writeBinary=function(e,t){t(e.length),this.writeBuffer(e);},n.prototype.writeBuffer=function(e){if(!(e instanceof b))throw new TypeError("BufferWriter only accepts Buffers");this.latestBufferOffset?this.latestBuffer.length-this.latestBufferOffset>=e.length?(e.copy(this.latestBuffer,this.latestBufferOffset),this.latestBufferOffset+=e.length,this.latestBufferOffset>=this.latestBuffer.length&&(this.completeBuffers.push(this.latestBuffer),this.latestBuffer=b.alloc(this.defaultBufferLength),this.latestBufferOffset=0)):(this.completeBuffers.push(this.latestBuffer.slice(0,this.latestBufferOffset)),this.completeBuffers.push(e),this.latestBuffer=b.alloc(this.defaultBufferLength),this.latestBufferOffset=0):this.completeBuffers.push(e),this.byteLength+=e.length;},n.prototype.result=function(){for(var e=b.alloc(this.byteLength),t=0,n=0;n<this.completeBuffers.length;n++){var r=this.completeBuffers[n];r.copy(e,t,0,r.length),t+=r.length;}return this.latestBufferOffset&&this.latestBuffer.copy(e,t,0,this.latestBufferOffset),this.stringFormat?e.toString(this.stringFormat):e},"function"==typeof b&&(g.addReader(function(e,t){if(e instanceof b)return new i(e);if("hex"===t||"base64"===t){var n=b.from(e,t);return new i(n)}}),g.addWriter(function(e){return e&&"buffer"!==e?"hex"===e||"base64"===e?new n(e):void 0:new n})),(y.prototype=Object.create(e.prototype)).peekByte=function(){var e=this.hex.substring(this.pos,2);return parseInt(e,16)},y.prototype.readByte=function(){var e=this.hex.substring(this.pos,this.pos+2);return this.pos+=2,parseInt(e,16)},y.prototype.readChunk=function(e){var t=this.hex.substring(this.pos,this.pos+2*e);return this.pos+=2*e,"function"==typeof b?b.from(t,"hex"):new o(t)},(v.prototype=Object.create(t.prototype)).writeByte=function(e){if(e<0||255<e)throw new Error("Byte value out of range: "+e);var t=e.toString(16);1==t.length&&(t="0"+t),this.$hex+=t;},v.prototype.canWriteBinary=function(e){return e instanceof o||"function"==typeof b&&e instanceof b},v.prototype.writeBinary=function(e,t){if(e instanceof o)t(e.length()),this.$hex+=e.$hex;else{if(!("function"==typeof b&&e instanceof b))throw new TypeError("HexWriter only accepts BinaryHex or Buffers");t(e.length),this.$hex+=e.toString("hex");}},v.prototype.result=function(){return "buffer"===this.finalFormat&&"function"==typeof b?b.from(this.$hex,"hex"):new o(this.$hex).toString(this.finalFormat)},v.prototype.writeString=function(e,t){var n=o.fromUtf8String(e);t(n.length()),this.$hex+=n.$hex;},g.addReader(function(e,t){return e instanceof o||e.$hex?new y(e.$hex):"hex"===t?new y(e):void 0}),g.addWriter(function(e){if("hex"===e)return new v}),g}();return e.addSemanticEncode(0,function(e){if(e instanceof Date)return e.toISOString()}).addSemanticDecode(0,function(e){return new Date(e)}).addSemanticDecode(1,function(e){return new Date(e)}),e})?e.apply(i,t):e)||(r.exports=n);}).call(this,e(9).Buffer);},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.get=function(e,t,n){var r=o.default.get(this.getStandardOrigin()+t.url).set(t.headers).query(e);return s.call(this,r,t,n)},t.post=function(e,t,n,r){var i=o.default.post(this.getStandardOrigin()+n.url).query(e).set(n.headers).send(t);return s.call(this,i,n,r)},t.patch=function(e,t,n,r){var i=o.default.patch(this.getStandardOrigin()+n.url).query(e).set(n.headers).send(t);return s.call(this,i,n,r)},t.del=function(e,t,n){var r=o.default.delete(this.getStandardOrigin()+t.url).set(t.headers).query(e);return s.call(this,r,t,n)};var r,o=(r=n(76))&&r.__esModule?r:{default:r};n(0);function a(r){var i=(new Date).getTime(),e=(new Date).toISOString(),o=console&&console.log?console:window&&window.console&&window.console.log?window.console:console;o.log("<<<<<"),o.log("[".concat(e,"]"),"\n",r.url,"\n",r.qs),o.log("-----"),r.on("response",function(e){var t=(new Date).getTime()-i,n=(new Date).toISOString();o.log(">>>>>>"),o.log("[".concat(n," / ").concat(t,"]"),"\n",r.url,"\n",r.qs,"\n",e.text),o.log("-----");});}function s(e,i,o){var s=this;return this._config.logVerbosity&&(e=e.use(a)),this._config.proxy&&this._modules.proxy&&(e=this._modules.proxy.call(this,e)),this._config.keepAlive&&this._modules.keepAlive&&(e=this._modules.keepAlive(e)),e.timeout(i.timeout).end(function(t,n){var e,r={};if(r.error=null!==t,r.operation=i.operation,n&&n.status&&(r.statusCode=n.status),t){if(t.response&&t.response.text&&!s._config.logVerbosity)try{r.errorData=JSON.parse(t.response.text);}catch(e){r.errorData=t;}else r.errorData=t;return r.category=s._detectErrorCategory(t),o(r,null)}try{e=JSON.parse(n.text);}catch(e){return r.errorData=n,r.error=!0,o(r,null)}return e.error&&1===e.error&&e.status&&e.message&&e.service?(r.errorData=e,r.statusCode=e.status,r.error=!0,r.category=s._detectErrorCategory(r),o(r,null)):(e.error&&e.error.message&&(r.errorData=e.error),o(r,e))})}},function(e,n,t){var r;r="undefined"!=typeof window?window:"undefined"!=typeof self?self:(console.warn("Using browser-only version of superagent in non-browser environment"),this);var i=t(77),o=t(78),s=t(10),a=t(79),u=t(81);function c(){}var f=n=e.exports=function(e,t){return "function"==typeof t?new n.Request("GET",e).end(t):1==arguments.length?new n.Request("GET",e):new n.Request(e,t)};n.Request=v,f.getXHR=function(){if(!(!r.XMLHttpRequest||r.location&&"file:"==r.location.protocol&&r.ActiveXObject))return new XMLHttpRequest;try{return new ActiveXObject("Microsoft.XMLHTTP")}catch(e){}try{return new ActiveXObject("Msxml2.XMLHTTP.6.0")}catch(e){}try{return new ActiveXObject("Msxml2.XMLHTTP.3.0")}catch(e){}try{return new ActiveXObject("Msxml2.XMLHTTP")}catch(e){}throw Error("Browser-only version of superagent could not find XHR")};var l="".trim?function(e){return e.trim()}:function(e){return e.replace(/(^\s*|\s*$)/g,"")};function h(e){if(!s(e))return e;var t=[];for(var n in e)p(t,n,e[n]);return t.join("&")}function p(t,n,e){if(null!=e)if(Array.isArray(e))e.forEach(function(e){p(t,n,e);});else if(s(e))for(var r in e)p(t,n+"["+r+"]",e[r]);else t.push(encodeURIComponent(n)+"="+encodeURIComponent(e));else null===e&&t.push(encodeURIComponent(n));}function d(e){for(var t,n,r={},i=e.split("&"),o=0,s=i.length;o<s;++o)-1==(n=(t=i[o]).indexOf("="))?r[decodeURIComponent(t)]="":r[decodeURIComponent(t.slice(0,n))]=decodeURIComponent(t.slice(n+1));return r}function g(e){return /[\/+]json($|[^-\w])/.test(e)}function y(e){this.req=e,this.xhr=this.req.xhr,this.text="HEAD"!=this.req.method&&(""===this.xhr.responseType||"text"===this.xhr.responseType)||void 0===this.xhr.responseType?this.xhr.responseText:null,this.statusText=this.req.xhr.statusText;var t=this.xhr.status;1223===t&&(t=204),this._setStatusProperties(t),this.header=this.headers=function(e){for(var t,n,r,i,o=e.split(/\r?\n/),s={},a=0,u=o.length;a<u;++a)-1!==(t=(n=o[a]).indexOf(":"))&&(r=n.slice(0,t).toLowerCase(),i=l(n.slice(t+1)),s[r]=i);return s}(this.xhr.getAllResponseHeaders()),this.header["content-type"]=this.xhr.getResponseHeader("content-type"),this._setHeaderProperties(this.header),null===this.text&&e._responseType?this.body=this.xhr.response:this.body="HEAD"!=this.req.method?this._parseBody(this.text?this.text:this.xhr.response):null;}function v(e,t){var r=this;this._query=this._query||[],this.method=e,this.url=t,this.header={},this._header={},this.on("end",function(){var t,n=null,e=null;try{e=new y(r);}catch(e){return (n=new Error("Parser is unable to parse the response")).parse=!0,n.original=e,r.xhr?(n.rawResponse=void 0===r.xhr.responseType?r.xhr.responseText:r.xhr.response,n.status=r.xhr.status?r.xhr.status:null,n.statusCode=n.status):(n.rawResponse=null,n.status=null),r.callback(n)}r.emit("response",e);try{r._isResponseOK(e)||(t=new Error(e.statusText||"Unsuccessful HTTP response"));}catch(e){t=e;}t?(t.original=n,t.response=e,t.status=e.status,r.callback(t,e)):r.callback(null,e);});}function b(e,t,n){var r=f("DELETE",e);return "function"==typeof t&&(n=t,t=null),t&&r.send(t),n&&r.end(n),r}f.serializeObject=h,f.parseString=d,f.types={html:"text/html",json:"application/json",xml:"text/xml",urlencoded:"application/x-www-form-urlencoded",form:"application/x-www-form-urlencoded","form-data":"application/x-www-form-urlencoded"},f.serialize={"application/x-www-form-urlencoded":h,"application/json":JSON.stringify},f.parse={"application/x-www-form-urlencoded":d,"application/json":JSON.parse},a(y.prototype),y.prototype._parseBody=function(e){var t=f.parse[this.type];return this.req._parser?this.req._parser(this,e):(!t&&g(this.type)&&(t=f.parse["application/json"]),t&&e&&(e.length||e instanceof Object)?t(e):null)},y.prototype.toError=function(){var e=this.req,t=e.method,n=e.url,r="cannot "+t+" "+n+" ("+this.status+")",i=new Error(r);return i.status=this.status,i.method=t,i.url=n,i},f.Response=y,i(v.prototype),o(v.prototype),v.prototype.type=function(e){return this.set("Content-Type",f.types[e]||e),this},v.prototype.accept=function(e){return this.set("Accept",f.types[e]||e),this},v.prototype.auth=function(e,t,n){1===arguments.length&&(t=""),"object"==typeof t&&null!==t&&(n=t,t=""),n=n||{type:"function"==typeof btoa?"basic":"auto"};return this._auth(e,t,n,function(e){if("function"==typeof btoa)return btoa(e);throw new Error("Cannot use basic auth, btoa is not a function")})},v.prototype.query=function(e){return "string"!=typeof e&&(e=h(e)),e&&this._query.push(e),this},v.prototype.attach=function(e,t,n){if(t){if(this._data)throw Error("superagent can't mix .send() and .attach()");this._getFormData().append(e,t,n||t.name);}return this},v.prototype._getFormData=function(){return this._formData||(this._formData=new r.FormData),this._formData},v.prototype.callback=function(e,t){if(this._shouldRetry(e,t))return this._retry();var n=this._callback;this.clearTimeout(),e&&(this._maxRetries&&(e.retries=this._retries-1),this.emit("error",e)),n(e,t);},v.prototype.crossDomainError=function(){var e=new Error("Request has been terminated\nPossible causes: the network is offline, Origin is not allowed by Access-Control-Allow-Origin, the page is being unloaded, etc.");e.crossDomain=!0,e.status=this.status,e.method=this.method,e.url=this.url,this.callback(e);},v.prototype.buffer=v.prototype.ca=v.prototype.agent=function(){return console.warn("This is not supported in browser version of superagent"),this},v.prototype.pipe=v.prototype.write=function(){throw Error("Streaming is not supported in browser version of superagent")},v.prototype._isHost=function(e){return e&&"object"==typeof e&&!Array.isArray(e)&&"[object Object]"!==Object.prototype.toString.call(e)},v.prototype.end=function(e){return this._endCalled&&console.warn("Warning: .end() was called twice. This is not supported in superagent"),this._endCalled=!0,this._callback=e||c,this._finalizeQueryString(),this._end()},v.prototype._end=function(){var n=this,r=this.xhr=f.getXHR(),e=this._formData||this._data;this._setTimeouts(),r.onreadystatechange=function(){var e=r.readyState;if(2<=e&&n._responseTimeoutTimer&&clearTimeout(n._responseTimeoutTimer),4==e){var t;try{t=r.status;}catch(e){t=0;}if(!t){if(n.timedout||n._aborted)return;return n.crossDomainError()}n.emit("end");}};function t(e,t){0<t.total&&(t.percent=t.loaded/t.total*100),t.direction=e,n.emit("progress",t);}if(this.hasListeners("progress"))try{r.onprogress=t.bind(null,"download"),r.upload&&(r.upload.onprogress=t.bind(null,"upload"));}catch(e){}try{this.username&&this.password?r.open(this.method,this.url,!0,this.username,this.password):r.open(this.method,this.url,!0);}catch(e){return this.callback(e)}if(this._withCredentials&&(r.withCredentials=!0),!this._formData&&"GET"!=this.method&&"HEAD"!=this.method&&"string"!=typeof e&&!this._isHost(e)){var i=this._header["content-type"],o=this._serializer||f.serialize[i?i.split(";")[0]:""];!o&&g(i)&&(o=f.serialize["application/json"]),o&&(e=o(e));}for(var s in this.header)null!=this.header[s]&&this.header.hasOwnProperty(s)&&r.setRequestHeader(s,this.header[s]);return this._responseType&&(r.responseType=this._responseType),this.emit("request",this),r.send(void 0!==e?e:null),this},f.agent=function(){return new u},["GET","POST","OPTIONS","PATCH","PUT","DELETE"].forEach(function(r){u.prototype[r.toLowerCase()]=function(e,t){var n=new f.Request(r,e);return this._setDefaults(n),t&&n.end(t),n};}),u.prototype.del=u.prototype.delete,f.get=function(e,t,n){var r=f("GET",e);return "function"==typeof t&&(n=t,t=null),t&&r.query(t),n&&r.end(n),r},f.head=function(e,t,n){var r=f("HEAD",e);return "function"==typeof t&&(n=t,t=null),t&&r.query(t),n&&r.end(n),r},f.options=function(e,t,n){var r=f("OPTIONS",e);return "function"==typeof t&&(n=t,t=null),t&&r.send(t),n&&r.end(n),r},f.del=b,f.delete=b,f.patch=function(e,t,n){var r=f("PATCH",e);return "function"==typeof t&&(n=t,t=null),t&&r.send(t),n&&r.end(n),r},f.post=function(e,t,n){var r=f("POST",e);return "function"==typeof t&&(n=t,t=null),t&&r.send(t),n&&r.end(n),r},f.put=function(e,t,n){var r=f("PUT",e);return "function"==typeof t&&(n=t,t=null),t&&r.send(t),n&&r.end(n),r};},function(e,t,n){function r(e){if(e)return function(e){for(var t in r.prototype)e[t]=r.prototype[t];return e}(e)}(e.exports=r).prototype.on=r.prototype.addEventListener=function(e,t){return this._callbacks=this._callbacks||{},(this._callbacks["$"+e]=this._callbacks["$"+e]||[]).push(t),this},r.prototype.once=function(e,t){function n(){this.off(e,n),t.apply(this,arguments);}return n.fn=t,this.on(e,n),this},r.prototype.off=r.prototype.removeListener=r.prototype.removeAllListeners=r.prototype.removeEventListener=function(e,t){if(this._callbacks=this._callbacks||{},0==arguments.length)return this._callbacks={},this;var n,r=this._callbacks["$"+e];if(!r)return this;if(1==arguments.length)return delete this._callbacks["$"+e],this;for(var i=0;i<r.length;i++)if((n=r[i])===t||n.fn===t){r.splice(i,1);break}return 0===r.length&&delete this._callbacks["$"+e],this},r.prototype.emit=function(e){this._callbacks=this._callbacks||{};for(var t=new Array(arguments.length-1),n=this._callbacks["$"+e],r=1;r<arguments.length;r++)t[r-1]=arguments[r];if(n){r=0;for(var i=(n=n.slice(0)).length;r<i;++r)n[r].apply(this,t);}return this},r.prototype.listeners=function(e){return this._callbacks=this._callbacks||{},this._callbacks["$"+e]||[]},r.prototype.hasListeners=function(e){return !!this.listeners(e).length};},function(e,t,n){var i=n(10);function r(e){if(e)return function(e){for(var t in r.prototype)e[t]=r.prototype[t];return e}(e)}(e.exports=r).prototype.clearTimeout=function(){return clearTimeout(this._timer),clearTimeout(this._responseTimeoutTimer),delete this._timer,delete this._responseTimeoutTimer,this},r.prototype.parse=function(e){return this._parser=e,this},r.prototype.responseType=function(e){return this._responseType=e,this},r.prototype.serialize=function(e){return this._serializer=e,this},r.prototype.timeout=function(e){if(!e||"object"!=typeof e)return this._timeout=e,this._responseTimeout=0,this;for(var t in e)switch(t){case"deadline":this._timeout=e.deadline;break;case"response":this._responseTimeout=e.response;break;default:console.warn("Unknown timeout option",t);}return this},r.prototype.retry=function(e,t){return 0!==arguments.length&&!0!==e||(e=1),e<=0&&(e=0),this._maxRetries=e,this._retries=0,this._retryCallback=t,this};var o=["ECONNRESET","ETIMEDOUT","EADDRINFO","ESOCKETTIMEDOUT"];r.prototype._shouldRetry=function(e,t){if(!this._maxRetries||this._retries++>=this._maxRetries)return !1;if(this._retryCallback)try{var n=this._retryCallback(e,t);if(!0===n)return !0;if(!1===n)return !1}catch(e){console.error(e);}if(t&&t.status&&500<=t.status&&501!=t.status)return !0;if(e){if(e.code&&~o.indexOf(e.code))return !0;if(e.timeout&&"ECONNABORTED"==e.code)return !0;if(e.crossDomain)return !0}return !1},r.prototype._retry=function(){return this.clearTimeout(),this.req&&(this.req=null,this.req=this.request()),this._aborted=!1,this.timedout=!1,this._end()},r.prototype.then=function(e,t){if(!this._fullfilledPromise){var i=this;this._endCalled&&console.warn("Warning: superagent request was sent twice, because both .end() and .then() were called. Never call .end() if you use promises"),this._fullfilledPromise=new Promise(function(n,r){i.end(function(e,t){e?r(e):n(t);});});}return this._fullfilledPromise.then(e,t)},r.prototype.catch=function(e){return this.then(void 0,e)},r.prototype.use=function(e){return e(this),this},r.prototype.ok=function(e){if("function"!=typeof e)throw Error("Callback required");return this._okCallback=e,this},r.prototype._isResponseOK=function(e){return !!e&&(this._okCallback?this._okCallback(e):200<=e.status&&e.status<300)},r.prototype.getHeader=r.prototype.get=function(e){return this._header[e.toLowerCase()]},r.prototype.set=function(e,t){if(i(e)){for(var n in e)this.set(n,e[n]);return this}return this._header[e.toLowerCase()]=t,this.header[e]=t,this},r.prototype.unset=function(e){return delete this._header[e.toLowerCase()],delete this.header[e],this},r.prototype.field=function(e,t){if(null==e)throw new Error(".field(name, val) name can not be empty");if(this._data&&console.error(".field() can't be used if .send() is used. Please use only .send() or only .field() & .attach()"),i(e)){for(var n in e)this.field(n,e[n]);return this}if(Array.isArray(t)){for(var r in t)this.field(e,t[r]);return this}if(null==t)throw new Error(".field(name, val) val can not be empty");return "boolean"==typeof t&&(t=""+t),this._getFormData().append(e,t),this},r.prototype.abort=function(){return this._aborted||(this._aborted=!0,this.xhr&&this.xhr.abort(),this.req&&this.req.abort(),this.clearTimeout(),this.emit("abort")),this},r.prototype._auth=function(e,t,n,r){switch(n.type){case"basic":this.set("Authorization","Basic "+r(e+":"+t));break;case"auto":this.username=e,this.password=t;break;case"bearer":this.set("Authorization","Bearer "+e);}return this},r.prototype.withCredentials=function(e){return null==e&&(e=!0),this._withCredentials=e,this},r.prototype.redirects=function(e){return this._maxRedirects=e,this},r.prototype.maxResponseSize=function(e){if("number"!=typeof e)throw TypeError("Invalid argument");return this._maxResponseSize=e,this},r.prototype.toJSON=function(){return {method:this.method,url:this.url,data:this._data,headers:this._header}},r.prototype.send=function(e){var t=i(e),n=this._header["content-type"];if(this._formData&&console.error(".send() can't be used if .attach() or .field() is used. Please use only .send() or only .field() & .attach()"),t&&!this._data)Array.isArray(e)?this._data=[]:this._isHost(e)||(this._data={});else if(e&&this._data&&this._isHost(this._data))throw Error("Can't merge these send calls");if(t&&i(this._data))for(var r in e)this._data[r]=e[r];else"string"==typeof e?(n||this.type("form"),n=this._header["content-type"],this._data="application/x-www-form-urlencoded"==n?this._data?this._data+"&"+e:e:(this._data||"")+e):this._data=e;return !t||this._isHost(e)||n||this.type("json"),this},r.prototype.sortQuery=function(e){return this._sort=void 0===e||e,this},r.prototype._finalizeQueryString=function(){var e=this._query.join("&");if(e&&(this.url+=(0<=this.url.indexOf("?")?"&":"?")+e),this._query.length=0,this._sort){var t=this.url.indexOf("?");if(0<=t){var n=this.url.substring(t+1).split("&");"function"==typeof this._sort?n.sort(this._sort):n.sort(),this.url=this.url.substring(0,t)+"?"+n.join("&");}}},r.prototype._appendQueryString=function(){console.trace("Unsupported");},r.prototype._timeoutError=function(e,t,n){if(!this._aborted){var r=new Error(e+t+"ms exceeded");r.timeout=t,r.code="ECONNABORTED",r.errno=n,this.timedout=!0,this.abort(),this.callback(r);}},r.prototype._setTimeouts=function(){var e=this;this._timeout&&!this._timer&&(this._timer=setTimeout(function(){e._timeoutError("Timeout of ",e._timeout,"ETIME");},this._timeout)),this._responseTimeout&&!this._responseTimeoutTimer&&(this._responseTimeoutTimer=setTimeout(function(){e._timeoutError("Response timeout of ",e._responseTimeout,"ETIMEDOUT");},this._responseTimeout));};},function(e,t,n){var i=n(80);function r(e){if(e)return function(e){for(var t in r.prototype)e[t]=r.prototype[t];return e}(e)}(e.exports=r).prototype.get=function(e){return this.header[e.toLowerCase()]},r.prototype._setHeaderProperties=function(e){var t=e["content-type"]||"";this.type=i.type(t);var n=i.params(t);for(var r in n)this[r]=n[r];this.links={};try{e.link&&(this.links=i.parseLinks(e.link));}catch(e){}},r.prototype._setStatusProperties=function(e){var t=e/100|0;this.status=this.statusCode=e,this.statusType=t,this.info=1==t,this.ok=2==t,this.redirect=3==t,this.clientError=4==t,this.serverError=5==t,this.error=(4==t||5==t)&&this.toError(),this.created=201==e,this.accepted=202==e,this.noContent=204==e,this.badRequest=400==e,this.unauthorized=401==e,this.notAcceptable=406==e,this.forbidden=403==e,this.notFound=404==e,this.unprocessableEntity=422==e;};},function(e,t,n){t.type=function(e){return e.split(/ *; */).shift()},t.params=function(e){return e.split(/ *; */).reduce(function(e,t){var n=t.split(/ *= */),r=n.shift(),i=n.shift();return r&&i&&(e[r]=i),e},{})},t.parseLinks=function(e){return e.split(/ *, */).reduce(function(e,t){var n=t.split(/ *; */),r=n[0].slice(1,-1);return e[n[1].split(/ *= */)[1].slice(1,-1)]=r,e},{})},t.cleanHeader=function(e,t){return delete e["content-type"],delete e["content-length"],delete e["transfer-encoding"],delete e.host,t&&(delete e.authorization,delete e.cookie),e};},function(e,t){function n(){this._defaults=[];}["use","on","once","set","query","type","accept","auth","withCredentials","sortQuery","retry","ok","redirects","timeout","buffer","serialize","parse","ca","key","pfx","cert"].forEach(function(e){n.prototype[e]=function(){return this._defaults.push({fn:e,arguments:arguments}),this};}),n.prototype._setDefaults=function(t){this._defaults.forEach(function(e){t[e.fn].apply(t,e.arguments);});},e.exports=n;}],i.c=r,i.d=function(e,t,n){i.o(e,t)||Object.defineProperty(e,t,{enumerable:!0,get:n});},i.r=function(e){"undefined"!=typeof Symbol&&Symbol.toStringTag&&Object.defineProperty(e,Symbol.toStringTag,{value:"Module"}),Object.defineProperty(e,"__esModule",{value:!0});},i.t=function(t,e){if(1&e&&(t=i(t)),8&e)return t;if(4&e&&"object"==typeof t&&t&&t.__esModule)return t;var n=Object.create(null);if(i.r(n),Object.defineProperty(n,"default",{enumerable:!0,value:t}),2&e&&"string"!=typeof t)for(var r in t)i.d(n,r,function(e){return t[e]}.bind(null,r));return n},i.n=function(e){var t=e&&e.__esModule?function(){return e.default}:function(){return e};return i.d(t,"a",t),t},i.o=function(e,t){return Object.prototype.hasOwnProperty.call(e,t)},i.p="",i(i.s=11);function i(e){if(r[e])return r[e].exports;var t=r[e]={i:e,l:!1,exports:{}};return n[e].call(t.exports,t,t.exports,i),t.l=!0,t.exports}var n,r;});
+    !function(e,t){module.exports=t();}(window,function(){return r={},i.m=n=[function(e,t,n){e.exports={};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.default=void 0;t.default={PNTimeOperation:"PNTimeOperation",PNHistoryOperation:"PNHistoryOperation",PNDeleteMessagesOperation:"PNDeleteMessagesOperation",PNFetchMessagesOperation:"PNFetchMessagesOperation",PNMessageCounts:"PNMessageCountsOperation",PNSubscribeOperation:"PNSubscribeOperation",PNUnsubscribeOperation:"PNUnsubscribeOperation",PNPublishOperation:"PNPublishOperation",PNSignalOperation:"PNSignalOperation",PNAddMessageActionOperation:"PNAddActionOperation",PNRemoveMessageActionOperation:"PNRemoveMessageActionOperation",PNGetMessageActionsOperation:"PNGetMessageActionsOperation",PNCreateUserOperation:"PNCreateUserOperation",PNUpdateUserOperation:"PNUpdateUserOperation",PNDeleteUserOperation:"PNDeleteUserOperation",PNGetUserOperation:"PNGetUsersOperation",PNGetUsersOperation:"PNGetUsersOperation",PNCreateSpaceOperation:"PNCreateSpaceOperation",PNUpdateSpaceOperation:"PNUpdateSpaceOperation",PNDeleteSpaceOperation:"PNDeleteSpaceOperation",PNGetSpaceOperation:"PNGetSpacesOperation",PNGetSpacesOperation:"PNGetSpacesOperation",PNGetMembersOperation:"PNGetMembersOperation",PNUpdateMembersOperation:"PNUpdateMembersOperation",PNGetMembershipsOperation:"PNGetMembershipsOperation",PNUpdateMembershipsOperation:"PNUpdateMembershipsOperation",PNPushNotificationEnabledChannelsOperation:"PNPushNotificationEnabledChannelsOperation",PNRemoveAllPushNotificationsOperation:"PNRemoveAllPushNotificationsOperation",PNWhereNowOperation:"PNWhereNowOperation",PNSetStateOperation:"PNSetStateOperation",PNHereNowOperation:"PNHereNowOperation",PNGetStateOperation:"PNGetStateOperation",PNHeartbeatOperation:"PNHeartbeatOperation",PNChannelGroupsOperation:"PNChannelGroupsOperation",PNRemoveGroupOperation:"PNRemoveGroupOperation",PNChannelsForGroupOperation:"PNChannelsForGroupOperation",PNAddChannelsToGroupOperation:"PNAddChannelsToGroupOperation",PNRemoveChannelsFromGroupOperation:"PNRemoveChannelsFromGroupOperation",PNAccessManagerGrant:"PNAccessManagerGrant",PNAccessManagerGrantToken:"PNAccessManagerGrantToken",PNAccessManagerAudit:"PNAccessManagerAudit"},e.exports=t.default;},function(e,t,n){function r(e){return encodeURIComponent(e).replace(/[!~*'()]/g,function(e){return "%".concat(e.charCodeAt(0).toString(16).toUpperCase())})}function i(e){return function(e){var t=[];return Object.keys(e).forEach(function(e){return t.push(e)}),t}(e).sort()}e.exports={signPamFromParams:function(t){return i(t).map(function(e){return "".concat(e,"=").concat(r(t[e]))}).join("&")},endsWith:function(e,t){return -1!==e.indexOf(t,this.length-t.length)},createPromise:function(){var n,r;return {promise:new Promise(function(e,t){n=e,r=t;}),reject:r,fulfill:n}},encodeString:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.default=void 0;var r,i=(r=n(5))&&r.__esModule?r:{default:r};n(0);function s(e,t){for(var n=0;n<t.length;n++){var r=t[n];r.enumerable=r.enumerable||!1,r.configurable=!0,"value"in r&&(r.writable=!0),Object.defineProperty(e,r.key,r);}}function o(e,t,n){return t in e?Object.defineProperty(e,t,{value:n,enumerable:!0,configurable:!0,writable:!0}):e[t]=n,e}var a,u,l=(a=f,(u=[{key:"getAuthKey",value:function(){return this.authKey}},{key:"setAuthKey",value:function(e){return this.authKey=e,this}},{key:"setCipherKey",value:function(e){return this.cipherKey=e,this}},{key:"getUUID",value:function(){return this.UUID}},{key:"setUUID",value:function(e){return this._db&&this._db.set&&this._db.set("".concat(this.subscribeKey,"uuid"),e),this.UUID=e,this}},{key:"getFilterExpression",value:function(){return this.filterExpression}},{key:"setFilterExpression",value:function(e){return this.filterExpression=e,this}},{key:"getPresenceTimeout",value:function(){return this._presenceTimeout}},{key:"setPresenceTimeout",value:function(e){return 20<=e?this._presenceTimeout=e:(this._presenceTimeout=20,console.log("WARNING: Presence timeout is less than the minimum. Using minimum value: ",this._presenceTimeout)),this.setHeartbeatInterval(this._presenceTimeout/2-1),this}},{key:"setProxy",value:function(e){this.proxy=e;}},{key:"getHeartbeatInterval",value:function(){return this._heartbeatInterval}},{key:"setHeartbeatInterval",value:function(e){return this._heartbeatInterval=e,this}},{key:"getSubscribeTimeout",value:function(){return this._subscribeRequestTimeout}},{key:"setSubscribeTimeout",value:function(e){return this._subscribeRequestTimeout=e,this}},{key:"getTransactionTimeout",value:function(){return this._transactionalRequestTimeout}},{key:"setTransactionTimeout",value:function(e){return this._transactionalRequestTimeout=e,this}},{key:"isSendBeaconEnabled",value:function(){return this._useSendBeacon}},{key:"setSendBeaconConfig",value:function(e){return this._useSendBeacon=e,this}},{key:"getVersion",value:function(){return "4.27.6"}},{key:"_addPnsdkSuffix",value:function(e,t){this._PNSDKSuffix[e]=t;}},{key:"_getPnsdkSuffix",value:function(n){var r=this;return Object.keys(this._PNSDKSuffix).reduce(function(e,t){return e+n+r._PNSDKSuffix[t]},"")}},{key:"_decideUUID",value:function(e){return e||(this._db&&this._db.get&&this._db.get("".concat(this.subscribeKey,"uuid"))?this._db.get("".concat(this.subscribeKey,"uuid")):"pn-".concat(i.default.createUUID()))}}])&&s(a.prototype,u),f);function f(e){var t=e.setup,n=e.db;!function(e,t){if(!(e instanceof t))throw new TypeError("Cannot call a class as a function")}(this,f),o(this,"_db",void 0),o(this,"subscribeKey",void 0),o(this,"publishKey",void 0),o(this,"secretKey",void 0),o(this,"cipherKey",void 0),o(this,"authKey",void 0),o(this,"UUID",void 0),o(this,"proxy",void 0),o(this,"instanceId",void 0),o(this,"sdkName",void 0),o(this,"sdkFamily",void 0),o(this,"partnerId",void 0),o(this,"filterExpression",void 0),o(this,"suppressLeaveEvents",void 0),o(this,"secure",void 0),o(this,"origin",void 0),o(this,"logVerbosity",void 0),o(this,"useInstanceId",void 0),o(this,"useRequestId",void 0),o(this,"keepAlive",void 0),o(this,"keepAliveSettings",void 0),o(this,"autoNetworkDetection",void 0),o(this,"announceSuccessfulHeartbeats",void 0),o(this,"announceFailedHeartbeats",void 0),o(this,"_presenceTimeout",void 0),o(this,"_heartbeatInterval",void 0),o(this,"_subscribeRequestTimeout",void 0),o(this,"_transactionalRequestTimeout",void 0),o(this,"_useSendBeacon",void 0),o(this,"_PNSDKSuffix",void 0),o(this,"requestMessageCountThreshold",void 0),o(this,"restore",void 0),o(this,"dedupeOnSubscribe",void 0),o(this,"maximumCacheSize",void 0),o(this,"customEncrypt",void 0),o(this,"customDecrypt",void 0),this._PNSDKSuffix={},this._db=n,this.instanceId="pn-".concat(i.default.createUUID()),this.secretKey=t.secretKey||t.secret_key,this.subscribeKey=t.subscribeKey||t.subscribe_key,this.publishKey=t.publishKey||t.publish_key,this.sdkName=t.sdkName,this.sdkFamily=t.sdkFamily,this.partnerId=t.partnerId,this.setAuthKey(t.authKey),this.setCipherKey(t.cipherKey),this.setFilterExpression(t.filterExpression),this.origin=t.origin||"ps.pndsn.com",this.secure=t.ssl||!1,this.restore=t.restore||!1,this.proxy=t.proxy,this.keepAlive=t.keepAlive,this.keepAliveSettings=t.keepAliveSettings,this.autoNetworkDetection=t.autoNetworkDetection||!1,this.dedupeOnSubscribe=t.dedupeOnSubscribe||!1,this.maximumCacheSize=t.maximumCacheSize||100,this.customEncrypt=t.customEncrypt,this.customDecrypt=t.customDecrypt,"undefined"!=typeof location&&"https:"===location.protocol&&(this.secure=!0),this.logVerbosity=t.logVerbosity||!1,this.suppressLeaveEvents=t.suppressLeaveEvents||!1,this.announceFailedHeartbeats=t.announceFailedHeartbeats||!0,this.announceSuccessfulHeartbeats=t.announceSuccessfulHeartbeats||!1,this.useInstanceId=t.useInstanceId||!1,this.useRequestId=t.useRequestId||!1,this.requestMessageCountThreshold=t.requestMessageCountThreshold,this.setTransactionTimeout(t.transactionalRequestTimeout||15e3),this.setSubscribeTimeout(t.subscribeRequestTimeout||31e4),this.setSendBeaconConfig(t.useSendBeacon||!0),t.presenceTimeout?this.setPresenceTimeout(t.presenceTimeout):this._presenceTimeout=300,null!=t.heartbeatInterval&&this.setHeartbeatInterval(t.heartbeatInterval),this.setUUID(this._decideUUID(t.uuid));}t.default=l,e.exports=t.default;},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.default=void 0;t.default={PNNetworkUpCategory:"PNNetworkUpCategory",PNNetworkDownCategory:"PNNetworkDownCategory",PNNetworkIssuesCategory:"PNNetworkIssuesCategory",PNTimeoutCategory:"PNTimeoutCategory",PNBadRequestCategory:"PNBadRequestCategory",PNAccessDeniedCategory:"PNAccessDeniedCategory",PNUnknownCategory:"PNUnknownCategory",PNReconnectedCategory:"PNReconnectedCategory",PNConnectedCategory:"PNConnectedCategory",PNRequestMessageCountExceededCategory:"PNRequestMessageCountExceededCategory"},e.exports=t.default;},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.default=void 0;var r,i=(r=n(14))&&r.__esModule?r:{default:r};var s={createUUID:function(){return i.default.uuid?i.default.uuid():(0, i.default)()}};t.default=s,e.exports=t.default;},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.default=void 0;r(n(3));var u=r(n(7));function r(e){return e&&e.__esModule?e:{default:e}}function i(e,t){for(var n=0;n<t.length;n++){var r=t[n];r.enumerable=r.enumerable||!1,r.configurable=!0,"value"in r&&(r.writable=!0),Object.defineProperty(e,r.key,r);}}function s(e,t,n){return t in e?Object.defineProperty(e,t,{value:n,enumerable:!0,configurable:!0,writable:!0}):e[t]=n,e}var o,a,l=(o=f,(a=[{key:"HMACSHA256",value:function(e){return u.default.HmacSHA256(e,this._config.secretKey).toString(u.default.enc.Base64)}},{key:"SHA256",value:function(e){return u.default.SHA256(e).toString(u.default.enc.Hex)}},{key:"_parseOptions",value:function(e){var t=e||{};return t.hasOwnProperty("encryptKey")||(t.encryptKey=this._defaultOptions.encryptKey),t.hasOwnProperty("keyEncoding")||(t.keyEncoding=this._defaultOptions.keyEncoding),t.hasOwnProperty("keyLength")||(t.keyLength=this._defaultOptions.keyLength),t.hasOwnProperty("mode")||(t.mode=this._defaultOptions.mode),-1===this._allowedKeyEncodings.indexOf(t.keyEncoding.toLowerCase())&&(t.keyEncoding=this._defaultOptions.keyEncoding),-1===this._allowedKeyLengths.indexOf(parseInt(t.keyLength,10))&&(t.keyLength=this._defaultOptions.keyLength),-1===this._allowedModes.indexOf(t.mode.toLowerCase())&&(t.mode=this._defaultOptions.mode),t}},{key:"_decodeKey",value:function(e,t){return "base64"===t.keyEncoding?u.default.enc.Base64.parse(e):"hex"===t.keyEncoding?u.default.enc.Hex.parse(e):e}},{key:"_getPaddedKey",value:function(e,t){return e=this._decodeKey(e,t),t.encryptKey?u.default.enc.Utf8.parse(this.SHA256(e).slice(0,32)):e}},{key:"_getMode",value:function(e){return "ecb"===e.mode?u.default.mode.ECB:u.default.mode.CBC}},{key:"_getIV",value:function(e){return "cbc"===e.mode?u.default.enc.Utf8.parse(this._iv):null}},{key:"encrypt",value:function(e,t,n){return this._config.customEncrypt?this._config.customEncrypt(e):this.pnEncrypt(e,t,n)}},{key:"decrypt",value:function(e,t,n){return this._config.customDecrypt?this._config.customDecrypt(e):this.pnDecrypt(e,t,n)}},{key:"pnEncrypt",value:function(e,t,n){if(!t&&!this._config.cipherKey)return e;n=this._parseOptions(n);var r=this._getIV(n),i=this._getMode(n),s=this._getPaddedKey(t||this._config.cipherKey,n);return u.default.AES.encrypt(e,s,{iv:r,mode:i}).ciphertext.toString(u.default.enc.Base64)||e}},{key:"pnDecrypt",value:function(e,t,n){if(!t&&!this._config.cipherKey)return e;n=this._parseOptions(n);var r=this._getIV(n),i=this._getMode(n),s=this._getPaddedKey(t||this._config.cipherKey,n);try{var o=u.default.enc.Base64.parse(e),a=u.default.AES.decrypt({ciphertext:o},s,{iv:r,mode:i}).toString(u.default.enc.Utf8);return JSON.parse(a)}catch(e){return null}}}])&&i(o.prototype,a),f);function f(e){var t=e.config;!function(e,t){if(!(e instanceof t))throw new TypeError("Cannot call a class as a function")}(this,f),s(this,"_config",void 0),s(this,"_iv",void 0),s(this,"_allowedKeyEncodings",void 0),s(this,"_allowedKeyLengths",void 0),s(this,"_allowedModes",void 0),s(this,"_defaultOptions",void 0),this._config=t,this._iv="0123456789012345",this._allowedKeyEncodings=["hex","utf8","base64","binary"],this._allowedKeyLengths=[128,256],this._allowedModes=["ecb","cbc"],this._defaultOptions={encryptKey:!0,keyEncoding:"utf8",keyLength:256,mode:"cbc"};}t.default=l,e.exports=t.default;},function(e,t,n){var r,c,i,u,s,o,a,l,f,h,j=j||function(a){function n(){}var e={},t=e.lib={},r=t.Base={extend:function(e){n.prototype=this;var t=new n;return e&&t.mixIn(e),t.hasOwnProperty("init")||(t.init=function(){t.$super.init.apply(this,arguments);}),(t.init.prototype=t).$super=this,t},create:function(){var e=this.extend();return e.init.apply(e,arguments),e},init:function(){},mixIn:function(e){for(var t in e)e.hasOwnProperty(t)&&(this[t]=e[t]);e.hasOwnProperty("toString")&&(this.toString=e.toString);},clone:function(){return this.init.prototype.extend(this)}},u=t.WordArray=r.extend({init:function(e,t){e=this.words=e||[],this.sigBytes=null!=t?t:4*e.length;},toString:function(e){return (e||s).stringify(this)},concat:function(e){var t=this.words,n=e.words,r=this.sigBytes;if(e=e.sigBytes,this.clamp(),r%4)for(var i=0;i<e;i++)t[r+i>>>2]|=(n[i>>>2]>>>24-i%4*8&255)<<24-(r+i)%4*8;else if(65535<n.length)for(i=0;i<e;i+=4)t[r+i>>>2]=n[i>>>2];else t.push.apply(t,n);return this.sigBytes+=e,this},clamp:function(){var e=this.words,t=this.sigBytes;e[t>>>2]&=4294967295<<32-t%4*8,e.length=a.ceil(t/4);},clone:function(){var e=r.clone.call(this);return e.words=this.words.slice(0),e},random:function(e){for(var t=[],n=0;n<e;n+=4)t.push(4294967296*a.random()|0);return new u.init(t,e)}}),i=e.enc={},s=i.Hex={stringify:function(e){var t=e.words;e=e.sigBytes;for(var n=[],r=0;r<e;r++){var i=t[r>>>2]>>>24-r%4*8&255;n.push((i>>>4).toString(16)),n.push((15&i).toString(16));}return n.join("")},parse:function(e){for(var t=e.length,n=[],r=0;r<t;r+=2)n[r>>>3]|=parseInt(e.substr(r,2),16)<<24-r%8*4;return new u.init(n,t/2)}},o=i.Latin1={stringify:function(e){var t=e.words;e=e.sigBytes;for(var n=[],r=0;r<e;r++)n.push(String.fromCharCode(t[r>>>2]>>>24-r%4*8&255));return n.join("")},parse:function(e){for(var t=e.length,n=[],r=0;r<t;r++)n[r>>>2]|=(255&e.charCodeAt(r))<<24-r%4*8;return new u.init(n,t)}},c=i.Utf8={stringify:function(e){try{return decodeURIComponent(escape(o.stringify(e)))}catch(e){throw Error("Malformed UTF-8 data")}},parse:function(e){return o.parse(unescape(encodeURIComponent(e)))}},l=t.BufferedBlockAlgorithm=r.extend({reset:function(){this._data=new u.init,this._nDataBytes=0;},_append:function(e){"string"==typeof e&&(e=c.parse(e)),this._data.concat(e),this._nDataBytes+=e.sigBytes;},_process:function(e){var t=this._data,n=t.words,r=t.sigBytes,i=this.blockSize,s=r/(4*i);if(e=(s=e?a.ceil(s):a.max((0|s)-this._minBufferSize,0))*i,r=a.min(4*e,r),e){for(var o=0;o<e;o+=i)this._doProcessBlock(n,o);o=n.splice(0,e),t.sigBytes-=r;}return new u.init(o,r)},clone:function(){var e=r.clone.call(this);return e._data=this._data.clone(),e},_minBufferSize:0});t.Hasher=l.extend({cfg:r.extend(),init:function(e){this.cfg=this.cfg.extend(e),this.reset();},reset:function(){l.reset.call(this),this._doReset();},update:function(e){return this._append(e),this._process(),this},finalize:function(e){return e&&this._append(e),this._doFinalize()},blockSize:16,_createHelper:function(n){return function(e,t){return new n.init(t).finalize(e)}},_createHmacHelper:function(n){return function(e,t){return new f.HMAC.init(n,t).finalize(e)}}});var f=e.algo={};return e}(Math);!function(i){for(var e=j,t=(r=e.lib).WordArray,n=r.Hasher,r=e.algo,s=[],d=[],o=function(e){return 4294967296*(e-(0|e))|0},a=2,u=0;u<64;){var c;e:{c=a;for(var l=i.sqrt(c),f=2;f<=l;f++)if(!(c%f)){c=!1;break e}c=!0;}c&&(u<8&&(s[u]=o(i.pow(a,.5))),d[u]=o(i.pow(a,1/3)),u++),a++;}var g=[];r=r.SHA256=n.extend({_doReset:function(){this._hash=new t.init(s.slice(0));},_doProcessBlock:function(e,t){for(var n=this._hash.words,r=n[0],i=n[1],s=n[2],o=n[3],a=n[4],u=n[5],c=n[6],l=n[7],f=0;f<64;f++){if(f<16)g[f]=0|e[t+f];else {var h=g[f-15],p=g[f-2];g[f]=((h<<25|h>>>7)^(h<<14|h>>>18)^h>>>3)+g[f-7]+((p<<15|p>>>17)^(p<<13|p>>>19)^p>>>10)+g[f-16];}h=l+((a<<26|a>>>6)^(a<<21|a>>>11)^(a<<7|a>>>25))+(a&u^~a&c)+d[f]+g[f],p=((r<<30|r>>>2)^(r<<19|r>>>13)^(r<<10|r>>>22))+(r&i^r&s^i&s),l=c,c=u,u=a,a=o+h|0,o=s,s=i,i=r,r=h+p|0;}n[0]=n[0]+r|0,n[1]=n[1]+i|0,n[2]=n[2]+s|0,n[3]=n[3]+o|0,n[4]=n[4]+a|0,n[5]=n[5]+u|0,n[6]=n[6]+c|0,n[7]=n[7]+l|0;},_doFinalize:function(){var e=this._data,t=e.words,n=8*this._nDataBytes,r=8*e.sigBytes;return t[r>>>5]|=128<<24-r%32,t[14+(64+r>>>9<<4)]=i.floor(n/4294967296),t[15+(64+r>>>9<<4)]=n,e.sigBytes=4*t.length,this._process(),this._hash},clone:function(){var e=n.clone.call(this);return e._hash=this._hash.clone(),e}});e.SHA256=n._createHelper(r),e.HmacSHA256=n._createHmacHelper(r);}(Math),c=(r=j).enc.Utf8,r.algo.HMAC=r.lib.Base.extend({init:function(e,t){e=this._hasher=new e.init,"string"==typeof t&&(t=c.parse(t));var n=e.blockSize,r=4*n;t.sigBytes>r&&(t=e.finalize(t)),t.clamp();for(var i=this._oKey=t.clone(),s=this._iKey=t.clone(),o=i.words,a=s.words,u=0;u<n;u++)o[u]^=1549556828,a[u]^=909522486;i.sigBytes=s.sigBytes=r,this.reset();},reset:function(){var e=this._hasher;e.reset(),e.update(this._iKey);},update:function(e){return this._hasher.update(e),this},finalize:function(e){var t=this._hasher;return e=t.finalize(e),t.reset(),t.finalize(this._oKey.clone().concat(e))}}),u=(i=j).lib.WordArray,i.enc.Base64={stringify:function(e){var t=e.words,n=e.sigBytes,r=this._map;e.clamp(),e=[];for(var i=0;i<n;i+=3)for(var s=(t[i>>>2]>>>24-i%4*8&255)<<16|(t[i+1>>>2]>>>24-(i+1)%4*8&255)<<8|t[i+2>>>2]>>>24-(i+2)%4*8&255,o=0;o<4&&i+.75*o<n;o++)e.push(r.charAt(s>>>6*(3-o)&63));if(t=r.charAt(64))for(;e.length%4;)e.push(t);return e.join("")},parse:function(e){var t=e.length,n=this._map;!(r=n.charAt(64))||-1!=(r=e.indexOf(r))&&(t=r);for(var r=[],i=0,s=0;s<t;s++)if(s%4){var o=n.indexOf(e.charAt(s-1))<<s%4*2,a=n.indexOf(e.charAt(s))>>>6-s%4*2;r[i>>>2]|=(o|a)<<24-i%4*8,i++;}return u.create(r,i)},_map:"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/="},function(s){function O(e,t,n,r,i,s,o){return ((e=e+(t&n|~t&r)+i+o)<<s|e>>>32-s)+t}function T(e,t,n,r,i,s,o){return ((e=e+(t&r|n&~r)+i+o)<<s|e>>>32-s)+t}function S(e,t,n,r,i,s,o){return ((e=e+(t^n^r)+i+o)<<s|e>>>32-s)+t}function M(e,t,n,r,i,s,o){return ((e=e+(n^(t|~r))+i+o)<<s|e>>>32-s)+t}for(var e=j,t=(r=e.lib).WordArray,n=r.Hasher,r=e.algo,w=[],i=0;i<64;i++)w[i]=4294967296*s.abs(s.sin(i+1))|0;r=r.MD5=n.extend({_doReset:function(){this._hash=new t.init([1732584193,4023233417,2562383102,271733878]);},_doProcessBlock:function(e,t){for(var n=0;n<16;n++){var r=e[o=t+n];e[o]=16711935&(r<<8|r>>>24)|4278255360&(r<<24|r>>>8);}n=this._hash.words;var i,s,o=e[t+0],a=(r=e[t+1],e[t+2]),u=e[t+3],c=e[t+4],l=e[t+5],f=e[t+6],h=e[t+7],p=e[t+8],d=e[t+9],g=e[t+10],y=e[t+11],v=e[t+12],b=e[t+13],m=e[t+14],_=e[t+15],k=n[0],P=M(P=M(P=M(P=M(P=S(P=S(P=S(P=S(P=T(P=T(P=T(P=T(P=O(P=O(P=O(P=O(P=n[1],s=O(s=n[2],i=O(i=n[3],k=O(k,P,s,i,o,7,w[0]),P,s,r,12,w[1]),k,P,a,17,w[2]),i,k,u,22,w[3]),s=O(s,i=O(i,k=O(k,P,s,i,c,7,w[4]),P,s,l,12,w[5]),k,P,f,17,w[6]),i,k,h,22,w[7]),s=O(s,i=O(i,k=O(k,P,s,i,p,7,w[8]),P,s,d,12,w[9]),k,P,g,17,w[10]),i,k,y,22,w[11]),s=O(s,i=O(i,k=O(k,P,s,i,v,7,w[12]),P,s,b,12,w[13]),k,P,m,17,w[14]),i,k,_,22,w[15]),s=T(s,i=T(i,k=T(k,P,s,i,r,5,w[16]),P,s,f,9,w[17]),k,P,y,14,w[18]),i,k,o,20,w[19]),s=T(s,i=T(i,k=T(k,P,s,i,l,5,w[20]),P,s,g,9,w[21]),k,P,_,14,w[22]),i,k,c,20,w[23]),s=T(s,i=T(i,k=T(k,P,s,i,d,5,w[24]),P,s,m,9,w[25]),k,P,u,14,w[26]),i,k,p,20,w[27]),s=T(s,i=T(i,k=T(k,P,s,i,b,5,w[28]),P,s,a,9,w[29]),k,P,h,14,w[30]),i,k,v,20,w[31]),s=S(s,i=S(i,k=S(k,P,s,i,l,4,w[32]),P,s,p,11,w[33]),k,P,y,16,w[34]),i,k,m,23,w[35]),s=S(s,i=S(i,k=S(k,P,s,i,r,4,w[36]),P,s,c,11,w[37]),k,P,h,16,w[38]),i,k,g,23,w[39]),s=S(s,i=S(i,k=S(k,P,s,i,b,4,w[40]),P,s,o,11,w[41]),k,P,u,16,w[42]),i,k,f,23,w[43]),s=S(s,i=S(i,k=S(k,P,s,i,d,4,w[44]),P,s,v,11,w[45]),k,P,_,16,w[46]),i,k,a,23,w[47]),s=M(s,i=M(i,k=M(k,P,s,i,o,6,w[48]),P,s,h,10,w[49]),k,P,m,15,w[50]),i,k,l,21,w[51]),s=M(s,i=M(i,k=M(k,P,s,i,v,6,w[52]),P,s,u,10,w[53]),k,P,g,15,w[54]),i,k,r,21,w[55]),s=M(s,i=M(i,k=M(k,P,s,i,p,6,w[56]),P,s,_,10,w[57]),k,P,f,15,w[58]),i,k,b,21,w[59]),s=M(s,i=M(i,k=M(k,P,s,i,c,6,w[60]),P,s,y,10,w[61]),k,P,a,15,w[62]),i,k,d,21,w[63]);n[0]=n[0]+k|0,n[1]=n[1]+P|0,n[2]=n[2]+s|0,n[3]=n[3]+i|0;},_doFinalize:function(){var e=this._data,t=e.words,n=8*this._nDataBytes,r=8*e.sigBytes;t[r>>>5]|=128<<24-r%32;var i=s.floor(n/4294967296);for(t[15+(r+64>>>9<<4)]=16711935&(i<<8|i>>>24)|4278255360&(i<<24|i>>>8),t[14+(r+64>>>9<<4)]=16711935&(n<<8|n>>>24)|4278255360&(n<<24|n>>>8),e.sigBytes=4*(t.length+1),this._process(),t=(e=this._hash).words,n=0;n<4;n++)r=t[n],t[n]=16711935&(r<<8|r>>>24)|4278255360&(r<<24|r>>>8);return e},clone:function(){var e=n.clone.call(this);return e._hash=this._hash.clone(),e}}),e.MD5=n._createHelper(r),e.HmacMD5=n._createHmacHelper(r);}(Math),a=(s=(o=j).lib).Base,l=s.WordArray,f=(s=o.algo).EvpKDF=a.extend({cfg:a.extend({keySize:4,hasher:s.MD5,iterations:1}),init:function(e){this.cfg=this.cfg.extend(e);},compute:function(e,t){for(var n=(o=this.cfg).hasher.create(),r=l.create(),i=r.words,s=o.keySize,o=o.iterations;i.length<s;){a&&n.update(a);var a=n.update(e).finalize(t);n.reset();for(var u=1;u<o;u++)a=n.finalize(a),n.reset();r.concat(a);}return r.sigBytes=4*s,r}}),o.EvpKDF=function(e,t,n){return f.create(n).compute(e,t)},j.lib.Cipher||function(){var e=(h=j).lib,t=e.Base,o=e.WordArray,n=e.BufferedBlockAlgorithm,r=h.enc.Base64,i=h.algo.EvpKDF,s=e.Cipher=n.extend({cfg:t.extend(),createEncryptor:function(e,t){return this.create(this._ENC_XFORM_MODE,e,t)},createDecryptor:function(e,t){return this.create(this._DEC_XFORM_MODE,e,t)},init:function(e,t,n){this.cfg=this.cfg.extend(n),this._xformMode=e,this._key=t,this.reset();},reset:function(){n.reset.call(this),this._doReset();},process:function(e){return this._append(e),this._process()},finalize:function(e){return e&&this._append(e),this._doFinalize()},keySize:4,ivSize:4,_ENC_XFORM_MODE:1,_DEC_XFORM_MODE:2,_createHelper:function(r){return {encrypt:function(e,t,n){return ("string"==typeof t?p:f).encrypt(r,e,t,n)},decrypt:function(e,t,n){return ("string"==typeof t?p:f).decrypt(r,e,t,n)}}}});e.StreamCipher=s.extend({_doFinalize:function(){return this._process(!0)},blockSize:1});function a(e,t,n){var r=this._iv;r?this._iv=void 0:r=this._prevBlock;for(var i=0;i<n;i++)e[t+i]^=r[i];}var u=h.mode={},c=(e.BlockCipherMode=t.extend({createEncryptor:function(e,t){return this.Encryptor.create(e,t)},createDecryptor:function(e,t){return this.Decryptor.create(e,t)},init:function(e,t){this._cipher=e,this._iv=t;}})).extend();c.Encryptor=c.extend({processBlock:function(e,t){var n=this._cipher,r=n.blockSize;a.call(this,e,t,r),n.encryptBlock(e,t),this._prevBlock=e.slice(t,t+r);}}),c.Decryptor=c.extend({processBlock:function(e,t){var n=this._cipher,r=n.blockSize,i=e.slice(t,t+r);n.decryptBlock(e,t),a.call(this,e,t,r),this._prevBlock=i;}}),u=u.CBC=c,c=(h.pad={}).Pkcs7={pad:function(e,t){for(var n,r=(n=(n=4*t)-e.sigBytes%n)<<24|n<<16|n<<8|n,i=[],s=0;s<n;s+=4)i.push(r);n=o.create(i,n),e.concat(n);},unpad:function(e){e.sigBytes-=255&e.words[e.sigBytes-1>>>2];}},e.BlockCipher=s.extend({cfg:s.cfg.extend({mode:u,padding:c}),reset:function(){s.reset.call(this);var e=(t=this.cfg).iv,t=t.mode;if(this._xformMode==this._ENC_XFORM_MODE)var n=t.createEncryptor;else n=t.createDecryptor,this._minBufferSize=1;this._mode=n.call(t,this,e&&e.words);},_doProcessBlock:function(e,t){this._mode.processBlock(e,t);},_doFinalize:function(){var e=this.cfg.padding;if(this._xformMode==this._ENC_XFORM_MODE){e.pad(this._data,this.blockSize);var t=this._process(!0);}else t=this._process(!0),e.unpad(t);return t},blockSize:4});var l=e.CipherParams=t.extend({init:function(e){this.mixIn(e);},toString:function(e){return (e||this.formatter).stringify(this)}}),f=(u=(h.format={}).OpenSSL={stringify:function(e){var t=e.ciphertext;return ((e=e.salt)?o.create([1398893684,1701076831]).concat(e).concat(t):t).toString(r)},parse:function(e){var t=(e=r.parse(e)).words;if(1398893684==t[0]&&1701076831==t[1]){var n=o.create(t.slice(2,4));t.splice(0,4),e.sigBytes-=16;}return l.create({ciphertext:e,salt:n})}},e.SerializableCipher=t.extend({cfg:t.extend({format:u}),encrypt:function(e,t,n,r){r=this.cfg.extend(r);var i=e.createEncryptor(n,r);return t=i.finalize(t),i=i.cfg,l.create({ciphertext:t,key:n,iv:i.iv,algorithm:e,mode:i.mode,padding:i.padding,blockSize:e.blockSize,formatter:r.format})},decrypt:function(e,t,n,r){return r=this.cfg.extend(r),t=this._parse(t,r.format),e.createDecryptor(n,r).finalize(t.ciphertext)},_parse:function(e,t){return "string"==typeof e?t.parse(e,this):e}})),h=(h.kdf={}).OpenSSL={execute:function(e,t,n,r){return r=r||o.random(8),e=i.create({keySize:t+n}).compute(e,r),n=o.create(e.words.slice(t),4*n),e.sigBytes=4*t,l.create({key:e,iv:n,salt:r})}},p=e.PasswordBasedCipher=f.extend({cfg:f.cfg.extend({kdf:h}),encrypt:function(e,t,n,r){return n=(r=this.cfg.extend(r)).kdf.execute(n,e.keySize,e.ivSize),r.iv=n.iv,(e=f.encrypt.call(this,e,t,n.key,r)).mixIn(n),e},decrypt:function(e,t,n,r){return r=this.cfg.extend(r),t=this._parse(t,r.format),n=r.kdf.execute(n,e.keySize,e.ivSize,t.salt),r.iv=n.iv,f.decrypt.call(this,e,t,n.key,r)}});}(),function(){for(var e=j,t=e.lib.BlockCipher,n=e.algo,o=[],r=[],i=[],s=[],a=[],u=[],c=[],l=[],f=[],h=[],p=[],d=0;d<256;d++)p[d]=d<128?d<<1:d<<1^283;var g=0,y=0;for(d=0;d<256;d++){var v=(v=y^y<<1^y<<2^y<<3^y<<4)>>>8^255&v^99;o[g]=v;var b=p[r[v]=g],m=p[b],_=p[m],k=257*p[v]^16843008*v;i[g]=k<<24|k>>>8,s[g]=k<<16|k>>>16,a[g]=k<<8|k>>>24,u[g]=k,k=16843009*_^65537*m^257*b^16843008*g,c[v]=k<<24|k>>>8,l[v]=k<<16|k>>>16,f[v]=k<<8|k>>>24,h[v]=k,g?(g=b^p[p[p[_^b]]],y^=p[p[y]]):g=y=1;}var P=[0,1,2,4,8,16,32,64,128,27,54];n=n.AES=t.extend({_doReset:function(){for(var e=(n=this._key).words,t=n.sigBytes/4,n=4*((this._nRounds=t+6)+1),r=this._keySchedule=[],i=0;i<n;i++)if(i<t)r[i]=e[i];else {var s=r[i-1];i%t?6<t&&4==i%t&&(s=o[s>>>24]<<24|o[s>>>16&255]<<16|o[s>>>8&255]<<8|o[255&s]):(s=o[(s=s<<8|s>>>24)>>>24]<<24|o[s>>>16&255]<<16|o[s>>>8&255]<<8|o[255&s],s^=P[i/t|0]<<24),r[i]=r[i-t]^s;}for(e=this._invKeySchedule=[],t=0;t<n;t++)i=n-t,s=t%4?r[i]:r[i-4],e[t]=t<4||i<=4?s:c[o[s>>>24]]^l[o[s>>>16&255]]^f[o[s>>>8&255]]^h[o[255&s]];},encryptBlock:function(e,t){this._doCryptBlock(e,t,this._keySchedule,i,s,a,u,o);},decryptBlock:function(e,t){var n=e[t+1];e[t+1]=e[t+3],e[t+3]=n,this._doCryptBlock(e,t,this._invKeySchedule,c,l,f,h,r),n=e[t+1],e[t+1]=e[t+3],e[t+3]=n;},_doCryptBlock:function(e,t,n,r,i,s,o,a){for(var u=this._nRounds,c=e[t]^n[0],l=e[t+1]^n[1],f=e[t+2]^n[2],h=e[t+3]^n[3],p=4,d=1;d<u;d++){var g=r[c>>>24]^i[l>>>16&255]^s[f>>>8&255]^o[255&h]^n[p++],y=r[l>>>24]^i[f>>>16&255]^s[h>>>8&255]^o[255&c]^n[p++],v=r[f>>>24]^i[h>>>16&255]^s[c>>>8&255]^o[255&l]^n[p++];h=r[h>>>24]^i[c>>>16&255]^s[l>>>8&255]^o[255&f]^n[p++],c=g,l=y,f=v;}g=(a[c>>>24]<<24|a[l>>>16&255]<<16|a[f>>>8&255]<<8|a[255&h])^n[p++],y=(a[l>>>24]<<24|a[f>>>16&255]<<16|a[h>>>8&255]<<8|a[255&c])^n[p++],v=(a[f>>>24]<<24|a[h>>>16&255]<<16|a[c>>>8&255]<<8|a[255&l])^n[p++],h=(a[h>>>24]<<24|a[c>>>16&255]<<16|a[l>>>8&255]<<8|a[255&f])^n[p++],e[t]=g,e[t+1]=y,e[t+2]=v,e[t+3]=h;},keySize:8});e.AES=t._createHelper(n);}(),j.mode.ECB=((h=j.lib.BlockCipherMode.extend()).Encryptor=h.extend({processBlock:function(e,t){this._cipher.encryptBlock(e,t);}}),h.Decryptor=h.extend({processBlock:function(e,t){this._cipher.decryptBlock(e,t);}}),h),e.exports=j;},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.default=void 0;n(0);var r,i=(r=n(4))&&r.__esModule?r:{default:r};function s(e,t){for(var n=0;n<t.length;n++){var r=t[n];r.enumerable=r.enumerable||!1,r.configurable=!0,"value"in r&&(r.writable=!0),Object.defineProperty(e,r.key,r);}}var o,a,c=(o=l,(a=[{key:"addListener",value:function(e){this._listeners.push(e);}},{key:"removeListener",value:function(t){var n=[];this._listeners.forEach(function(e){e!==t&&n.push(e);}),this._listeners=n;}},{key:"removeAllListeners",value:function(){this._listeners=[];}},{key:"announcePresence",value:function(t){this._listeners.forEach(function(e){e.presence&&e.presence(t);});}},{key:"announceStatus",value:function(t){this._listeners.forEach(function(e){e.status&&e.status(t);});}},{key:"announceMessage",value:function(t){this._listeners.forEach(function(e){e.message&&e.message(t);});}},{key:"announceSignal",value:function(t){this._listeners.forEach(function(e){e.signal&&e.signal(t);});}},{key:"announceMessageAction",value:function(t){this._listeners.forEach(function(e){e.messageAction&&e.messageAction(t);});}},{key:"announceUser",value:function(t){this._listeners.forEach(function(e){e.user&&e.user(t);});}},{key:"announceSpace",value:function(t){this._listeners.forEach(function(e){e.space&&e.space(t);});}},{key:"announceMembership",value:function(t){this._listeners.forEach(function(e){e.membership&&e.membership(t);});}},{key:"announceNetworkUp",value:function(){var e={};e.category=i.default.PNNetworkUpCategory,this.announceStatus(e);}},{key:"announceNetworkDown",value:function(){var e={};e.category=i.default.PNNetworkDownCategory,this.announceStatus(e);}}])&&s(o.prototype,a),l);function l(){!function(e,t){if(!(e instanceof t))throw new TypeError("Cannot call a class as a function")}(this,l),function(e,t,n){t in e?Object.defineProperty(e,t,{value:n,enumerable:!0,configurable:!0,writable:!0}):e[t]=n;}(this,"_listeners",void 0),this._listeners=[];}t.default=c,e.exports=t.default;},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNTimeOperation},t.getURL=function(){return "/time/0"},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.prepareParams=function(){return {}},t.isAuthSupported=function(){return !1},t.handleResponse=function(e,t){return {timetoken:t[0]}},t.validateParams=function(){};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){e.exports=function(e){return null!==e&&"object"==typeof e};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.default=void 0;var i=l(n(12)),r=l(n(13)),s=l(n(68)),a=l(n(7)),o=l(n(69)),u=l(n(70)),c=n(71);n(0);function l(e){return e&&e.__esModule?e:{default:e}}function f(e,t){return !t||"object"!==d(t)&&"function"!=typeof t?function(e){if(void 0!==e)return e;throw new ReferenceError("this hasn't been initialised - super() hasn't been called")}(e):t}function h(e){return (h=Object.setPrototypeOf?Object.getPrototypeOf:function(e){return e.__proto__||Object.getPrototypeOf(e)})(e)}function p(e,t){return (p=Object.setPrototypeOf||function(e,t){return e.__proto__=t,e})(e,t)}function d(e){return (d="function"==typeof Symbol&&"symbol"==typeof Symbol.iterator?function(e){return typeof e}:function(e){return e&&"function"==typeof Symbol&&e.constructor===Symbol&&e!==Symbol.prototype?"symbol":typeof e})(e)}function g(e){if(!navigator||!navigator.sendBeacon)return !1;navigator.sendBeacon(e);}function y(e){for(var t=a.default.enc.Base64.parse(e).words,n=new ArrayBuffer(4*t.length),r=new Uint8Array(n),i=0;i<t.length;i+=1){var s=t[i],o=4*i;r[o]=(4278190080&s)>>24,r[1+o]=(16711680&s)>>16,r[2+o]=(65280&s)>>8,r[3+o]=255&s;}return r.buffer}function v(i){function s(e){return e&&"object"===d(e)&&e.constructor===Object}if(!s(i))return i;var o={};return Object.keys(i).forEach(function(e){var t=function(e){return "string"==typeof e||e instanceof String}(e),n=e,r=i[e];Array.isArray(e)||t&&0<=e.indexOf(",")?n=(t?e.split(","):e).reduce(function(e,t){return e+=String.fromCharCode(t)},""):(function(e){return "number"==typeof e&&isFinite(e)}(e)||t&&!isNaN(e))&&(n=String.fromCharCode(t?parseInt(e,10):10));o[n]=s(r)?v(r):r;}),o}var b=(function(e,t){if("function"!=typeof t&&null!==t)throw new TypeError("Super expression must either be null or a function");e.prototype=Object.create(t&&t.prototype,{constructor:{value:e,writable:!0,configurable:!0}}),t&&p(e,t);}(m,r.default),m);function m(e){var t;!function(e,t){if(!(e instanceof t))throw new TypeError("Cannot call a class as a function")}(this,m);var n=e.listenToBrowserNetworkEvents,r=void 0===n||n;return e.db=o.default,e.sdkFamily="Web",e.networking=new s.default({del:c.del,get:c.get,post:c.post,patch:c.patch,sendBeacon:g}),e.cbor=new u.default(function(e){return v(i.default.decode(e))},y),t=f(this,h(m).call(this,e)),r&&(window.addEventListener("offline",function(){t.networkDownDetected();}),window.addEventListener("online",function(){t.networkUpDetected();})),t}t.default=b,e.exports=t.default;},function(t,n,r){var s,o;!function(e,S){var M=Math.pow(2,-24),i=Math.pow(2,32),g=Math.pow(2,53);(o="function"==typeof(s={encode:function(e){var o,a=new ArrayBuffer(256),u=new DataView(a),c=0;function l(e){for(var t=a.byteLength,n=c+e;t<n;)t*=2;if(t!==a.byteLength){var r=u;a=new ArrayBuffer(t),u=new DataView(a);for(var i=c+3>>2,s=0;s<i;++s)u.setUint32(4*s,r.getUint32(4*s));}return o=e,u}function f(){c+=o;}function h(e){f(l(1).setUint8(c,e));}function p(e){for(var t=l(e.length),n=0;n<e.length;++n)t.setUint8(c+n,e[n]);f();}function d(e,t){t<24?h(e<<5|t):t<256?(h(e<<5|24),h(t)):t<65536?(h(e<<5|25),function(e){f(l(2).setUint16(c,e));}(t)):t<4294967296?(h(e<<5|26),function(e){f(l(4).setUint32(c,e));}(t)):(h(e<<5|27),function(e){var t=e%i,n=(e-t)/i,r=l(8);r.setUint32(c,n),r.setUint32(c+4,t),f();}(t));}if(function e(t){var n;if(!1===t)return h(244);if(!0===t)return h(245);if(null===t)return h(246);if(t===S)return h(247);switch(typeof t){case"number":if(Math.floor(t)===t){if(0<=t&&t<=g)return d(0,t);if(-g<=t&&t<0)return d(1,-(t+1))}return h(251),function(e){f(l(8).setFloat64(c,e));}(t);case"string":var r=[];for(n=0;n<t.length;++n){var i=t.charCodeAt(n);i<128?r.push(i):(i<2048?r.push(192|i>>6):(i<55296?r.push(224|i>>12):(i=(1023&i)<<10,i|=1023&t.charCodeAt(++n),i+=65536,r.push(240|i>>18),r.push(128|i>>12&63)),r.push(128|i>>6&63)),r.push(128|63&i));}return d(3,r.length),p(r);default:var s;if(Array.isArray(t))for(d(4,s=t.length),n=0;n<s;++n)e(t[n]);else if(t instanceof Uint8Array)d(2,t.length),p(t);else {var o=Object.keys(t);for(d(5,s=o.length),n=0;n<s;++n){var a=o[n];e(a),e(t[a]);}}}}(e),"slice"in a)return a.slice(0,c);for(var t=new ArrayBuffer(c),n=new DataView(t),r=0;r<c;++r)n.setUint8(r,u.getUint8(r));return t},decode:function(t,p,d){var g=new DataView(t),y=0;function v(e,t){return y+=t,e}function b(e){return v(new Uint8Array(t,y,e),e)}function m(){return v(g.getUint8(y),1)}function _(){return v(g.getUint16(y),2)}function n(){return v(g.getUint32(y),4)}function k(){return 255===g.getUint8(y)&&(y+=1,!0)}function P(e){if(e<24)return e;if(24===e)return m();if(25===e)return _();if(26===e)return n();if(27===e)return n()*i+n();if(31===e)return -1;throw "Invalid length encoding"}function O(e){var t=m();if(255===t)return -1;var n=P(31&t);if(n<0||t>>5!==e)throw "Invalid indefinite length element";return n}function T(e,t){for(var n=0;n<t;++n){var r=m();128&r&&(r<224?(r=(31&r)<<6|63&m(),t-=1):r<240?(r=(15&r)<<12|(63&m())<<6|63&m(),t-=2):(r=(15&r)<<18|(63&m())<<12|(63&m())<<6|63&m(),t-=3)),r<65536?e.push(r):(r-=65536,e.push(55296|r>>10),e.push(56320|1023&r));}}"function"!=typeof p&&(p=function(e){return e}),"function"!=typeof d&&(d=function(){return S});var e=function e(){var t,n,r=m(),i=r>>5,s=31&r;if(7==i)switch(s){case 25:return function(){var e=new ArrayBuffer(4),t=new DataView(e),n=_(),r=32768&n,i=31744&n,s=1023&n;if(31744===i)i=261120;else if(0!==i)i+=114688;else if(0!=s)return s*M;return t.setUint32(0,r<<16|i<<13|s<<13),t.getFloat32(0)}();case 26:return v(g.getFloat32(y),4);case 27:return v(g.getFloat64(y),8)}if((n=P(s))<0&&(i<2||6<i))throw "Invalid length";switch(i){case 0:return n;case 1:return -1-n;case 2:if(n<0){for(var o=[],a=0;0<=(n=O(i));)a+=n,o.push(b(n));var u=new Uint8Array(a),c=0;for(t=0;t<o.length;++t)u.set(o[t],c),c+=o[t].length;return u}return b(n);case 3:var l=[];if(n<0)for(;0<=(n=O(i));)T(l,n);else T(l,n);return String.fromCharCode.apply(null,l);case 4:var f;if(n<0)for(f=[];!k();)f.push(e());else for(f=new Array(n),t=0;t<n;++t)f[t]=e();return f;case 5:var h={};for(t=0;t<n||n<0&&!k();++t)h[e()]=e();return h;case 6:return p(e(),n);case 7:switch(n){case 20:return !1;case 21:return !0;case 22:return null;case 23:return S;default:return d(n)}}}();if(y!==t.byteLength)throw "Remaining bytes";return e}})?s.call(n,r,n,t):s)===S||(t.exports=o);}();},function(e,t,n){function o(e){return (o="function"==typeof Symbol&&"symbol"==typeof Symbol.iterator?function(e){return typeof e}:function(e){return e&&"function"==typeof Symbol&&e.constructor===Symbol&&e!==Symbol.prototype?"symbol":typeof e})(e)}Object.defineProperty(t,"__esModule",{value:!0}),t.default=void 0;var y=l(n(3)),v=l(n(6)),b=l(n(15)),m=l(n(18)),r=l(n(19)),_=l(n(8)),k=l(n(20)),P=l(n(21)),O=c(n(22)),T=c(n(23)),S=c(n(24)),M=c(n(25)),w=c(n(26)),j=c(n(27)),C=c(n(28)),N=c(n(29)),E=c(n(30)),A=c(n(31)),R=c(n(32)),x=c(n(33)),U=c(n(34)),K=c(n(35)),D=c(n(36)),I=c(n(37)),G=c(n(38)),L=c(n(39)),F=c(n(40)),H=c(n(41)),q=c(n(42)),B=c(n(43)),z=c(n(44)),W=c(n(45)),X=c(n(46)),V=c(n(47)),J=c(n(48)),$=c(n(49)),Q=c(n(50)),Y=c(n(51)),Z=c(n(52)),ee=c(n(53)),te=c(n(54)),ne=c(n(55)),re=c(n(56)),ie=c(n(57)),se=c(n(58)),oe=c(n(59)),ae=c(n(60)),ue=c(n(61)),ce=c(n(62)),le=c(n(63)),fe=c(n(64)),he=c(n(65)),pe=c(n(66)),de=c(n(9)),ge=c(n(67)),i=l(n(1)),s=l(n(4)),a=(n(0),l(n(5)));function u(){if("function"!=typeof WeakMap)return null;var e=new WeakMap;return u=function(){return e},e}function c(e){if(e&&e.__esModule)return e;if(null===e||"object"!==o(e)&&"function"!=typeof e)return {default:e};var t=u();if(t&&t.has(e))return t.get(e);var n={},r=Object.defineProperty&&Object.getOwnPropertyDescriptor;for(var i in e)if(Object.prototype.hasOwnProperty.call(e,i)){var s=r?Object.getOwnPropertyDescriptor(e,i):null;s&&(s.get||s.set)?Object.defineProperty(n,i,s):n[i]=e[i];}return n.default=e,t&&t.set(e,n),n}function l(e){return e&&e.__esModule?e:{default:e}}function f(e,t){for(var n=0;n<t.length;n++){var r=t[n];r.enumerable=r.enumerable||!1,r.configurable=!0,"value"in r&&(r.writable=!0),Object.defineProperty(e,r.key,r);}}function ye(e,t,n){return t in e?Object.defineProperty(e,t,{value:n,enumerable:!0,configurable:!0,writable:!0}):e[t]=n,e}var h,p,d,g=(h=ve,d=[{key:"notificationPayload",value:function(e,t){return new r.default(e,t)}},{key:"generateUUID",value:function(){return a.default.createUUID()}}],(p=[{key:"getVersion",value:function(){return this._config.getVersion()}},{key:"_addPnsdkSuffix",value:function(e,t){this._config._addPnsdkSuffix(e,t);}},{key:"networkDownDetected",value:function(){this._listenerManager.announceNetworkDown(),this._config.restore?this.disconnect():this.destroy(!0);}},{key:"networkUpDetected",value:function(){this._listenerManager.announceNetworkUp(),this.reconnect();}}])&&f(h.prototype,p),void(d&&f(h,d)),ve);function ve(e){var n=this;!function(e,t){if(!(e instanceof t))throw new TypeError("Cannot call a class as a function")}(this,ve),ye(this,"_config",void 0),ye(this,"_telemetryManager",void 0),ye(this,"_listenerManager",void 0),ye(this,"_tokenManager",void 0),ye(this,"time",void 0),ye(this,"publish",void 0),ye(this,"fire",void 0),ye(this,"history",void 0),ye(this,"deleteMessages",void 0),ye(this,"messageCounts",void 0),ye(this,"fetchMessages",void 0),ye(this,"channelGroups",void 0),ye(this,"push",void 0),ye(this,"hereNow",void 0),ye(this,"whereNow",void 0),ye(this,"getState",void 0),ye(this,"setState",void 0),ye(this,"grant",void 0),ye(this,"grantToken",void 0),ye(this,"audit",void 0),ye(this,"subscribe",void 0),ye(this,"signal",void 0),ye(this,"presence",void 0),ye(this,"unsubscribe",void 0),ye(this,"unsubscribeAll",void 0),ye(this,"addMessageAction",void 0),ye(this,"removeMessageAction",void 0),ye(this,"getMessageActions",void 0),ye(this,"createUser",void 0),ye(this,"updateUser",void 0),ye(this,"deleteUser",void 0),ye(this,"getUser",void 0),ye(this,"getUsers",void 0),ye(this,"createSpace",void 0),ye(this,"updateSpace",void 0),ye(this,"deleteSpace",void 0),ye(this,"getSpaces",void 0),ye(this,"getSpace",void 0),ye(this,"getMembers",void 0),ye(this,"addMembers",void 0),ye(this,"updateMembers",void 0),ye(this,"removeMembers",void 0),ye(this,"getMemberships",void 0),ye(this,"joinSpaces",void 0),ye(this,"updateMemberships",void 0),ye(this,"leaveSpaces",void 0),ye(this,"disconnect",void 0),ye(this,"reconnect",void 0),ye(this,"destroy",void 0),ye(this,"stop",void 0),ye(this,"getSubscribedChannels",void 0),ye(this,"getSubscribedChannelGroups",void 0),ye(this,"addListener",void 0),ye(this,"removeListener",void 0),ye(this,"removeAllListeners",void 0),ye(this,"parseToken",void 0),ye(this,"setToken",void 0),ye(this,"setTokens",void 0),ye(this,"getToken",void 0),ye(this,"getTokens",void 0),ye(this,"clearTokens",void 0),ye(this,"getAuthKey",void 0),ye(this,"setAuthKey",void 0),ye(this,"setCipherKey",void 0),ye(this,"setUUID",void 0),ye(this,"getUUID",void 0),ye(this,"getFilterExpression",void 0),ye(this,"setFilterExpression",void 0),ye(this,"setHeartbeatInterval",void 0),ye(this,"setProxy",void 0),ye(this,"encrypt",void 0),ye(this,"decrypt",void 0);var t=e.db,r=e.networking,i=e.cbor,s=this._config=new y.default({setup:e,db:t}),o=new v.default({config:s});r.init(s);var a=this._tokenManager=new k.default(s,i),u={config:s,networking:r,crypto:o,tokenManager:a,telemetryManager:this._telemetryManager=new m.default({maximumSamplesCount:6e4})},c=P.default.bind(this,u,de),l=P.default.bind(this,u,A),f=P.default.bind(this,u,x),h=P.default.bind(this,u,K),p=P.default.bind(this,u,ge),d=this._listenerManager=new _.default,g=new b.default({timeEndpoint:c,leaveEndpoint:l,heartbeatEndpoint:f,setStateEndpoint:h,subscribeEndpoint:p,crypto:u.crypto,config:u.config,listenerManager:d});this.addListener=d.addListener.bind(d),this.removeListener=d.removeListener.bind(d),this.removeAllListeners=d.removeAllListeners.bind(d),this.parseToken=a.parseToken.bind(a),this.setToken=a.setToken.bind(a),this.setTokens=a.setTokens.bind(a),this.getToken=a.getToken.bind(a),this.getTokens=a.getTokens.bind(a),this.clearTokens=a.clearTokens.bind(a),this.channelGroups={listGroups:P.default.bind(this,u,M),listChannels:P.default.bind(this,u,w),addChannels:P.default.bind(this,u,O),removeChannels:P.default.bind(this,u,T),deleteGroup:P.default.bind(this,u,S)},this.push={addChannels:P.default.bind(this,u,j),removeChannels:P.default.bind(this,u,C),deleteDevice:P.default.bind(this,u,E),listChannels:P.default.bind(this,u,N)},this.hereNow=P.default.bind(this,u,D),this.whereNow=P.default.bind(this,u,R),this.getState=P.default.bind(this,u,U),this.setState=g.adaptStateChange.bind(g),this.grant=P.default.bind(this,u,oe),this.grantToken=P.default.bind(this,u,ae),this.audit=P.default.bind(this,u,se),this.publish=P.default.bind(this,u,ue),this.fire=function(e,t){return e.replicate=!1,e.storeInHistory=!1,n.publish(e,t)},this.signal=P.default.bind(this,u,ce),this.history=P.default.bind(this,u,le),this.deleteMessages=P.default.bind(this,u,fe),this.messageCounts=P.default.bind(this,u,he),this.fetchMessages=P.default.bind(this,u,pe),this.addMessageAction=P.default.bind(this,u,I),this.removeMessageAction=P.default.bind(this,u,G),this.getMessageActions=P.default.bind(this,u,L),this.createUser=P.default.bind(this,u,F),this.updateUser=P.default.bind(this,u,H),this.deleteUser=P.default.bind(this,u,q),this.getUser=P.default.bind(this,u,B),this.getUsers=P.default.bind(this,u,z),this.createSpace=P.default.bind(this,u,W),this.updateSpace=P.default.bind(this,u,X),this.deleteSpace=P.default.bind(this,u,V),this.getSpaces=P.default.bind(this,u,J),this.getSpace=P.default.bind(this,u,$),this.addMembers=P.default.bind(this,u,Y),this.updateMembers=P.default.bind(this,u,Z),this.removeMembers=P.default.bind(this,u,ee),this.getMembers=P.default.bind(this,u,Q),this.getMemberships=P.default.bind(this,u,te),this.joinSpaces=P.default.bind(this,u,re),this.updateMemberships=P.default.bind(this,u,ne),this.leaveSpaces=P.default.bind(this,u,ie),this.time=c,this.subscribe=g.adaptSubscribeChange.bind(g),this.presence=g.adaptPresenceChange.bind(g),this.unsubscribe=g.adaptUnsubscribeChange.bind(g),this.disconnect=g.disconnect.bind(g),this.reconnect=g.reconnect.bind(g),this.destroy=function(e){g.unsubscribeAll(e),g.disconnect();},this.stop=this.destroy,this.unsubscribeAll=g.unsubscribeAll.bind(g),this.getSubscribedChannels=g.getSubscribedChannels.bind(g),this.getSubscribedChannelGroups=g.getSubscribedChannelGroups.bind(g),this.encrypt=o.encrypt.bind(o),this.decrypt=o.decrypt.bind(o),this.getAuthKey=u.config.getAuthKey.bind(u.config),this.setAuthKey=u.config.setAuthKey.bind(u.config),this.setCipherKey=u.config.setCipherKey.bind(u.config),this.getUUID=u.config.getUUID.bind(u.config),this.setUUID=u.config.setUUID.bind(u.config),this.getFilterExpression=u.config.getFilterExpression.bind(u.config),this.setFilterExpression=u.config.setFilterExpression.bind(u.config),this.setHeartbeatInterval=u.config.setHeartbeatInterval.bind(u.config),r.hasModule("proxy")&&(this.setProxy=function(e){u.config.setProxy(e),n.reconnect();});}ye(t.default=g,"OPERATIONS",i.default),ye(g,"CATEGORIES",s.default),e.exports=t.default;},function(e,t,n){var r,i,s;i=[t],void 0===(s="function"==typeof(r=function(e){var r={3:/^[0-9A-F]{8}-[0-9A-F]{4}-3[0-9A-F]{3}-[0-9A-F]{4}-[0-9A-F]{12}$/i,4:/^[0-9A-F]{8}-[0-9A-F]{4}-4[0-9A-F]{3}-[89AB][0-9A-F]{3}-[0-9A-F]{12}$/i,5:/^[0-9A-F]{8}-[0-9A-F]{4}-5[0-9A-F]{3}-[89AB][0-9A-F]{3}-[0-9A-F]{12}$/i,all:/^[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}$/i};function t(){var e,t,n="";for(e=0;e<32;e++)t=16*Math.random()|0,8!==e&&12!==e&&16!==e&&20!==e||(n+="-"),n+=(12===e?4:16===e?3&t|8:t).toString(16);return n}function n(e,t){var n=r[t||"all"];return n&&n.test(e)||!1}t.isUUID=n,t.VERSION="0.1.0",e.uuid=t,e.isUUID=n;})?r.apply(t,i):r)||(e.exports=s);},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.default=void 0;r(n(6)),r(n(3)),r(n(8));var c=r(n(16)),l=r(n(17)),f=r(n(2)),a=(n(0),r(n(4)));function r(e){return e&&e.__esModule?e:{default:e}}function i(e,t){for(var n=0;n<t.length;n++){var r=t[n];r.enumerable=r.enumerable||!1,r.configurable=!0,"value"in r&&(r.writable=!0),Object.defineProperty(e,r.key,r);}}function h(e,t,n){return t in e?Object.defineProperty(e,t,{value:n,enumerable:!0,configurable:!0,writable:!0}):e[t]=n,e}var s,o,p=(s=d,(o=[{key:"adaptStateChange",value:function(e,t){var n=this,r=e.state,i=e.channels,s=void 0===i?[]:i,o=e.channelGroups,a=void 0===o?[]:o;return s.forEach(function(e){e in n._channels&&(n._channels[e].state=r);}),a.forEach(function(e){e in n._channelGroups&&(n._channelGroups[e].state=r);}),this._setStateEndpoint({state:r,channels:s,channelGroups:a},t)}},{key:"adaptPresenceChange",value:function(e){var t=this,n=e.connected,r=e.channels,i=void 0===r?[]:r,s=e.channelGroups,o=void 0===s?[]:s;n?(i.forEach(function(e){t._heartbeatChannels[e]={state:{}};}),o.forEach(function(e){t._heartbeatChannelGroups[e]={state:{}};})):(i.forEach(function(e){e in t._heartbeatChannels&&delete t._heartbeatChannels[e];}),o.forEach(function(e){e in t._heartbeatChannelGroups&&delete t._heartbeatChannelGroups[e];}),!1===this._config.suppressLeaveEvents&&this._leaveEndpoint({channels:i,channelGroups:o},function(e){t._listenerManager.announceStatus(e);})),this.reconnect();}},{key:"adaptSubscribeChange",value:function(e){var t=this,n=e.timetoken,r=e.channels,i=void 0===r?[]:r,s=e.channelGroups,o=void 0===s?[]:s,a=e.withPresence,u=void 0!==a&&a,c=e.withHeartbeats,l=void 0!==c&&c;this._config.subscribeKey&&""!==this._config.subscribeKey?(n&&(this._lastTimetoken=this._currentTimetoken,this._currentTimetoken=n),"0"!==this._currentTimetoken&&0!==this._currentTimetoken&&(this._storedTimetoken=this._currentTimetoken,this._currentTimetoken=0),i.forEach(function(e){t._channels[e]={state:{}},u&&(t._presenceChannels[e]={}),(l||t._config.getHeartbeatInterval())&&(t._heartbeatChannels[e]={}),t._pendingChannelSubscriptions.push(e);}),o.forEach(function(e){t._channelGroups[e]={state:{}},u&&(t._presenceChannelGroups[e]={}),(l||t._config.getHeartbeatInterval())&&(t._heartbeatChannelGroups[e]={}),t._pendingChannelGroupSubscriptions.push(e);}),this._subscriptionStatusAnnounced=!1,this.reconnect()):console&&console.log&&console.log("subscribe key missing; aborting subscribe");}},{key:"adaptUnsubscribeChange",value:function(e,t){var n=this,r=e.channels,i=void 0===r?[]:r,s=e.channelGroups,o=void 0===s?[]:s,a=[],u=[];i.forEach(function(e){e in n._channels&&(delete n._channels[e],a.push(e),e in n._heartbeatChannels&&delete n._heartbeatChannels[e]),e in n._presenceChannels&&(delete n._presenceChannels[e],a.push(e));}),o.forEach(function(e){e in n._channelGroups&&(delete n._channelGroups[e],u.push(e),e in n._heartbeatChannelGroups&&delete n._heartbeatChannelGroups[e]),e in n._presenceChannelGroups&&(delete n._channelGroups[e],u.push(e));}),0===a.length&&0===u.length||(!1!==this._config.suppressLeaveEvents||t||this._leaveEndpoint({channels:a,channelGroups:u},function(e){e.affectedChannels=a,e.affectedChannelGroups=u,e.currentTimetoken=n._currentTimetoken,e.lastTimetoken=n._lastTimetoken,n._listenerManager.announceStatus(e);}),0===Object.keys(this._channels).length&&0===Object.keys(this._presenceChannels).length&&0===Object.keys(this._channelGroups).length&&0===Object.keys(this._presenceChannelGroups).length&&(this._lastTimetoken=0,this._currentTimetoken=0,this._storedTimetoken=null,this._region=null,this._reconnectionManager.stopPolling()),this.reconnect());}},{key:"unsubscribeAll",value:function(e){this.adaptUnsubscribeChange({channels:this.getSubscribedChannels(),channelGroups:this.getSubscribedChannelGroups()},e);}},{key:"getHeartbeatChannels",value:function(){return Object.keys(this._heartbeatChannels)}},{key:"getHeartbeatChannelGroups",value:function(){return Object.keys(this._heartbeatChannelGroups)}},{key:"getSubscribedChannels",value:function(){return Object.keys(this._channels)}},{key:"getSubscribedChannelGroups",value:function(){return Object.keys(this._channelGroups)}},{key:"reconnect",value:function(){this._startSubscribeLoop(),this._registerHeartbeatTimer();}},{key:"disconnect",value:function(){this._stopSubscribeLoop(),this._stopHeartbeatTimer(),this._reconnectionManager.stopPolling();}},{key:"_registerHeartbeatTimer",value:function(){this._stopHeartbeatTimer(),0!==this._config.getHeartbeatInterval()&&(this._performHeartbeatLoop(),this._heartbeatTimer=setInterval(this._performHeartbeatLoop.bind(this),1e3*this._config.getHeartbeatInterval()));}},{key:"_stopHeartbeatTimer",value:function(){this._heartbeatTimer&&(clearInterval(this._heartbeatTimer),this._heartbeatTimer=null);}},{key:"_performHeartbeatLoop",value:function(){var n=this,e=this.getHeartbeatChannels(),t=this.getHeartbeatChannelGroups(),r={};0===e.length&&0===t.length||(this.getSubscribedChannels().forEach(function(e){var t=n._channels[e].state;Object.keys(t).length&&(r[e]=t);}),this.getSubscribedChannelGroups().forEach(function(e){var t=n._channelGroups[e].state;Object.keys(t).length&&(r[e]=t);}),this._heartbeatEndpoint({channels:e,channelGroups:t,state:r},function(e){e.error&&n._config.announceFailedHeartbeats&&n._listenerManager.announceStatus(e),e.error&&n._config.autoNetworkDetection&&n._isOnline&&(n._isOnline=!1,n.disconnect(),n._listenerManager.announceNetworkDown(),n.reconnect()),!e.error&&n._config.announceSuccessfulHeartbeats&&n._listenerManager.announceStatus(e);}.bind(this)));}},{key:"_startSubscribeLoop",value:function(){var n=this;this._stopSubscribeLoop();var r={},i=[],s=[];if(Object.keys(this._channels).forEach(function(e){var t=n._channels[e].state;Object.keys(t).length&&(r[e]=t),i.push(e);}),Object.keys(this._presenceChannels).forEach(function(e){i.push("".concat(e,"-pnpres"));}),Object.keys(this._channelGroups).forEach(function(e){var t=n._channelGroups[e].state;Object.keys(t).length&&(r[e]=t),s.push(e);}),Object.keys(this._presenceChannelGroups).forEach(function(e){s.push("".concat(e,"-pnpres"));}),0!==i.length||0!==s.length){var e={channels:i,channelGroups:s,state:r,timetoken:this._currentTimetoken,filterExpression:this._config.filterExpression,region:this._region};this._subscribeCall=this._subscribeEndpoint(e,this._processSubscribeResponse.bind(this));}}},{key:"_processSubscribeResponse",value:function(t,e){var c=this;if(t.error)t.category===a.default.PNTimeoutCategory?this._startSubscribeLoop():(t.category===a.default.PNNetworkIssuesCategory?(this.disconnect(),t.error&&this._config.autoNetworkDetection&&this._isOnline&&(this._isOnline=!1,this._listenerManager.announceNetworkDown()),this._reconnectionManager.onReconnection(function(){c._config.autoNetworkDetection&&!c._isOnline&&(c._isOnline=!0,c._listenerManager.announceNetworkUp()),c.reconnect(),c._subscriptionStatusAnnounced=!0;var e={category:a.default.PNReconnectedCategory,operation:t.operation,lastTimetoken:c._lastTimetoken,currentTimetoken:c._currentTimetoken};c._listenerManager.announceStatus(e);}),this._reconnectionManager.startPolling()):t.category===a.default.PNBadRequestCategory&&this._stopHeartbeatTimer(),this._listenerManager.announceStatus(t));else {if(this._storedTimetoken?(this._currentTimetoken=this._storedTimetoken,this._storedTimetoken=null):(this._lastTimetoken=this._currentTimetoken,this._currentTimetoken=e.metadata.timetoken),!this._subscriptionStatusAnnounced){var n={};n.category=a.default.PNConnectedCategory,n.operation=t.operation,n.affectedChannels=this._pendingChannelSubscriptions,n.subscribedChannels=this.getSubscribedChannels(),n.affectedChannelGroups=this._pendingChannelGroupSubscriptions,n.lastTimetoken=this._lastTimetoken,n.currentTimetoken=this._currentTimetoken,this._subscriptionStatusAnnounced=!0,this._listenerManager.announceStatus(n),this._pendingChannelSubscriptions=[],this._pendingChannelGroupSubscriptions=[];}var r=e.messages||[],i=this._config,s=i.requestMessageCountThreshold,l=i.dedupeOnSubscribe;if(s&&r.length>=s){var o={};o.category=a.default.PNRequestMessageCountExceededCategory,o.operation=t.operation,this._listenerManager.announceStatus(o);}r.forEach(function(e){var t=e.channel,n=e.subscriptionMatch,r=e.publishMetaData;if(t===n&&(n=null),l){if(c._dedupingManager.isDuplicate(e))return;c._dedupingManager.addEntry(e);}if(f.default.endsWith(e.channel,"-pnpres")){var i={channel:null,subscription:null};i.actualChannel=null!=n?t:null,i.subscribedChannel=null!=n?n:t,t&&(i.channel=t.substring(0,t.lastIndexOf("-pnpres"))),n&&(i.subscription=n.substring(0,n.lastIndexOf("-pnpres"))),i.action=e.payload.action,i.state=e.payload.data,i.timetoken=r.publishTimetoken,i.occupancy=e.payload.occupancy,i.uuid=e.payload.uuid,i.timestamp=e.payload.timestamp,e.payload.join&&(i.join=e.payload.join),e.payload.leave&&(i.leave=e.payload.leave),e.payload.timeout&&(i.timeout=e.payload.timeout),c._listenerManager.announcePresence(i);}else if(1===e.messageType){var s={channel:null,subscription:null};s.channel=t,s.subscription=n,s.timetoken=r.publishTimetoken,s.publisher=e.issuingClientId,e.userMetadata&&(s.userMetadata=e.userMetadata),s.message=e.payload,c._listenerManager.announceSignal(s);}else if(2===e.messageType){var o={channel:null,subscription:null};o.channel=t,o.subscription=n,o.timetoken=r.publishTimetoken,o.publisher=e.issuingClientId,e.userMetadata&&(o.userMetadata=e.userMetadata),o.message={event:e.payload.event,type:e.payload.type,data:e.payload.data},"user"===e.payload.type?c._listenerManager.announceUser(o):"space"===e.payload.type?c._listenerManager.announceSpace(o):"membership"===e.payload.type&&c._listenerManager.announceMembership(o);}else if(3===e.messageType){var a={};a.channel=t,a.subscription=n,a.timetoken=r.publishTimetoken,a.publisher=e.issuingClientId,a.data={messageTimetoken:e.payload.data.messageTimetoken,actionTimetoken:e.payload.data.actionTimetoken,type:e.payload.data.type,uuid:e.issuingClientId,value:e.payload.data.value},a.event=e.payload.event,c._listenerManager.announceMessageAction(a);}else {var u={channel:null,subscription:null};u.actualChannel=null!=n?t:null,u.subscribedChannel=null!=n?n:t,u.channel=t,u.subscription=n,u.timetoken=r.publishTimetoken,u.publisher=e.issuingClientId,e.userMetadata&&(u.userMetadata=e.userMetadata),c._config.cipherKey?u.message=c._crypto.decrypt(e.payload):u.message=e.payload,c._listenerManager.announceMessage(u);}}),this._region=e.metadata.region,this._startSubscribeLoop();}}},{key:"_stopSubscribeLoop",value:function(){this._subscribeCall&&("function"==typeof this._subscribeCall.abort&&this._subscribeCall.abort(),this._subscribeCall=null);}}])&&i(s.prototype,o),d);function d(e){var t=e.subscribeEndpoint,n=e.leaveEndpoint,r=e.heartbeatEndpoint,i=e.setStateEndpoint,s=e.timeEndpoint,o=e.config,a=e.crypto,u=e.listenerManager;!function(e,t){if(!(e instanceof t))throw new TypeError("Cannot call a class as a function")}(this,d),h(this,"_crypto",void 0),h(this,"_config",void 0),h(this,"_listenerManager",void 0),h(this,"_reconnectionManager",void 0),h(this,"_leaveEndpoint",void 0),h(this,"_heartbeatEndpoint",void 0),h(this,"_setStateEndpoint",void 0),h(this,"_subscribeEndpoint",void 0),h(this,"_channels",void 0),h(this,"_presenceChannels",void 0),h(this,"_heartbeatChannels",void 0),h(this,"_heartbeatChannelGroups",void 0),h(this,"_channelGroups",void 0),h(this,"_presenceChannelGroups",void 0),h(this,"_currentTimetoken",void 0),h(this,"_lastTimetoken",void 0),h(this,"_storedTimetoken",void 0),h(this,"_region",void 0),h(this,"_subscribeCall",void 0),h(this,"_heartbeatTimer",void 0),h(this,"_subscriptionStatusAnnounced",void 0),h(this,"_autoNetworkDetection",void 0),h(this,"_isOnline",void 0),h(this,"_pendingChannelSubscriptions",void 0),h(this,"_pendingChannelGroupSubscriptions",void 0),h(this,"_dedupingManager",void 0),this._listenerManager=u,this._config=o,this._leaveEndpoint=n,this._heartbeatEndpoint=r,this._setStateEndpoint=i,this._subscribeEndpoint=t,this._crypto=a,this._channels={},this._presenceChannels={},this._heartbeatChannels={},this._heartbeatChannelGroups={},this._channelGroups={},this._presenceChannelGroups={},this._pendingChannelSubscriptions=[],this._pendingChannelGroupSubscriptions=[],this._currentTimetoken=0,this._lastTimetoken=0,this._storedTimetoken=null,this._subscriptionStatusAnnounced=!1,this._isOnline=!0,this._reconnectionManager=new c.default({timeEndpoint:s}),this._dedupingManager=new l.default({config:o});}t.default=p,e.exports=t.default;},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.default=void 0;var r;(r=n(9))&&r.__esModule,n(0);function i(e,t){for(var n=0;n<t.length;n++){var r=t[n];r.enumerable=r.enumerable||!1,r.configurable=!0,"value"in r&&(r.writable=!0),Object.defineProperty(e,r.key,r);}}function s(e,t,n){return t in e?Object.defineProperty(e,t,{value:n,enumerable:!0,configurable:!0,writable:!0}):e[t]=n,e}var o,a,c=(o=l,(a=[{key:"onReconnection",value:function(e){this._reconnectionCallback=e;}},{key:"startPolling",value:function(){this._timeTimer=setInterval(this._performTimeLoop.bind(this),3e3);}},{key:"stopPolling",value:function(){clearInterval(this._timeTimer);}},{key:"_performTimeLoop",value:function(){var t=this;this._timeEndpoint(function(e){e.error||(clearInterval(t._timeTimer),t._reconnectionCallback());});}}])&&i(o.prototype,a),l);function l(e){var t=e.timeEndpoint;!function(e,t){if(!(e instanceof t))throw new TypeError("Cannot call a class as a function")}(this,l),s(this,"_reconnectionCallback",void 0),s(this,"_timeEndpoint",void 0),s(this,"_timeTimer",void 0),this._timeEndpoint=t;}t.default=c,e.exports=t.default;},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.default=void 0;var r;(r=n(3))&&r.__esModule,n(0);function i(e,t){for(var n=0;n<t.length;n++){var r=t[n];r.enumerable=r.enumerable||!1,r.configurable=!0,"value"in r&&(r.writable=!0),Object.defineProperty(e,r.key,r);}}function s(e,t,n){return t in e?Object.defineProperty(e,t,{value:n,enumerable:!0,configurable:!0,writable:!0}):e[t]=n,e}var o,a,c=(o=l,(a=[{key:"getKey",value:function(e){var t=function(e){var t=0;if(0===e.length)return t;for(var n=0;n<e.length;n+=1)t=(t<<5)-t+e.charCodeAt(n),t&=t;return t}(JSON.stringify(e.payload)).toString(),n=e.publishMetaData.publishTimetoken;return "".concat(n,"-").concat(t)}},{key:"isDuplicate",value:function(e){return this.hashHistory.includes(this.getKey(e))}},{key:"addEntry",value:function(e){this.hashHistory.length>=this._config.maximumCacheSize&&this.hashHistory.shift(),this.hashHistory.push(this.getKey(e));}},{key:"clearHistory",value:function(){this.hashHistory=[];}}])&&i(o.prototype,a),l);function l(e){var t=e.config;!function(e,t){if(!(e instanceof t))throw new TypeError("Cannot call a class as a function")}(this,l),s(this,"_config",void 0),s(this,"hashHistory",void 0),this.hashHistory=[],this._config=t;}t.default=c,e.exports=t.default;},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.default=void 0;var r,s=(r=n(1))&&r.__esModule?r:{default:r};function i(e,t){for(var n=0;n<t.length;n++){var r=t[n];r.enumerable=r.enumerable||!1,r.configurable=!0,"value"in r&&(r.writable=!0),Object.defineProperty(e,r.key,r);}}function o(e,t,n){return t in e?Object.defineProperty(e,t,{value:n,enumerable:!0,configurable:!0,writable:!0}):e[t]=n,e}var a,u,l=(a=f,(u=[{key:"operationsLatencyForRequest",value:function(){var r=this,i={};return Object.keys(this._latencies).forEach(function(e){var t=r._latencies[e],n=r._averageLatency(t);0<n&&(i["l_".concat(e)]=n);}),i}},{key:"startLatencyMeasure",value:function(e,t){e!==s.default.PNSubscribeOperation&&t&&(this._trackedLatencies[t]=Date.now());}},{key:"stopLatencyMeasure",value:function(e,t){if(e!==s.default.PNSubscribeOperation&&t){var n=this._endpointName(e),r=this._latencies[n],i=this._trackedLatencies[t];(r=r||(this._latencies[n]=[])).push(Date.now()-i),r.length>this._maximumSamplesCount&&r.splice(0,r.length-this._maximumSamplesCount),delete this._trackedLatencies[t];}}},{key:"_averageLatency",value:function(e){return Math.floor(e.reduce(function(e,t){return e+t},0)/e.length)}},{key:"_endpointName",value:function(e){var t=null;switch(e){case s.default.PNPublishOperation:t="pub";break;case s.default.PNSignalOperation:t="sig";break;case s.default.PNHistoryOperation:case s.default.PNFetchMessagesOperation:case s.default.PNDeleteMessagesOperation:case s.default.PNMessageCounts:t="hist";break;case s.default.PNUnsubscribeOperation:case s.default.PNWhereNowOperation:case s.default.PNHereNowOperation:case s.default.PNHeartbeatOperation:case s.default.PNSetStateOperation:case s.default.PNGetStateOperation:t="pres";break;case s.default.PNAddChannelsToGroupOperation:case s.default.PNRemoveChannelsFromGroupOperation:case s.default.PNChannelGroupsOperation:case s.default.PNRemoveGroupOperation:case s.default.PNChannelsForGroupOperation:t="cg";break;case s.default.PNPushNotificationEnabledChannelsOperation:case s.default.PNRemoveAllPushNotificationsOperation:t="push";break;case s.default.PNCreateUserOperation:case s.default.PNUpdateUserOperation:case s.default.PNDeleteUserOperation:case s.default.PNGetUserOperation:case s.default.PNGetUsersOperation:case s.default.PNCreateSpaceOperation:case s.default.PNUpdateSpaceOperation:case s.default.PNDeleteSpaceOperation:case s.default.PNGetSpaceOperation:case s.default.PNGetSpacesOperation:case s.default.PNGetMembersOperation:case s.default.PNUpdateMembersOperation:case s.default.PNGetMembershipsOperation:case s.default.PNUpdateMembershipsOperation:t="obj";break;case s.default.PNAddMessageActionOperation:case s.default.PNRemoveMessageActionOperation:case s.default.PNGetMessageActionsOperation:t="msga";break;case s.default.PNAccessManagerGrant:case s.default.PNAccessManagerAudit:t="pam";break;case s.default.PNAccessManagerGrantToken:t="pam3";break;default:t="time";}return t}}])&&i(a.prototype,u),f);function f(e){!function(e,t){if(!(e instanceof t))throw new TypeError("Cannot call a class as a function")}(this,f),o(this,"_maximumSamplesCount",100),o(this,"_trackedLatencies",{}),o(this,"_latencies",{}),this._maximumSamplesCount=e.maximumSamplesCount||this._maximumSamplesCount;}t.default=l,e.exports=t.default;},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.default=t.FCMNotificationPayload=t.MPNSNotificationPayload=t.APNSNotificationPayload=void 0;n(0);function r(e){return (r="function"==typeof Symbol&&"symbol"==typeof Symbol.iterator?function(e){return typeof e}:function(e){return e&&"function"==typeof Symbol&&e.constructor===Symbol&&e!==Symbol.prototype?"symbol":typeof e})(e)}function i(e,t){if(null==e)return {};var n,r,i=function(e,t){if(null==e)return {};var n,r,i={},s=Object.keys(e);for(r=0;r<s.length;r++)n=s[r],0<=t.indexOf(n)||(i[n]=e[n]);return i}(e,t);if(Object.getOwnPropertySymbols){var s=Object.getOwnPropertySymbols(e);for(r=0;r<s.length;r++)n=s[r],0<=t.indexOf(n)||Object.prototype.propertyIsEnumerable.call(e,n)&&(i[n]=e[n]);}return i}function s(t,e){var n=Object.keys(t);if(Object.getOwnPropertySymbols){var r=Object.getOwnPropertySymbols(t);e&&(r=r.filter(function(e){return Object.getOwnPropertyDescriptor(t,e).enumerable})),n.push.apply(n,r);}return n}function o(t){for(var e=1;e<arguments.length;e++){var n=null!=arguments[e]?arguments[e]:{};e%2?s(Object(n),!0).forEach(function(e){g(t,e,n[e]);}):Object.getOwnPropertyDescriptors?Object.defineProperties(t,Object.getOwnPropertyDescriptors(n)):s(Object(n)).forEach(function(e){Object.defineProperty(t,e,Object.getOwnPropertyDescriptor(n,e));});}return t}function a(e,t){return !t||"object"!==r(t)&&"function"!=typeof t?c(e):t}function u(e){return (u=Object.setPrototypeOf?Object.getPrototypeOf:function(e){return e.__proto__||Object.getPrototypeOf(e)})(e)}function c(e){if(void 0===e)throw new ReferenceError("this hasn't been initialised - super() hasn't been called");return e}function l(e,t){if("function"!=typeof t&&null!==t)throw new TypeError("Super expression must either be null or a function");e.prototype=Object.create(t&&t.prototype,{constructor:{value:e,writable:!0,configurable:!0}}),t&&f(e,t);}function f(e,t){return (f=Object.setPrototypeOf||function(e,t){return e.__proto__=t,e})(e,t)}function h(e,t){if(!(e instanceof t))throw new TypeError("Cannot call a class as a function")}function p(e,t){for(var n=0;n<t.length;n++){var r=t[n];r.enumerable=r.enumerable||!1,r.configurable=!0,"value"in r&&(r.writable=!0),Object.defineProperty(e,r.key,r);}}function d(e,t,n){return t&&p(e.prototype,t),n&&p(e,n),e}function g(e,t,n){return t in e?Object.defineProperty(e,t,{value:n,enumerable:!0,configurable:!0,writable:!0}):e[t]=n,e}var y=(d(v,[{key:"payload",get:function(){return this._payload}},{key:"title",set:function(e){this._title=e;}},{key:"subtitle",set:function(e){this._subtitle=e;}},{key:"body",set:function(e){this._body=e;}},{key:"badge",set:function(e){this._badge=e;}},{key:"sound",set:function(e){this._sound=e;}}]),d(v,[{key:"_setDefaultPayloadStructure",value:function(){}},{key:"toObject",value:function(){return {}}}]),v);function v(e,t,n){h(this,v),g(this,"_subtitle",void 0),g(this,"_payload",void 0),g(this,"_badge",void 0),g(this,"_sound",void 0),g(this,"_title",void 0),g(this,"_body",void 0),this._payload=e,this._setDefaultPayloadStructure(),this.title=t,this.body=n;}var b=(l(m,y),d(m,[{key:"_setDefaultPayloadStructure",value:function(){this._payload.aps={alert:{}};}},{key:"toObject",value:function(){var t=this,e=o({},this._payload),n=e.aps,r=n.alert;if(this._isSilent&&(n["content-available"]=1),"apns2"===this._apnsPushType){if(!this._configurations||!this._configurations.length)throw new ReferenceError("APNS2 configuration is missing");var i=[];this._configurations.forEach(function(e){i.push(t._objectFromAPNS2Configuration(e));}),i.length&&(e.pn_push=i);}return r&&Object.keys(r).length||delete n.alert,this._isSilent&&(delete n.alert,delete n.badge,delete n.sound,r={}),this._isSilent||Object.keys(r).length?e:null}},{key:"_objectFromAPNS2Configuration",value:function(e){var t=this;if(!e.targets||!e.targets.length)throw new ReferenceError("At least one APNS2 target should be provided");var n=[];e.targets.forEach(function(e){n.push(t._objectFromAPNSTarget(e));});var r=e.collapseId,i=e.expirationDate,s={auth_method:"token",targets:n,version:"v2"};return r&&r.length&&(s.collapse_id=r),i&&(s.expiration=i.toISOString()),s}},{key:"_objectFromAPNSTarget",value:function(e){if(!e.topic||!e.topic.length)throw new TypeError("Target 'topic' undefined.");var t=e.topic,n=e.environment,r=void 0===n?"development":n,i=e.excludedDevices,s=void 0===i?[]:i,o={topic:t,environment:r};return s.length&&(o.excluded_devices=s),o}},{key:"configurations",set:function(e){e&&e.length&&(this._configurations=e);}},{key:"notification",get:function(){return this._payload.aps}},{key:"title",get:function(){return this._title},set:function(e){e&&e.length&&(this._payload.aps.alert.title=e,this._title=e);}},{key:"subtitle",get:function(){return this._subtitle},set:function(e){e&&e.length&&(this._payload.aps.alert.subtitle=e,this._subtitle=e);}},{key:"body",get:function(){return this._body},set:function(e){e&&e.length&&(this._payload.aps.alert.body=e,this._body=e);}},{key:"badge",get:function(){return this._badge},set:function(e){null!=e&&(this._payload.aps.badge=e,this._badge=e);}},{key:"sound",get:function(){return this._sound},set:function(e){e&&e.length&&(this._payload.aps.sound=e,this._sound=e);}},{key:"silent",set:function(e){this._isSilent=e;}}]),m);function m(){var e,t;h(this,m);for(var n=arguments.length,r=new Array(n),i=0;i<n;i++)r[i]=arguments[i];return g(c(t=a(this,(e=u(m)).call.apply(e,[this].concat(r)))),"_configurations",void 0),g(c(t),"_apnsPushType",void 0),g(c(t),"_isSilent",void 0),t}t.APNSNotificationPayload=b;var _=(l(k,y),d(k,[{key:"toObject",value:function(){return Object.keys(this._payload).length?o({},this._payload):null}},{key:"backContent",get:function(){return this._backContent},set:function(e){e&&e.length&&(this._payload.back_content=e,this._backContent=e);}},{key:"backTitle",get:function(){return this._backTitle},set:function(e){e&&e.length&&(this._payload.back_title=e,this._backTitle=e);}},{key:"count",get:function(){return this._count},set:function(e){null!=e&&(this._payload.count=e,this._count=e);}},{key:"title",get:function(){return this._title},set:function(e){e&&e.length&&(this._payload.title=e,this._title=e);}},{key:"type",get:function(){return this._type},set:function(e){e&&e.length&&(this._payload.type=e,this._type=e);}},{key:"subtitle",get:function(){return this.backTitle},set:function(e){this.backTitle=e;}},{key:"body",get:function(){return this.backContent},set:function(e){this.backContent=e;}},{key:"badge",get:function(){return this.count},set:function(e){this.count=e;}}]),k);function k(){var e,t;h(this,k);for(var n=arguments.length,r=new Array(n),i=0;i<n;i++)r[i]=arguments[i];return g(c(t=a(this,(e=u(k)).call.apply(e,[this].concat(r)))),"_backContent",void 0),g(c(t),"_backTitle",void 0),g(c(t),"_count",void 0),g(c(t),"_type",void 0),t}t.MPNSNotificationPayload=_;var P=(l(O,y),d(O,[{key:"_setDefaultPayloadStructure",value:function(){this._payload.notification={},this._payload.data={};}},{key:"toObject",value:function(){var e=o({},this._payload.data),t=null,n={};if(2<Object.keys(this._payload).length){var r=this._payload;r.notification,r.data,e=o({},e,{},i(r,["notification","data"]));}return this._isSilent?e.notification=this._payload.notification:t=this._payload.notification,Object.keys(e).length&&(n.data=e),t&&Object.keys(t).length&&(n.notification=t),Object.keys(n).length?n:null}},{key:"notification",get:function(){return this._payload.notification}},{key:"data",get:function(){return this._payload.data}},{key:"title",get:function(){return this._title},set:function(e){e&&e.length&&(this._payload.notification.title=e,this._title=e);}},{key:"body",get:function(){return this._body},set:function(e){e&&e.length&&(this._payload.notification.body=e,this._body=e);}},{key:"sound",get:function(){return this._sound},set:function(e){e&&e.length&&(this._payload.notification.sound=e,this._sound=e);}},{key:"icon",get:function(){return this._icon},set:function(e){e&&e.length&&(this._payload.notification.icon=e,this._icon=e);}},{key:"tag",get:function(){return this._tag},set:function(e){e&&e.length&&(this._payload.notification.tag=e,this._tag=e);}},{key:"silent",set:function(e){this._isSilent=e;}}]),O);function O(){var e,t;h(this,O);for(var n=arguments.length,r=new Array(n),i=0;i<n;i++)r[i]=arguments[i];return g(c(t=a(this,(e=u(O)).call.apply(e,[this].concat(r)))),"_isSilent",void 0),g(c(t),"_icon",void 0),g(c(t),"_tag",void 0),t}function T(e,t){h(this,T),g(this,"_payload",void 0),g(this,"_debugging",void 0),g(this,"_subtitle",void 0),g(this,"_badge",void 0),g(this,"_sound",void 0),g(this,"_title",void 0),g(this,"_body",void 0),g(this,"apns",void 0),g(this,"mpns",void 0),g(this,"fcm",void 0),this._payload={apns:{},mpns:{},fcm:{}},this._title=e,this._body=t,this.apns=new b(this._payload.apns,e,t),this.mpns=new _(this._payload.mpns,e,t),this.fcm=new P(this._payload.fcm,e,t);}t.FCMNotificationPayload=P;var S=(d(T,[{key:"debugging",set:function(e){this._debugging=e;}},{key:"title",get:function(){return this._title}},{key:"body",get:function(){return this._body}},{key:"subtitle",get:function(){return this._subtitle},set:function(e){this._subtitle=e,this.apns.subtitle=e,this.mpns.subtitle=e,this.fcm.subtitle=e;}},{key:"badge",get:function(){return this._badge},set:function(e){this._badge=e,this.apns.badge=e,this.mpns.badge=e,this.fcm.badge=e;}},{key:"sound",get:function(){return this._sound},set:function(e){this._sound=e,this.apns.sound=e,this.mpns.sound=e,this.fcm.sound=e;}}]),d(T,[{key:"buildPayload",value:function(e){var t={};if(e.includes("apns")||e.includes("apns2")){this.apns._apnsPushType=e.includes("apns")?"apns":"apns2";var n=this.apns.toObject();n&&Object.keys(n).length&&(t.pn_apns=n);}if(e.includes("mpns")){var r=this.mpns.toObject();r&&Object.keys(r).length&&(t.pn_mpns=r);}if(e.includes("fcm")){var i=this.fcm.toObject();i&&Object.keys(i).length&&(t.pn_gcm=i);}return Object.keys(t).length&&this._debugging&&(t.pn_debug=!0),t}}]),T);t.default=S;},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.default=void 0;var r;(r=n(3))&&r.__esModule,n(0);function i(e){return (i="function"==typeof Symbol&&"symbol"==typeof Symbol.iterator?function(e){return typeof e}:function(e){return e&&"function"==typeof Symbol&&e.constructor===Symbol&&e!==Symbol.prototype?"symbol":typeof e})(e)}function s(e,t){for(var n=0;n<t.length;n++){var r=t[n];r.enumerable=r.enumerable||!1,r.configurable=!0,"value"in r&&(r.writable=!0),Object.defineProperty(e,r.key,r);}}function o(e,t,n){return t in e?Object.defineProperty(e,t,{value:n,enumerable:!0,configurable:!0,writable:!0}):e[t]=n,e}var a,u,l=(a=f,(u=[{key:"_initializeTokens",value:function(){this._userTokens={},this._spaceTokens={},this._userToken=void 0,this._spaceToken=void 0;}},{key:"_setToken",value:function(t){var n=this,e=this.parseToken(t);e&&e.resources&&(e.resources.users&&Object.keys(e.resources.users).forEach(function(e){n._userTokens[e]=t;}),e.resources.spaces&&Object.keys(e.resources.spaces).forEach(function(e){n._spaceTokens[e]=t;})),e&&e.patterns&&(e.patterns.users&&0<Object.keys(e.patterns.users).length&&(this._userToken=t),e.patterns.spaces&&0<Object.keys(e.patterns.spaces).length&&(this._spaceToken=t));}},{key:"setToken",value:function(e){e&&0<e.length&&this._setToken(e);}},{key:"setTokens",value:function(e){var t=this;e&&e.length&&"object"===i(e)&&e.forEach(function(e){t.setToken(e);});}},{key:"getTokens",value:function(e){var t=this,n={users:{},spaces:{}};return e?(e.user&&(n.user=this._userToken),e.space&&(n.space=this._spaceToken),e.users&&e.users.forEach(function(e){n.users[e]=t._userTokens[e];}),e.space&&e.spaces.forEach(function(e){n.spaces[e]=t._spaceTokens[e];})):(this._userToken&&(n.user=this._userToken),this._spaceToken&&(n.space=this._spaceToken),Object.keys(this._userTokens).forEach(function(e){n.users[e]=t._userTokens[e];}),Object.keys(this._spaceTokens).forEach(function(e){n.spaces[e]=t._spaceTokens[e];})),n}},{key:"getToken",value:function(e,t){var n;return t?"user"===e?n=this._userTokens[t]:"space"===e&&(n=this._spaceTokens[t]):"user"===e?n=this._userToken:"space"===e&&(n=this._spaceToken),n}},{key:"extractPermissions",value:function(e){var t={create:!1,read:!1,write:!1,manage:!1,delete:!1};return 16==(16&e)&&(t.create=!0),8==(8&e)&&(t.delete=!0),4==(4&e)&&(t.manage=!0),2==(2&e)&&(t.write=!0),1==(1&e)&&(t.read=!0),t}},{key:"parseToken",value:function(e){var t=this,n=this._cbor.decodeToken(e);if(void 0!==n){var r=Object.keys(n.res.usr),i=Object.keys(n.res.spc),s=Object.keys(n.pat.usr),o=Object.keys(n.pat.spc),a={version:n.v,timestamp:n.t,ttl:n.ttl},u=0<r.length,c=0<i.length;(u||c)&&(a.resources={},u&&(a.resources.users={},r.forEach(function(e){a.resources.users[e]=t.extractPermissions(n.res.usr[e]);})),c&&(a.resources.spaces={},i.forEach(function(e){a.resources.spaces[e]=t.extractPermissions(n.res.spc[e]);})));var l=0<s.length,f=0<o.length;return (l||f)&&(a.patterns={},l&&(a.patterns.users={},s.forEach(function(e){a.patterns.users[e]=t.extractPermissions(n.pat.usr[e]);})),f&&(a.patterns.spaces={},o.forEach(function(e){a.patterns.spaces[e]=t.extractPermissions(n.pat.spc[e]);}))),0<Object.keys(n.meta).length&&(a.meta=n.meta),a.signature=n.sig,a}}},{key:"clearTokens",value:function(){this._initializeTokens();}}])&&s(a.prototype,u),f);function f(e,t){!function(e,t){if(!(e instanceof t))throw new TypeError("Cannot call a class as a function")}(this,f),o(this,"_config",void 0),o(this,"_cbor",void 0),o(this,"_userTokens",void 0),o(this,"_spaceTokens",void 0),o(this,"_userToken",void 0),o(this,"_spaceToken",void 0),this._config=e,this._cbor=t,this._initializeTokens();}t.default=l,e.exports=t.default;},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.default=function(r,i){var e=r.networking,t=r.config,s=r.telemetryManager,o=m.default.createUUID(),a=null,u=null,c={};a=i.getOperation()===k.default.PNTimeOperation||i.getOperation()===k.default.PNChannelGroupsOperation?arguments.length<=2?void 0:arguments[2]:(c=arguments.length<=2?void 0:arguments[2],arguments.length<=3?void 0:arguments[3]);"undefined"==typeof Promise||a||(u=_.default.createPromise());var n=i.validateParams(r,c);if(n)return a?a(S(n)):u?(u.reject(new T("Validation failed, check status for details",S(n))),u.promise):void 0;var l,f=i.prepareParams(r,c),h=function(e,t,n){return e.usePost&&e.usePost(t,n)?e.postURL(t,n):e.usePatch&&e.usePatch(t,n)?e.patchURL(t,n):e.getURL(t,n)}(i,r,c),p={url:h,operation:i.getOperation(),timeout:i.getRequestTimeout(r),headers:i.getRequestHeaders?i.getRequestHeaders():{}};f.uuid=t.UUID,f.pnsdk=function(e){if(e.sdkName)return e.sdkName;var t="PubNub-JS-".concat(e.sdkFamily);e.partnerId&&(t+="-".concat(e.partnerId));t+="/".concat(e.getVersion());var n=e._getPnsdkSuffix(" ");0<n.length&&(t+=n);return t}(t);var d=s.operationsLatencyForRequest();Object.keys(d).length&&(f=function(t){for(var e=1;e<arguments.length;e++){var n=null!=arguments[e]?arguments[e]:{};e%2?P(Object(n),!0).forEach(function(e){O(t,e,n[e]);}):Object.getOwnPropertyDescriptors?Object.defineProperties(t,Object.getOwnPropertyDescriptors(n)):P(Object(n)).forEach(function(e){Object.defineProperty(t,e,Object.getOwnPropertyDescriptor(n,e));});}return t}({},f,{},d));t.useInstanceId&&(f.instanceid=t.instanceId);t.useRequestId&&(f.requestid=o);if(i.isAuthSupported()){var g=function(e,t,n){var r;e.getAuthToken&&(r=e.getAuthToken(t,n));return r}(i,r,c)||t.getAuthKey();g&&(f.auth=g);}t.secretKey&&function(e,t,n,r,i){var s=e.config,o=e.crypto,a=M(e,i,r);n.timestamp=Math.floor((new Date).getTime()/1e3);var u="".concat(a,"\n").concat(s.publishKey,"\n").concat(t,"\n").concat(_.default.signPamFromParams(n),"\n");if("POST"===a){var c=i.postPayload(e,r);u+="string"==typeof c?c:JSON.stringify(c);}else if("PATCH"===a){var l=i.patchPayload(e,r);u+="string"==typeof l?l:JSON.stringify(l);}var f="v2.".concat(o.HMACSHA256(u));f=(f=(f=f.replace(/\+/g,"-")).replace(/\//g,"_")).replace(/=+$/,""),n.signature=f;}(r,h,f,c,i);function y(e,t){if(e.error)a?a(e):u&&u.reject(new T("PubNub call failed, check status for details",e));else {s.stopLatencyMeasure(i.getOperation(),o);var n=i.handleResponse(r,t,c);a?a(e,n):u&&u.fulfill(n);}}if(s.startLatencyMeasure(i.getOperation(),o),"POST"===M(r,i,c)){var v=i.postPayload(r,c);l=e.POST(f,v,p,y);}else if("PATCH"===M(r,i,c)){var b=i.patchPayload(r,c);l=e.PATCH(f,b,p,y);}else l="DELETE"===M(r,i,c)?e.DELETE(f,p,y):e.GET(f,p,y);if(i.getOperation()===k.default.PNSubscribeOperation)return l;if(u)return u.promise};var m=r(n(5)),_=(n(0),r(n(2))),k=(r(n(3)),r(n(1)));function r(e){return e&&e.__esModule?e:{default:e}}function P(t,e){var n=Object.keys(t);if(Object.getOwnPropertySymbols){var r=Object.getOwnPropertySymbols(t);e&&(r=r.filter(function(e){return Object.getOwnPropertyDescriptor(t,e).enumerable})),n.push.apply(n,r);}return n}function O(e,t,n){return t in e?Object.defineProperty(e,t,{value:n,enumerable:!0,configurable:!0,writable:!0}):e[t]=n,e}function i(e){return (i="function"==typeof Symbol&&"symbol"==typeof Symbol.iterator?function(e){return typeof e}:function(e){return e&&"function"==typeof Symbol&&e.constructor===Symbol&&e!==Symbol.prototype?"symbol":typeof e})(e)}function s(e,t){return !t||"object"!==i(t)&&"function"!=typeof t?function(e){if(void 0!==e)return e;throw new ReferenceError("this hasn't been initialised - super() hasn't been called")}(e):t}function o(e){var n="function"==typeof Map?new Map:void 0;return (o=function(e){if(null===e||!function(e){return -1!==Function.toString.call(e).indexOf("[native code]")}(e))return e;if("function"!=typeof e)throw new TypeError("Super expression must either be null or a function");if(void 0!==n){if(n.has(e))return n.get(e);n.set(e,t);}function t(){return a(e,arguments,c(this).constructor)}return t.prototype=Object.create(e.prototype,{constructor:{value:t,enumerable:!1,writable:!0,configurable:!0}}),u(t,e)})(e)}function a(e,t,n){return (a=function(){if("undefined"==typeof Reflect||!Reflect.construct)return !1;if(Reflect.construct.sham)return !1;if("function"==typeof Proxy)return !0;try{return Date.prototype.toString.call(Reflect.construct(Date,[],function(){})),!0}catch(e){return !1}}()?Reflect.construct:function(e,t,n){var r=[null];r.push.apply(r,t);var i=new(Function.bind.apply(e,r));return n&&u(i,n.prototype),i}).apply(null,arguments)}function u(e,t){return (u=Object.setPrototypeOf||function(e,t){return e.__proto__=t,e})(e,t)}function c(e){return (c=Object.setPrototypeOf?Object.getPrototypeOf:function(e){return e.__proto__||Object.getPrototypeOf(e)})(e)}var T=(function(e,t){if("function"!=typeof t&&null!==t)throw new TypeError("Super expression must either be null or a function");e.prototype=Object.create(t&&t.prototype,{constructor:{value:e,writable:!0,configurable:!0}}),t&&u(e,t);}(l,o(Error)),l);function l(e,t){var n;return function(e,t){if(!(e instanceof t))throw new TypeError("Cannot call a class as a function")}(this,l),(n=s(this,c(l).call(this,e))).name=n.constructor.name,n.status=t,n.message=e,n}function S(e){return function(e,t){return e.type=t,e.error=!0,e}({message:e},"validationError")}function M(e,t,n){return t.usePost&&t.usePost(e,n)?"POST":t.usePatch&&t.usePatch(e,n)?"PATCH":t.useDelete&&t.useDelete(e,n)?"DELETE":"GET"}e.exports=t.default;},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return r.default.PNAddChannelsToGroupOperation},t.validateParams=function(e,t){var n=t.channels,r=t.channelGroup,i=e.config;if(!r)return "Missing Channel Group";if(!n||0===n.length)return "Missing Channels";if(!i.subscribeKey)return "Missing Subscribe Key"},t.getURL=function(e,t){var n=t.channelGroup,r=e.config;return "/v1/channel-registration/sub-key/".concat(r.subscribeKey,"/channel-group/").concat(i.default.encodeString(n))},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(e,t){var n=t.channels;return {add:(void 0===n?[]:n).join(",")}},t.handleResponse=function(){return {}};n(0);var r=s(n(1)),i=s(n(2));function s(e){return e&&e.__esModule?e:{default:e}}},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return r.default.PNRemoveChannelsFromGroupOperation},t.validateParams=function(e,t){var n=t.channels,r=t.channelGroup,i=e.config;if(!r)return "Missing Channel Group";if(!n||0===n.length)return "Missing Channels";if(!i.subscribeKey)return "Missing Subscribe Key"},t.getURL=function(e,t){var n=t.channelGroup,r=e.config;return "/v1/channel-registration/sub-key/".concat(r.subscribeKey,"/channel-group/").concat(i.default.encodeString(n))},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(e,t){var n=t.channels;return {remove:(void 0===n?[]:n).join(",")}},t.handleResponse=function(){return {}};n(0);var r=s(n(1)),i=s(n(2));function s(e){return e&&e.__esModule?e:{default:e}}},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return r.default.PNRemoveGroupOperation},t.validateParams=function(e,t){var n=t.channelGroup,r=e.config;if(!n)return "Missing Channel Group";if(!r.subscribeKey)return "Missing Subscribe Key"},t.getURL=function(e,t){var n=t.channelGroup,r=e.config;return "/v1/channel-registration/sub-key/".concat(r.subscribeKey,"/channel-group/").concat(i.default.encodeString(n),"/remove")},t.isAuthSupported=function(){return !0},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.prepareParams=function(){return {}},t.handleResponse=function(){return {}};n(0);var r=s(n(1)),i=s(n(2));function s(e){return e&&e.__esModule?e:{default:e}}},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNChannelGroupsOperation},t.validateParams=function(e){if(!e.config.subscribeKey)return "Missing Subscribe Key"},t.getURL=function(e){var t=e.config;return "/v1/channel-registration/sub-key/".concat(t.subscribeKey,"/channel-group")},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(){return {}},t.handleResponse=function(e,t){return {groups:t.payload.groups}};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return r.default.PNChannelsForGroupOperation},t.validateParams=function(e,t){var n=t.channelGroup,r=e.config;if(!n)return "Missing Channel Group";if(!r.subscribeKey)return "Missing Subscribe Key"},t.getURL=function(e,t){var n=t.channelGroup,r=e.config;return "/v1/channel-registration/sub-key/".concat(r.subscribeKey,"/channel-group/").concat(i.default.encodeString(n))},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(){return {}},t.handleResponse=function(e,t){return {channels:t.payload.channels}};n(0);var r=s(n(1)),i=s(n(2));function s(e){return e&&e.__esModule?e:{default:e}}},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNPushNotificationEnabledChannelsOperation},t.validateParams=function(e,t){var n=t.device,r=t.pushGateway,i=t.channels,s=t.topic,o=e.config;if(!n)return "Missing Device ID (device)";if(!r)return "Missing GW Type (pushGateway: gcm, apns or apns2)";if("apns2"===r&&!s)return "Missing APNS2 topic";if(!i||0===i.length)return "Missing Channels";if(!o.subscribeKey)return "Missing Subscribe Key"},t.getURL=function(e,t){var n=t.device,r=t.pushGateway,i=e.config;return "apns2"!==r?"/v1/push/sub-key/".concat(i.subscribeKey,"/devices/").concat(n):"/v2/push/sub-key/".concat(i.subscribeKey,"/devices-apns2/").concat(n)},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(e,t){var n=t.pushGateway,r=t.channels,i=void 0===r?[]:r,s=t.environment,o=void 0===s?"development":s,a=t.topic,u={type:n,add:i.join(",")};"apns2"===n&&delete(u=Object.assign({},u,{environment:o,topic:a})).type;return u},t.handleResponse=function(){return {}};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNPushNotificationEnabledChannelsOperation},t.validateParams=function(e,t){var n=t.device,r=t.pushGateway,i=t.channels,s=t.topic,o=e.config;if(!n)return "Missing Device ID (device)";if(!r)return "Missing GW Type (pushGateway: gcm, apns or apns2)";if("apns2"===r&&!s)return "Missing APNS2 topic";if(!i||0===i.length)return "Missing Channels";if(!o.subscribeKey)return "Missing Subscribe Key"},t.getURL=function(e,t){var n=t.device,r=t.pushGateway,i=e.config;return "apns2"!==r?"/v1/push/sub-key/".concat(i.subscribeKey,"/devices/").concat(n):"/v2/push/sub-key/".concat(i.subscribeKey,"/devices-apns2/").concat(n)},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(e,t){var n=t.pushGateway,r=t.channels,i=void 0===r?[]:r,s=t.environment,o=void 0===s?"development":s,a=t.topic,u={type:n,remove:i.join(",")};"apns2"===n&&delete(u=Object.assign({},u,{environment:o,topic:a})).type;return u},t.handleResponse=function(){return {}};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNPushNotificationEnabledChannelsOperation},t.validateParams=function(e,t){var n=t.device,r=t.pushGateway,i=t.topic,s=e.config;if(!n)return "Missing Device ID (device)";if(!r)return "Missing GW Type (pushGateway: gcm, apns or apns2)";if("apns2"===r&&!i)return "Missing APNS2 topic";if(!s.subscribeKey)return "Missing Subscribe Key"},t.getURL=function(e,t){var n=t.device,r=t.pushGateway,i=e.config;return "apns2"!==r?"/v1/push/sub-key/".concat(i.subscribeKey,"/devices/").concat(n):"/v2/push/sub-key/".concat(i.subscribeKey,"/devices-apns2/").concat(n)},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(e,t){var n=t.pushGateway,r=t.environment,i=void 0===r?"development":r,s=t.topic,o={type:n};"apns2"===n&&delete(o=Object.assign({},o,{environment:i,topic:s})).type;return o},t.handleResponse=function(e,t){return {channels:t}};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNRemoveAllPushNotificationsOperation},t.validateParams=function(e,t){var n=t.device,r=t.pushGateway,i=t.topic,s=e.config;if(!n)return "Missing Device ID (device)";if(!r)return "Missing GW Type (pushGateway: gcm, apns or apns2)";if("apns2"===r&&!i)return "Missing APNS2 topic";if(!s.subscribeKey)return "Missing Subscribe Key"},t.getURL=function(e,t){var n=t.device,r=t.pushGateway,i=e.config;return "apns2"!==r?"/v1/push/sub-key/".concat(i.subscribeKey,"/devices/").concat(n,"/remove"):"/v2/push/sub-key/".concat(i.subscribeKey,"/devices-apns2/").concat(n,"/remove")},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(e,t){var n=t.pushGateway,r=t.environment,i=void 0===r?"development":r,s=t.topic,o={type:n};"apns2"===n&&delete(o=Object.assign({},o,{environment:i,topic:s})).type;return o},t.handleResponse=function(){return {}};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return r.default.PNUnsubscribeOperation},t.validateParams=function(e){if(!e.config.subscribeKey)return "Missing Subscribe Key"},t.getURL=function(e,t){var n=e.config,r=t.channels,i=void 0===r?[]:r,s=0<i.length?i.join(","):",";return "/v2/presence/sub-key/".concat(n.subscribeKey,"/channel/").concat(o.default.encodeString(s),"/leave")},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(e,t){var n=t.channelGroups,r=void 0===n?[]:n,i={};0<r.length&&(i["channel-group"]=r.join(","));return i},t.handleResponse=function(){return {}};n(0);var r=i(n(1)),o=i(n(2));function i(e){return e&&e.__esModule?e:{default:e}}},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNWhereNowOperation},t.validateParams=function(e){if(!e.config.subscribeKey)return "Missing Subscribe Key"},t.getURL=function(e,t){var n=e.config,r=t.uuid,i=void 0===r?n.UUID:r;return "/v2/presence/sub-key/".concat(n.subscribeKey,"/uuid/").concat(i)},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(){return {}},t.handleResponse=function(e,t){return t.payload?{channels:t.payload.channels}:{channels:[]}};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return r.default.PNHeartbeatOperation},t.validateParams=function(e){if(!e.config.subscribeKey)return "Missing Subscribe Key"},t.getURL=function(e,t){var n=e.config,r=t.channels,i=void 0===r?[]:r,s=0<i.length?i.join(","):",";return "/v2/presence/sub-key/".concat(n.subscribeKey,"/channel/").concat(o.default.encodeString(s),"/heartbeat")},t.isAuthSupported=function(){return !0},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.prepareParams=function(e,t){var n=t.channelGroups,r=void 0===n?[]:n,i=t.state,s=void 0===i?{}:i,o=e.config,a={};0<r.length&&(a["channel-group"]=r.join(","));return a.state=JSON.stringify(s),a.heartbeat=o.getPresenceTimeout(),a},t.handleResponse=function(){return {}};n(0);var r=i(n(1)),o=i(n(2));function i(e){return e&&e.__esModule?e:{default:e}}},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return r.default.PNGetStateOperation},t.validateParams=function(e){if(!e.config.subscribeKey)return "Missing Subscribe Key"},t.getURL=function(e,t){var n=e.config,r=t.uuid,i=void 0===r?n.UUID:r,s=t.channels,o=void 0===s?[]:s,a=0<o.length?o.join(","):",";return "/v2/presence/sub-key/".concat(n.subscribeKey,"/channel/").concat(u.default.encodeString(a),"/uuid/").concat(i)},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(e,t){var n=t.channelGroups,r=void 0===n?[]:n,i={};0<r.length&&(i["channel-group"]=r.join(","));return i},t.handleResponse=function(e,t,n){var r=n.channels,i=void 0===r?[]:r,s=n.channelGroups,o=void 0===s?[]:s,a={};1===i.length&&0===o.length?a[i[0]]=t.payload:a=t.payload;return {channels:a}};n(0);var r=i(n(1)),u=i(n(2));function i(e){return e&&e.__esModule?e:{default:e}}},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return r.default.PNSetStateOperation},t.validateParams=function(e,t){var n=e.config,r=t.state,i=t.channels,s=void 0===i?[]:i,o=t.channelGroups,a=void 0===o?[]:o;if(!r)return "Missing State";if(!n.subscribeKey)return "Missing Subscribe Key";if(0===s.length&&0===a.length)return "Please provide a list of channels and/or channel-groups"},t.getURL=function(e,t){var n=e.config,r=t.channels,i=void 0===r?[]:r,s=0<i.length?i.join(","):",";return "/v2/presence/sub-key/".concat(n.subscribeKey,"/channel/").concat(o.default.encodeString(s),"/uuid/").concat(n.UUID,"/data")},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(e,t){var n=t.state,r=t.channelGroups,i=void 0===r?[]:r,s={};s.state=JSON.stringify(n),0<i.length&&(s["channel-group"]=i.join(","));return s},t.handleResponse=function(e,t){return {state:t.payload}};n(0);var r=i(n(1)),o=i(n(2));function i(e){return e&&e.__esModule?e:{default:e}}},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return r.default.PNHereNowOperation},t.validateParams=function(e){if(!e.config.subscribeKey)return "Missing Subscribe Key"},t.getURL=function(e,t){var n=e.config,r=t.channels,i=void 0===r?[]:r,s=t.channelGroups,o=void 0===s?[]:s,a="/v2/presence/sub-key/".concat(n.subscribeKey);if(0<i.length||0<o.length){var u=0<i.length?i.join(","):",";a+="/channel/".concat(c.default.encodeString(u));}return a},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(e,t){var n=t.channelGroups,r=void 0===n?[]:n,i=t.includeUUIDs,s=void 0===i||i,o=t.includeState,a=void 0!==o&&o,u=t.queryParameters,c=void 0===u?{}:u,l={};s||(l.disable_uuids=1);a&&(l.state=1);0<r.length&&(l["channel-group"]=r.join(","));return l=function(t){for(var e=1;e<arguments.length;e++){var n=null!=arguments[e]?arguments[e]:{};e%2?f(Object(n),!0).forEach(function(e){h(t,e,n[e]);}):Object.getOwnPropertyDescriptors?Object.defineProperties(t,Object.getOwnPropertyDescriptors(n)):f(Object(n)).forEach(function(e){Object.defineProperty(t,e,Object.getOwnPropertyDescriptor(n,e));});}return t}({},l,{},c)},t.handleResponse=function(e,i,t){var n,r=t.channels,s=void 0===r?[]:r,o=t.channelGroups,a=void 0===o?[]:o,u=t.includeUUIDs,c=void 0===u||u,l=t.includeState,f=void 0!==l&&l;n=1<s.length||0<a.length||0===a.length&&0===s.length?function(){var r={};return r.totalChannels=i.payload.total_channels,r.totalOccupancy=i.payload.total_occupancy,r.channels={},Object.keys(i.payload.channels).forEach(function(e){var t=i.payload.channels[e],n=[];return r.channels[e]={occupants:n,name:e,occupancy:t.occupancy},c&&t.uuids.forEach(function(e){f?n.push({state:e.state,uuid:e.uuid}):n.push({state:null,uuid:e});}),r}),r}():function(){var e={},t=[];return e.totalChannels=1,e.totalOccupancy=i.occupancy,e.channels={},e.channels[s[0]]={occupants:t,name:s[0],occupancy:i.occupancy},c&&i.uuids&&i.uuids.forEach(function(e){f?t.push({state:e.state,uuid:e.uuid}):t.push({state:null,uuid:e});}),e}();return n};n(0);var r=i(n(1)),c=i(n(2));function i(e){return e&&e.__esModule?e:{default:e}}function f(t,e){var n=Object.keys(t);if(Object.getOwnPropertySymbols){var r=Object.getOwnPropertySymbols(t);e&&(r=r.filter(function(e){return Object.getOwnPropertyDescriptor(t,e).enumerable})),n.push.apply(n,r);}return n}function h(e,t,n){return t in e?Object.defineProperty(e,t,{value:n,enumerable:!0,configurable:!0,writable:!0}):e[t]=n,e}},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNAddMessageActionOperation},t.validateParams=function(e,t){var n=e.config,r=t.action,i=t.channel;if(!t.messageTimetoken)return "Missing message timetoken";if(!n.subscribeKey)return "Missing Subscribe Key";if(!i)return "Missing message channel";if(!r)return "Missing Action";if(!r.value)return "Missing Action.value";if(!r.type)return "Missing Action.type";if(15<r.type.length)return "Action.type value exceed maximum length of 15"},t.usePost=function(){return !0},t.postURL=function(e,t){var n=e.config,r=t.channel,i=t.messageTimetoken;return "/v1/message-actions/".concat(n.subscribeKey,"/channel/").concat(r,"/message/").concat(i)},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.getRequestHeaders=function(){return {"Content-Type":"application/json"}},t.isAuthSupported=function(){return !0},t.prepareParams=function(){return {}},t.postPayload=function(e,t){return t.action},t.handleResponse=function(e,t){return {data:t.data}};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNRemoveMessageActionOperation},t.validateParams=function(e,t){var n=e.config,r=t.channel,i=t.actionTimetoken;if(!t.messageTimetoken)return "Missing message timetoken";if(!i)return "Missing action timetoken";if(!n.subscribeKey)return "Missing Subscribe Key";if(!r)return "Missing message channel"},t.useDelete=function(){return !0},t.getURL=function(e,t){var n=e.config,r=t.channel,i=t.actionTimetoken,s=t.messageTimetoken;return "/v1/message-actions/".concat(n.subscribeKey,"/channel/").concat(r,"/message/").concat(s,"/action/").concat(i)},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(){return {}},t.handleResponse=function(e,t){return {data:t.data}};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNGetMessageActionsOperation},t.validateParams=function(e,t){var n=e.config,r=t.channel;if(!n.subscribeKey)return "Missing Subscribe Key";if(!r)return "Missing message channel"},t.getURL=function(e,t){var n=e.config,r=t.channel;return "/v1/message-actions/".concat(n.subscribeKey,"/channel/").concat(r)},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(e,t){var n=t.limit,r=t.start,i=t.end,s={};n&&(s.limit=n);r&&(s.start=r);i&&(s.end=i);return s},t.handleResponse=function(e,t){var n={data:t.data,start:null,end:null};n.data.length&&(n.end=n.data[n.data.length-1].actionTimetoken,n.start=n.data[0].actionTimetoken);return n};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNCreateUserOperation},t.validateParams=function(e,t){var n=e.config,r=t.id,i=t.name,s=t.custom;if(!r)return "Missing User.id";if(!i)return "Missing User.name";if(!n.subscribeKey)return "Missing Subscribe Key";if(s&&!Object.values(s).every(function(e){return "string"==typeof e||"number"==typeof e||"boolean"==typeof e}))return "Invalid custom type, only string, number and boolean values are allowed."},t.usePost=function(){return !0},t.getURL=function(e){var t=e.config;return "/v1/objects/".concat(t.subscribeKey,"/users")},t.postURL=function(e){var t=e.config;return "/v1/objects/".concat(t.subscribeKey,"/users")},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.getAuthToken=function(e,t){return e.tokenManager.getToken("user",t.id)||e.tokenManager.getToken("user")},t.prepareParams=function(e,t){var n=t.include,r={};n?void 0===n.customFields&&(n.customFields=!0):n={customFields:!0};if(n){var i=[];n.customFields&&i.push("custom");var s=i.join(",");0<s.length&&(r.include=s);}return r},t.postPayload=function(e,t){return function(e,t){return t}(0,t)},t.handleResponse=function(e,t){return t};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNUpdateUserOperation},t.validateParams=function(e,t){var n=e.config,r=t.id,i=t.name,s=t.custom;if(!r)return "Missing User.id";if(!i)return "Missing User.name";if(!n.subscribeKey)return "Missing Subscribe Key";if(s&&!Object.values(s).every(function(e){return "string"==typeof e||"number"==typeof e||"boolean"==typeof e}))return "Invalid custom type, only string, number and boolean values are allowed."},t.usePatch=function(){return !0},t.getURL=function(e,t){var n=e.config,r=t.id;return "/v1/objects/".concat(n.subscribeKey,"/users/").concat(r)},t.patchURL=function(e,t){var n=e.config,r=t.id;return "/v1/objects/".concat(n.subscribeKey,"/users/").concat(r)},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.getAuthToken=function(e,t){return e.tokenManager.getToken("user",t.id)||e.tokenManager.getToken("user")},t.prepareParams=function(e,t){var n=t.include,r={};n?void 0===n.customFields&&(n.customFields=!0):n={customFields:!0};if(n){var i=[];n.customFields&&i.push("custom");var s=i.join(",");0<s.length&&(r.include=s);}return r},t.patchPayload=function(e,t){return function(e,t){return t}(0,t)},t.handleResponse=function(e,t){return t};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNDeleteUserOperation},t.validateParams=function(e,t){var n=e.config;if(!t)return "Missing UserId";if(!n.subscribeKey)return "Missing Subscribe Key"},t.useDelete=function(){return !0},t.getURL=function(e,t){var n=e.config;return "/v1/objects/".concat(n.subscribeKey,"/users/").concat(t)},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.getAuthToken=function(e,t){return e.tokenManager.getToken("user",t)||e.tokenManager.getToken("user")},t.prepareParams=function(){return {}},t.handleResponse=function(e,t){return t};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNGetUserOperation},t.validateParams=function(e,t){if(!t.userId)return "Missing userId"},t.getURL=function(e,t){var n=e.config;return "/v1/objects/".concat(n.subscribeKey,"/users/").concat(t.userId)},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.getAuthToken=function(e,t){return e.tokenManager.getToken("user",t.userId)||e.tokenManager.getToken("user")},t.prepareParams=function(e,t){var n=t.include,r={};n?void 0===n.customFields&&(n.customFields=!0):n={customFields:!0};if(n){var i=[];n.customFields&&i.push("custom");var s=i.join(",");0<s.length&&(r.include=s);}return r},t.handleResponse=function(e,t){return t};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNGetUsersOperation},t.validateParams=function(){},t.getURL=function(e){var t=e.config;return "/v1/objects/".concat(t.subscribeKey,"/users")},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.getAuthToken=function(e){return e.tokenManager.getToken("user")},t.prepareParams=function(e,t){var n=t.include,r=t.limit,i=t.page,s=t.filter,o={};r&&(o.limit=r);if(n){var a=[];n.totalCount&&(o.count=!0),n.customFields&&a.push("custom");var u=a.join(",");0<u.length&&(o.include=u);}i&&(i.next&&(o.start=i.next),i.prev&&(o.end=i.prev));s&&(o.filter=s);return o},t.handleResponse=function(e,t){return t};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNCreateSpaceOperation},t.validateParams=function(e,t){var n=e.config,r=t.id,i=t.name,s=t.custom;if(!r)return "Missing Space.id";if(!i)return "Missing Space.name";if(!n.subscribeKey)return "Missing Subscribe Key";if(s&&!Object.values(s).every(function(e){return "string"==typeof e||"number"==typeof e||"boolean"==typeof e}))return "Invalid custom type, only string, number and boolean values are allowed."},t.usePost=function(){return !0},t.getURL=function(e){var t=e.config;return "/v1/objects/".concat(t.subscribeKey,"/spaces")},t.postURL=function(e){var t=e.config;return "/v1/objects/".concat(t.subscribeKey,"/spaces")},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.getAuthToken=function(e,t){return e.tokenManager.getToken("space",t.id)||e.tokenManager.getToken("space")},t.prepareParams=function(e,t){var n=t.include,r={};n?void 0===n.customFields&&(n.customFields=!0):n={customFields:!0};if(n){var i=[];n.customFields&&i.push("custom");var s=i.join(",");0<s.length&&(r.include=s);}return r},t.postPayload=function(e,t){return function(e,t){return t}(0,t)},t.handleResponse=function(e,t){return t};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNUpdateSpaceOperation},t.validateParams=function(e,t){var n=e.config,r=t.id,i=t.name,s=t.custom;if(!r)return "Missing Space.id";if(!i)return "Missing Space.name";if(!n.subscribeKey)return "Missing Subscribe Key";if(s&&!Object.values(s).every(function(e){return "string"==typeof e||"number"==typeof e||"boolean"==typeof e}))return "Invalid custom type, only string, number and boolean values are allowed."},t.usePatch=function(){return !0},t.getURL=function(e,t){var n=e.config,r=t.id;return "/v1/objects/".concat(n.subscribeKey,"/spaces/").concat(r)},t.patchURL=function(e,t){var n=e.config,r=t.id;return "/v1/objects/".concat(n.subscribeKey,"/spaces/").concat(r)},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.getAuthToken=function(e,t){return e.tokenManager.getToken("space",t.id)||e.tokenManager.getToken("space")},t.prepareParams=function(e,t){var n=t.include,r={};n?void 0===n.customFields&&(n.customFields=!0):n={customFields:!0};if(n){var i=[];n.customFields&&i.push("custom");var s=i.join(",");0<s.length&&(r.include=s);}return r},t.patchPayload=function(e,t){return function(e,t){return t}(0,t)},t.handleResponse=function(e,t){return t};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNDeleteSpaceOperation},t.validateParams=function(e,t){var n=e.config;if(!t)return "Missing SpaceId";if(!n.subscribeKey)return "Missing Subscribe Key"},t.useDelete=function(){return !0},t.getURL=function(e,t){var n=e.config;return "/v1/objects/".concat(n.subscribeKey,"/spaces/").concat(t)},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.getAuthToken=function(e,t){return e.tokenManager.getToken("space",t)||e.tokenManager.getToken("space")},t.prepareParams=function(){return {}},t.handleResponse=function(e,t){return t};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNGetSpacesOperation},t.validateParams=function(){},t.getURL=function(e){var t=e.config;return "/v1/objects/".concat(t.subscribeKey,"/spaces")},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.getAuthToken=function(e){return e.tokenManager.getToken("space")},t.prepareParams=function(e,t){var n=t.include,r=t.limit,i=t.page,s=t.filter,o={};r&&(o.limit=r);if(n){var a=[];n.totalCount&&(o.count=!0),n.customFields&&a.push("custom");var u=a.join(",");0<u.length&&(o.include=u);}i&&(i.next&&(o.start=i.next),i.prev&&(o.end=i.prev));s&&(o.filter=s);return o},t.handleResponse=function(e,t){return t};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNGetSpaceOperation},t.validateParams=function(e,t){if(!t.spaceId)return "Missing spaceId"},t.getURL=function(e,t){var n=e.config;return "/v1/objects/".concat(n.subscribeKey,"/spaces/").concat(t.spaceId)},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.getAuthToken=function(e,t){return e.tokenManager.getToken("space",t.spaceId)||e.tokenManager.getToken("space")},t.prepareParams=function(e,t){var n=t.include,r={};n?void 0===n.customFields&&(n.customFields=!0):n={customFields:!0};if(n){var i=[];n.customFields&&i.push("custom");var s=i.join(",");0<s.length&&(r.include=s);}return r},t.handleResponse=function(e,t){return t};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNGetMembersOperation},t.validateParams=function(e,t){if(!t.spaceId)return "Missing spaceId"},t.getURL=function(e,t){var n=e.config;return "/v1/objects/".concat(n.subscribeKey,"/spaces/").concat(t.spaceId,"/users")},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.getAuthToken=function(e,t){return e.tokenManager.getToken("space",t.spaceId)||e.tokenManager.getToken("space")},t.prepareParams=function(e,t){var n=t.include,r=t.limit,i=t.page,s=t.filter,o={};r&&(o.limit=r);if(n){var a=[];n.totalCount&&(o.count=!0),n.customFields&&a.push("custom"),n.userFields&&a.push("user"),n.customUserFields&&a.push("user.custom");var u=a.join(",");0<u.length&&(o.include=u);}i&&(i.next&&(o.start=i.next),i.prev&&(o.end=i.prev));s&&(o.filter=s);return o},t.handleResponse=function(e,t){return t};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNUpdateMembersOperation},t.validateParams=function(e,t){var n=t.spaceId,r=t.users;if(!n)return "Missing spaceId";if(!r)return "Missing users"},t.getURL=function(e,t){var n=e.config;return "/v1/objects/".concat(n.subscribeKey,"/spaces/").concat(t.spaceId,"/users")},t.patchURL=function(e,t){var n=e.config;return "/v1/objects/".concat(n.subscribeKey,"/spaces/").concat(t.spaceId,"/users")},t.usePatch=function(){return !0},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.getAuthToken=function(e,t){return e.tokenManager.getToken("space",t.spaceId)||e.tokenManager.getToken("space")},t.prepareParams=function(e,t){var n=t.include,r=t.limit,i=t.page,s={};r&&(s.limit=r);if(n){var o=[];n.totalCount&&(s.count=!0),n.customFields&&o.push("custom"),n.spaceFields&&o.push("space"),n.customSpaceFields&&o.push("space.custom");var a=o.join(",");0<a.length&&(s.include=a);}i&&(i.next&&(s.start=i.next),i.prev&&(s.end=i.prev));return s},t.patchPayload=function(e,t){return function(e,t){var n=t.users,r={};n&&0<n.length&&(r.add=[],n.forEach(function(e){var t={id:e.id};e.custom&&(t.custom=e.custom),r.add.push(t);}));return r}(0,t)},t.handleResponse=function(e,t){return t};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNUpdateMembersOperation},t.validateParams=function(e,t){var n=t.spaceId,r=t.users;if(!n)return "Missing spaceId";if(!r)return "Missing users"},t.getURL=function(e,t){var n=e.config;return "/v1/objects/".concat(n.subscribeKey,"/spaces/").concat(t.spaceId,"/users")},t.patchURL=function(e,t){var n=e.config;return "/v1/objects/".concat(n.subscribeKey,"/spaces/").concat(t.spaceId,"/users")},t.usePatch=function(){return !0},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.getAuthToken=function(e,t){return e.tokenManager.getToken("space",t.spaceId)||e.tokenManager.getToken("space")},t.prepareParams=function(e,t){var n=t.include,r=t.limit,i=t.page,s={};r&&(s.limit=r);if(n){var o=[];n.totalCount&&(s.count=!0),n.customFields&&o.push("custom"),n.spaceFields&&o.push("space"),n.customSpaceFields&&o.push("space.custom");var a=o.join(",");0<a.length&&(s.include=a);}i&&(i.next&&(s.start=i.next),i.prev&&(s.end=i.prev));return s},t.patchPayload=function(e,t){return function(e,t){var n=t.addMembers,r=t.updateMembers,i=t.removeMembers,s=t.users,o={};n&&0<n.length&&(o.add=[],n.forEach(function(e){var t={id:e.id};e.custom&&(t.custom=e.custom),o.add.push(t);}));r&&0<r.length&&(o.update=[],r.forEach(function(e){var t={id:e.id};e.custom&&(t.custom=e.custom),o.update.push(t);}));s&&0<s.length&&(o.update=o.update||[],s.forEach(function(e){var t={id:e.id};e.custom&&(t.custom=e.custom),o.update.push(t);}));i&&0<i.length&&(o.remove=[],i.forEach(function(e){o.remove.push({id:e});}));return o}(0,t)},t.handleResponse=function(e,t){return t};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNUpdateMembersOperation},t.validateParams=function(e,t){var n=t.spaceId,r=t.users;if(!n)return "Missing spaceId";if(!r)return "Missing users"},t.getURL=function(e,t){var n=e.config;return "/v1/objects/".concat(n.subscribeKey,"/spaces/").concat(t.spaceId,"/users")},t.patchURL=function(e,t){var n=e.config;return "/v1/objects/".concat(n.subscribeKey,"/spaces/").concat(t.spaceId,"/users")},t.usePatch=function(){return !0},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.getAuthToken=function(e,t){return e.tokenManager.getToken("space",t.spaceId)||e.tokenManager.getToken("space")},t.prepareParams=function(e,t){var n=t.include,r=t.limit,i=t.page,s={};r&&(s.limit=r);if(n){var o=[];n.totalCount&&(s.count=!0),n.customFields&&o.push("custom"),n.spaceFields&&o.push("space"),n.customSpaceFields&&o.push("space.custom");var a=o.join(",");0<a.length&&(s.include=a);}i&&(i.next&&(s.start=i.next),i.prev&&(s.end=i.prev));return s},t.patchPayload=function(e,t){return function(e,t){var n=t.users,r={};n&&0<n.length&&(r.remove=[],n.forEach(function(e){r.remove.push({id:e});}));return r}(0,t)},t.handleResponse=function(e,t){return t};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNGetMembershipsOperation},t.validateParams=function(e,t){if(!t.userId)return "Missing userId"},t.getURL=function(e,t){var n=e.config;return "/v1/objects/".concat(n.subscribeKey,"/users/").concat(t.userId,"/spaces")},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.getAuthToken=function(e,t){return e.tokenManager.getToken("user",t.userId)||e.tokenManager.getToken("user")},t.prepareParams=function(e,t){var n=t.include,r=t.limit,i=t.page,s=t.filter,o={};r&&(o.limit=r);if(n){var a=[];n.totalCount&&(o.count=!0),n.customFields&&a.push("custom"),n.spaceFields&&a.push("space"),n.customSpaceFields&&a.push("space.custom");var u=a.join(",");0<u.length&&(o.include=u);}i&&(i.next&&(o.start=i.next),i.prev&&(o.end=i.prev));s&&(o.filter=s);return o},t.handleResponse=function(e,t){return t};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNUpdateMembershipsOperation},t.validateParams=function(e,t){var n=t.userId,r=t.spaces;if(!n)return "Missing userId";if(!r)return "Missing spaces"},t.getURL=function(e,t){var n=e.config;return "/v1/objects/".concat(n.subscribeKey,"/users/").concat(t.userId,"/spaces")},t.patchURL=function(e,t){var n=e.config;return "/v1/objects/".concat(n.subscribeKey,"/users/").concat(t.userId,"/spaces")},t.usePatch=function(){return !0},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.getAuthToken=function(e,t){return e.tokenManager.getToken("user",t.userId)||e.tokenManager.getToken("user")},t.prepareParams=function(e,t){var n=t.include,r=t.limit,i=t.page,s={};r&&(s.limit=r);if(n){var o=[];n.totalCount&&(s.count=!0),n.customFields&&o.push("custom"),n.spaceFields&&o.push("space"),n.customSpaceFields&&o.push("space.custom");var a=o.join(",");0<a.length&&(s.include=a);}i&&(i.next&&(s.start=i.next),i.prev&&(s.end=i.prev));return s},t.patchPayload=function(e,t){return function(e,t){var n=t.addMemberships,r=t.updateMemberships,i=t.removeMemberships,s=t.spaces,o={};n&&0<n.length&&(o.add=[],n.forEach(function(e){var t={id:e.id};e.custom&&(t.custom=e.custom),o.add.push(t);}));r&&0<r.length&&(o.update=[],r.forEach(function(e){var t={id:e.id};e.custom&&(t.custom=e.custom),o.update.push(t);}));s&&0<s.length&&(o.update=o.update||[],s.forEach(function(e){var t={id:e.id};e.custom&&(t.custom=e.custom),o.update.push(t);}));i&&0<i.length&&(o.remove=[],i.forEach(function(e){o.remove.push({id:e});}));return o}(0,t)},t.handleResponse=function(e,t){return t};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNUpdateMembershipsOperation},t.validateParams=function(e,t){var n=t.userId,r=t.spaces;if(!n)return "Missing userId";if(!r)return "Missing spaces"},t.getURL=function(e,t){var n=e.config;return "/v1/objects/".concat(n.subscribeKey,"/users/").concat(t.userId,"/spaces")},t.patchURL=function(e,t){var n=e.config;return "/v1/objects/".concat(n.subscribeKey,"/users/").concat(t.userId,"/spaces")},t.usePatch=function(){return !0},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.getAuthToken=function(e,t){return e.tokenManager.getToken("user",t.userId)||e.tokenManager.getToken("user")},t.prepareParams=function(e,t){var n=t.include,r=t.limit,i=t.page,s={};r&&(s.limit=r);if(n){var o=[];n.totalCount&&(s.count=!0),n.customFields&&o.push("custom"),n.spaceFields&&o.push("space"),n.customSpaceFields&&o.push("space.custom");var a=o.join(",");0<a.length&&(s.include=a);}i&&(i.next&&(s.start=i.next),i.prev&&(s.end=i.prev));return s},t.patchPayload=function(e,t){return function(e,t){var n=t.spaces,r={};n&&0<n.length&&(r.add=[],n.forEach(function(e){var t={id:e.id};e.custom&&(t.custom=e.custom),r.add.push(t);}));return r}(0,t)},t.handleResponse=function(e,t){return t};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNUpdateMembershipsOperation},t.validateParams=function(e,t){var n=t.userId,r=t.spaces;if(!n)return "Missing userId";if(!r)return "Missing spaces"},t.getURL=function(e,t){var n=e.config;return "/v1/objects/".concat(n.subscribeKey,"/users/").concat(t.userId,"/spaces")},t.patchURL=function(e,t){var n=e.config;return "/v1/objects/".concat(n.subscribeKey,"/users/").concat(t.userId,"/spaces")},t.usePatch=function(){return !0},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.getAuthToken=function(e,t){return e.tokenManager.getToken("user",t.userId)||e.tokenManager.getToken("user")},t.prepareParams=function(e,t){var n=t.include,r=t.limit,i=t.page,s={};r&&(s.limit=r);if(n){var o=[];n.totalCount&&(s.count=!0),n.customFields&&o.push("custom"),n.spaceFields&&o.push("space"),n.customSpaceFields&&o.push("space.custom");var a=o.join(",");0<a.length&&(s.include=a);}i&&(i.next&&(s.start=i.next),i.prev&&(s.end=i.prev));return s},t.patchPayload=function(e,t){return function(e,t){var n=t.spaces,r={};n&&0<n.length&&(r.remove=[],n.forEach(function(e){r.remove.push({id:e});}));return r}(0,t)},t.handleResponse=function(e,t){return t};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNAccessManagerAudit},t.validateParams=function(e){if(!e.config.subscribeKey)return "Missing Subscribe Key"},t.getURL=function(e){var t=e.config;return "/v2/auth/audit/sub-key/".concat(t.subscribeKey)},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !1},t.prepareParams=function(e,t){var n=t.channel,r=t.channelGroup,i=t.authKeys,s=void 0===i?[]:i,o={};n&&(o.channel=n);r&&(o["channel-group"]=r);0<s.length&&(o.auth=s.join(","));return o},t.handleResponse=function(e,t){return t.payload};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNAccessManagerGrant},t.validateParams=function(e){var t=e.config;if(!t.subscribeKey)return "Missing Subscribe Key";if(!t.publishKey)return "Missing Publish Key";if(!t.secretKey)return "Missing Secret Key"},t.getURL=function(e){var t=e.config;return "/v2/auth/grant/sub-key/".concat(t.subscribeKey)},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !1},t.prepareParams=function(e,t){var n=t.channels,r=void 0===n?[]:n,i=t.channelGroups,s=void 0===i?[]:i,o=t.ttl,a=t.read,u=void 0!==a&&a,c=t.write,l=void 0!==c&&c,f=t.manage,h=void 0!==f&&f,p=t.authKeys,d=void 0===p?[]:p,g=t.delete,y={};y.r=u?"1":"0",y.w=l?"1":"0",y.m=h?"1":"0",y.d=g?"1":"0",0<r.length&&(y.channel=r.join(","));0<s.length&&(y["channel-group"]=s.join(","));0<d.length&&(y.auth=d.join(","));!o&&0!==o||(y.ttl=o);return y},t.handleResponse=function(){return {}};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNAccessManagerGrantToken},t.extractPermissions=f,t.validateParams=function(e,t){var n=e.config;if(!n.subscribeKey)return "Missing Subscribe Key";if(!n.publishKey)return "Missing Publish Key";if(!n.secretKey)return "Missing Secret Key";if(!t.resources&&!t.patterns)return "Missing either Resources or Patterns.";if(t.resources&&(!t.resources.users||0===Object.keys(t.resources.users).length)&&(!t.resources.spaces||0===Object.keys(t.resources.spaces).length)||t.patterns&&(!t.patterns.users||0===Object.keys(t.patterns.users).length)&&(!t.patterns.spaces||0===Object.keys(t.patterns.spaces).length))return "Missing values for either Resources or Patterns."},t.postURL=function(e){var t=e.config;return "/v3/pam/".concat(t.subscribeKey,"/grant")},t.usePost=function(){return !0},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !1},t.prepareParams=function(){return {}},t.postPayload=function(e,t){return function(e,t){var n=t.ttl,r=t.resources,i=t.patterns,s=t.meta,o={ttl:0,permissions:{resources:{channels:{},groups:{},users:{},spaces:{}},patterns:{channels:{},groups:{},users:{},spaces:{}},meta:{}}};if(r){var a=r.users,u=r.spaces;a&&Object.keys(a).forEach(function(e){o.permissions.resources.users[e]=f(a[e]);}),u&&Object.keys(u).forEach(function(e){o.permissions.resources.spaces[e]=f(u[e]);});}if(i){var c=i.users,l=i.spaces;c&&Object.keys(c).forEach(function(e){o.permissions.patterns.users[e]=f(c[e]);}),l&&Object.keys(l).forEach(function(e){o.permissions.patterns.spaces[e]=f(l[e]);});}!n&&0!==n||(o.ttl=n);s&&(o.permissions.meta=s);return o}(0,t)},t.handleResponse=function(e,t){return t.data.token};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};function f(e){var t=0;return e.create&&(t|=16),e.delete&&(t|=8),e.manage&&(t|=4),e.write&&(t|=2),e.read&&(t|=1),t}},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return r.default.PNPublishOperation},t.validateParams=function(e,t){var n=e.config,r=t.message;if(!t.channel)return "Missing Channel";if(!r)return "Missing Message";if(!n.subscribeKey)return "Missing Subscribe Key"},t.usePost=function(e,t){var n=t.sendByPost;return void 0!==n&&n},t.getURL=function(e,t){var n=e.config,r=t.channel,i=t.message,s=a(e,i);return "/publish/".concat(n.publishKey,"/").concat(n.subscribeKey,"/0/").concat(o.default.encodeString(r),"/0/").concat(o.default.encodeString(s))},t.postURL=function(e,t){var n=e.config,r=t.channel;return "/publish/".concat(n.publishKey,"/").concat(n.subscribeKey,"/0/").concat(o.default.encodeString(r),"/0")},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.postPayload=function(e,t){var n=t.message;return a(e,n)},t.prepareParams=function(e,t){var n=t.meta,r=t.replicate,i=void 0===r||r,s=t.storeInHistory,o=t.ttl,a={};null!=s&&(a.store=s?"1":"0");o&&(a.ttl=o);!1===i&&(a.norep="true");n&&"object"===u(n)&&(a.meta=JSON.stringify(n));return a},t.handleResponse=function(e,t){return {timetoken:t[2]}};n(0);var r=i(n(1)),o=i(n(2));function i(e){return e&&e.__esModule?e:{default:e}}function u(e){return (u="function"==typeof Symbol&&"symbol"==typeof Symbol.iterator?function(e){return typeof e}:function(e){return e&&"function"==typeof Symbol&&e.constructor===Symbol&&e!==Symbol.prototype?"symbol":typeof e})(e)}function a(e,t){var n=e.crypto,r=e.config,i=JSON.stringify(t);return r.cipherKey&&(i=n.encrypt(i),i=JSON.stringify(i)),i}},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return r.default.PNSignalOperation},t.validateParams=function(e,t){var n=e.config,r=t.message;if(!t.channel)return "Missing Channel";if(!r)return "Missing Message";if(!n.subscribeKey)return "Missing Subscribe Key"},t.getURL=function(e,t){var n=e.config,r=t.channel,i=t.message,s=function(e,t){return JSON.stringify(t)}(0,i);return "/signal/".concat(n.publishKey,"/").concat(n.subscribeKey,"/0/").concat(o.default.encodeString(r),"/0/").concat(o.default.encodeString(s))},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(){return {}},t.handleResponse=function(e,t){return {timetoken:t[2]}};n(0);var r=i(n(1)),o=i(n(2));function i(e){return e&&e.__esModule?e:{default:e}}},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return r.default.PNHistoryOperation},t.validateParams=function(e,t){var n=t.channel,r=e.config;if(!n)return "Missing channel";if(!r.subscribeKey)return "Missing Subscribe Key"},t.getURL=function(e,t){var n=t.channel,r=e.config;return "/v2/history/sub-key/".concat(r.subscribeKey,"/channel/").concat(i.default.encodeString(n))},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(e,t){var n=t.start,r=t.end,i=t.reverse,s=t.count,o=void 0===s?100:s,a=t.stringifiedTimeToken,u=void 0!==a&&a,c=t.includeMeta,l=void 0!==c&&c,f={include_token:"true"};f.count=o,n&&(f.start=n);r&&(f.end=r);u&&(f.string_message_token="true");null!=i&&(f.reverse=i.toString());l&&(f.include_meta="true");return f},t.handleResponse=function(n,e){var r={messages:[],startTimeToken:e[1],endTimeToken:e[2]};Array.isArray(e[0])&&e[0].forEach(function(e){var t={timetoken:e.timetoken,entry:function(e,t){var n=e.config,r=e.crypto;if(!n.cipherKey)return t;try{return r.decrypt(t)}catch(e){return t}}(n,e.message)};e.meta&&(t.meta=e.meta),r.messages.push(t);});return r};n(0);var r=s(n(1)),i=s(n(2));function s(e){return e&&e.__esModule?e:{default:e}}},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return r.default.PNDeleteMessagesOperation},t.validateParams=function(e,t){var n=t.channel,r=e.config;if(!n)return "Missing channel";if(!r.subscribeKey)return "Missing Subscribe Key"},t.useDelete=function(){return !0},t.getURL=function(e,t){var n=t.channel,r=e.config;return "/v3/history/sub-key/".concat(r.subscribeKey,"/channel/").concat(i.default.encodeString(n))},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(e,t){var n=t.start,r=t.end,i={};n&&(i.start=n);r&&(i.end=r);return i},t.handleResponse=function(e,t){return t.payload};n(0);var r=s(n(1)),i=s(n(2));function s(e){return e&&e.__esModule?e:{default:e}}},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return r.default.PNMessageCounts},t.validateParams=function(e,t){var n=t.channels,r=t.timetoken,i=t.channelTimetokens,s=e.config;if(!n)return "Missing channel";if(r&&i)return "timetoken and channelTimetokens are incompatible together";if(r&&i&&1<i.length&&n.length!==i.length)return "Length of channelTimetokens and channels do not match";if(!s.subscribeKey)return "Missing Subscribe Key"},t.getURL=function(e,t){var n=t.channels,r=e.config,i=n.join(",");return "/v3/history/sub-key/".concat(r.subscribeKey,"/message-counts/").concat(s.default.encodeString(i))},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(e,t){var n=t.timetoken,r=t.channelTimetokens,i={};if(r&&1===r.length){var s=function(e,t){return function(e){if(Array.isArray(e))return e}(e)||function(e,t){if(!(Symbol.iterator in Object(e)||"[object Arguments]"===Object.prototype.toString.call(e)))return;var n=[],r=!0,i=!1,s=void 0;try{for(var o,a=e[Symbol.iterator]();!(r=(o=a.next()).done)&&(n.push(o.value),!t||n.length!==t);r=!0);}catch(e){i=!0,s=e;}finally{try{r||null==a.return||a.return();}finally{if(i)throw s}}return n}(e,t)||function(){throw new TypeError("Invalid attempt to destructure non-iterable instance")}()}(r,1)[0];i.timetoken=s;}else r?i.channelsTimetoken=r.join(","):n&&(i.timetoken=n);return i},t.handleResponse=function(e,t){return {channels:t.channels}};var r=i(n(1)),s=i(n(2));function i(e){return e&&e.__esModule?e:{default:e}}},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return r.default.PNFetchMessagesOperation},t.validateParams=function(e,t){var n=t.channels,r=t.includeMessageActions,i=void 0!==r&&r,s=e.config;if(!n||0===n.length)return "Missing channels";if(!s.subscribeKey)return "Missing Subscribe Key";if(i&&1<n.length)throw new TypeError("History can return actions data for a single channel only. Either pass a single channel or disable the includeMessageActions flag.")},t.getURL=function(e,t){var n=t.channels,r=void 0===n?[]:n,i=t.includeMessageActions,s=void 0!==i&&i,o=e.config,a=s?"history-with-actions":"history",u=0<r.length?r.join(","):",";return "/v3/".concat(a,"/sub-key/").concat(o.subscribeKey,"/channel/").concat(c.default.encodeString(u))},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(e,t){var n=t.start,r=t.end,i=t.count,s=t.stringifiedTimeToken,o=void 0!==s&&s,a=t.includeMeta,u=void 0!==a&&a,c={};i&&(c.max=i);n&&(c.start=n);r&&(c.end=r);o&&(c.string_message_token="true");u&&(c.include_meta="true");return c},t.handleResponse=function(r,e){var i={channels:{}};return Object.keys(e.channels||{}).forEach(function(n){i.channels[n]=[],(e.channels[n]||[]).forEach(function(e){var t={};t.channel=n,t.timetoken=e.timetoken,t.message=function(e,t){var n=e.config,r=e.crypto;if(!n.cipherKey)return t;try{return r.decrypt(t)}catch(e){return t}}(r,e.message),e.actions&&(t.actions=e.actions,t.data=e.actions),e.meta&&(t.meta=e.meta),i.channels[n].push(t);});}),i};n(0);var r=i(n(1)),c=i(n(2));function i(e){return e&&e.__esModule?e:{default:e}}},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return r.default.PNSubscribeOperation},t.validateParams=function(e){if(!e.config.subscribeKey)return "Missing Subscribe Key"},t.getURL=function(e,t){var n=e.config,r=t.channels,i=void 0===r?[]:r,s=0<i.length?i.join(","):",";return "/v2/subscribe/".concat(n.subscribeKey,"/").concat(o.default.encodeString(s),"/0")},t.getRequestTimeout=function(e){return e.config.getSubscribeTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(e,t){var n=e.config,r=t.state,i=t.channelGroups,s=void 0===i?[]:i,o=t.timetoken,a=t.filterExpression,u=t.region,c={heartbeat:n.getPresenceTimeout()};0<s.length&&(c["channel-group"]=s.join(","));a&&0<a.length&&(c["filter-expr"]=a);Object.keys(r).length&&(c.state=JSON.stringify(r));o&&(c.tt=o);u&&(c.tr=u);return c},t.handleResponse=function(e,t){var r=[];t.m.forEach(function(e){var t={publishTimetoken:e.p.t,region:e.p.r},n={shard:parseInt(e.a,10),subscriptionMatch:e.b,channel:e.c,messageType:e.e,payload:e.d,flags:e.f,issuingClientId:e.i,subscribeKey:e.k,originationTimetoken:e.o,userMetadata:e.u,publishMetaData:t};r.push(n);});var n={timetoken:t.t.t,region:t.t.r};return {messages:r,metadata:n}};n(0);var r=i(n(1)),o=i(n(2));function i(e){return e&&e.__esModule?e:{default:e}}},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.default=void 0;i(n(3));var r=i(n(4));n(0);function i(e){return e&&e.__esModule?e:{default:e}}function s(e,t){for(var n=0;n<t.length;n++){var r=t[n];r.enumerable=r.enumerable||!1,r.configurable=!0,"value"in r&&(r.writable=!0),Object.defineProperty(e,r.key,r);}}function o(e,t,n){return t in e?Object.defineProperty(e,t,{value:n,enumerable:!0,configurable:!0,writable:!0}):e[t]=n,e}var a,u,l=(a=f,(u=[{key:"init",value:function(e){this._config=e,this._maxSubDomain=20,this._currentSubDomain=Math.floor(Math.random()*this._maxSubDomain),this._providedFQDN=(this._config.secure?"https://":"http://")+this._config.origin,this._coreParams={},this.shiftStandardOrigin();}},{key:"nextOrigin",value:function(){return this._providedFQDN.match(/ps\.pndsn\.com$/i)?(this._currentSubDomain=this._currentSubDomain+1,this._currentSubDomain>=this._maxSubDomain&&(this._currentSubDomain=1),e=this._currentSubDomain.toString(),this._providedFQDN.replace("ps.pndsn.com","ps".concat(e,".pndsn.com"))):this._providedFQDN;var e;}},{key:"hasModule",value:function(e){return e in this._modules}},{key:"shiftStandardOrigin",value:function(){return this._standardOrigin=this.nextOrigin(),this._standardOrigin}},{key:"getStandardOrigin",value:function(){return this._standardOrigin}},{key:"POST",value:function(e,t,n,r){return this._modules.post(e,t,n,r)}},{key:"PATCH",value:function(e,t,n,r){return this._modules.patch(e,t,n,r)}},{key:"GET",value:function(e,t,n){return this._modules.get(e,t,n)}},{key:"DELETE",value:function(e,t,n){return this._modules.del(e,t,n)}},{key:"_detectErrorCategory",value:function(e){if("ENOTFOUND"===e.code)return r.default.PNNetworkIssuesCategory;if("ECONNREFUSED"===e.code)return r.default.PNNetworkIssuesCategory;if("ECONNRESET"===e.code)return r.default.PNNetworkIssuesCategory;if("EAI_AGAIN"===e.code)return r.default.PNNetworkIssuesCategory;if(0===e.status||e.hasOwnProperty("status")&&void 0===e.status)return r.default.PNNetworkIssuesCategory;if(e.timeout)return r.default.PNTimeoutCategory;if("ETIMEDOUT"===e.code)return r.default.PNNetworkIssuesCategory;if(e.response){if(e.response.badRequest)return r.default.PNBadRequestCategory;if(e.response.forbidden)return r.default.PNAccessDeniedCategory}return r.default.PNUnknownCategory}}])&&s(a.prototype,u),f);function f(t){var n=this;!function(e,t){if(!(e instanceof t))throw new TypeError("Cannot call a class as a function")}(this,f),o(this,"_modules",void 0),o(this,"_config",void 0),o(this,"_maxSubDomain",void 0),o(this,"_currentSubDomain",void 0),o(this,"_standardOrigin",void 0),o(this,"_subscribeOrigin",void 0),o(this,"_providedFQDN",void 0),o(this,"_requestTimeout",void 0),o(this,"_coreParams",void 0),this._modules={},Object.keys(t).forEach(function(e){n._modules[e]=t[e].bind(n);});}t.default=l,e.exports=t.default;},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.default=void 0;var r={get:function(e){try{return localStorage.getItem(e)}catch(e){return null}},set:function(e,t){try{return localStorage.setItem(e,t)}catch(e){return null}}};t.default=r,e.exports=t.default;},function(e,t,n){function i(e){return (i="function"==typeof Symbol&&"symbol"==typeof Symbol.iterator?function(e){return typeof e}:function(e){return e&&"function"==typeof Symbol&&e.constructor===Symbol&&e!==Symbol.prototype?"symbol":typeof e})(e)}function r(e,t){for(var n=0;n<t.length;n++){var r=t[n];r.enumerable=r.enumerable||!1,r.configurable=!0,"value"in r&&(r.writable=!0),Object.defineProperty(e,r.key,r);}}function s(e,t,n){return t in e?Object.defineProperty(e,t,{value:n,enumerable:!0,configurable:!0,writable:!0}):e[t]=n,e}Object.defineProperty(t,"__esModule",{value:!0}),t.default=void 0;var o,a,c=(o=l,(a=[{key:"decodeToken",value:function(e){var t="";e.length%4==3?t="=":e.length%4==2&&(t="==");var n=e.replace(/-/gi,"+").replace(/_/gi,"/")+t,r=this._decode(this._base64ToBinary(n));if("object"===i(r))return r}}])&&r(o.prototype,a),l);function l(e,t){!function(e,t){if(!(e instanceof t))throw new TypeError("Cannot call a class as a function")}(this,l),s(this,"_base64ToBinary",void 0),s(this,"_cborReader",void 0),this._base64ToBinary=t,this._decode=e;}t.default=c,e.exports=t.default;},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.get=function(e,t,n){var r=s.default.get(this.getStandardOrigin()+t.url).set(t.headers).query(e);return o.call(this,r,t,n)},t.post=function(e,t,n,r){var i=s.default.post(this.getStandardOrigin()+n.url).query(e).set(n.headers).send(t);return o.call(this,i,n,r)},t.patch=function(e,t,n,r){var i=s.default.patch(this.getStandardOrigin()+n.url).query(e).set(n.headers).send(t);return o.call(this,i,n,r)},t.del=function(e,t,n){var r=s.default.delete(this.getStandardOrigin()+t.url).set(t.headers).query(e);return o.call(this,r,t,n)};var r,s=(r=n(72))&&r.__esModule?r:{default:r};n(0);function a(r){var i=(new Date).getTime(),e=(new Date).toISOString(),s=console&&console.log?console:window&&window.console&&window.console.log?window.console:console;s.log("<<<<<"),s.log("[".concat(e,"]"),"\n",r.url,"\n",r.qs),s.log("-----"),r.on("response",function(e){var t=(new Date).getTime()-i,n=(new Date).toISOString();s.log(">>>>>>"),s.log("[".concat(n," / ").concat(t,"]"),"\n",r.url,"\n",r.qs,"\n",e.text),s.log("-----");});}function o(e,i,s){var o=this;return this._config.logVerbosity&&(e=e.use(a)),this._config.proxy&&this._modules.proxy&&(e=this._modules.proxy.call(this,e)),this._config.keepAlive&&this._modules.keepAlive&&(e=this._modules.keepAlive(e)),e.timeout(i.timeout).end(function(t,n){var e,r={};if(r.error=null!==t,r.operation=i.operation,n&&n.status&&(r.statusCode=n.status),t){if(t.response&&t.response.text&&!o._config.logVerbosity)try{r.errorData=JSON.parse(t.response.text);}catch(e){r.errorData=t;}else r.errorData=t;return r.category=o._detectErrorCategory(t),s(r,null)}try{e=JSON.parse(n.text);}catch(e){return r.errorData=n,r.error=!0,s(r,null)}return e.error&&1===e.error&&e.status&&e.message&&e.service?(r.errorData=e,r.statusCode=e.status,r.error=!0,r.category=o._detectErrorCategory(r),s(r,null)):(e.error&&e.error.message&&(r.errorData=e.error),s(r,e))})}},function(e,n,t){var r;r="undefined"!=typeof window?window:"undefined"!=typeof self?self:(console.warn("Using browser-only version of superagent in non-browser environment"),this);var i=t(73),s=t(74),o=t(10),a=t(75),u=t(77);function c(){}var l=n=e.exports=function(e,t){return "function"==typeof t?new n.Request("GET",e).end(t):1==arguments.length?new n.Request("GET",e):new n.Request(e,t)};n.Request=v,l.getXHR=function(){if(!(!r.XMLHttpRequest||r.location&&"file:"==r.location.protocol&&r.ActiveXObject))return new XMLHttpRequest;try{return new ActiveXObject("Microsoft.XMLHTTP")}catch(e){}try{return new ActiveXObject("Msxml2.XMLHTTP.6.0")}catch(e){}try{return new ActiveXObject("Msxml2.XMLHTTP.3.0")}catch(e){}try{return new ActiveXObject("Msxml2.XMLHTTP")}catch(e){}throw Error("Browser-only version of superagent could not find XHR")};var f="".trim?function(e){return e.trim()}:function(e){return e.replace(/(^\s*|\s*$)/g,"")};function h(e){if(!o(e))return e;var t=[];for(var n in e)p(t,n,e[n]);return t.join("&")}function p(t,n,e){if(null!=e)if(Array.isArray(e))e.forEach(function(e){p(t,n,e);});else if(o(e))for(var r in e)p(t,n+"["+r+"]",e[r]);else t.push(encodeURIComponent(n)+"="+encodeURIComponent(e));else null===e&&t.push(encodeURIComponent(n));}function d(e){for(var t,n,r={},i=e.split("&"),s=0,o=i.length;s<o;++s)-1==(n=(t=i[s]).indexOf("="))?r[decodeURIComponent(t)]="":r[decodeURIComponent(t.slice(0,n))]=decodeURIComponent(t.slice(n+1));return r}function g(e){return /[\/+]json($|[^-\w])/.test(e)}function y(e){this.req=e,this.xhr=this.req.xhr,this.text="HEAD"!=this.req.method&&(""===this.xhr.responseType||"text"===this.xhr.responseType)||void 0===this.xhr.responseType?this.xhr.responseText:null,this.statusText=this.req.xhr.statusText;var t=this.xhr.status;1223===t&&(t=204),this._setStatusProperties(t),this.header=this.headers=function(e){for(var t,n,r,i,s=e.split(/\r?\n/),o={},a=0,u=s.length;a<u;++a)-1!==(t=(n=s[a]).indexOf(":"))&&(r=n.slice(0,t).toLowerCase(),i=f(n.slice(t+1)),o[r]=i);return o}(this.xhr.getAllResponseHeaders()),this.header["content-type"]=this.xhr.getResponseHeader("content-type"),this._setHeaderProperties(this.header),null===this.text&&e._responseType?this.body=this.xhr.response:this.body="HEAD"!=this.req.method?this._parseBody(this.text?this.text:this.xhr.response):null;}function v(e,t){var r=this;this._query=this._query||[],this.method=e,this.url=t,this.header={},this._header={},this.on("end",function(){var t,n=null,e=null;try{e=new y(r);}catch(e){return (n=new Error("Parser is unable to parse the response")).parse=!0,n.original=e,r.xhr?(n.rawResponse=void 0===r.xhr.responseType?r.xhr.responseText:r.xhr.response,n.status=r.xhr.status?r.xhr.status:null,n.statusCode=n.status):(n.rawResponse=null,n.status=null),r.callback(n)}r.emit("response",e);try{r._isResponseOK(e)||(t=new Error(e.statusText||"Unsuccessful HTTP response"));}catch(e){t=e;}t?(t.original=n,t.response=e,t.status=e.status,r.callback(t,e)):r.callback(null,e);});}function b(e,t,n){var r=l("DELETE",e);return "function"==typeof t&&(n=t,t=null),t&&r.send(t),n&&r.end(n),r}l.serializeObject=h,l.parseString=d,l.types={html:"text/html",json:"application/json",xml:"text/xml",urlencoded:"application/x-www-form-urlencoded",form:"application/x-www-form-urlencoded","form-data":"application/x-www-form-urlencoded"},l.serialize={"application/x-www-form-urlencoded":h,"application/json":JSON.stringify},l.parse={"application/x-www-form-urlencoded":d,"application/json":JSON.parse},a(y.prototype),y.prototype._parseBody=function(e){var t=l.parse[this.type];return this.req._parser?this.req._parser(this,e):(!t&&g(this.type)&&(t=l.parse["application/json"]),t&&e&&(e.length||e instanceof Object)?t(e):null)},y.prototype.toError=function(){var e=this.req,t=e.method,n=e.url,r="cannot "+t+" "+n+" ("+this.status+")",i=new Error(r);return i.status=this.status,i.method=t,i.url=n,i},l.Response=y,i(v.prototype),s(v.prototype),v.prototype.type=function(e){return this.set("Content-Type",l.types[e]||e),this},v.prototype.accept=function(e){return this.set("Accept",l.types[e]||e),this},v.prototype.auth=function(e,t,n){1===arguments.length&&(t=""),"object"==typeof t&&null!==t&&(n=t,t=""),n=n||{type:"function"==typeof btoa?"basic":"auto"};return this._auth(e,t,n,function(e){if("function"==typeof btoa)return btoa(e);throw new Error("Cannot use basic auth, btoa is not a function")})},v.prototype.query=function(e){return "string"!=typeof e&&(e=h(e)),e&&this._query.push(e),this},v.prototype.attach=function(e,t,n){if(t){if(this._data)throw Error("superagent can't mix .send() and .attach()");this._getFormData().append(e,t,n||t.name);}return this},v.prototype._getFormData=function(){return this._formData||(this._formData=new r.FormData),this._formData},v.prototype.callback=function(e,t){if(this._shouldRetry(e,t))return this._retry();var n=this._callback;this.clearTimeout(),e&&(this._maxRetries&&(e.retries=this._retries-1),this.emit("error",e)),n(e,t);},v.prototype.crossDomainError=function(){var e=new Error("Request has been terminated\nPossible causes: the network is offline, Origin is not allowed by Access-Control-Allow-Origin, the page is being unloaded, etc.");e.crossDomain=!0,e.status=this.status,e.method=this.method,e.url=this.url,this.callback(e);},v.prototype.buffer=v.prototype.ca=v.prototype.agent=function(){return console.warn("This is not supported in browser version of superagent"),this},v.prototype.pipe=v.prototype.write=function(){throw Error("Streaming is not supported in browser version of superagent")},v.prototype._isHost=function(e){return e&&"object"==typeof e&&!Array.isArray(e)&&"[object Object]"!==Object.prototype.toString.call(e)},v.prototype.end=function(e){return this._endCalled&&console.warn("Warning: .end() was called twice. This is not supported in superagent"),this._endCalled=!0,this._callback=e||c,this._finalizeQueryString(),this._end()},v.prototype._end=function(){var n=this,r=this.xhr=l.getXHR(),e=this._formData||this._data;this._setTimeouts(),r.onreadystatechange=function(){var e=r.readyState;if(2<=e&&n._responseTimeoutTimer&&clearTimeout(n._responseTimeoutTimer),4==e){var t;try{t=r.status;}catch(e){t=0;}if(!t){if(n.timedout||n._aborted)return;return n.crossDomainError()}n.emit("end");}};function t(e,t){0<t.total&&(t.percent=t.loaded/t.total*100),t.direction=e,n.emit("progress",t);}if(this.hasListeners("progress"))try{r.onprogress=t.bind(null,"download"),r.upload&&(r.upload.onprogress=t.bind(null,"upload"));}catch(e){}try{this.username&&this.password?r.open(this.method,this.url,!0,this.username,this.password):r.open(this.method,this.url,!0);}catch(e){return this.callback(e)}if(this._withCredentials&&(r.withCredentials=!0),!this._formData&&"GET"!=this.method&&"HEAD"!=this.method&&"string"!=typeof e&&!this._isHost(e)){var i=this._header["content-type"],s=this._serializer||l.serialize[i?i.split(";")[0]:""];!s&&g(i)&&(s=l.serialize["application/json"]),s&&(e=s(e));}for(var o in this.header)null!=this.header[o]&&this.header.hasOwnProperty(o)&&r.setRequestHeader(o,this.header[o]);return this._responseType&&(r.responseType=this._responseType),this.emit("request",this),r.send(void 0!==e?e:null),this},l.agent=function(){return new u},["GET","POST","OPTIONS","PATCH","PUT","DELETE"].forEach(function(r){u.prototype[r.toLowerCase()]=function(e,t){var n=new l.Request(r,e);return this._setDefaults(n),t&&n.end(t),n};}),u.prototype.del=u.prototype.delete,l.get=function(e,t,n){var r=l("GET",e);return "function"==typeof t&&(n=t,t=null),t&&r.query(t),n&&r.end(n),r},l.head=function(e,t,n){var r=l("HEAD",e);return "function"==typeof t&&(n=t,t=null),t&&r.query(t),n&&r.end(n),r},l.options=function(e,t,n){var r=l("OPTIONS",e);return "function"==typeof t&&(n=t,t=null),t&&r.send(t),n&&r.end(n),r},l.del=b,l.delete=b,l.patch=function(e,t,n){var r=l("PATCH",e);return "function"==typeof t&&(n=t,t=null),t&&r.send(t),n&&r.end(n),r},l.post=function(e,t,n){var r=l("POST",e);return "function"==typeof t&&(n=t,t=null),t&&r.send(t),n&&r.end(n),r},l.put=function(e,t,n){var r=l("PUT",e);return "function"==typeof t&&(n=t,t=null),t&&r.send(t),n&&r.end(n),r};},function(e,t,n){function r(e){if(e)return function(e){for(var t in r.prototype)e[t]=r.prototype[t];return e}(e)}(e.exports=r).prototype.on=r.prototype.addEventListener=function(e,t){return this._callbacks=this._callbacks||{},(this._callbacks["$"+e]=this._callbacks["$"+e]||[]).push(t),this},r.prototype.once=function(e,t){function n(){this.off(e,n),t.apply(this,arguments);}return n.fn=t,this.on(e,n),this},r.prototype.off=r.prototype.removeListener=r.prototype.removeAllListeners=r.prototype.removeEventListener=function(e,t){if(this._callbacks=this._callbacks||{},0==arguments.length)return this._callbacks={},this;var n,r=this._callbacks["$"+e];if(!r)return this;if(1==arguments.length)return delete this._callbacks["$"+e],this;for(var i=0;i<r.length;i++)if((n=r[i])===t||n.fn===t){r.splice(i,1);break}return 0===r.length&&delete this._callbacks["$"+e],this},r.prototype.emit=function(e){this._callbacks=this._callbacks||{};for(var t=new Array(arguments.length-1),n=this._callbacks["$"+e],r=1;r<arguments.length;r++)t[r-1]=arguments[r];if(n){r=0;for(var i=(n=n.slice(0)).length;r<i;++r)n[r].apply(this,t);}return this},r.prototype.listeners=function(e){return this._callbacks=this._callbacks||{},this._callbacks["$"+e]||[]},r.prototype.hasListeners=function(e){return !!this.listeners(e).length};},function(e,t,n){var i=n(10);function r(e){if(e)return function(e){for(var t in r.prototype)e[t]=r.prototype[t];return e}(e)}(e.exports=r).prototype.clearTimeout=function(){return clearTimeout(this._timer),clearTimeout(this._responseTimeoutTimer),delete this._timer,delete this._responseTimeoutTimer,this},r.prototype.parse=function(e){return this._parser=e,this},r.prototype.responseType=function(e){return this._responseType=e,this},r.prototype.serialize=function(e){return this._serializer=e,this},r.prototype.timeout=function(e){if(!e||"object"!=typeof e)return this._timeout=e,this._responseTimeout=0,this;for(var t in e)switch(t){case"deadline":this._timeout=e.deadline;break;case"response":this._responseTimeout=e.response;break;default:console.warn("Unknown timeout option",t);}return this},r.prototype.retry=function(e,t){return 0!==arguments.length&&!0!==e||(e=1),e<=0&&(e=0),this._maxRetries=e,this._retries=0,this._retryCallback=t,this};var s=["ECONNRESET","ETIMEDOUT","EADDRINFO","ESOCKETTIMEDOUT"];r.prototype._shouldRetry=function(e,t){if(!this._maxRetries||this._retries++>=this._maxRetries)return !1;if(this._retryCallback)try{var n=this._retryCallback(e,t);if(!0===n)return !0;if(!1===n)return !1}catch(e){console.error(e);}if(t&&t.status&&500<=t.status&&501!=t.status)return !0;if(e){if(e.code&&~s.indexOf(e.code))return !0;if(e.timeout&&"ECONNABORTED"==e.code)return !0;if(e.crossDomain)return !0}return !1},r.prototype._retry=function(){return this.clearTimeout(),this.req&&(this.req=null,this.req=this.request()),this._aborted=!1,this.timedout=!1,this._end()},r.prototype.then=function(e,t){if(!this._fullfilledPromise){var i=this;this._endCalled&&console.warn("Warning: superagent request was sent twice, because both .end() and .then() were called. Never call .end() if you use promises"),this._fullfilledPromise=new Promise(function(n,r){i.end(function(e,t){e?r(e):n(t);});});}return this._fullfilledPromise.then(e,t)},r.prototype.catch=function(e){return this.then(void 0,e)},r.prototype.use=function(e){return e(this),this},r.prototype.ok=function(e){if("function"!=typeof e)throw Error("Callback required");return this._okCallback=e,this},r.prototype._isResponseOK=function(e){return !!e&&(this._okCallback?this._okCallback(e):200<=e.status&&e.status<300)},r.prototype.getHeader=r.prototype.get=function(e){return this._header[e.toLowerCase()]},r.prototype.set=function(e,t){if(i(e)){for(var n in e)this.set(n,e[n]);return this}return this._header[e.toLowerCase()]=t,this.header[e]=t,this},r.prototype.unset=function(e){return delete this._header[e.toLowerCase()],delete this.header[e],this},r.prototype.field=function(e,t){if(null==e)throw new Error(".field(name, val) name can not be empty");if(this._data&&console.error(".field() can't be used if .send() is used. Please use only .send() or only .field() & .attach()"),i(e)){for(var n in e)this.field(n,e[n]);return this}if(Array.isArray(t)){for(var r in t)this.field(e,t[r]);return this}if(null==t)throw new Error(".field(name, val) val can not be empty");return "boolean"==typeof t&&(t=""+t),this._getFormData().append(e,t),this},r.prototype.abort=function(){return this._aborted||(this._aborted=!0,this.xhr&&this.xhr.abort(),this.req&&this.req.abort(),this.clearTimeout(),this.emit("abort")),this},r.prototype._auth=function(e,t,n,r){switch(n.type){case"basic":this.set("Authorization","Basic "+r(e+":"+t));break;case"auto":this.username=e,this.password=t;break;case"bearer":this.set("Authorization","Bearer "+e);}return this},r.prototype.withCredentials=function(e){return null==e&&(e=!0),this._withCredentials=e,this},r.prototype.redirects=function(e){return this._maxRedirects=e,this},r.prototype.maxResponseSize=function(e){if("number"!=typeof e)throw TypeError("Invalid argument");return this._maxResponseSize=e,this},r.prototype.toJSON=function(){return {method:this.method,url:this.url,data:this._data,headers:this._header}},r.prototype.send=function(e){var t=i(e),n=this._header["content-type"];if(this._formData&&console.error(".send() can't be used if .attach() or .field() is used. Please use only .send() or only .field() & .attach()"),t&&!this._data)Array.isArray(e)?this._data=[]:this._isHost(e)||(this._data={});else if(e&&this._data&&this._isHost(this._data))throw Error("Can't merge these send calls");if(t&&i(this._data))for(var r in e)this._data[r]=e[r];else "string"==typeof e?(n||this.type("form"),n=this._header["content-type"],this._data="application/x-www-form-urlencoded"==n?this._data?this._data+"&"+e:e:(this._data||"")+e):this._data=e;return !t||this._isHost(e)||n||this.type("json"),this},r.prototype.sortQuery=function(e){return this._sort=void 0===e||e,this},r.prototype._finalizeQueryString=function(){var e=this._query.join("&");if(e&&(this.url+=(0<=this.url.indexOf("?")?"&":"?")+e),this._query.length=0,this._sort){var t=this.url.indexOf("?");if(0<=t){var n=this.url.substring(t+1).split("&");"function"==typeof this._sort?n.sort(this._sort):n.sort(),this.url=this.url.substring(0,t)+"?"+n.join("&");}}},r.prototype._appendQueryString=function(){console.trace("Unsupported");},r.prototype._timeoutError=function(e,t,n){if(!this._aborted){var r=new Error(e+t+"ms exceeded");r.timeout=t,r.code="ECONNABORTED",r.errno=n,this.timedout=!0,this.abort(),this.callback(r);}},r.prototype._setTimeouts=function(){var e=this;this._timeout&&!this._timer&&(this._timer=setTimeout(function(){e._timeoutError("Timeout of ",e._timeout,"ETIME");},this._timeout)),this._responseTimeout&&!this._responseTimeoutTimer&&(this._responseTimeoutTimer=setTimeout(function(){e._timeoutError("Response timeout of ",e._responseTimeout,"ETIMEDOUT");},this._responseTimeout));};},function(e,t,n){var i=n(76);function r(e){if(e)return function(e){for(var t in r.prototype)e[t]=r.prototype[t];return e}(e)}(e.exports=r).prototype.get=function(e){return this.header[e.toLowerCase()]},r.prototype._setHeaderProperties=function(e){var t=e["content-type"]||"";this.type=i.type(t);var n=i.params(t);for(var r in n)this[r]=n[r];this.links={};try{e.link&&(this.links=i.parseLinks(e.link));}catch(e){}},r.prototype._setStatusProperties=function(e){var t=e/100|0;this.status=this.statusCode=e,this.statusType=t,this.info=1==t,this.ok=2==t,this.redirect=3==t,this.clientError=4==t,this.serverError=5==t,this.error=(4==t||5==t)&&this.toError(),this.created=201==e,this.accepted=202==e,this.noContent=204==e,this.badRequest=400==e,this.unauthorized=401==e,this.notAcceptable=406==e,this.forbidden=403==e,this.notFound=404==e,this.unprocessableEntity=422==e;};},function(e,t,n){t.type=function(e){return e.split(/ *; */).shift()},t.params=function(e){return e.split(/ *; */).reduce(function(e,t){var n=t.split(/ *= */),r=n.shift(),i=n.shift();return r&&i&&(e[r]=i),e},{})},t.parseLinks=function(e){return e.split(/ *, */).reduce(function(e,t){var n=t.split(/ *; */),r=n[0].slice(1,-1);return e[n[1].split(/ *= */)[1].slice(1,-1)]=r,e},{})},t.cleanHeader=function(e,t){return delete e["content-type"],delete e["content-length"],delete e["transfer-encoding"],delete e.host,t&&(delete e.authorization,delete e.cookie),e};},function(e,t){function n(){this._defaults=[];}["use","on","once","set","query","type","accept","auth","withCredentials","sortQuery","retry","ok","redirects","timeout","buffer","serialize","parse","ca","key","pfx","cert"].forEach(function(e){n.prototype[e]=function(){return this._defaults.push({fn:e,arguments:arguments}),this};}),n.prototype._setDefaults=function(t){this._defaults.forEach(function(e){t[e.fn].apply(t,e.arguments);});},e.exports=n;}],i.c=r,i.d=function(e,t,n){i.o(e,t)||Object.defineProperty(e,t,{enumerable:!0,get:n});},i.r=function(e){"undefined"!=typeof Symbol&&Symbol.toStringTag&&Object.defineProperty(e,Symbol.toStringTag,{value:"Module"}),Object.defineProperty(e,"__esModule",{value:!0});},i.t=function(t,e){if(1&e&&(t=i(t)),8&e)return t;if(4&e&&"object"==typeof t&&t&&t.__esModule)return t;var n=Object.create(null);if(i.r(n),Object.defineProperty(n,"default",{enumerable:!0,value:t}),2&e&&"string"!=typeof t)for(var r in t)i.d(n,r,function(e){return t[e]}.bind(null,r));return n},i.n=function(e){var t=e&&e.__esModule?function(){return e.default}:function(){return e};return i.d(t,"a",t),t},i.o=function(e,t){return Object.prototype.hasOwnProperty.call(e,t)},i.p="",i(i.s=11);function i(e){if(r[e])return r[e].exports;var t=r[e]={i:e,l:!1,exports:{}};return n[e].call(t.exports,t,t.exports,i),t.l=!0,t.exports}var n,r;});
     });
 
     var PubNub = unwrapExports(pubnub_min);
@@ -34715,7 +35029,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
       }
     };
 
-    /* src/Modals/userModal.svelte generated by Svelte v3.18.1 */
+    /* src/Modals/userModal.svelte generated by Svelte v3.20.1 */
+
+    const { console: console_1$1 } = globals;
     const file$4 = "src/Modals/userModal.svelte";
 
     function create_fragment$6(ctx) {
@@ -34844,7 +35160,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, div11, anchor);
     			append_dev(div11, div0);
     			append_dev(div0, p);
@@ -34876,6 +35192,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			append_dev(div11, t10);
     			append_dev(div11, div10);
     			append_dev(div10, button);
+    			if (remount) run_all(dispose);
 
     			dispose = [
     				listen_dev(input0, "input", /*input0_input_handler*/ ctx[4]),
@@ -34945,6 +35262,15 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		close();
     	}
 
+    	const writable_props = [];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$1.warn(`<UserModal> was created with unknown prop '${key}'`);
+    	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("UserModal", $$slots, []);
+
     	function input0_input_handler() {
     		user.name = this.value;
     		$$invalidate(0, user);
@@ -34960,13 +35286,29 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		$$invalidate(0, user);
     	}
 
-    	$$self.$capture_state = () => {
-    		return {};
-    	};
+    	$$self.$capture_state = () => ({
+    		getContext,
+    		getClient,
+    		mutate,
+    		subscribe: subscribe$2,
+    		apolloClient,
+    		cookieHandler,
+    		publish,
+    		grantPermissions,
+    		pubnub,
+    		close,
+    		user,
+    		client,
+    		clickHandler
+    	});
 
     	$$self.$inject_state = $$props => {
     		if ("user" in $$props) $$invalidate(0, user = $$props.user);
     	};
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
 
     	return [
     		user,
@@ -34993,7 +35335,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	}
     }
 
-    /* src/Modals/userHelper.svelte generated by Svelte v3.18.1 */
+    /* src/Modals/userHelper.svelte generated by Svelte v3.20.1 */
 
     function create_fragment$7(ctx) {
     	const block = {
@@ -35019,7 +35361,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$7($$self) {
+    function instance$7($$self, $$props, $$invalidate) {
     	const { open } = getContext("simple-modal");
 
     	const showSurprise = () => {
@@ -35031,14 +35373,21 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	};
 
     	showSurprise();
+    	const writable_props = [];
 
-    	$$self.$capture_state = () => {
-    		return {};
-    	};
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<UserHelper> was created with unknown prop '${key}'`);
+    	});
 
-    	$$self.$inject_state = $$props => {
-    		
-    	};
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("UserHelper", $$slots, []);
+
+    	$$self.$capture_state = () => ({
+    		getContext,
+    		UserModal,
+    		open,
+    		showSurprise
+    	});
 
     	return [];
     }
@@ -35067,10 +35416,10 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
         };
     }
 
-    /* node_modules/svelte-simple-modal/src/Modal.svelte generated by Svelte v3.18.1 */
+    /* home/princekumar/Desktop/tryout/node_modules/.pnpm/registry.npmjs.org/svelte-simple-modal/0.3.0_svelte@3.20.1/node_modules/svelte-simple-modal/src/Modal.svelte generated by Svelte v3.20.1 */
 
     const { Object: Object_1 } = globals;
-    const file$5 = "node_modules/svelte-simple-modal/src/Modal.svelte";
+    const file$5 = "home/princekumar/Desktop/tryout/node_modules/.pnpm/registry.npmjs.org/svelte-simple-modal/0.3.0_svelte@3.20.1/node_modules/svelte-simple-modal/src/Modal.svelte";
 
     // (201:2) {#if Component}
     function create_if_block$1(ctx) {
@@ -35102,19 +35451,19 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			t = space();
     			div0 = element("div");
     			create_component(component.$$.fragment);
-    			attr_dev(div0, "class", "content svelte-12ra95k");
+    			attr_dev(div0, "class", "content svelte-2c8it5");
     			attr_dev(div0, "style", /*cssContent*/ ctx[7]);
-    			add_location(div0, file$5, 217, 10, 9065);
-    			attr_dev(div1, "class", "window svelte-12ra95k");
+    			add_location(div0, file$5, 217, 10, 9281);
+    			attr_dev(div1, "class", "window svelte-2c8it5");
     			attr_dev(div1, "style", /*cssWindow*/ ctx[6]);
-    			add_location(div1, file$5, 209, 8, 8801);
-    			attr_dev(div2, "class", "window-wrap svelte-12ra95k");
-    			add_location(div2, file$5, 208, 6, 8750);
-    			attr_dev(div3, "class", "bg svelte-12ra95k");
+    			add_location(div1, file$5, 209, 8, 9017);
+    			attr_dev(div2, "class", "window-wrap svelte-2c8it5");
+    			add_location(div2, file$5, 208, 6, 8966);
+    			attr_dev(div3, "class", "bg svelte-2c8it5");
     			attr_dev(div3, "style", /*cssBg*/ ctx[5]);
-    			add_location(div3, file$5, 201, 4, 8570);
+    			add_location(div3, file$5, 201, 4, 8786);
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, div3, anchor);
     			append_dev(div3, div2);
     			append_dev(div2, div1);
@@ -35125,6 +35474,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			/*div2_binding*/ ctx[31](div2);
     			/*div3_binding*/ ctx[32](div3);
     			current = true;
+    			if (remount) dispose();
     			dispose = listen_dev(div3, "click", /*handleOuterClick*/ ctx[12], false, false, false);
     		},
     		p: function update(ctx, dirty) {
@@ -35214,11 +35564,12 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	const block = {
     		c: function create() {
     			button = element("button");
-    			attr_dev(button, "class", "close svelte-12ra95k");
-    			add_location(button, file$5, 215, 12, 8990);
+    			attr_dev(button, "class", "close svelte-2c8it5");
+    			add_location(button, file$5, 215, 12, 9206);
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, button, anchor);
+    			if (remount) dispose();
     			dispose = listen_dev(button, "click", /*close*/ ctx[10], false, false, false);
     		},
     		p: noop,
@@ -35254,13 +35605,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			if (if_block) if_block.c();
     			t = space();
     			if (default_slot) default_slot.c();
-    			attr_dev(div, "class", "svelte-12ra95k");
-    			add_location(div, file$5, 199, 0, 8542);
+    			attr_dev(div, "class", "svelte-2c8it5");
+    			add_location(div, file$5, 199, 0, 8758);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, div, anchor);
     			if (if_block) if_block.m(div, null);
     			append_dev(div, t);
@@ -35270,6 +35621,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			}
 
     			current = true;
+    			if (remount) dispose();
     			dispose = listen_dev(window, "keyup", /*handleKeyup*/ ctx[11], false, false, false);
     		},
     		p: function update(ctx, dirty) {
@@ -35293,8 +35645,10 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     				check_outros();
     			}
 
-    			if (default_slot && default_slot.p && dirty[0] & /*$$scope*/ 536870912) {
-    				default_slot.p(get_slot_context(default_slot_template, ctx, /*$$scope*/ ctx[29], null), get_slot_changes(default_slot_template, /*$$scope*/ ctx[29], dirty, null));
+    			if (default_slot) {
+    				if (default_slot.p && dirty[0] & /*$$scope*/ 536870912) {
+    					default_slot.p(get_slot_context(default_slot_template, ctx, /*$$scope*/ ctx[29], null), get_slot_changes(default_slot_template, /*$$scope*/ ctx[29], dirty, null));
+    				}
     			}
     		},
     		i: function intro(local) {
@@ -35409,6 +35763,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	});
 
     	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Modal", $$slots, ['default']);
 
     	function div2_binding($$value) {
     		binding_callbacks[$$value ? "unshift" : "push"](() => {
@@ -35438,32 +35793,39 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		if ("$$scope" in $$props) $$invalidate(29, $$scope = $$props.$$scope);
     	};
 
-    	$$self.$capture_state = () => {
-    		return {
-    			key,
-    			closeButton,
-    			closeOnEsc,
-    			closeOnOuterClick,
-    			styleBg,
-    			styleWindow,
-    			styleContent,
-    			setContext: setContext$1,
-    			transitionBg,
-    			transitionBgProps,
-    			transitionWindow,
-    			transitionWindowProps,
-    			state,
-    			Component,
-    			props,
-    			background,
-    			wrap,
-    			cssBg,
-    			cssWindow,
-    			cssContent,
-    			currentTransitionBg,
-    			currentTransitionWindow
-    		};
-    	};
+    	$$self.$capture_state = () => ({
+    		baseSetContext: setContext,
+    		fade,
+    		key,
+    		closeButton,
+    		closeOnEsc,
+    		closeOnOuterClick,
+    		styleBg,
+    		styleWindow,
+    		styleContent,
+    		setContext: setContext$1,
+    		transitionBg,
+    		transitionBgProps,
+    		transitionWindow,
+    		transitionWindowProps,
+    		defaultState,
+    		state,
+    		Component,
+    		props,
+    		background,
+    		wrap,
+    		camelCaseToDash,
+    		toCssString,
+    		open,
+    		close,
+    		handleKeyup,
+    		handleOuterClick,
+    		cssBg,
+    		cssWindow,
+    		cssContent,
+    		currentTransitionBg,
+    		currentTransitionWindow
+    	});
 
     	$$self.$inject_state = $$props => {
     		if ("key" in $$props) $$invalidate(13, key = $$props.key);
@@ -35495,6 +35857,10 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	let cssContent;
     	let currentTransitionBg;
     	let currentTransitionWindow;
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
 
     	$$self.$$.update = () => {
     		if ($$self.$$.dirty[0] & /*state*/ 1) {
@@ -35687,9 +36053,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	}
     }
 
-    /* src/components/timer.svelte generated by Svelte v3.18.1 */
+    /* src/components/timer.svelte generated by Svelte v3.20.1 */
 
-    const { console: console_1 } = globals;
+    const { console: console_1$2 } = globals;
     const file$6 = "src/components/timer.svelte";
 
     function create_fragment$9(ctx) {
@@ -35854,28 +36220,40 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	const writable_props = ["expireTime"];
 
     	Object.keys($$props).forEach(key => {
-    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1.warn(`<Timer> was created with unknown prop '${key}'`);
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$2.warn(`<Timer> was created with unknown prop '${key}'`);
     	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Timer", $$slots, []);
 
     	$$self.$set = $$props => {
     		if ("expireTime" in $$props) $$invalidate(1, expireTime = $$props.expireTime);
     	};
 
-    	$$self.$capture_state = () => {
-    		return {
-    			expireTime,
-    			timer,
-    			timeCounter,
-    			$dataStore
-    		};
-    	};
+    	$$self.$capture_state = () => ({
+    		dataStore,
+    		cookieHandler,
+    		apolloClient,
+    		mutate,
+    		getClient,
+    		expireTime,
+    		timer,
+    		client,
+    		sendSolution,
+    		InitializeTimer,
+    		timeCounter,
+    		$dataStore
+    	});
 
     	$$self.$inject_state = $$props => {
     		if ("expireTime" in $$props) $$invalidate(1, expireTime = $$props.expireTime);
     		if ("timer" in $$props) $$invalidate(0, timer = $$props.timer);
     		if ("timeCounter" in $$props) timeCounter = $$props.timeCounter;
-    		if ("$dataStore" in $$props) dataStore.set($dataStore = $$props.$dataStore);
     	};
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
 
     	return [timer, expireTime];
     }
@@ -35896,7 +36274,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		const props = options.props || {};
 
     		if (/*expireTime*/ ctx[1] === undefined && !("expireTime" in props)) {
-    			console_1.warn("<Timer> was created without expected prop 'expireTime'");
+    			console_1$2.warn("<Timer> was created without expected prop 'expireTime'");
     		}
     	}
 
@@ -35909,9 +36287,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	}
     }
 
-    /* src/Home.svelte generated by Svelte v3.18.1 */
+    /* src/Home.svelte generated by Svelte v3.20.1 */
 
-    const { console: console_1$1 } = globals;
+    const { console: console_1$3 } = globals;
     const file$7 = "src/Home.svelte";
 
     function get_each_context$1(ctx, list, i) {
@@ -36197,7 +36575,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			attr_dev(div3, "class", "btm svelte-kdwmpr");
     			add_location(div3, file$7, 414, 6, 14486);
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, div3, anchor);
     			append_dev(div3, div2);
     			append_dev(div2, div0);
@@ -36205,6 +36583,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			append_dev(div2, t0);
     			append_dev(div2, div1);
     			append_dev(div1, h4);
+    			if (remount) dispose();
     			dispose = listen_dev(div3, "click", /*joined*/ ctx[7], false, false, false);
     		},
     		p: noop,
@@ -36261,6 +36640,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	let img1_src_value;
     	let dispose;
     	let each_value = /*output*/ ctx[2];
+    	validate_each_argument(each_value);
     	let each_blocks = [];
 
     	for (let i = 0; i < each_value.length; i += 1) {
@@ -36368,7 +36748,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			attr_dev(div14, "class", "btm svelte-kdwmpr");
     			add_location(div14, file$7, 403, 6, 14111);
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, div11, anchor);
     			append_dev(div11, div3);
     			append_dev(div3, div0);
@@ -36405,6 +36785,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			append_dev(div14, div13);
     			append_dev(div13, div12);
     			append_dev(div12, img1);
+    			if (remount) run_all(dispose);
 
     			dispose = [
     				listen_dev(input, "input", /*input_input_handler*/ ctx[16]),
@@ -36426,6 +36807,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     			if (dirty & /*output*/ 4) {
     				each_value = /*output*/ ctx[2];
+    				validate_each_argument(each_value);
     				let i;
 
     				for (i = 0; i < each_value.length; i += 1) {
@@ -36641,6 +37023,10 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
+    function updateStore$1(result) {
+    	console.log(result);
+    }
+
     function instance$a($$self, $$props, $$invalidate) {
     	let $problems;
     	let { currentRoute } = $$props;
@@ -36721,8 +37107,11 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	const writable_props = ["currentRoute"];
 
     	Object.keys($$props).forEach(key => {
-    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$1.warn(`<Home> was created with unknown prop '${key}'`);
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$3.warn(`<Home> was created with unknown prop '${key}'`);
     	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Home", $$slots, []);
 
     	function input_input_handler() {
     		newMessage = this.value;
@@ -36733,20 +37122,42 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		if ("currentRoute" in $$props) $$invalidate(10, currentRoute = $$props.currentRoute);
     	};
 
-    	$$self.$capture_state = () => {
-    		return {
-    			currentRoute,
-    			tokens,
-    			hasJoinedChat,
-    			channel,
-    			username,
-    			newMessage,
-    			messages,
-    			output,
-    			userName,
-    			$problems
-    		};
-    	};
+    	$$self.$capture_state = () => ({
+    		onMount,
+    		EditorArea,
+    		Tabs,
+    		getClient,
+    		query,
+    		subscribe: subscribe$2,
+    		apolloClient,
+    		dataStore,
+    		currentTab,
+    		getContext,
+    		Content: UserHelper,
+    		Modal,
+    		cookieHandler,
+    		currentRoute,
+    		Timer,
+    		publish,
+    		grantPermissions,
+    		pubnub,
+    		client,
+    		problems,
+    		tokens,
+    		hasJoinedChat,
+    		channel,
+    		username,
+    		newMessage,
+    		messages,
+    		output,
+    		updateStore: updateStore$1,
+    		joined,
+    		close,
+    		userName,
+    		email,
+    		pubbie,
+    		$problems
+    	});
 
     	$$self.$inject_state = $$props => {
     		if ("currentRoute" in $$props) $$invalidate(10, currentRoute = $$props.currentRoute);
@@ -36758,8 +37169,11 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		if ("messages" in $$props) messages = $$props.messages;
     		if ("output" in $$props) $$invalidate(2, output = $$props.output);
     		if ("userName" in $$props) $$invalidate(3, userName = $$props.userName);
-    		if ("$problems" in $$props) problems.set($problems = $$props.$problems);
     	};
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
 
     	return [
     		hasJoinedChat,
@@ -36798,7 +37212,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		const props = options.props || {};
 
     		if (/*currentRoute*/ ctx[10] === undefined && !("currentRoute" in props)) {
-    			console_1$1.warn("<Home> was created without expected prop 'currentRoute'");
+    			console_1$3.warn("<Home> was created without expected prop 'currentRoute'");
     		}
     	}
 
@@ -36811,7 +37225,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	}
     }
 
-    /* src/Modals/problemModal.svelte generated by Svelte v3.18.1 */
+    /* src/Modals/problemModal.svelte generated by Svelte v3.20.1 */
     const file$8 = "src/Modals/problemModal.svelte";
 
     function create_fragment$b(ctx) {
@@ -36831,9 +37245,10 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, p, anchor);
     			append_dev(p, button);
+    			if (remount) dispose();
     			dispose = listen_dev(button, "click", /*showSurprise*/ ctx[0], false, false, false);
     		},
     		p: noop,
@@ -36856,19 +37271,20 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$b($$self) {
+    function instance$b($$self, $$props, $$invalidate) {
     	const showSurprise = () => {
     		location.replace("http://localhost:5000/newProblem");
     	};
 
-    	$$self.$capture_state = () => {
-    		return {};
-    	};
+    	const writable_props = [];
 
-    	$$self.$inject_state = $$props => {
-    		
-    	};
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<ProblemModal> was created with unknown prop '${key}'`);
+    	});
 
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("ProblemModal", $$slots, []);
+    	$$self.$capture_state = () => ({ getContext, showSurprise });
     	return [showSurprise];
     }
 
@@ -36886,7 +37302,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	}
     }
 
-    /* src/Modals/testModal.svelte generated by Svelte v3.18.1 */
+    /* src/Modals/testModal.svelte generated by Svelte v3.20.1 */
 
     const file$9 = "src/Modals/testModal.svelte";
 
@@ -36907,9 +37323,10 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, p, anchor);
     			append_dev(p, button);
+    			if (remount) dispose();
     			dispose = listen_dev(button, "click", /*showSurprise*/ ctx[0], false, false, false);
     		},
     		p: noop,
@@ -36935,6 +37352,10 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     function instance$c($$self, $$props, $$invalidate) {
     	let { changeCheck } = $$props;
 
+    	const TestCheck = () => {
+    		changeCheck();
+    	};
+
     	const showSurprise = () => {
     		location.replace("http://localhost:5000/newtest");
     	};
@@ -36945,17 +37366,22 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<TestModal> was created with unknown prop '${key}'`);
     	});
 
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("TestModal", $$slots, []);
+
     	$$self.$set = $$props => {
     		if ("changeCheck" in $$props) $$invalidate(1, changeCheck = $$props.changeCheck);
     	};
 
-    	$$self.$capture_state = () => {
-    		return { changeCheck };
-    	};
+    	$$self.$capture_state = () => ({ changeCheck, TestCheck, showSurprise });
 
     	$$self.$inject_state = $$props => {
     		if ("changeCheck" in $$props) $$invalidate(1, changeCheck = $$props.changeCheck);
     	};
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
 
     	return [showSurprise, changeCheck];
     }
@@ -36989,7 +37415,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	}
     }
 
-    /* src/components/navbar.svelte generated by Svelte v3.18.1 */
+    /* src/components/navbar.svelte generated by Svelte v3.20.1 */
+
+    const { console: console_1$4 } = globals;
     const file$a = "src/components/navbar.svelte";
 
     function create_fragment$d(ctx) {
@@ -37105,7 +37533,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, link, anchor);
     			insert_dev(target, t0, anchor);
     			insert_dev(target, nav, anchor);
@@ -37129,6 +37557,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			append_dev(li1, img2);
     			append_dev(li1, t10);
     			append_dev(li1, p2);
+    			if (remount) run_all(dispose);
 
     			dispose = [
     				listen_dev(li0, "click", /*click_handler*/ ctx[4], false, false, false),
@@ -37186,6 +37615,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	console.log(number);
     	changeTheme(number);
+    	const writable_props = [];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$4.warn(`<Navbar> was created with unknown prop '${key}'`);
+    	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Navbar", $$slots, []);
 
     	const click_handler = () => {
     		$$invalidate(0, number++, number);
@@ -37193,14 +37630,23 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		changeTheme(number % themesize);
     	};
 
-    	$$self.$capture_state = () => {
-    		return {};
-    	};
+    	$$self.$capture_state = () => ({
+    		cookieHandler,
+    		tokens,
+    		myFunction,
+    		themes,
+    		number,
+    		changeTheme
+    	});
 
     	$$self.$inject_state = $$props => {
     		if ("themes" in $$props) $$invalidate(2, themes = $$props.themes);
     		if ("number" in $$props) $$invalidate(0, number = $$props.number);
     	};
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
 
     	return [number, tokens, themes, changeTheme, click_handler];
     }
@@ -37219,476 +37665,2736 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	}
     }
 
-    /* src/routes/Admin.svelte generated by Svelte v3.18.1 */
-    const file$b = "src/routes/Admin.svelte";
+    var feather = createCommonjsModule(function (module, exports) {
+    (function webpackUniversalModuleDefinition(root, factory) {
+    	module.exports = factory();
+    })(typeof self !== 'undefined' ? self : commonjsGlobal, function() {
+    return /******/ (function(modules) { // webpackBootstrap
+    /******/ 	// The module cache
+    /******/ 	var installedModules = {};
+    /******/
+    /******/ 	// The require function
+    /******/ 	function __webpack_require__(moduleId) {
+    /******/
+    /******/ 		// Check if module is in cache
+    /******/ 		if(installedModules[moduleId]) {
+    /******/ 			return installedModules[moduleId].exports;
+    /******/ 		}
+    /******/ 		// Create a new module (and put it into the cache)
+    /******/ 		var module = installedModules[moduleId] = {
+    /******/ 			i: moduleId,
+    /******/ 			l: false,
+    /******/ 			exports: {}
+    /******/ 		};
+    /******/
+    /******/ 		// Execute the module function
+    /******/ 		modules[moduleId].call(module.exports, module, module.exports, __webpack_require__);
+    /******/
+    /******/ 		// Flag the module as loaded
+    /******/ 		module.l = true;
+    /******/
+    /******/ 		// Return the exports of the module
+    /******/ 		return module.exports;
+    /******/ 	}
+    /******/
+    /******/
+    /******/ 	// expose the modules object (__webpack_modules__)
+    /******/ 	__webpack_require__.m = modules;
+    /******/
+    /******/ 	// expose the module cache
+    /******/ 	__webpack_require__.c = installedModules;
+    /******/
+    /******/ 	// define getter function for harmony exports
+    /******/ 	__webpack_require__.d = function(exports, name, getter) {
+    /******/ 		if(!__webpack_require__.o(exports, name)) {
+    /******/ 			Object.defineProperty(exports, name, {
+    /******/ 				configurable: false,
+    /******/ 				enumerable: true,
+    /******/ 				get: getter
+    /******/ 			});
+    /******/ 		}
+    /******/ 	};
+    /******/
+    /******/ 	// define __esModule on exports
+    /******/ 	__webpack_require__.r = function(exports) {
+    /******/ 		Object.defineProperty(exports, '__esModule', { value: true });
+    /******/ 	};
+    /******/
+    /******/ 	// getDefaultExport function for compatibility with non-harmony modules
+    /******/ 	__webpack_require__.n = function(module) {
+    /******/ 		var getter = module && module.__esModule ?
+    /******/ 			function getDefault() { return module['default']; } :
+    /******/ 			function getModuleExports() { return module; };
+    /******/ 		__webpack_require__.d(getter, 'a', getter);
+    /******/ 		return getter;
+    /******/ 	};
+    /******/
+    /******/ 	// Object.prototype.hasOwnProperty.call
+    /******/ 	__webpack_require__.o = function(object, property) { return Object.prototype.hasOwnProperty.call(object, property); };
+    /******/
+    /******/ 	// __webpack_public_path__
+    /******/ 	__webpack_require__.p = "";
+    /******/
+    /******/
+    /******/ 	// Load entry module and return exports
+    /******/ 	return __webpack_require__(__webpack_require__.s = 0);
+    /******/ })
+    /************************************************************************/
+    /******/ ({
+
+    /***/ "./dist/icons.json":
+    /*!*************************!*\
+      !*** ./dist/icons.json ***!
+      \*************************/
+    /*! exports provided: activity, airplay, alert-circle, alert-octagon, alert-triangle, align-center, align-justify, align-left, align-right, anchor, aperture, archive, arrow-down-circle, arrow-down-left, arrow-down-right, arrow-down, arrow-left-circle, arrow-left, arrow-right-circle, arrow-right, arrow-up-circle, arrow-up-left, arrow-up-right, arrow-up, at-sign, award, bar-chart-2, bar-chart, battery-charging, battery, bell-off, bell, bluetooth, bold, book-open, book, bookmark, box, briefcase, calendar, camera-off, camera, cast, check-circle, check-square, check, chevron-down, chevron-left, chevron-right, chevron-up, chevrons-down, chevrons-left, chevrons-right, chevrons-up, chrome, circle, clipboard, clock, cloud-drizzle, cloud-lightning, cloud-off, cloud-rain, cloud-snow, cloud, code, codepen, codesandbox, coffee, columns, command, compass, copy, corner-down-left, corner-down-right, corner-left-down, corner-left-up, corner-right-down, corner-right-up, corner-up-left, corner-up-right, cpu, credit-card, crop, crosshair, database, delete, disc, divide-circle, divide-square, divide, dollar-sign, download-cloud, download, dribbble, droplet, edit-2, edit-3, edit, external-link, eye-off, eye, facebook, fast-forward, feather, figma, file-minus, file-plus, file-text, file, film, filter, flag, folder-minus, folder-plus, folder, framer, frown, gift, git-branch, git-commit, git-merge, git-pull-request, github, gitlab, globe, grid, hard-drive, hash, headphones, heart, help-circle, hexagon, home, image, inbox, info, instagram, italic, key, layers, layout, life-buoy, link-2, link, linkedin, list, loader, lock, log-in, log-out, mail, map-pin, map, maximize-2, maximize, meh, menu, message-circle, message-square, mic-off, mic, minimize-2, minimize, minus-circle, minus-square, minus, monitor, moon, more-horizontal, more-vertical, mouse-pointer, move, music, navigation-2, navigation, octagon, package, paperclip, pause-circle, pause, pen-tool, percent, phone-call, phone-forwarded, phone-incoming, phone-missed, phone-off, phone-outgoing, phone, pie-chart, play-circle, play, plus-circle, plus-square, plus, pocket, power, printer, radio, refresh-ccw, refresh-cw, repeat, rewind, rotate-ccw, rotate-cw, rss, save, scissors, search, send, server, settings, share-2, share, shield-off, shield, shopping-bag, shopping-cart, shuffle, sidebar, skip-back, skip-forward, slack, slash, sliders, smartphone, smile, speaker, square, star, stop-circle, sun, sunrise, sunset, tablet, tag, target, terminal, thermometer, thumbs-down, thumbs-up, toggle-left, toggle-right, tool, trash-2, trash, trello, trending-down, trending-up, triangle, truck, tv, twitch, twitter, type, umbrella, underline, unlock, upload-cloud, upload, user-check, user-minus, user-plus, user-x, user, users, video-off, video, voicemail, volume-1, volume-2, volume-x, volume, watch, wifi-off, wifi, wind, x-circle, x-octagon, x-square, x, youtube, zap-off, zap, zoom-in, zoom-out, default */
+    /***/ (function(module) {
+
+    module.exports = {"activity":"<polyline points=\"22 12 18 12 15 21 9 3 6 12 2 12\"></polyline>","airplay":"<path d=\"M5 17H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-1\"></path><polygon points=\"12 15 17 21 7 21 12 15\"></polygon>","alert-circle":"<circle cx=\"12\" cy=\"12\" r=\"10\"></circle><line x1=\"12\" y1=\"8\" x2=\"12\" y2=\"12\"></line><line x1=\"12\" y1=\"16\" x2=\"12.01\" y2=\"16\"></line>","alert-octagon":"<polygon points=\"7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2\"></polygon><line x1=\"12\" y1=\"8\" x2=\"12\" y2=\"12\"></line><line x1=\"12\" y1=\"16\" x2=\"12.01\" y2=\"16\"></line>","alert-triangle":"<path d=\"M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z\"></path><line x1=\"12\" y1=\"9\" x2=\"12\" y2=\"13\"></line><line x1=\"12\" y1=\"17\" x2=\"12.01\" y2=\"17\"></line>","align-center":"<line x1=\"18\" y1=\"10\" x2=\"6\" y2=\"10\"></line><line x1=\"21\" y1=\"6\" x2=\"3\" y2=\"6\"></line><line x1=\"21\" y1=\"14\" x2=\"3\" y2=\"14\"></line><line x1=\"18\" y1=\"18\" x2=\"6\" y2=\"18\"></line>","align-justify":"<line x1=\"21\" y1=\"10\" x2=\"3\" y2=\"10\"></line><line x1=\"21\" y1=\"6\" x2=\"3\" y2=\"6\"></line><line x1=\"21\" y1=\"14\" x2=\"3\" y2=\"14\"></line><line x1=\"21\" y1=\"18\" x2=\"3\" y2=\"18\"></line>","align-left":"<line x1=\"17\" y1=\"10\" x2=\"3\" y2=\"10\"></line><line x1=\"21\" y1=\"6\" x2=\"3\" y2=\"6\"></line><line x1=\"21\" y1=\"14\" x2=\"3\" y2=\"14\"></line><line x1=\"17\" y1=\"18\" x2=\"3\" y2=\"18\"></line>","align-right":"<line x1=\"21\" y1=\"10\" x2=\"7\" y2=\"10\"></line><line x1=\"21\" y1=\"6\" x2=\"3\" y2=\"6\"></line><line x1=\"21\" y1=\"14\" x2=\"3\" y2=\"14\"></line><line x1=\"21\" y1=\"18\" x2=\"7\" y2=\"18\"></line>","anchor":"<circle cx=\"12\" cy=\"5\" r=\"3\"></circle><line x1=\"12\" y1=\"22\" x2=\"12\" y2=\"8\"></line><path d=\"M5 12H2a10 10 0 0 0 20 0h-3\"></path>","aperture":"<circle cx=\"12\" cy=\"12\" r=\"10\"></circle><line x1=\"14.31\" y1=\"8\" x2=\"20.05\" y2=\"17.94\"></line><line x1=\"9.69\" y1=\"8\" x2=\"21.17\" y2=\"8\"></line><line x1=\"7.38\" y1=\"12\" x2=\"13.12\" y2=\"2.06\"></line><line x1=\"9.69\" y1=\"16\" x2=\"3.95\" y2=\"6.06\"></line><line x1=\"14.31\" y1=\"16\" x2=\"2.83\" y2=\"16\"></line><line x1=\"16.62\" y1=\"12\" x2=\"10.88\" y2=\"21.94\"></line>","archive":"<polyline points=\"21 8 21 21 3 21 3 8\"></polyline><rect x=\"1\" y=\"3\" width=\"22\" height=\"5\"></rect><line x1=\"10\" y1=\"12\" x2=\"14\" y2=\"12\"></line>","arrow-down-circle":"<circle cx=\"12\" cy=\"12\" r=\"10\"></circle><polyline points=\"8 12 12 16 16 12\"></polyline><line x1=\"12\" y1=\"8\" x2=\"12\" y2=\"16\"></line>","arrow-down-left":"<line x1=\"17\" y1=\"7\" x2=\"7\" y2=\"17\"></line><polyline points=\"17 17 7 17 7 7\"></polyline>","arrow-down-right":"<line x1=\"7\" y1=\"7\" x2=\"17\" y2=\"17\"></line><polyline points=\"17 7 17 17 7 17\"></polyline>","arrow-down":"<line x1=\"12\" y1=\"5\" x2=\"12\" y2=\"19\"></line><polyline points=\"19 12 12 19 5 12\"></polyline>","arrow-left-circle":"<circle cx=\"12\" cy=\"12\" r=\"10\"></circle><polyline points=\"12 8 8 12 12 16\"></polyline><line x1=\"16\" y1=\"12\" x2=\"8\" y2=\"12\"></line>","arrow-left":"<line x1=\"19\" y1=\"12\" x2=\"5\" y2=\"12\"></line><polyline points=\"12 19 5 12 12 5\"></polyline>","arrow-right-circle":"<circle cx=\"12\" cy=\"12\" r=\"10\"></circle><polyline points=\"12 16 16 12 12 8\"></polyline><line x1=\"8\" y1=\"12\" x2=\"16\" y2=\"12\"></line>","arrow-right":"<line x1=\"5\" y1=\"12\" x2=\"19\" y2=\"12\"></line><polyline points=\"12 5 19 12 12 19\"></polyline>","arrow-up-circle":"<circle cx=\"12\" cy=\"12\" r=\"10\"></circle><polyline points=\"16 12 12 8 8 12\"></polyline><line x1=\"12\" y1=\"16\" x2=\"12\" y2=\"8\"></line>","arrow-up-left":"<line x1=\"17\" y1=\"17\" x2=\"7\" y2=\"7\"></line><polyline points=\"7 17 7 7 17 7\"></polyline>","arrow-up-right":"<line x1=\"7\" y1=\"17\" x2=\"17\" y2=\"7\"></line><polyline points=\"7 7 17 7 17 17\"></polyline>","arrow-up":"<line x1=\"12\" y1=\"19\" x2=\"12\" y2=\"5\"></line><polyline points=\"5 12 12 5 19 12\"></polyline>","at-sign":"<circle cx=\"12\" cy=\"12\" r=\"4\"></circle><path d=\"M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-3.92 7.94\"></path>","award":"<circle cx=\"12\" cy=\"8\" r=\"7\"></circle><polyline points=\"8.21 13.89 7 23 12 20 17 23 15.79 13.88\"></polyline>","bar-chart-2":"<line x1=\"18\" y1=\"20\" x2=\"18\" y2=\"10\"></line><line x1=\"12\" y1=\"20\" x2=\"12\" y2=\"4\"></line><line x1=\"6\" y1=\"20\" x2=\"6\" y2=\"14\"></line>","bar-chart":"<line x1=\"12\" y1=\"20\" x2=\"12\" y2=\"10\"></line><line x1=\"18\" y1=\"20\" x2=\"18\" y2=\"4\"></line><line x1=\"6\" y1=\"20\" x2=\"6\" y2=\"16\"></line>","battery-charging":"<path d=\"M5 18H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h3.19M15 6h2a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-3.19\"></path><line x1=\"23\" y1=\"13\" x2=\"23\" y2=\"11\"></line><polyline points=\"11 6 7 12 13 12 9 18\"></polyline>","battery":"<rect x=\"1\" y=\"6\" width=\"18\" height=\"12\" rx=\"2\" ry=\"2\"></rect><line x1=\"23\" y1=\"13\" x2=\"23\" y2=\"11\"></line>","bell-off":"<path d=\"M13.73 21a2 2 0 0 1-3.46 0\"></path><path d=\"M18.63 13A17.89 17.89 0 0 1 18 8\"></path><path d=\"M6.26 6.26A5.86 5.86 0 0 0 6 8c0 7-3 9-3 9h14\"></path><path d=\"M18 8a6 6 0 0 0-9.33-5\"></path><line x1=\"1\" y1=\"1\" x2=\"23\" y2=\"23\"></line>","bell":"<path d=\"M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9\"></path><path d=\"M13.73 21a2 2 0 0 1-3.46 0\"></path>","bluetooth":"<polyline points=\"6.5 6.5 17.5 17.5 12 23 12 1 17.5 6.5 6.5 17.5\"></polyline>","bold":"<path d=\"M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z\"></path><path d=\"M6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z\"></path>","book-open":"<path d=\"M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z\"></path><path d=\"M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z\"></path>","book":"<path d=\"M4 19.5A2.5 2.5 0 0 1 6.5 17H20\"></path><path d=\"M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z\"></path>","bookmark":"<path d=\"M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z\"></path>","box":"<path d=\"M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z\"></path><polyline points=\"3.27 6.96 12 12.01 20.73 6.96\"></polyline><line x1=\"12\" y1=\"22.08\" x2=\"12\" y2=\"12\"></line>","briefcase":"<rect x=\"2\" y=\"7\" width=\"20\" height=\"14\" rx=\"2\" ry=\"2\"></rect><path d=\"M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16\"></path>","calendar":"<rect x=\"3\" y=\"4\" width=\"18\" height=\"18\" rx=\"2\" ry=\"2\"></rect><line x1=\"16\" y1=\"2\" x2=\"16\" y2=\"6\"></line><line x1=\"8\" y1=\"2\" x2=\"8\" y2=\"6\"></line><line x1=\"3\" y1=\"10\" x2=\"21\" y2=\"10\"></line>","camera-off":"<line x1=\"1\" y1=\"1\" x2=\"23\" y2=\"23\"></line><path d=\"M21 21H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h3m3-3h6l2 3h4a2 2 0 0 1 2 2v9.34m-7.72-2.06a4 4 0 1 1-5.56-5.56\"></path>","camera":"<path d=\"M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z\"></path><circle cx=\"12\" cy=\"13\" r=\"4\"></circle>","cast":"<path d=\"M2 16.1A5 5 0 0 1 5.9 20M2 12.05A9 9 0 0 1 9.95 20M2 8V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-6\"></path><line x1=\"2\" y1=\"20\" x2=\"2.01\" y2=\"20\"></line>","check-circle":"<path d=\"M22 11.08V12a10 10 0 1 1-5.93-9.14\"></path><polyline points=\"22 4 12 14.01 9 11.01\"></polyline>","check-square":"<polyline points=\"9 11 12 14 22 4\"></polyline><path d=\"M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11\"></path>","check":"<polyline points=\"20 6 9 17 4 12\"></polyline>","chevron-down":"<polyline points=\"6 9 12 15 18 9\"></polyline>","chevron-left":"<polyline points=\"15 18 9 12 15 6\"></polyline>","chevron-right":"<polyline points=\"9 18 15 12 9 6\"></polyline>","chevron-up":"<polyline points=\"18 15 12 9 6 15\"></polyline>","chevrons-down":"<polyline points=\"7 13 12 18 17 13\"></polyline><polyline points=\"7 6 12 11 17 6\"></polyline>","chevrons-left":"<polyline points=\"11 17 6 12 11 7\"></polyline><polyline points=\"18 17 13 12 18 7\"></polyline>","chevrons-right":"<polyline points=\"13 17 18 12 13 7\"></polyline><polyline points=\"6 17 11 12 6 7\"></polyline>","chevrons-up":"<polyline points=\"17 11 12 6 7 11\"></polyline><polyline points=\"17 18 12 13 7 18\"></polyline>","chrome":"<circle cx=\"12\" cy=\"12\" r=\"10\"></circle><circle cx=\"12\" cy=\"12\" r=\"4\"></circle><line x1=\"21.17\" y1=\"8\" x2=\"12\" y2=\"8\"></line><line x1=\"3.95\" y1=\"6.06\" x2=\"8.54\" y2=\"14\"></line><line x1=\"10.88\" y1=\"21.94\" x2=\"15.46\" y2=\"14\"></line>","circle":"<circle cx=\"12\" cy=\"12\" r=\"10\"></circle>","clipboard":"<path d=\"M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2\"></path><rect x=\"8\" y=\"2\" width=\"8\" height=\"4\" rx=\"1\" ry=\"1\"></rect>","clock":"<circle cx=\"12\" cy=\"12\" r=\"10\"></circle><polyline points=\"12 6 12 12 16 14\"></polyline>","cloud-drizzle":"<line x1=\"8\" y1=\"19\" x2=\"8\" y2=\"21\"></line><line x1=\"8\" y1=\"13\" x2=\"8\" y2=\"15\"></line><line x1=\"16\" y1=\"19\" x2=\"16\" y2=\"21\"></line><line x1=\"16\" y1=\"13\" x2=\"16\" y2=\"15\"></line><line x1=\"12\" y1=\"21\" x2=\"12\" y2=\"23\"></line><line x1=\"12\" y1=\"15\" x2=\"12\" y2=\"17\"></line><path d=\"M20 16.58A5 5 0 0 0 18 7h-1.26A8 8 0 1 0 4 15.25\"></path>","cloud-lightning":"<path d=\"M19 16.9A5 5 0 0 0 18 7h-1.26a8 8 0 1 0-11.62 9\"></path><polyline points=\"13 11 9 17 15 17 11 23\"></polyline>","cloud-off":"<path d=\"M22.61 16.95A5 5 0 0 0 18 10h-1.26a8 8 0 0 0-7.05-6M5 5a8 8 0 0 0 4 15h9a5 5 0 0 0 1.7-.3\"></path><line x1=\"1\" y1=\"1\" x2=\"23\" y2=\"23\"></line>","cloud-rain":"<line x1=\"16\" y1=\"13\" x2=\"16\" y2=\"21\"></line><line x1=\"8\" y1=\"13\" x2=\"8\" y2=\"21\"></line><line x1=\"12\" y1=\"15\" x2=\"12\" y2=\"23\"></line><path d=\"M20 16.58A5 5 0 0 0 18 7h-1.26A8 8 0 1 0 4 15.25\"></path>","cloud-snow":"<path d=\"M20 17.58A5 5 0 0 0 18 8h-1.26A8 8 0 1 0 4 16.25\"></path><line x1=\"8\" y1=\"16\" x2=\"8.01\" y2=\"16\"></line><line x1=\"8\" y1=\"20\" x2=\"8.01\" y2=\"20\"></line><line x1=\"12\" y1=\"18\" x2=\"12.01\" y2=\"18\"></line><line x1=\"12\" y1=\"22\" x2=\"12.01\" y2=\"22\"></line><line x1=\"16\" y1=\"16\" x2=\"16.01\" y2=\"16\"></line><line x1=\"16\" y1=\"20\" x2=\"16.01\" y2=\"20\"></line>","cloud":"<path d=\"M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z\"></path>","code":"<polyline points=\"16 18 22 12 16 6\"></polyline><polyline points=\"8 6 2 12 8 18\"></polyline>","codepen":"<polygon points=\"12 2 22 8.5 22 15.5 12 22 2 15.5 2 8.5 12 2\"></polygon><line x1=\"12\" y1=\"22\" x2=\"12\" y2=\"15.5\"></line><polyline points=\"22 8.5 12 15.5 2 8.5\"></polyline><polyline points=\"2 15.5 12 8.5 22 15.5\"></polyline><line x1=\"12\" y1=\"2\" x2=\"12\" y2=\"8.5\"></line>","codesandbox":"<path d=\"M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z\"></path><polyline points=\"7.5 4.21 12 6.81 16.5 4.21\"></polyline><polyline points=\"7.5 19.79 7.5 14.6 3 12\"></polyline><polyline points=\"21 12 16.5 14.6 16.5 19.79\"></polyline><polyline points=\"3.27 6.96 12 12.01 20.73 6.96\"></polyline><line x1=\"12\" y1=\"22.08\" x2=\"12\" y2=\"12\"></line>","coffee":"<path d=\"M18 8h1a4 4 0 0 1 0 8h-1\"></path><path d=\"M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z\"></path><line x1=\"6\" y1=\"1\" x2=\"6\" y2=\"4\"></line><line x1=\"10\" y1=\"1\" x2=\"10\" y2=\"4\"></line><line x1=\"14\" y1=\"1\" x2=\"14\" y2=\"4\"></line>","columns":"<path d=\"M12 3h7a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-7m0-18H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h7m0-18v18\"></path>","command":"<path d=\"M18 3a3 3 0 0 0-3 3v12a3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3H6a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3V6a3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3h12a3 3 0 0 0 3-3 3 3 0 0 0-3-3z\"></path>","compass":"<circle cx=\"12\" cy=\"12\" r=\"10\"></circle><polygon points=\"16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76\"></polygon>","copy":"<rect x=\"9\" y=\"9\" width=\"13\" height=\"13\" rx=\"2\" ry=\"2\"></rect><path d=\"M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1\"></path>","corner-down-left":"<polyline points=\"9 10 4 15 9 20\"></polyline><path d=\"M20 4v7a4 4 0 0 1-4 4H4\"></path>","corner-down-right":"<polyline points=\"15 10 20 15 15 20\"></polyline><path d=\"M4 4v7a4 4 0 0 0 4 4h12\"></path>","corner-left-down":"<polyline points=\"14 15 9 20 4 15\"></polyline><path d=\"M20 4h-7a4 4 0 0 0-4 4v12\"></path>","corner-left-up":"<polyline points=\"14 9 9 4 4 9\"></polyline><path d=\"M20 20h-7a4 4 0 0 1-4-4V4\"></path>","corner-right-down":"<polyline points=\"10 15 15 20 20 15\"></polyline><path d=\"M4 4h7a4 4 0 0 1 4 4v12\"></path>","corner-right-up":"<polyline points=\"10 9 15 4 20 9\"></polyline><path d=\"M4 20h7a4 4 0 0 0 4-4V4\"></path>","corner-up-left":"<polyline points=\"9 14 4 9 9 4\"></polyline><path d=\"M20 20v-7a4 4 0 0 0-4-4H4\"></path>","corner-up-right":"<polyline points=\"15 14 20 9 15 4\"></polyline><path d=\"M4 20v-7a4 4 0 0 1 4-4h12\"></path>","cpu":"<rect x=\"4\" y=\"4\" width=\"16\" height=\"16\" rx=\"2\" ry=\"2\"></rect><rect x=\"9\" y=\"9\" width=\"6\" height=\"6\"></rect><line x1=\"9\" y1=\"1\" x2=\"9\" y2=\"4\"></line><line x1=\"15\" y1=\"1\" x2=\"15\" y2=\"4\"></line><line x1=\"9\" y1=\"20\" x2=\"9\" y2=\"23\"></line><line x1=\"15\" y1=\"20\" x2=\"15\" y2=\"23\"></line><line x1=\"20\" y1=\"9\" x2=\"23\" y2=\"9\"></line><line x1=\"20\" y1=\"14\" x2=\"23\" y2=\"14\"></line><line x1=\"1\" y1=\"9\" x2=\"4\" y2=\"9\"></line><line x1=\"1\" y1=\"14\" x2=\"4\" y2=\"14\"></line>","credit-card":"<rect x=\"1\" y=\"4\" width=\"22\" height=\"16\" rx=\"2\" ry=\"2\"></rect><line x1=\"1\" y1=\"10\" x2=\"23\" y2=\"10\"></line>","crop":"<path d=\"M6.13 1L6 16a2 2 0 0 0 2 2h15\"></path><path d=\"M1 6.13L16 6a2 2 0 0 1 2 2v15\"></path>","crosshair":"<circle cx=\"12\" cy=\"12\" r=\"10\"></circle><line x1=\"22\" y1=\"12\" x2=\"18\" y2=\"12\"></line><line x1=\"6\" y1=\"12\" x2=\"2\" y2=\"12\"></line><line x1=\"12\" y1=\"6\" x2=\"12\" y2=\"2\"></line><line x1=\"12\" y1=\"22\" x2=\"12\" y2=\"18\"></line>","database":"<ellipse cx=\"12\" cy=\"5\" rx=\"9\" ry=\"3\"></ellipse><path d=\"M21 12c0 1.66-4 3-9 3s-9-1.34-9-3\"></path><path d=\"M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5\"></path>","delete":"<path d=\"M21 4H8l-7 8 7 8h13a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z\"></path><line x1=\"18\" y1=\"9\" x2=\"12\" y2=\"15\"></line><line x1=\"12\" y1=\"9\" x2=\"18\" y2=\"15\"></line>","disc":"<circle cx=\"12\" cy=\"12\" r=\"10\"></circle><circle cx=\"12\" cy=\"12\" r=\"3\"></circle>","divide-circle":"<line x1=\"8\" y1=\"12\" x2=\"16\" y2=\"12\"></line><line x1=\"12\" y1=\"16\" x2=\"12\" y2=\"16\"></line><line x1=\"12\" y1=\"8\" x2=\"12\" y2=\"8\"></line><circle cx=\"12\" cy=\"12\" r=\"10\"></circle>","divide-square":"<rect x=\"3\" y=\"3\" width=\"18\" height=\"18\" rx=\"2\" ry=\"2\"></rect><line x1=\"8\" y1=\"12\" x2=\"16\" y2=\"12\"></line><line x1=\"12\" y1=\"16\" x2=\"12\" y2=\"16\"></line><line x1=\"12\" y1=\"8\" x2=\"12\" y2=\"8\"></line>","divide":"<circle cx=\"12\" cy=\"6\" r=\"2\"></circle><line x1=\"5\" y1=\"12\" x2=\"19\" y2=\"12\"></line><circle cx=\"12\" cy=\"18\" r=\"2\"></circle>","dollar-sign":"<line x1=\"12\" y1=\"1\" x2=\"12\" y2=\"23\"></line><path d=\"M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6\"></path>","download-cloud":"<polyline points=\"8 17 12 21 16 17\"></polyline><line x1=\"12\" y1=\"12\" x2=\"12\" y2=\"21\"></line><path d=\"M20.88 18.09A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.29\"></path>","download":"<path d=\"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4\"></path><polyline points=\"7 10 12 15 17 10\"></polyline><line x1=\"12\" y1=\"15\" x2=\"12\" y2=\"3\"></line>","dribbble":"<circle cx=\"12\" cy=\"12\" r=\"10\"></circle><path d=\"M8.56 2.75c4.37 6.03 6.02 9.42 8.03 17.72m2.54-15.38c-3.72 4.35-8.94 5.66-16.88 5.85m19.5 1.9c-3.5-.93-6.63-.82-8.94 0-2.58.92-5.01 2.86-7.44 6.32\"></path>","droplet":"<path d=\"M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z\"></path>","edit-2":"<path d=\"M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z\"></path>","edit-3":"<path d=\"M12 20h9\"></path><path d=\"M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z\"></path>","edit":"<path d=\"M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7\"></path><path d=\"M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z\"></path>","external-link":"<path d=\"M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6\"></path><polyline points=\"15 3 21 3 21 9\"></polyline><line x1=\"10\" y1=\"14\" x2=\"21\" y2=\"3\"></line>","eye-off":"<path d=\"M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24\"></path><line x1=\"1\" y1=\"1\" x2=\"23\" y2=\"23\"></line>","eye":"<path d=\"M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z\"></path><circle cx=\"12\" cy=\"12\" r=\"3\"></circle>","facebook":"<path d=\"M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z\"></path>","fast-forward":"<polygon points=\"13 19 22 12 13 5 13 19\"></polygon><polygon points=\"2 19 11 12 2 5 2 19\"></polygon>","feather":"<path d=\"M20.24 12.24a6 6 0 0 0-8.49-8.49L5 10.5V19h8.5z\"></path><line x1=\"16\" y1=\"8\" x2=\"2\" y2=\"22\"></line><line x1=\"17.5\" y1=\"15\" x2=\"9\" y2=\"15\"></line>","figma":"<path d=\"M5 5.5A3.5 3.5 0 0 1 8.5 2H12v7H8.5A3.5 3.5 0 0 1 5 5.5z\"></path><path d=\"M12 2h3.5a3.5 3.5 0 1 1 0 7H12V2z\"></path><path d=\"M12 12.5a3.5 3.5 0 1 1 7 0 3.5 3.5 0 1 1-7 0z\"></path><path d=\"M5 19.5A3.5 3.5 0 0 1 8.5 16H12v3.5a3.5 3.5 0 1 1-7 0z\"></path><path d=\"M5 12.5A3.5 3.5 0 0 1 8.5 9H12v7H8.5A3.5 3.5 0 0 1 5 12.5z\"></path>","file-minus":"<path d=\"M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z\"></path><polyline points=\"14 2 14 8 20 8\"></polyline><line x1=\"9\" y1=\"15\" x2=\"15\" y2=\"15\"></line>","file-plus":"<path d=\"M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z\"></path><polyline points=\"14 2 14 8 20 8\"></polyline><line x1=\"12\" y1=\"18\" x2=\"12\" y2=\"12\"></line><line x1=\"9\" y1=\"15\" x2=\"15\" y2=\"15\"></line>","file-text":"<path d=\"M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z\"></path><polyline points=\"14 2 14 8 20 8\"></polyline><line x1=\"16\" y1=\"13\" x2=\"8\" y2=\"13\"></line><line x1=\"16\" y1=\"17\" x2=\"8\" y2=\"17\"></line><polyline points=\"10 9 9 9 8 9\"></polyline>","file":"<path d=\"M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z\"></path><polyline points=\"13 2 13 9 20 9\"></polyline>","film":"<rect x=\"2\" y=\"2\" width=\"20\" height=\"20\" rx=\"2.18\" ry=\"2.18\"></rect><line x1=\"7\" y1=\"2\" x2=\"7\" y2=\"22\"></line><line x1=\"17\" y1=\"2\" x2=\"17\" y2=\"22\"></line><line x1=\"2\" y1=\"12\" x2=\"22\" y2=\"12\"></line><line x1=\"2\" y1=\"7\" x2=\"7\" y2=\"7\"></line><line x1=\"2\" y1=\"17\" x2=\"7\" y2=\"17\"></line><line x1=\"17\" y1=\"17\" x2=\"22\" y2=\"17\"></line><line x1=\"17\" y1=\"7\" x2=\"22\" y2=\"7\"></line>","filter":"<polygon points=\"22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3\"></polygon>","flag":"<path d=\"M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z\"></path><line x1=\"4\" y1=\"22\" x2=\"4\" y2=\"15\"></line>","folder-minus":"<path d=\"M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z\"></path><line x1=\"9\" y1=\"14\" x2=\"15\" y2=\"14\"></line>","folder-plus":"<path d=\"M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z\"></path><line x1=\"12\" y1=\"11\" x2=\"12\" y2=\"17\"></line><line x1=\"9\" y1=\"14\" x2=\"15\" y2=\"14\"></line>","folder":"<path d=\"M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z\"></path>","framer":"<path d=\"M5 16V9h14V2H5l14 14h-7m-7 0l7 7v-7m-7 0h7\"></path>","frown":"<circle cx=\"12\" cy=\"12\" r=\"10\"></circle><path d=\"M16 16s-1.5-2-4-2-4 2-4 2\"></path><line x1=\"9\" y1=\"9\" x2=\"9.01\" y2=\"9\"></line><line x1=\"15\" y1=\"9\" x2=\"15.01\" y2=\"9\"></line>","gift":"<polyline points=\"20 12 20 22 4 22 4 12\"></polyline><rect x=\"2\" y=\"7\" width=\"20\" height=\"5\"></rect><line x1=\"12\" y1=\"22\" x2=\"12\" y2=\"7\"></line><path d=\"M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z\"></path><path d=\"M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z\"></path>","git-branch":"<line x1=\"6\" y1=\"3\" x2=\"6\" y2=\"15\"></line><circle cx=\"18\" cy=\"6\" r=\"3\"></circle><circle cx=\"6\" cy=\"18\" r=\"3\"></circle><path d=\"M18 9a9 9 0 0 1-9 9\"></path>","git-commit":"<circle cx=\"12\" cy=\"12\" r=\"4\"></circle><line x1=\"1.05\" y1=\"12\" x2=\"7\" y2=\"12\"></line><line x1=\"17.01\" y1=\"12\" x2=\"22.96\" y2=\"12\"></line>","git-merge":"<circle cx=\"18\" cy=\"18\" r=\"3\"></circle><circle cx=\"6\" cy=\"6\" r=\"3\"></circle><path d=\"M6 21V9a9 9 0 0 0 9 9\"></path>","git-pull-request":"<circle cx=\"18\" cy=\"18\" r=\"3\"></circle><circle cx=\"6\" cy=\"6\" r=\"3\"></circle><path d=\"M13 6h3a2 2 0 0 1 2 2v7\"></path><line x1=\"6\" y1=\"9\" x2=\"6\" y2=\"21\"></line>","github":"<path d=\"M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22\"></path>","gitlab":"<path d=\"M22.65 14.39L12 22.13 1.35 14.39a.84.84 0 0 1-.3-.94l1.22-3.78 2.44-7.51A.42.42 0 0 1 4.82 2a.43.43 0 0 1 .58 0 .42.42 0 0 1 .11.18l2.44 7.49h8.1l2.44-7.51A.42.42 0 0 1 18.6 2a.43.43 0 0 1 .58 0 .42.42 0 0 1 .11.18l2.44 7.51L23 13.45a.84.84 0 0 1-.35.94z\"></path>","globe":"<circle cx=\"12\" cy=\"12\" r=\"10\"></circle><line x1=\"2\" y1=\"12\" x2=\"22\" y2=\"12\"></line><path d=\"M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z\"></path>","grid":"<rect x=\"3\" y=\"3\" width=\"7\" height=\"7\"></rect><rect x=\"14\" y=\"3\" width=\"7\" height=\"7\"></rect><rect x=\"14\" y=\"14\" width=\"7\" height=\"7\"></rect><rect x=\"3\" y=\"14\" width=\"7\" height=\"7\"></rect>","hard-drive":"<line x1=\"22\" y1=\"12\" x2=\"2\" y2=\"12\"></line><path d=\"M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z\"></path><line x1=\"6\" y1=\"16\" x2=\"6.01\" y2=\"16\"></line><line x1=\"10\" y1=\"16\" x2=\"10.01\" y2=\"16\"></line>","hash":"<line x1=\"4\" y1=\"9\" x2=\"20\" y2=\"9\"></line><line x1=\"4\" y1=\"15\" x2=\"20\" y2=\"15\"></line><line x1=\"10\" y1=\"3\" x2=\"8\" y2=\"21\"></line><line x1=\"16\" y1=\"3\" x2=\"14\" y2=\"21\"></line>","headphones":"<path d=\"M3 18v-6a9 9 0 0 1 18 0v6\"></path><path d=\"M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z\"></path>","heart":"<path d=\"M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z\"></path>","help-circle":"<circle cx=\"12\" cy=\"12\" r=\"10\"></circle><path d=\"M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3\"></path><line x1=\"12\" y1=\"17\" x2=\"12.01\" y2=\"17\"></line>","hexagon":"<path d=\"M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z\"></path>","home":"<path d=\"M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z\"></path><polyline points=\"9 22 9 12 15 12 15 22\"></polyline>","image":"<rect x=\"3\" y=\"3\" width=\"18\" height=\"18\" rx=\"2\" ry=\"2\"></rect><circle cx=\"8.5\" cy=\"8.5\" r=\"1.5\"></circle><polyline points=\"21 15 16 10 5 21\"></polyline>","inbox":"<polyline points=\"22 12 16 12 14 15 10 15 8 12 2 12\"></polyline><path d=\"M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z\"></path>","info":"<circle cx=\"12\" cy=\"12\" r=\"10\"></circle><line x1=\"12\" y1=\"16\" x2=\"12\" y2=\"12\"></line><line x1=\"12\" y1=\"8\" x2=\"12.01\" y2=\"8\"></line>","instagram":"<rect x=\"2\" y=\"2\" width=\"20\" height=\"20\" rx=\"5\" ry=\"5\"></rect><path d=\"M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z\"></path><line x1=\"17.5\" y1=\"6.5\" x2=\"17.51\" y2=\"6.5\"></line>","italic":"<line x1=\"19\" y1=\"4\" x2=\"10\" y2=\"4\"></line><line x1=\"14\" y1=\"20\" x2=\"5\" y2=\"20\"></line><line x1=\"15\" y1=\"4\" x2=\"9\" y2=\"20\"></line>","key":"<path d=\"M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4\"></path>","layers":"<polygon points=\"12 2 2 7 12 12 22 7 12 2\"></polygon><polyline points=\"2 17 12 22 22 17\"></polyline><polyline points=\"2 12 12 17 22 12\"></polyline>","layout":"<rect x=\"3\" y=\"3\" width=\"18\" height=\"18\" rx=\"2\" ry=\"2\"></rect><line x1=\"3\" y1=\"9\" x2=\"21\" y2=\"9\"></line><line x1=\"9\" y1=\"21\" x2=\"9\" y2=\"9\"></line>","life-buoy":"<circle cx=\"12\" cy=\"12\" r=\"10\"></circle><circle cx=\"12\" cy=\"12\" r=\"4\"></circle><line x1=\"4.93\" y1=\"4.93\" x2=\"9.17\" y2=\"9.17\"></line><line x1=\"14.83\" y1=\"14.83\" x2=\"19.07\" y2=\"19.07\"></line><line x1=\"14.83\" y1=\"9.17\" x2=\"19.07\" y2=\"4.93\"></line><line x1=\"14.83\" y1=\"9.17\" x2=\"18.36\" y2=\"5.64\"></line><line x1=\"4.93\" y1=\"19.07\" x2=\"9.17\" y2=\"14.83\"></line>","link-2":"<path d=\"M15 7h3a5 5 0 0 1 5 5 5 5 0 0 1-5 5h-3m-6 0H6a5 5 0 0 1-5-5 5 5 0 0 1 5-5h3\"></path><line x1=\"8\" y1=\"12\" x2=\"16\" y2=\"12\"></line>","link":"<path d=\"M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71\"></path><path d=\"M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71\"></path>","linkedin":"<path d=\"M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z\"></path><rect x=\"2\" y=\"9\" width=\"4\" height=\"12\"></rect><circle cx=\"4\" cy=\"4\" r=\"2\"></circle>","list":"<line x1=\"8\" y1=\"6\" x2=\"21\" y2=\"6\"></line><line x1=\"8\" y1=\"12\" x2=\"21\" y2=\"12\"></line><line x1=\"8\" y1=\"18\" x2=\"21\" y2=\"18\"></line><line x1=\"3\" y1=\"6\" x2=\"3.01\" y2=\"6\"></line><line x1=\"3\" y1=\"12\" x2=\"3.01\" y2=\"12\"></line><line x1=\"3\" y1=\"18\" x2=\"3.01\" y2=\"18\"></line>","loader":"<line x1=\"12\" y1=\"2\" x2=\"12\" y2=\"6\"></line><line x1=\"12\" y1=\"18\" x2=\"12\" y2=\"22\"></line><line x1=\"4.93\" y1=\"4.93\" x2=\"7.76\" y2=\"7.76\"></line><line x1=\"16.24\" y1=\"16.24\" x2=\"19.07\" y2=\"19.07\"></line><line x1=\"2\" y1=\"12\" x2=\"6\" y2=\"12\"></line><line x1=\"18\" y1=\"12\" x2=\"22\" y2=\"12\"></line><line x1=\"4.93\" y1=\"19.07\" x2=\"7.76\" y2=\"16.24\"></line><line x1=\"16.24\" y1=\"7.76\" x2=\"19.07\" y2=\"4.93\"></line>","lock":"<rect x=\"3\" y=\"11\" width=\"18\" height=\"11\" rx=\"2\" ry=\"2\"></rect><path d=\"M7 11V7a5 5 0 0 1 10 0v4\"></path>","log-in":"<path d=\"M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4\"></path><polyline points=\"10 17 15 12 10 7\"></polyline><line x1=\"15\" y1=\"12\" x2=\"3\" y2=\"12\"></line>","log-out":"<path d=\"M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4\"></path><polyline points=\"16 17 21 12 16 7\"></polyline><line x1=\"21\" y1=\"12\" x2=\"9\" y2=\"12\"></line>","mail":"<path d=\"M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z\"></path><polyline points=\"22,6 12,13 2,6\"></polyline>","map-pin":"<path d=\"M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z\"></path><circle cx=\"12\" cy=\"10\" r=\"3\"></circle>","map":"<polygon points=\"1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6\"></polygon><line x1=\"8\" y1=\"2\" x2=\"8\" y2=\"18\"></line><line x1=\"16\" y1=\"6\" x2=\"16\" y2=\"22\"></line>","maximize-2":"<polyline points=\"15 3 21 3 21 9\"></polyline><polyline points=\"9 21 3 21 3 15\"></polyline><line x1=\"21\" y1=\"3\" x2=\"14\" y2=\"10\"></line><line x1=\"3\" y1=\"21\" x2=\"10\" y2=\"14\"></line>","maximize":"<path d=\"M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3\"></path>","meh":"<circle cx=\"12\" cy=\"12\" r=\"10\"></circle><line x1=\"8\" y1=\"15\" x2=\"16\" y2=\"15\"></line><line x1=\"9\" y1=\"9\" x2=\"9.01\" y2=\"9\"></line><line x1=\"15\" y1=\"9\" x2=\"15.01\" y2=\"9\"></line>","menu":"<line x1=\"3\" y1=\"12\" x2=\"21\" y2=\"12\"></line><line x1=\"3\" y1=\"6\" x2=\"21\" y2=\"6\"></line><line x1=\"3\" y1=\"18\" x2=\"21\" y2=\"18\"></line>","message-circle":"<path d=\"M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z\"></path>","message-square":"<path d=\"M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z\"></path>","mic-off":"<line x1=\"1\" y1=\"1\" x2=\"23\" y2=\"23\"></line><path d=\"M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6\"></path><path d=\"M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23\"></path><line x1=\"12\" y1=\"19\" x2=\"12\" y2=\"23\"></line><line x1=\"8\" y1=\"23\" x2=\"16\" y2=\"23\"></line>","mic":"<path d=\"M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z\"></path><path d=\"M19 10v2a7 7 0 0 1-14 0v-2\"></path><line x1=\"12\" y1=\"19\" x2=\"12\" y2=\"23\"></line><line x1=\"8\" y1=\"23\" x2=\"16\" y2=\"23\"></line>","minimize-2":"<polyline points=\"4 14 10 14 10 20\"></polyline><polyline points=\"20 10 14 10 14 4\"></polyline><line x1=\"14\" y1=\"10\" x2=\"21\" y2=\"3\"></line><line x1=\"3\" y1=\"21\" x2=\"10\" y2=\"14\"></line>","minimize":"<path d=\"M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3\"></path>","minus-circle":"<circle cx=\"12\" cy=\"12\" r=\"10\"></circle><line x1=\"8\" y1=\"12\" x2=\"16\" y2=\"12\"></line>","minus-square":"<rect x=\"3\" y=\"3\" width=\"18\" height=\"18\" rx=\"2\" ry=\"2\"></rect><line x1=\"8\" y1=\"12\" x2=\"16\" y2=\"12\"></line>","minus":"<line x1=\"5\" y1=\"12\" x2=\"19\" y2=\"12\"></line>","monitor":"<rect x=\"2\" y=\"3\" width=\"20\" height=\"14\" rx=\"2\" ry=\"2\"></rect><line x1=\"8\" y1=\"21\" x2=\"16\" y2=\"21\"></line><line x1=\"12\" y1=\"17\" x2=\"12\" y2=\"21\"></line>","moon":"<path d=\"M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z\"></path>","more-horizontal":"<circle cx=\"12\" cy=\"12\" r=\"1\"></circle><circle cx=\"19\" cy=\"12\" r=\"1\"></circle><circle cx=\"5\" cy=\"12\" r=\"1\"></circle>","more-vertical":"<circle cx=\"12\" cy=\"12\" r=\"1\"></circle><circle cx=\"12\" cy=\"5\" r=\"1\"></circle><circle cx=\"12\" cy=\"19\" r=\"1\"></circle>","mouse-pointer":"<path d=\"M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z\"></path><path d=\"M13 13l6 6\"></path>","move":"<polyline points=\"5 9 2 12 5 15\"></polyline><polyline points=\"9 5 12 2 15 5\"></polyline><polyline points=\"15 19 12 22 9 19\"></polyline><polyline points=\"19 9 22 12 19 15\"></polyline><line x1=\"2\" y1=\"12\" x2=\"22\" y2=\"12\"></line><line x1=\"12\" y1=\"2\" x2=\"12\" y2=\"22\"></line>","music":"<path d=\"M9 18V5l12-2v13\"></path><circle cx=\"6\" cy=\"18\" r=\"3\"></circle><circle cx=\"18\" cy=\"16\" r=\"3\"></circle>","navigation-2":"<polygon points=\"12 2 19 21 12 17 5 21 12 2\"></polygon>","navigation":"<polygon points=\"3 11 22 2 13 21 11 13 3 11\"></polygon>","octagon":"<polygon points=\"7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2\"></polygon>","package":"<line x1=\"16.5\" y1=\"9.4\" x2=\"7.5\" y2=\"4.21\"></line><path d=\"M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z\"></path><polyline points=\"3.27 6.96 12 12.01 20.73 6.96\"></polyline><line x1=\"12\" y1=\"22.08\" x2=\"12\" y2=\"12\"></line>","paperclip":"<path d=\"M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48\"></path>","pause-circle":"<circle cx=\"12\" cy=\"12\" r=\"10\"></circle><line x1=\"10\" y1=\"15\" x2=\"10\" y2=\"9\"></line><line x1=\"14\" y1=\"15\" x2=\"14\" y2=\"9\"></line>","pause":"<rect x=\"6\" y=\"4\" width=\"4\" height=\"16\"></rect><rect x=\"14\" y=\"4\" width=\"4\" height=\"16\"></rect>","pen-tool":"<path d=\"M12 19l7-7 3 3-7 7-3-3z\"></path><path d=\"M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z\"></path><path d=\"M2 2l7.586 7.586\"></path><circle cx=\"11\" cy=\"11\" r=\"2\"></circle>","percent":"<line x1=\"19\" y1=\"5\" x2=\"5\" y2=\"19\"></line><circle cx=\"6.5\" cy=\"6.5\" r=\"2.5\"></circle><circle cx=\"17.5\" cy=\"17.5\" r=\"2.5\"></circle>","phone-call":"<path d=\"M15.05 5A5 5 0 0 1 19 8.95M15.05 1A9 9 0 0 1 23 8.94m-1 7.98v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z\"></path>","phone-forwarded":"<polyline points=\"19 1 23 5 19 9\"></polyline><line x1=\"15\" y1=\"5\" x2=\"23\" y2=\"5\"></line><path d=\"M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z\"></path>","phone-incoming":"<polyline points=\"16 2 16 8 22 8\"></polyline><line x1=\"23\" y1=\"1\" x2=\"16\" y2=\"8\"></line><path d=\"M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z\"></path>","phone-missed":"<line x1=\"23\" y1=\"1\" x2=\"17\" y2=\"7\"></line><line x1=\"17\" y1=\"1\" x2=\"23\" y2=\"7\"></line><path d=\"M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z\"></path>","phone-off":"<path d=\"M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7 2 2 0 0 1 1.72 2v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.42 19.42 0 0 1-3.33-2.67m-2.67-3.34a19.79 19.79 0 0 1-3.07-8.63A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91\"></path><line x1=\"23\" y1=\"1\" x2=\"1\" y2=\"23\"></line>","phone-outgoing":"<polyline points=\"23 7 23 1 17 1\"></polyline><line x1=\"16\" y1=\"8\" x2=\"23\" y2=\"1\"></line><path d=\"M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z\"></path>","phone":"<path d=\"M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z\"></path>","pie-chart":"<path d=\"M21.21 15.89A10 10 0 1 1 8 2.83\"></path><path d=\"M22 12A10 10 0 0 0 12 2v10z\"></path>","play-circle":"<circle cx=\"12\" cy=\"12\" r=\"10\"></circle><polygon points=\"10 8 16 12 10 16 10 8\"></polygon>","play":"<polygon points=\"5 3 19 12 5 21 5 3\"></polygon>","plus-circle":"<circle cx=\"12\" cy=\"12\" r=\"10\"></circle><line x1=\"12\" y1=\"8\" x2=\"12\" y2=\"16\"></line><line x1=\"8\" y1=\"12\" x2=\"16\" y2=\"12\"></line>","plus-square":"<rect x=\"3\" y=\"3\" width=\"18\" height=\"18\" rx=\"2\" ry=\"2\"></rect><line x1=\"12\" y1=\"8\" x2=\"12\" y2=\"16\"></line><line x1=\"8\" y1=\"12\" x2=\"16\" y2=\"12\"></line>","plus":"<line x1=\"12\" y1=\"5\" x2=\"12\" y2=\"19\"></line><line x1=\"5\" y1=\"12\" x2=\"19\" y2=\"12\"></line>","pocket":"<path d=\"M4 3h16a2 2 0 0 1 2 2v6a10 10 0 0 1-10 10A10 10 0 0 1 2 11V5a2 2 0 0 1 2-2z\"></path><polyline points=\"8 10 12 14 16 10\"></polyline>","power":"<path d=\"M18.36 6.64a9 9 0 1 1-12.73 0\"></path><line x1=\"12\" y1=\"2\" x2=\"12\" y2=\"12\"></line>","printer":"<polyline points=\"6 9 6 2 18 2 18 9\"></polyline><path d=\"M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2\"></path><rect x=\"6\" y=\"14\" width=\"12\" height=\"8\"></rect>","radio":"<circle cx=\"12\" cy=\"12\" r=\"2\"></circle><path d=\"M16.24 7.76a6 6 0 0 1 0 8.49m-8.48-.01a6 6 0 0 1 0-8.49m11.31-2.82a10 10 0 0 1 0 14.14m-14.14 0a10 10 0 0 1 0-14.14\"></path>","refresh-ccw":"<polyline points=\"1 4 1 10 7 10\"></polyline><polyline points=\"23 20 23 14 17 14\"></polyline><path d=\"M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15\"></path>","refresh-cw":"<polyline points=\"23 4 23 10 17 10\"></polyline><polyline points=\"1 20 1 14 7 14\"></polyline><path d=\"M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15\"></path>","repeat":"<polyline points=\"17 1 21 5 17 9\"></polyline><path d=\"M3 11V9a4 4 0 0 1 4-4h14\"></path><polyline points=\"7 23 3 19 7 15\"></polyline><path d=\"M21 13v2a4 4 0 0 1-4 4H3\"></path>","rewind":"<polygon points=\"11 19 2 12 11 5 11 19\"></polygon><polygon points=\"22 19 13 12 22 5 22 19\"></polygon>","rotate-ccw":"<polyline points=\"1 4 1 10 7 10\"></polyline><path d=\"M3.51 15a9 9 0 1 0 2.13-9.36L1 10\"></path>","rotate-cw":"<polyline points=\"23 4 23 10 17 10\"></polyline><path d=\"M20.49 15a9 9 0 1 1-2.12-9.36L23 10\"></path>","rss":"<path d=\"M4 11a9 9 0 0 1 9 9\"></path><path d=\"M4 4a16 16 0 0 1 16 16\"></path><circle cx=\"5\" cy=\"19\" r=\"1\"></circle>","save":"<path d=\"M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z\"></path><polyline points=\"17 21 17 13 7 13 7 21\"></polyline><polyline points=\"7 3 7 8 15 8\"></polyline>","scissors":"<circle cx=\"6\" cy=\"6\" r=\"3\"></circle><circle cx=\"6\" cy=\"18\" r=\"3\"></circle><line x1=\"20\" y1=\"4\" x2=\"8.12\" y2=\"15.88\"></line><line x1=\"14.47\" y1=\"14.48\" x2=\"20\" y2=\"20\"></line><line x1=\"8.12\" y1=\"8.12\" x2=\"12\" y2=\"12\"></line>","search":"<circle cx=\"11\" cy=\"11\" r=\"8\"></circle><line x1=\"21\" y1=\"21\" x2=\"16.65\" y2=\"16.65\"></line>","send":"<line x1=\"22\" y1=\"2\" x2=\"11\" y2=\"13\"></line><polygon points=\"22 2 15 22 11 13 2 9 22 2\"></polygon>","server":"<rect x=\"2\" y=\"2\" width=\"20\" height=\"8\" rx=\"2\" ry=\"2\"></rect><rect x=\"2\" y=\"14\" width=\"20\" height=\"8\" rx=\"2\" ry=\"2\"></rect><line x1=\"6\" y1=\"6\" x2=\"6.01\" y2=\"6\"></line><line x1=\"6\" y1=\"18\" x2=\"6.01\" y2=\"18\"></line>","settings":"<circle cx=\"12\" cy=\"12\" r=\"3\"></circle><path d=\"M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z\"></path>","share-2":"<circle cx=\"18\" cy=\"5\" r=\"3\"></circle><circle cx=\"6\" cy=\"12\" r=\"3\"></circle><circle cx=\"18\" cy=\"19\" r=\"3\"></circle><line x1=\"8.59\" y1=\"13.51\" x2=\"15.42\" y2=\"17.49\"></line><line x1=\"15.41\" y1=\"6.51\" x2=\"8.59\" y2=\"10.49\"></line>","share":"<path d=\"M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8\"></path><polyline points=\"16 6 12 2 8 6\"></polyline><line x1=\"12\" y1=\"2\" x2=\"12\" y2=\"15\"></line>","shield-off":"<path d=\"M19.69 14a6.9 6.9 0 0 0 .31-2V5l-8-3-3.16 1.18\"></path><path d=\"M4.73 4.73L4 5v7c0 6 8 10 8 10a20.29 20.29 0 0 0 5.62-4.38\"></path><line x1=\"1\" y1=\"1\" x2=\"23\" y2=\"23\"></line>","shield":"<path d=\"M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z\"></path>","shopping-bag":"<path d=\"M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z\"></path><line x1=\"3\" y1=\"6\" x2=\"21\" y2=\"6\"></line><path d=\"M16 10a4 4 0 0 1-8 0\"></path>","shopping-cart":"<circle cx=\"9\" cy=\"21\" r=\"1\"></circle><circle cx=\"20\" cy=\"21\" r=\"1\"></circle><path d=\"M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6\"></path>","shuffle":"<polyline points=\"16 3 21 3 21 8\"></polyline><line x1=\"4\" y1=\"20\" x2=\"21\" y2=\"3\"></line><polyline points=\"21 16 21 21 16 21\"></polyline><line x1=\"15\" y1=\"15\" x2=\"21\" y2=\"21\"></line><line x1=\"4\" y1=\"4\" x2=\"9\" y2=\"9\"></line>","sidebar":"<rect x=\"3\" y=\"3\" width=\"18\" height=\"18\" rx=\"2\" ry=\"2\"></rect><line x1=\"9\" y1=\"3\" x2=\"9\" y2=\"21\"></line>","skip-back":"<polygon points=\"19 20 9 12 19 4 19 20\"></polygon><line x1=\"5\" y1=\"19\" x2=\"5\" y2=\"5\"></line>","skip-forward":"<polygon points=\"5 4 15 12 5 20 5 4\"></polygon><line x1=\"19\" y1=\"5\" x2=\"19\" y2=\"19\"></line>","slack":"<path d=\"M14.5 10c-.83 0-1.5-.67-1.5-1.5v-5c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5v5c0 .83-.67 1.5-1.5 1.5z\"></path><path d=\"M20.5 10H19V8.5c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z\"></path><path d=\"M9.5 14c.83 0 1.5.67 1.5 1.5v5c0 .83-.67 1.5-1.5 1.5S8 21.33 8 20.5v-5c0-.83.67-1.5 1.5-1.5z\"></path><path d=\"M3.5 14H5v1.5c0 .83-.67 1.5-1.5 1.5S2 16.33 2 15.5 2.67 14 3.5 14z\"></path><path d=\"M14 14.5c0-.83.67-1.5 1.5-1.5h5c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5h-5c-.83 0-1.5-.67-1.5-1.5z\"></path><path d=\"M15.5 19H14v1.5c0 .83.67 1.5 1.5 1.5s1.5-.67 1.5-1.5-.67-1.5-1.5-1.5z\"></path><path d=\"M10 9.5C10 8.67 9.33 8 8.5 8h-5C2.67 8 2 8.67 2 9.5S2.67 11 3.5 11h5c.83 0 1.5-.67 1.5-1.5z\"></path><path d=\"M8.5 5H10V3.5C10 2.67 9.33 2 8.5 2S7 2.67 7 3.5 7.67 5 8.5 5z\"></path>","slash":"<circle cx=\"12\" cy=\"12\" r=\"10\"></circle><line x1=\"4.93\" y1=\"4.93\" x2=\"19.07\" y2=\"19.07\"></line>","sliders":"<line x1=\"4\" y1=\"21\" x2=\"4\" y2=\"14\"></line><line x1=\"4\" y1=\"10\" x2=\"4\" y2=\"3\"></line><line x1=\"12\" y1=\"21\" x2=\"12\" y2=\"12\"></line><line x1=\"12\" y1=\"8\" x2=\"12\" y2=\"3\"></line><line x1=\"20\" y1=\"21\" x2=\"20\" y2=\"16\"></line><line x1=\"20\" y1=\"12\" x2=\"20\" y2=\"3\"></line><line x1=\"1\" y1=\"14\" x2=\"7\" y2=\"14\"></line><line x1=\"9\" y1=\"8\" x2=\"15\" y2=\"8\"></line><line x1=\"17\" y1=\"16\" x2=\"23\" y2=\"16\"></line>","smartphone":"<rect x=\"5\" y=\"2\" width=\"14\" height=\"20\" rx=\"2\" ry=\"2\"></rect><line x1=\"12\" y1=\"18\" x2=\"12.01\" y2=\"18\"></line>","smile":"<circle cx=\"12\" cy=\"12\" r=\"10\"></circle><path d=\"M8 14s1.5 2 4 2 4-2 4-2\"></path><line x1=\"9\" y1=\"9\" x2=\"9.01\" y2=\"9\"></line><line x1=\"15\" y1=\"9\" x2=\"15.01\" y2=\"9\"></line>","speaker":"<rect x=\"4\" y=\"2\" width=\"16\" height=\"20\" rx=\"2\" ry=\"2\"></rect><circle cx=\"12\" cy=\"14\" r=\"4\"></circle><line x1=\"12\" y1=\"6\" x2=\"12.01\" y2=\"6\"></line>","square":"<rect x=\"3\" y=\"3\" width=\"18\" height=\"18\" rx=\"2\" ry=\"2\"></rect>","star":"<polygon points=\"12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2\"></polygon>","stop-circle":"<circle cx=\"12\" cy=\"12\" r=\"10\"></circle><rect x=\"9\" y=\"9\" width=\"6\" height=\"6\"></rect>","sun":"<circle cx=\"12\" cy=\"12\" r=\"5\"></circle><line x1=\"12\" y1=\"1\" x2=\"12\" y2=\"3\"></line><line x1=\"12\" y1=\"21\" x2=\"12\" y2=\"23\"></line><line x1=\"4.22\" y1=\"4.22\" x2=\"5.64\" y2=\"5.64\"></line><line x1=\"18.36\" y1=\"18.36\" x2=\"19.78\" y2=\"19.78\"></line><line x1=\"1\" y1=\"12\" x2=\"3\" y2=\"12\"></line><line x1=\"21\" y1=\"12\" x2=\"23\" y2=\"12\"></line><line x1=\"4.22\" y1=\"19.78\" x2=\"5.64\" y2=\"18.36\"></line><line x1=\"18.36\" y1=\"5.64\" x2=\"19.78\" y2=\"4.22\"></line>","sunrise":"<path d=\"M17 18a5 5 0 0 0-10 0\"></path><line x1=\"12\" y1=\"2\" x2=\"12\" y2=\"9\"></line><line x1=\"4.22\" y1=\"10.22\" x2=\"5.64\" y2=\"11.64\"></line><line x1=\"1\" y1=\"18\" x2=\"3\" y2=\"18\"></line><line x1=\"21\" y1=\"18\" x2=\"23\" y2=\"18\"></line><line x1=\"18.36\" y1=\"11.64\" x2=\"19.78\" y2=\"10.22\"></line><line x1=\"23\" y1=\"22\" x2=\"1\" y2=\"22\"></line><polyline points=\"8 6 12 2 16 6\"></polyline>","sunset":"<path d=\"M17 18a5 5 0 0 0-10 0\"></path><line x1=\"12\" y1=\"9\" x2=\"12\" y2=\"2\"></line><line x1=\"4.22\" y1=\"10.22\" x2=\"5.64\" y2=\"11.64\"></line><line x1=\"1\" y1=\"18\" x2=\"3\" y2=\"18\"></line><line x1=\"21\" y1=\"18\" x2=\"23\" y2=\"18\"></line><line x1=\"18.36\" y1=\"11.64\" x2=\"19.78\" y2=\"10.22\"></line><line x1=\"23\" y1=\"22\" x2=\"1\" y2=\"22\"></line><polyline points=\"16 5 12 9 8 5\"></polyline>","tablet":"<rect x=\"4\" y=\"2\" width=\"16\" height=\"20\" rx=\"2\" ry=\"2\"></rect><line x1=\"12\" y1=\"18\" x2=\"12.01\" y2=\"18\"></line>","tag":"<path d=\"M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z\"></path><line x1=\"7\" y1=\"7\" x2=\"7.01\" y2=\"7\"></line>","target":"<circle cx=\"12\" cy=\"12\" r=\"10\"></circle><circle cx=\"12\" cy=\"12\" r=\"6\"></circle><circle cx=\"12\" cy=\"12\" r=\"2\"></circle>","terminal":"<polyline points=\"4 17 10 11 4 5\"></polyline><line x1=\"12\" y1=\"19\" x2=\"20\" y2=\"19\"></line>","thermometer":"<path d=\"M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z\"></path>","thumbs-down":"<path d=\"M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17\"></path>","thumbs-up":"<path d=\"M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3\"></path>","toggle-left":"<rect x=\"1\" y=\"5\" width=\"22\" height=\"14\" rx=\"7\" ry=\"7\"></rect><circle cx=\"8\" cy=\"12\" r=\"3\"></circle>","toggle-right":"<rect x=\"1\" y=\"5\" width=\"22\" height=\"14\" rx=\"7\" ry=\"7\"></rect><circle cx=\"16\" cy=\"12\" r=\"3\"></circle>","tool":"<path d=\"M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z\"></path>","trash-2":"<polyline points=\"3 6 5 6 21 6\"></polyline><path d=\"M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2\"></path><line x1=\"10\" y1=\"11\" x2=\"10\" y2=\"17\"></line><line x1=\"14\" y1=\"11\" x2=\"14\" y2=\"17\"></line>","trash":"<polyline points=\"3 6 5 6 21 6\"></polyline><path d=\"M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2\"></path>","trello":"<rect x=\"3\" y=\"3\" width=\"18\" height=\"18\" rx=\"2\" ry=\"2\"></rect><rect x=\"7\" y=\"7\" width=\"3\" height=\"9\"></rect><rect x=\"14\" y=\"7\" width=\"3\" height=\"5\"></rect>","trending-down":"<polyline points=\"23 18 13.5 8.5 8.5 13.5 1 6\"></polyline><polyline points=\"17 18 23 18 23 12\"></polyline>","trending-up":"<polyline points=\"23 6 13.5 15.5 8.5 10.5 1 18\"></polyline><polyline points=\"17 6 23 6 23 12\"></polyline>","triangle":"<path d=\"M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z\"></path>","truck":"<rect x=\"1\" y=\"3\" width=\"15\" height=\"13\"></rect><polygon points=\"16 8 20 8 23 11 23 16 16 16 16 8\"></polygon><circle cx=\"5.5\" cy=\"18.5\" r=\"2.5\"></circle><circle cx=\"18.5\" cy=\"18.5\" r=\"2.5\"></circle>","tv":"<rect x=\"2\" y=\"7\" width=\"20\" height=\"15\" rx=\"2\" ry=\"2\"></rect><polyline points=\"17 2 12 7 7 2\"></polyline>","twitch":"<path d=\"M21 2H3v16h5v4l4-4h5l4-4V2zm-10 9V7m5 4V7\"></path>","twitter":"<path d=\"M23 3a10.9 10.9 0 0 1-3.14 1.53 4.48 4.48 0 0 0-7.86 3v1A10.66 10.66 0 0 1 3 4s-4 9 5 13a11.64 11.64 0 0 1-7 2c9 5 20 0 20-11.5a4.5 4.5 0 0 0-.08-.83A7.72 7.72 0 0 0 23 3z\"></path>","type":"<polyline points=\"4 7 4 4 20 4 20 7\"></polyline><line x1=\"9\" y1=\"20\" x2=\"15\" y2=\"20\"></line><line x1=\"12\" y1=\"4\" x2=\"12\" y2=\"20\"></line>","umbrella":"<path d=\"M23 12a11.05 11.05 0 0 0-22 0zm-5 7a3 3 0 0 1-6 0v-7\"></path>","underline":"<path d=\"M6 3v7a6 6 0 0 0 6 6 6 6 0 0 0 6-6V3\"></path><line x1=\"4\" y1=\"21\" x2=\"20\" y2=\"21\"></line>","unlock":"<rect x=\"3\" y=\"11\" width=\"18\" height=\"11\" rx=\"2\" ry=\"2\"></rect><path d=\"M7 11V7a5 5 0 0 1 9.9-1\"></path>","upload-cloud":"<polyline points=\"16 16 12 12 8 16\"></polyline><line x1=\"12\" y1=\"12\" x2=\"12\" y2=\"21\"></line><path d=\"M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3\"></path><polyline points=\"16 16 12 12 8 16\"></polyline>","upload":"<path d=\"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4\"></path><polyline points=\"17 8 12 3 7 8\"></polyline><line x1=\"12\" y1=\"3\" x2=\"12\" y2=\"15\"></line>","user-check":"<path d=\"M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2\"></path><circle cx=\"8.5\" cy=\"7\" r=\"4\"></circle><polyline points=\"17 11 19 13 23 9\"></polyline>","user-minus":"<path d=\"M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2\"></path><circle cx=\"8.5\" cy=\"7\" r=\"4\"></circle><line x1=\"23\" y1=\"11\" x2=\"17\" y2=\"11\"></line>","user-plus":"<path d=\"M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2\"></path><circle cx=\"8.5\" cy=\"7\" r=\"4\"></circle><line x1=\"20\" y1=\"8\" x2=\"20\" y2=\"14\"></line><line x1=\"23\" y1=\"11\" x2=\"17\" y2=\"11\"></line>","user-x":"<path d=\"M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2\"></path><circle cx=\"8.5\" cy=\"7\" r=\"4\"></circle><line x1=\"18\" y1=\"8\" x2=\"23\" y2=\"13\"></line><line x1=\"23\" y1=\"8\" x2=\"18\" y2=\"13\"></line>","user":"<path d=\"M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2\"></path><circle cx=\"12\" cy=\"7\" r=\"4\"></circle>","users":"<path d=\"M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2\"></path><circle cx=\"9\" cy=\"7\" r=\"4\"></circle><path d=\"M23 21v-2a4 4 0 0 0-3-3.87\"></path><path d=\"M16 3.13a4 4 0 0 1 0 7.75\"></path>","video-off":"<path d=\"M16 16v1a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2m5.66 0H14a2 2 0 0 1 2 2v3.34l1 1L23 7v10\"></path><line x1=\"1\" y1=\"1\" x2=\"23\" y2=\"23\"></line>","video":"<polygon points=\"23 7 16 12 23 17 23 7\"></polygon><rect x=\"1\" y=\"5\" width=\"15\" height=\"14\" rx=\"2\" ry=\"2\"></rect>","voicemail":"<circle cx=\"5.5\" cy=\"11.5\" r=\"4.5\"></circle><circle cx=\"18.5\" cy=\"11.5\" r=\"4.5\"></circle><line x1=\"5.5\" y1=\"16\" x2=\"18.5\" y2=\"16\"></line>","volume-1":"<polygon points=\"11 5 6 9 2 9 2 15 6 15 11 19 11 5\"></polygon><path d=\"M15.54 8.46a5 5 0 0 1 0 7.07\"></path>","volume-2":"<polygon points=\"11 5 6 9 2 9 2 15 6 15 11 19 11 5\"></polygon><path d=\"M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07\"></path>","volume-x":"<polygon points=\"11 5 6 9 2 9 2 15 6 15 11 19 11 5\"></polygon><line x1=\"23\" y1=\"9\" x2=\"17\" y2=\"15\"></line><line x1=\"17\" y1=\"9\" x2=\"23\" y2=\"15\"></line>","volume":"<polygon points=\"11 5 6 9 2 9 2 15 6 15 11 19 11 5\"></polygon>","watch":"<circle cx=\"12\" cy=\"12\" r=\"7\"></circle><polyline points=\"12 9 12 12 13.5 13.5\"></polyline><path d=\"M16.51 17.35l-.35 3.83a2 2 0 0 1-2 1.82H9.83a2 2 0 0 1-2-1.82l-.35-3.83m.01-10.7l.35-3.83A2 2 0 0 1 9.83 1h4.35a2 2 0 0 1 2 1.82l.35 3.83\"></path>","wifi-off":"<line x1=\"1\" y1=\"1\" x2=\"23\" y2=\"23\"></line><path d=\"M16.72 11.06A10.94 10.94 0 0 1 19 12.55\"></path><path d=\"M5 12.55a10.94 10.94 0 0 1 5.17-2.39\"></path><path d=\"M10.71 5.05A16 16 0 0 1 22.58 9\"></path><path d=\"M1.42 9a15.91 15.91 0 0 1 4.7-2.88\"></path><path d=\"M8.53 16.11a6 6 0 0 1 6.95 0\"></path><line x1=\"12\" y1=\"20\" x2=\"12.01\" y2=\"20\"></line>","wifi":"<path d=\"M5 12.55a11 11 0 0 1 14.08 0\"></path><path d=\"M1.42 9a16 16 0 0 1 21.16 0\"></path><path d=\"M8.53 16.11a6 6 0 0 1 6.95 0\"></path><line x1=\"12\" y1=\"20\" x2=\"12.01\" y2=\"20\"></line>","wind":"<path d=\"M9.59 4.59A2 2 0 1 1 11 8H2m10.59 11.41A2 2 0 1 0 14 16H2m15.73-8.27A2.5 2.5 0 1 1 19.5 12H2\"></path>","x-circle":"<circle cx=\"12\" cy=\"12\" r=\"10\"></circle><line x1=\"15\" y1=\"9\" x2=\"9\" y2=\"15\"></line><line x1=\"9\" y1=\"9\" x2=\"15\" y2=\"15\"></line>","x-octagon":"<polygon points=\"7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2\"></polygon><line x1=\"15\" y1=\"9\" x2=\"9\" y2=\"15\"></line><line x1=\"9\" y1=\"9\" x2=\"15\" y2=\"15\"></line>","x-square":"<rect x=\"3\" y=\"3\" width=\"18\" height=\"18\" rx=\"2\" ry=\"2\"></rect><line x1=\"9\" y1=\"9\" x2=\"15\" y2=\"15\"></line><line x1=\"15\" y1=\"9\" x2=\"9\" y2=\"15\"></line>","x":"<line x1=\"18\" y1=\"6\" x2=\"6\" y2=\"18\"></line><line x1=\"6\" y1=\"6\" x2=\"18\" y2=\"18\"></line>","youtube":"<path d=\"M22.54 6.42a2.78 2.78 0 0 0-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 0 0-1.94 2A29 29 0 0 0 1 11.75a29 29 0 0 0 .46 5.33A2.78 2.78 0 0 0 3.4 19c1.72.46 8.6.46 8.6.46s6.88 0 8.6-.46a2.78 2.78 0 0 0 1.94-2 29 29 0 0 0 .46-5.25 29 29 0 0 0-.46-5.33z\"></path><polygon points=\"9.75 15.02 15.5 11.75 9.75 8.48 9.75 15.02\"></polygon>","zap-off":"<polyline points=\"12.41 6.75 13 2 10.57 4.92\"></polyline><polyline points=\"18.57 12.91 21 10 15.66 10\"></polyline><polyline points=\"8 8 3 14 12 14 11 22 16 16\"></polyline><line x1=\"1\" y1=\"1\" x2=\"23\" y2=\"23\"></line>","zap":"<polygon points=\"13 2 3 14 12 14 11 22 21 10 12 10 13 2\"></polygon>","zoom-in":"<circle cx=\"11\" cy=\"11\" r=\"8\"></circle><line x1=\"21\" y1=\"21\" x2=\"16.65\" y2=\"16.65\"></line><line x1=\"11\" y1=\"8\" x2=\"11\" y2=\"14\"></line><line x1=\"8\" y1=\"11\" x2=\"14\" y2=\"11\"></line>","zoom-out":"<circle cx=\"11\" cy=\"11\" r=\"8\"></circle><line x1=\"21\" y1=\"21\" x2=\"16.65\" y2=\"16.65\"></line><line x1=\"8\" y1=\"11\" x2=\"14\" y2=\"11\"></line>"};
+
+    /***/ }),
+
+    /***/ "./node_modules/classnames/dedupe.js":
+    /*!*******************************************!*\
+      !*** ./node_modules/classnames/dedupe.js ***!
+      \*******************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var __WEBPACK_AMD_DEFINE_ARRAY__, __WEBPACK_AMD_DEFINE_RESULT__;/*!
+      Copyright (c) 2016 Jed Watson.
+      Licensed under the MIT License (MIT), see
+      http://jedwatson.github.io/classnames
+    */
+    /* global define */
+
+    (function () {
+
+    	var classNames = (function () {
+    		// don't inherit from Object so we can skip hasOwnProperty check later
+    		// http://stackoverflow.com/questions/15518328/creating-js-object-with-object-createnull#answer-21079232
+    		function StorageObject() {}
+    		StorageObject.prototype = Object.create(null);
+
+    		function _parseArray (resultSet, array) {
+    			var length = array.length;
+
+    			for (var i = 0; i < length; ++i) {
+    				_parse(resultSet, array[i]);
+    			}
+    		}
+
+    		var hasOwn = {}.hasOwnProperty;
+
+    		function _parseNumber (resultSet, num) {
+    			resultSet[num] = true;
+    		}
+
+    		function _parseObject (resultSet, object) {
+    			for (var k in object) {
+    				if (hasOwn.call(object, k)) {
+    					// set value to false instead of deleting it to avoid changing object structure
+    					// https://www.smashingmagazine.com/2012/11/writing-fast-memory-efficient-javascript/#de-referencing-misconceptions
+    					resultSet[k] = !!object[k];
+    				}
+    			}
+    		}
+
+    		var SPACE = /\s+/;
+    		function _parseString (resultSet, str) {
+    			var array = str.split(SPACE);
+    			var length = array.length;
+
+    			for (var i = 0; i < length; ++i) {
+    				resultSet[array[i]] = true;
+    			}
+    		}
+
+    		function _parse (resultSet, arg) {
+    			if (!arg) return;
+    			var argType = typeof arg;
+
+    			// 'foo bar'
+    			if (argType === 'string') {
+    				_parseString(resultSet, arg);
+
+    			// ['foo', 'bar', ...]
+    			} else if (Array.isArray(arg)) {
+    				_parseArray(resultSet, arg);
+
+    			// { 'foo': true, ... }
+    			} else if (argType === 'object') {
+    				_parseObject(resultSet, arg);
+
+    			// '130'
+    			} else if (argType === 'number') {
+    				_parseNumber(resultSet, arg);
+    			}
+    		}
+
+    		function _classNames () {
+    			// don't leak arguments
+    			// https://github.com/petkaantonov/bluebird/wiki/Optimization-killers#32-leaking-arguments
+    			var len = arguments.length;
+    			var args = Array(len);
+    			for (var i = 0; i < len; i++) {
+    				args[i] = arguments[i];
+    			}
+
+    			var classSet = new StorageObject();
+    			_parseArray(classSet, args);
+
+    			var list = [];
+
+    			for (var k in classSet) {
+    				if (classSet[k]) {
+    					list.push(k);
+    				}
+    			}
+
+    			return list.join(' ');
+    		}
+
+    		return _classNames;
+    	})();
+
+    	if (typeof module !== 'undefined' && module.exports) {
+    		module.exports = classNames;
+    	} else {
+    		// register as 'classnames', consistent with npm package name
+    		!(__WEBPACK_AMD_DEFINE_ARRAY__ = [], __WEBPACK_AMD_DEFINE_RESULT__ = (function () {
+    			return classNames;
+    		}).apply(exports, __WEBPACK_AMD_DEFINE_ARRAY__),
+    				__WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
+    	}
+    }());
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/es/array/from.js":
+    /*!***********************************************!*\
+      !*** ./node_modules/core-js/es/array/from.js ***!
+      \***********************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    __webpack_require__(/*! ../../modules/es.string.iterator */ "./node_modules/core-js/modules/es.string.iterator.js");
+    __webpack_require__(/*! ../../modules/es.array.from */ "./node_modules/core-js/modules/es.array.from.js");
+    var path = __webpack_require__(/*! ../../internals/path */ "./node_modules/core-js/internals/path.js");
+
+    module.exports = path.Array.from;
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/a-function.js":
+    /*!******************************************************!*\
+      !*** ./node_modules/core-js/internals/a-function.js ***!
+      \******************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports) {
+
+    module.exports = function (it) {
+      if (typeof it != 'function') {
+        throw TypeError(String(it) + ' is not a function');
+      } return it;
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/an-object.js":
+    /*!*****************************************************!*\
+      !*** ./node_modules/core-js/internals/an-object.js ***!
+      \*****************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var isObject = __webpack_require__(/*! ../internals/is-object */ "./node_modules/core-js/internals/is-object.js");
+
+    module.exports = function (it) {
+      if (!isObject(it)) {
+        throw TypeError(String(it) + ' is not an object');
+      } return it;
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/array-from.js":
+    /*!******************************************************!*\
+      !*** ./node_modules/core-js/internals/array-from.js ***!
+      \******************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var bind = __webpack_require__(/*! ../internals/bind-context */ "./node_modules/core-js/internals/bind-context.js");
+    var toObject = __webpack_require__(/*! ../internals/to-object */ "./node_modules/core-js/internals/to-object.js");
+    var callWithSafeIterationClosing = __webpack_require__(/*! ../internals/call-with-safe-iteration-closing */ "./node_modules/core-js/internals/call-with-safe-iteration-closing.js");
+    var isArrayIteratorMethod = __webpack_require__(/*! ../internals/is-array-iterator-method */ "./node_modules/core-js/internals/is-array-iterator-method.js");
+    var toLength = __webpack_require__(/*! ../internals/to-length */ "./node_modules/core-js/internals/to-length.js");
+    var createProperty = __webpack_require__(/*! ../internals/create-property */ "./node_modules/core-js/internals/create-property.js");
+    var getIteratorMethod = __webpack_require__(/*! ../internals/get-iterator-method */ "./node_modules/core-js/internals/get-iterator-method.js");
+
+    // `Array.from` method
+    // https://tc39.github.io/ecma262/#sec-array.from
+    module.exports = function from(arrayLike /* , mapfn = undefined, thisArg = undefined */) {
+      var O = toObject(arrayLike);
+      var C = typeof this == 'function' ? this : Array;
+      var argumentsLength = arguments.length;
+      var mapfn = argumentsLength > 1 ? arguments[1] : undefined;
+      var mapping = mapfn !== undefined;
+      var index = 0;
+      var iteratorMethod = getIteratorMethod(O);
+      var length, result, step, iterator;
+      if (mapping) mapfn = bind(mapfn, argumentsLength > 2 ? arguments[2] : undefined, 2);
+      // if the target is not iterable or it's an array with the default iterator - use a simple case
+      if (iteratorMethod != undefined && !(C == Array && isArrayIteratorMethod(iteratorMethod))) {
+        iterator = iteratorMethod.call(O);
+        result = new C();
+        for (;!(step = iterator.next()).done; index++) {
+          createProperty(result, index, mapping
+            ? callWithSafeIterationClosing(iterator, mapfn, [step.value, index], true)
+            : step.value
+          );
+        }
+      } else {
+        length = toLength(O.length);
+        result = new C(length);
+        for (;length > index; index++) {
+          createProperty(result, index, mapping ? mapfn(O[index], index) : O[index]);
+        }
+      }
+      result.length = index;
+      return result;
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/array-includes.js":
+    /*!**********************************************************!*\
+      !*** ./node_modules/core-js/internals/array-includes.js ***!
+      \**********************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var toIndexedObject = __webpack_require__(/*! ../internals/to-indexed-object */ "./node_modules/core-js/internals/to-indexed-object.js");
+    var toLength = __webpack_require__(/*! ../internals/to-length */ "./node_modules/core-js/internals/to-length.js");
+    var toAbsoluteIndex = __webpack_require__(/*! ../internals/to-absolute-index */ "./node_modules/core-js/internals/to-absolute-index.js");
+
+    // `Array.prototype.{ indexOf, includes }` methods implementation
+    // false -> Array#indexOf
+    // https://tc39.github.io/ecma262/#sec-array.prototype.indexof
+    // true  -> Array#includes
+    // https://tc39.github.io/ecma262/#sec-array.prototype.includes
+    module.exports = function (IS_INCLUDES) {
+      return function ($this, el, fromIndex) {
+        var O = toIndexedObject($this);
+        var length = toLength(O.length);
+        var index = toAbsoluteIndex(fromIndex, length);
+        var value;
+        // Array#includes uses SameValueZero equality algorithm
+        // eslint-disable-next-line no-self-compare
+        if (IS_INCLUDES && el != el) while (length > index) {
+          value = O[index++];
+          // eslint-disable-next-line no-self-compare
+          if (value != value) return true;
+        // Array#indexOf ignores holes, Array#includes - not
+        } else for (;length > index; index++) if (IS_INCLUDES || index in O) {
+          if (O[index] === el) return IS_INCLUDES || index || 0;
+        } return !IS_INCLUDES && -1;
+      };
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/bind-context.js":
+    /*!********************************************************!*\
+      !*** ./node_modules/core-js/internals/bind-context.js ***!
+      \********************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var aFunction = __webpack_require__(/*! ../internals/a-function */ "./node_modules/core-js/internals/a-function.js");
+
+    // optional / simple context binding
+    module.exports = function (fn, that, length) {
+      aFunction(fn);
+      if (that === undefined) return fn;
+      switch (length) {
+        case 0: return function () {
+          return fn.call(that);
+        };
+        case 1: return function (a) {
+          return fn.call(that, a);
+        };
+        case 2: return function (a, b) {
+          return fn.call(that, a, b);
+        };
+        case 3: return function (a, b, c) {
+          return fn.call(that, a, b, c);
+        };
+      }
+      return function (/* ...args */) {
+        return fn.apply(that, arguments);
+      };
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/call-with-safe-iteration-closing.js":
+    /*!****************************************************************************!*\
+      !*** ./node_modules/core-js/internals/call-with-safe-iteration-closing.js ***!
+      \****************************************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var anObject = __webpack_require__(/*! ../internals/an-object */ "./node_modules/core-js/internals/an-object.js");
+
+    // call something on iterator step with safe closing on error
+    module.exports = function (iterator, fn, value, ENTRIES) {
+      try {
+        return ENTRIES ? fn(anObject(value)[0], value[1]) : fn(value);
+      // 7.4.6 IteratorClose(iterator, completion)
+      } catch (error) {
+        var returnMethod = iterator['return'];
+        if (returnMethod !== undefined) anObject(returnMethod.call(iterator));
+        throw error;
+      }
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/check-correctness-of-iteration.js":
+    /*!**************************************************************************!*\
+      !*** ./node_modules/core-js/internals/check-correctness-of-iteration.js ***!
+      \**************************************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var wellKnownSymbol = __webpack_require__(/*! ../internals/well-known-symbol */ "./node_modules/core-js/internals/well-known-symbol.js");
+
+    var ITERATOR = wellKnownSymbol('iterator');
+    var SAFE_CLOSING = false;
+
+    try {
+      var called = 0;
+      var iteratorWithReturn = {
+        next: function () {
+          return { done: !!called++ };
+        },
+        'return': function () {
+          SAFE_CLOSING = true;
+        }
+      };
+      iteratorWithReturn[ITERATOR] = function () {
+        return this;
+      };
+      // eslint-disable-next-line no-throw-literal
+      Array.from(iteratorWithReturn, function () { throw 2; });
+    } catch (error) { /* empty */ }
+
+    module.exports = function (exec, SKIP_CLOSING) {
+      if (!SKIP_CLOSING && !SAFE_CLOSING) return false;
+      var ITERATION_SUPPORT = false;
+      try {
+        var object = {};
+        object[ITERATOR] = function () {
+          return {
+            next: function () {
+              return { done: ITERATION_SUPPORT = true };
+            }
+          };
+        };
+        exec(object);
+      } catch (error) { /* empty */ }
+      return ITERATION_SUPPORT;
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/classof-raw.js":
+    /*!*******************************************************!*\
+      !*** ./node_modules/core-js/internals/classof-raw.js ***!
+      \*******************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports) {
+
+    var toString = {}.toString;
+
+    module.exports = function (it) {
+      return toString.call(it).slice(8, -1);
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/classof.js":
+    /*!***************************************************!*\
+      !*** ./node_modules/core-js/internals/classof.js ***!
+      \***************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var classofRaw = __webpack_require__(/*! ../internals/classof-raw */ "./node_modules/core-js/internals/classof-raw.js");
+    var wellKnownSymbol = __webpack_require__(/*! ../internals/well-known-symbol */ "./node_modules/core-js/internals/well-known-symbol.js");
+
+    var TO_STRING_TAG = wellKnownSymbol('toStringTag');
+    // ES3 wrong here
+    var CORRECT_ARGUMENTS = classofRaw(function () { return arguments; }()) == 'Arguments';
+
+    // fallback for IE11 Script Access Denied error
+    var tryGet = function (it, key) {
+      try {
+        return it[key];
+      } catch (error) { /* empty */ }
+    };
+
+    // getting tag from ES6+ `Object.prototype.toString`
+    module.exports = function (it) {
+      var O, tag, result;
+      return it === undefined ? 'Undefined' : it === null ? 'Null'
+        // @@toStringTag case
+        : typeof (tag = tryGet(O = Object(it), TO_STRING_TAG)) == 'string' ? tag
+        // builtinTag case
+        : CORRECT_ARGUMENTS ? classofRaw(O)
+        // ES3 arguments fallback
+        : (result = classofRaw(O)) == 'Object' && typeof O.callee == 'function' ? 'Arguments' : result;
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/copy-constructor-properties.js":
+    /*!***********************************************************************!*\
+      !*** ./node_modules/core-js/internals/copy-constructor-properties.js ***!
+      \***********************************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var has = __webpack_require__(/*! ../internals/has */ "./node_modules/core-js/internals/has.js");
+    var ownKeys = __webpack_require__(/*! ../internals/own-keys */ "./node_modules/core-js/internals/own-keys.js");
+    var getOwnPropertyDescriptorModule = __webpack_require__(/*! ../internals/object-get-own-property-descriptor */ "./node_modules/core-js/internals/object-get-own-property-descriptor.js");
+    var definePropertyModule = __webpack_require__(/*! ../internals/object-define-property */ "./node_modules/core-js/internals/object-define-property.js");
+
+    module.exports = function (target, source) {
+      var keys = ownKeys(source);
+      var defineProperty = definePropertyModule.f;
+      var getOwnPropertyDescriptor = getOwnPropertyDescriptorModule.f;
+      for (var i = 0; i < keys.length; i++) {
+        var key = keys[i];
+        if (!has(target, key)) defineProperty(target, key, getOwnPropertyDescriptor(source, key));
+      }
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/correct-prototype-getter.js":
+    /*!********************************************************************!*\
+      !*** ./node_modules/core-js/internals/correct-prototype-getter.js ***!
+      \********************************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var fails = __webpack_require__(/*! ../internals/fails */ "./node_modules/core-js/internals/fails.js");
+
+    module.exports = !fails(function () {
+      function F() { /* empty */ }
+      F.prototype.constructor = null;
+      return Object.getPrototypeOf(new F()) !== F.prototype;
+    });
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/create-iterator-constructor.js":
+    /*!***********************************************************************!*\
+      !*** ./node_modules/core-js/internals/create-iterator-constructor.js ***!
+      \***********************************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var IteratorPrototype = __webpack_require__(/*! ../internals/iterators-core */ "./node_modules/core-js/internals/iterators-core.js").IteratorPrototype;
+    var create = __webpack_require__(/*! ../internals/object-create */ "./node_modules/core-js/internals/object-create.js");
+    var createPropertyDescriptor = __webpack_require__(/*! ../internals/create-property-descriptor */ "./node_modules/core-js/internals/create-property-descriptor.js");
+    var setToStringTag = __webpack_require__(/*! ../internals/set-to-string-tag */ "./node_modules/core-js/internals/set-to-string-tag.js");
+    var Iterators = __webpack_require__(/*! ../internals/iterators */ "./node_modules/core-js/internals/iterators.js");
+
+    var returnThis = function () { return this; };
+
+    module.exports = function (IteratorConstructor, NAME, next) {
+      var TO_STRING_TAG = NAME + ' Iterator';
+      IteratorConstructor.prototype = create(IteratorPrototype, { next: createPropertyDescriptor(1, next) });
+      setToStringTag(IteratorConstructor, TO_STRING_TAG, false, true);
+      Iterators[TO_STRING_TAG] = returnThis;
+      return IteratorConstructor;
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/create-property-descriptor.js":
+    /*!**********************************************************************!*\
+      !*** ./node_modules/core-js/internals/create-property-descriptor.js ***!
+      \**********************************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports) {
+
+    module.exports = function (bitmap, value) {
+      return {
+        enumerable: !(bitmap & 1),
+        configurable: !(bitmap & 2),
+        writable: !(bitmap & 4),
+        value: value
+      };
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/create-property.js":
+    /*!***********************************************************!*\
+      !*** ./node_modules/core-js/internals/create-property.js ***!
+      \***********************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var toPrimitive = __webpack_require__(/*! ../internals/to-primitive */ "./node_modules/core-js/internals/to-primitive.js");
+    var definePropertyModule = __webpack_require__(/*! ../internals/object-define-property */ "./node_modules/core-js/internals/object-define-property.js");
+    var createPropertyDescriptor = __webpack_require__(/*! ../internals/create-property-descriptor */ "./node_modules/core-js/internals/create-property-descriptor.js");
+
+    module.exports = function (object, key, value) {
+      var propertyKey = toPrimitive(key);
+      if (propertyKey in object) definePropertyModule.f(object, propertyKey, createPropertyDescriptor(0, value));
+      else object[propertyKey] = value;
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/define-iterator.js":
+    /*!***********************************************************!*\
+      !*** ./node_modules/core-js/internals/define-iterator.js ***!
+      \***********************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var $ = __webpack_require__(/*! ../internals/export */ "./node_modules/core-js/internals/export.js");
+    var createIteratorConstructor = __webpack_require__(/*! ../internals/create-iterator-constructor */ "./node_modules/core-js/internals/create-iterator-constructor.js");
+    var getPrototypeOf = __webpack_require__(/*! ../internals/object-get-prototype-of */ "./node_modules/core-js/internals/object-get-prototype-of.js");
+    var setPrototypeOf = __webpack_require__(/*! ../internals/object-set-prototype-of */ "./node_modules/core-js/internals/object-set-prototype-of.js");
+    var setToStringTag = __webpack_require__(/*! ../internals/set-to-string-tag */ "./node_modules/core-js/internals/set-to-string-tag.js");
+    var hide = __webpack_require__(/*! ../internals/hide */ "./node_modules/core-js/internals/hide.js");
+    var redefine = __webpack_require__(/*! ../internals/redefine */ "./node_modules/core-js/internals/redefine.js");
+    var wellKnownSymbol = __webpack_require__(/*! ../internals/well-known-symbol */ "./node_modules/core-js/internals/well-known-symbol.js");
+    var IS_PURE = __webpack_require__(/*! ../internals/is-pure */ "./node_modules/core-js/internals/is-pure.js");
+    var Iterators = __webpack_require__(/*! ../internals/iterators */ "./node_modules/core-js/internals/iterators.js");
+    var IteratorsCore = __webpack_require__(/*! ../internals/iterators-core */ "./node_modules/core-js/internals/iterators-core.js");
+
+    var IteratorPrototype = IteratorsCore.IteratorPrototype;
+    var BUGGY_SAFARI_ITERATORS = IteratorsCore.BUGGY_SAFARI_ITERATORS;
+    var ITERATOR = wellKnownSymbol('iterator');
+    var KEYS = 'keys';
+    var VALUES = 'values';
+    var ENTRIES = 'entries';
+
+    var returnThis = function () { return this; };
+
+    module.exports = function (Iterable, NAME, IteratorConstructor, next, DEFAULT, IS_SET, FORCED) {
+      createIteratorConstructor(IteratorConstructor, NAME, next);
+
+      var getIterationMethod = function (KIND) {
+        if (KIND === DEFAULT && defaultIterator) return defaultIterator;
+        if (!BUGGY_SAFARI_ITERATORS && KIND in IterablePrototype) return IterablePrototype[KIND];
+        switch (KIND) {
+          case KEYS: return function keys() { return new IteratorConstructor(this, KIND); };
+          case VALUES: return function values() { return new IteratorConstructor(this, KIND); };
+          case ENTRIES: return function entries() { return new IteratorConstructor(this, KIND); };
+        } return function () { return new IteratorConstructor(this); };
+      };
+
+      var TO_STRING_TAG = NAME + ' Iterator';
+      var INCORRECT_VALUES_NAME = false;
+      var IterablePrototype = Iterable.prototype;
+      var nativeIterator = IterablePrototype[ITERATOR]
+        || IterablePrototype['@@iterator']
+        || DEFAULT && IterablePrototype[DEFAULT];
+      var defaultIterator = !BUGGY_SAFARI_ITERATORS && nativeIterator || getIterationMethod(DEFAULT);
+      var anyNativeIterator = NAME == 'Array' ? IterablePrototype.entries || nativeIterator : nativeIterator;
+      var CurrentIteratorPrototype, methods, KEY;
+
+      // fix native
+      if (anyNativeIterator) {
+        CurrentIteratorPrototype = getPrototypeOf(anyNativeIterator.call(new Iterable()));
+        if (IteratorPrototype !== Object.prototype && CurrentIteratorPrototype.next) {
+          if (!IS_PURE && getPrototypeOf(CurrentIteratorPrototype) !== IteratorPrototype) {
+            if (setPrototypeOf) {
+              setPrototypeOf(CurrentIteratorPrototype, IteratorPrototype);
+            } else if (typeof CurrentIteratorPrototype[ITERATOR] != 'function') {
+              hide(CurrentIteratorPrototype, ITERATOR, returnThis);
+            }
+          }
+          // Set @@toStringTag to native iterators
+          setToStringTag(CurrentIteratorPrototype, TO_STRING_TAG, true, true);
+          if (IS_PURE) Iterators[TO_STRING_TAG] = returnThis;
+        }
+      }
+
+      // fix Array#{values, @@iterator}.name in V8 / FF
+      if (DEFAULT == VALUES && nativeIterator && nativeIterator.name !== VALUES) {
+        INCORRECT_VALUES_NAME = true;
+        defaultIterator = function values() { return nativeIterator.call(this); };
+      }
+
+      // define iterator
+      if ((!IS_PURE || FORCED) && IterablePrototype[ITERATOR] !== defaultIterator) {
+        hide(IterablePrototype, ITERATOR, defaultIterator);
+      }
+      Iterators[NAME] = defaultIterator;
+
+      // export additional methods
+      if (DEFAULT) {
+        methods = {
+          values: getIterationMethod(VALUES),
+          keys: IS_SET ? defaultIterator : getIterationMethod(KEYS),
+          entries: getIterationMethod(ENTRIES)
+        };
+        if (FORCED) for (KEY in methods) {
+          if (BUGGY_SAFARI_ITERATORS || INCORRECT_VALUES_NAME || !(KEY in IterablePrototype)) {
+            redefine(IterablePrototype, KEY, methods[KEY]);
+          }
+        } else $({ target: NAME, proto: true, forced: BUGGY_SAFARI_ITERATORS || INCORRECT_VALUES_NAME }, methods);
+      }
+
+      return methods;
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/descriptors.js":
+    /*!*******************************************************!*\
+      !*** ./node_modules/core-js/internals/descriptors.js ***!
+      \*******************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var fails = __webpack_require__(/*! ../internals/fails */ "./node_modules/core-js/internals/fails.js");
+
+    // Thank's IE8 for his funny defineProperty
+    module.exports = !fails(function () {
+      return Object.defineProperty({}, 'a', { get: function () { return 7; } }).a != 7;
+    });
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/document-create-element.js":
+    /*!*******************************************************************!*\
+      !*** ./node_modules/core-js/internals/document-create-element.js ***!
+      \*******************************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var global = __webpack_require__(/*! ../internals/global */ "./node_modules/core-js/internals/global.js");
+    var isObject = __webpack_require__(/*! ../internals/is-object */ "./node_modules/core-js/internals/is-object.js");
+
+    var document = global.document;
+    // typeof document.createElement is 'object' in old IE
+    var exist = isObject(document) && isObject(document.createElement);
+
+    module.exports = function (it) {
+      return exist ? document.createElement(it) : {};
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/enum-bug-keys.js":
+    /*!*********************************************************!*\
+      !*** ./node_modules/core-js/internals/enum-bug-keys.js ***!
+      \*********************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports) {
+
+    // IE8- don't enum bug keys
+    module.exports = [
+      'constructor',
+      'hasOwnProperty',
+      'isPrototypeOf',
+      'propertyIsEnumerable',
+      'toLocaleString',
+      'toString',
+      'valueOf'
+    ];
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/export.js":
+    /*!**************************************************!*\
+      !*** ./node_modules/core-js/internals/export.js ***!
+      \**************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var global = __webpack_require__(/*! ../internals/global */ "./node_modules/core-js/internals/global.js");
+    var getOwnPropertyDescriptor = __webpack_require__(/*! ../internals/object-get-own-property-descriptor */ "./node_modules/core-js/internals/object-get-own-property-descriptor.js").f;
+    var hide = __webpack_require__(/*! ../internals/hide */ "./node_modules/core-js/internals/hide.js");
+    var redefine = __webpack_require__(/*! ../internals/redefine */ "./node_modules/core-js/internals/redefine.js");
+    var setGlobal = __webpack_require__(/*! ../internals/set-global */ "./node_modules/core-js/internals/set-global.js");
+    var copyConstructorProperties = __webpack_require__(/*! ../internals/copy-constructor-properties */ "./node_modules/core-js/internals/copy-constructor-properties.js");
+    var isForced = __webpack_require__(/*! ../internals/is-forced */ "./node_modules/core-js/internals/is-forced.js");
+
+    /*
+      options.target      - name of the target object
+      options.global      - target is the global object
+      options.stat        - export as static methods of target
+      options.proto       - export as prototype methods of target
+      options.real        - real prototype method for the `pure` version
+      options.forced      - export even if the native feature is available
+      options.bind        - bind methods to the target, required for the `pure` version
+      options.wrap        - wrap constructors to preventing global pollution, required for the `pure` version
+      options.unsafe      - use the simple assignment of property instead of delete + defineProperty
+      options.sham        - add a flag to not completely full polyfills
+      options.enumerable  - export as enumerable property
+      options.noTargetGet - prevent calling a getter on target
+    */
+    module.exports = function (options, source) {
+      var TARGET = options.target;
+      var GLOBAL = options.global;
+      var STATIC = options.stat;
+      var FORCED, target, key, targetProperty, sourceProperty, descriptor;
+      if (GLOBAL) {
+        target = global;
+      } else if (STATIC) {
+        target = global[TARGET] || setGlobal(TARGET, {});
+      } else {
+        target = (global[TARGET] || {}).prototype;
+      }
+      if (target) for (key in source) {
+        sourceProperty = source[key];
+        if (options.noTargetGet) {
+          descriptor = getOwnPropertyDescriptor(target, key);
+          targetProperty = descriptor && descriptor.value;
+        } else targetProperty = target[key];
+        FORCED = isForced(GLOBAL ? key : TARGET + (STATIC ? '.' : '#') + key, options.forced);
+        // contained in target
+        if (!FORCED && targetProperty !== undefined) {
+          if (typeof sourceProperty === typeof targetProperty) continue;
+          copyConstructorProperties(sourceProperty, targetProperty);
+        }
+        // add a flag to not completely full polyfills
+        if (options.sham || (targetProperty && targetProperty.sham)) {
+          hide(sourceProperty, 'sham', true);
+        }
+        // extend global
+        redefine(target, key, sourceProperty, options);
+      }
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/fails.js":
+    /*!*************************************************!*\
+      !*** ./node_modules/core-js/internals/fails.js ***!
+      \*************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports) {
+
+    module.exports = function (exec) {
+      try {
+        return !!exec();
+      } catch (error) {
+        return true;
+      }
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/function-to-string.js":
+    /*!**************************************************************!*\
+      !*** ./node_modules/core-js/internals/function-to-string.js ***!
+      \**************************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var shared = __webpack_require__(/*! ../internals/shared */ "./node_modules/core-js/internals/shared.js");
+
+    module.exports = shared('native-function-to-string', Function.toString);
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/get-iterator-method.js":
+    /*!***************************************************************!*\
+      !*** ./node_modules/core-js/internals/get-iterator-method.js ***!
+      \***************************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var classof = __webpack_require__(/*! ../internals/classof */ "./node_modules/core-js/internals/classof.js");
+    var Iterators = __webpack_require__(/*! ../internals/iterators */ "./node_modules/core-js/internals/iterators.js");
+    var wellKnownSymbol = __webpack_require__(/*! ../internals/well-known-symbol */ "./node_modules/core-js/internals/well-known-symbol.js");
+
+    var ITERATOR = wellKnownSymbol('iterator');
+
+    module.exports = function (it) {
+      if (it != undefined) return it[ITERATOR]
+        || it['@@iterator']
+        || Iterators[classof(it)];
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/global.js":
+    /*!**************************************************!*\
+      !*** ./node_modules/core-js/internals/global.js ***!
+      \**************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    /* WEBPACK VAR INJECTION */(function(global) {var O = 'object';
+    var check = function (it) {
+      return it && it.Math == Math && it;
+    };
+
+    // https://github.com/zloirock/core-js/issues/86#issuecomment-115759028
+    module.exports =
+      // eslint-disable-next-line no-undef
+      check(typeof globalThis == O && globalThis) ||
+      check(typeof window == O && window) ||
+      check(typeof self == O && self) ||
+      check(typeof global == O && global) ||
+      // eslint-disable-next-line no-new-func
+      Function('return this')();
+
+    /* WEBPACK VAR INJECTION */}.call(this, __webpack_require__(/*! ./../../webpack/buildin/global.js */ "./node_modules/webpack/buildin/global.js")));
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/has.js":
+    /*!***********************************************!*\
+      !*** ./node_modules/core-js/internals/has.js ***!
+      \***********************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports) {
+
+    var hasOwnProperty = {}.hasOwnProperty;
+
+    module.exports = function (it, key) {
+      return hasOwnProperty.call(it, key);
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/hidden-keys.js":
+    /*!*******************************************************!*\
+      !*** ./node_modules/core-js/internals/hidden-keys.js ***!
+      \*******************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports) {
+
+    module.exports = {};
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/hide.js":
+    /*!************************************************!*\
+      !*** ./node_modules/core-js/internals/hide.js ***!
+      \************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var DESCRIPTORS = __webpack_require__(/*! ../internals/descriptors */ "./node_modules/core-js/internals/descriptors.js");
+    var definePropertyModule = __webpack_require__(/*! ../internals/object-define-property */ "./node_modules/core-js/internals/object-define-property.js");
+    var createPropertyDescriptor = __webpack_require__(/*! ../internals/create-property-descriptor */ "./node_modules/core-js/internals/create-property-descriptor.js");
+
+    module.exports = DESCRIPTORS ? function (object, key, value) {
+      return definePropertyModule.f(object, key, createPropertyDescriptor(1, value));
+    } : function (object, key, value) {
+      object[key] = value;
+      return object;
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/html.js":
+    /*!************************************************!*\
+      !*** ./node_modules/core-js/internals/html.js ***!
+      \************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var global = __webpack_require__(/*! ../internals/global */ "./node_modules/core-js/internals/global.js");
+
+    var document = global.document;
+
+    module.exports = document && document.documentElement;
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/ie8-dom-define.js":
+    /*!**********************************************************!*\
+      !*** ./node_modules/core-js/internals/ie8-dom-define.js ***!
+      \**********************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var DESCRIPTORS = __webpack_require__(/*! ../internals/descriptors */ "./node_modules/core-js/internals/descriptors.js");
+    var fails = __webpack_require__(/*! ../internals/fails */ "./node_modules/core-js/internals/fails.js");
+    var createElement = __webpack_require__(/*! ../internals/document-create-element */ "./node_modules/core-js/internals/document-create-element.js");
+
+    // Thank's IE8 for his funny defineProperty
+    module.exports = !DESCRIPTORS && !fails(function () {
+      return Object.defineProperty(createElement('div'), 'a', {
+        get: function () { return 7; }
+      }).a != 7;
+    });
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/indexed-object.js":
+    /*!**********************************************************!*\
+      !*** ./node_modules/core-js/internals/indexed-object.js ***!
+      \**********************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    // fallback for non-array-like ES3 and non-enumerable old V8 strings
+    var fails = __webpack_require__(/*! ../internals/fails */ "./node_modules/core-js/internals/fails.js");
+    var classof = __webpack_require__(/*! ../internals/classof-raw */ "./node_modules/core-js/internals/classof-raw.js");
+
+    var split = ''.split;
+
+    module.exports = fails(function () {
+      // throws an error in rhino, see https://github.com/mozilla/rhino/issues/346
+      // eslint-disable-next-line no-prototype-builtins
+      return !Object('z').propertyIsEnumerable(0);
+    }) ? function (it) {
+      return classof(it) == 'String' ? split.call(it, '') : Object(it);
+    } : Object;
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/internal-state.js":
+    /*!**********************************************************!*\
+      !*** ./node_modules/core-js/internals/internal-state.js ***!
+      \**********************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var NATIVE_WEAK_MAP = __webpack_require__(/*! ../internals/native-weak-map */ "./node_modules/core-js/internals/native-weak-map.js");
+    var global = __webpack_require__(/*! ../internals/global */ "./node_modules/core-js/internals/global.js");
+    var isObject = __webpack_require__(/*! ../internals/is-object */ "./node_modules/core-js/internals/is-object.js");
+    var hide = __webpack_require__(/*! ../internals/hide */ "./node_modules/core-js/internals/hide.js");
+    var objectHas = __webpack_require__(/*! ../internals/has */ "./node_modules/core-js/internals/has.js");
+    var sharedKey = __webpack_require__(/*! ../internals/shared-key */ "./node_modules/core-js/internals/shared-key.js");
+    var hiddenKeys = __webpack_require__(/*! ../internals/hidden-keys */ "./node_modules/core-js/internals/hidden-keys.js");
+
+    var WeakMap = global.WeakMap;
+    var set, get, has;
+
+    var enforce = function (it) {
+      return has(it) ? get(it) : set(it, {});
+    };
+
+    var getterFor = function (TYPE) {
+      return function (it) {
+        var state;
+        if (!isObject(it) || (state = get(it)).type !== TYPE) {
+          throw TypeError('Incompatible receiver, ' + TYPE + ' required');
+        } return state;
+      };
+    };
+
+    if (NATIVE_WEAK_MAP) {
+      var store = new WeakMap();
+      var wmget = store.get;
+      var wmhas = store.has;
+      var wmset = store.set;
+      set = function (it, metadata) {
+        wmset.call(store, it, metadata);
+        return metadata;
+      };
+      get = function (it) {
+        return wmget.call(store, it) || {};
+      };
+      has = function (it) {
+        return wmhas.call(store, it);
+      };
+    } else {
+      var STATE = sharedKey('state');
+      hiddenKeys[STATE] = true;
+      set = function (it, metadata) {
+        hide(it, STATE, metadata);
+        return metadata;
+      };
+      get = function (it) {
+        return objectHas(it, STATE) ? it[STATE] : {};
+      };
+      has = function (it) {
+        return objectHas(it, STATE);
+      };
+    }
+
+    module.exports = {
+      set: set,
+      get: get,
+      has: has,
+      enforce: enforce,
+      getterFor: getterFor
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/is-array-iterator-method.js":
+    /*!********************************************************************!*\
+      !*** ./node_modules/core-js/internals/is-array-iterator-method.js ***!
+      \********************************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var wellKnownSymbol = __webpack_require__(/*! ../internals/well-known-symbol */ "./node_modules/core-js/internals/well-known-symbol.js");
+    var Iterators = __webpack_require__(/*! ../internals/iterators */ "./node_modules/core-js/internals/iterators.js");
+
+    var ITERATOR = wellKnownSymbol('iterator');
+    var ArrayPrototype = Array.prototype;
+
+    // check on default Array iterator
+    module.exports = function (it) {
+      return it !== undefined && (Iterators.Array === it || ArrayPrototype[ITERATOR] === it);
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/is-forced.js":
+    /*!*****************************************************!*\
+      !*** ./node_modules/core-js/internals/is-forced.js ***!
+      \*****************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var fails = __webpack_require__(/*! ../internals/fails */ "./node_modules/core-js/internals/fails.js");
+
+    var replacement = /#|\.prototype\./;
+
+    var isForced = function (feature, detection) {
+      var value = data[normalize(feature)];
+      return value == POLYFILL ? true
+        : value == NATIVE ? false
+        : typeof detection == 'function' ? fails(detection)
+        : !!detection;
+    };
+
+    var normalize = isForced.normalize = function (string) {
+      return String(string).replace(replacement, '.').toLowerCase();
+    };
+
+    var data = isForced.data = {};
+    var NATIVE = isForced.NATIVE = 'N';
+    var POLYFILL = isForced.POLYFILL = 'P';
+
+    module.exports = isForced;
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/is-object.js":
+    /*!*****************************************************!*\
+      !*** ./node_modules/core-js/internals/is-object.js ***!
+      \*****************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports) {
+
+    module.exports = function (it) {
+      return typeof it === 'object' ? it !== null : typeof it === 'function';
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/is-pure.js":
+    /*!***************************************************!*\
+      !*** ./node_modules/core-js/internals/is-pure.js ***!
+      \***************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports) {
+
+    module.exports = false;
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/iterators-core.js":
+    /*!**********************************************************!*\
+      !*** ./node_modules/core-js/internals/iterators-core.js ***!
+      \**********************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var getPrototypeOf = __webpack_require__(/*! ../internals/object-get-prototype-of */ "./node_modules/core-js/internals/object-get-prototype-of.js");
+    var hide = __webpack_require__(/*! ../internals/hide */ "./node_modules/core-js/internals/hide.js");
+    var has = __webpack_require__(/*! ../internals/has */ "./node_modules/core-js/internals/has.js");
+    var wellKnownSymbol = __webpack_require__(/*! ../internals/well-known-symbol */ "./node_modules/core-js/internals/well-known-symbol.js");
+    var IS_PURE = __webpack_require__(/*! ../internals/is-pure */ "./node_modules/core-js/internals/is-pure.js");
+
+    var ITERATOR = wellKnownSymbol('iterator');
+    var BUGGY_SAFARI_ITERATORS = false;
+
+    var returnThis = function () { return this; };
+
+    // `%IteratorPrototype%` object
+    // https://tc39.github.io/ecma262/#sec-%iteratorprototype%-object
+    var IteratorPrototype, PrototypeOfArrayIteratorPrototype, arrayIterator;
+
+    if ([].keys) {
+      arrayIterator = [].keys();
+      // Safari 8 has buggy iterators w/o `next`
+      if (!('next' in arrayIterator)) BUGGY_SAFARI_ITERATORS = true;
+      else {
+        PrototypeOfArrayIteratorPrototype = getPrototypeOf(getPrototypeOf(arrayIterator));
+        if (PrototypeOfArrayIteratorPrototype !== Object.prototype) IteratorPrototype = PrototypeOfArrayIteratorPrototype;
+      }
+    }
+
+    if (IteratorPrototype == undefined) IteratorPrototype = {};
+
+    // 25.1.2.1.1 %IteratorPrototype%[@@iterator]()
+    if (!IS_PURE && !has(IteratorPrototype, ITERATOR)) hide(IteratorPrototype, ITERATOR, returnThis);
+
+    module.exports = {
+      IteratorPrototype: IteratorPrototype,
+      BUGGY_SAFARI_ITERATORS: BUGGY_SAFARI_ITERATORS
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/iterators.js":
+    /*!*****************************************************!*\
+      !*** ./node_modules/core-js/internals/iterators.js ***!
+      \*****************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports) {
+
+    module.exports = {};
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/native-symbol.js":
+    /*!*********************************************************!*\
+      !*** ./node_modules/core-js/internals/native-symbol.js ***!
+      \*********************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var fails = __webpack_require__(/*! ../internals/fails */ "./node_modules/core-js/internals/fails.js");
+
+    module.exports = !!Object.getOwnPropertySymbols && !fails(function () {
+      // Chrome 38 Symbol has incorrect toString conversion
+      // eslint-disable-next-line no-undef
+      return !String(Symbol());
+    });
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/native-weak-map.js":
+    /*!***********************************************************!*\
+      !*** ./node_modules/core-js/internals/native-weak-map.js ***!
+      \***********************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var global = __webpack_require__(/*! ../internals/global */ "./node_modules/core-js/internals/global.js");
+    var nativeFunctionToString = __webpack_require__(/*! ../internals/function-to-string */ "./node_modules/core-js/internals/function-to-string.js");
+
+    var WeakMap = global.WeakMap;
+
+    module.exports = typeof WeakMap === 'function' && /native code/.test(nativeFunctionToString.call(WeakMap));
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/object-create.js":
+    /*!*********************************************************!*\
+      !*** ./node_modules/core-js/internals/object-create.js ***!
+      \*********************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var anObject = __webpack_require__(/*! ../internals/an-object */ "./node_modules/core-js/internals/an-object.js");
+    var defineProperties = __webpack_require__(/*! ../internals/object-define-properties */ "./node_modules/core-js/internals/object-define-properties.js");
+    var enumBugKeys = __webpack_require__(/*! ../internals/enum-bug-keys */ "./node_modules/core-js/internals/enum-bug-keys.js");
+    var hiddenKeys = __webpack_require__(/*! ../internals/hidden-keys */ "./node_modules/core-js/internals/hidden-keys.js");
+    var html = __webpack_require__(/*! ../internals/html */ "./node_modules/core-js/internals/html.js");
+    var documentCreateElement = __webpack_require__(/*! ../internals/document-create-element */ "./node_modules/core-js/internals/document-create-element.js");
+    var sharedKey = __webpack_require__(/*! ../internals/shared-key */ "./node_modules/core-js/internals/shared-key.js");
+    var IE_PROTO = sharedKey('IE_PROTO');
+
+    var PROTOTYPE = 'prototype';
+    var Empty = function () { /* empty */ };
+
+    // Create object with fake `null` prototype: use iframe Object with cleared prototype
+    var createDict = function () {
+      // Thrash, waste and sodomy: IE GC bug
+      var iframe = documentCreateElement('iframe');
+      var length = enumBugKeys.length;
+      var lt = '<';
+      var script = 'script';
+      var gt = '>';
+      var js = 'java' + script + ':';
+      var iframeDocument;
+      iframe.style.display = 'none';
+      html.appendChild(iframe);
+      iframe.src = String(js);
+      iframeDocument = iframe.contentWindow.document;
+      iframeDocument.open();
+      iframeDocument.write(lt + script + gt + 'document.F=Object' + lt + '/' + script + gt);
+      iframeDocument.close();
+      createDict = iframeDocument.F;
+      while (length--) delete createDict[PROTOTYPE][enumBugKeys[length]];
+      return createDict();
+    };
+
+    // 19.1.2.2 / 15.2.3.5 Object.create(O [, Properties])
+    module.exports = Object.create || function create(O, Properties) {
+      var result;
+      if (O !== null) {
+        Empty[PROTOTYPE] = anObject(O);
+        result = new Empty();
+        Empty[PROTOTYPE] = null;
+        // add "__proto__" for Object.getPrototypeOf polyfill
+        result[IE_PROTO] = O;
+      } else result = createDict();
+      return Properties === undefined ? result : defineProperties(result, Properties);
+    };
+
+    hiddenKeys[IE_PROTO] = true;
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/object-define-properties.js":
+    /*!********************************************************************!*\
+      !*** ./node_modules/core-js/internals/object-define-properties.js ***!
+      \********************************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var DESCRIPTORS = __webpack_require__(/*! ../internals/descriptors */ "./node_modules/core-js/internals/descriptors.js");
+    var definePropertyModule = __webpack_require__(/*! ../internals/object-define-property */ "./node_modules/core-js/internals/object-define-property.js");
+    var anObject = __webpack_require__(/*! ../internals/an-object */ "./node_modules/core-js/internals/an-object.js");
+    var objectKeys = __webpack_require__(/*! ../internals/object-keys */ "./node_modules/core-js/internals/object-keys.js");
+
+    module.exports = DESCRIPTORS ? Object.defineProperties : function defineProperties(O, Properties) {
+      anObject(O);
+      var keys = objectKeys(Properties);
+      var length = keys.length;
+      var i = 0;
+      var key;
+      while (length > i) definePropertyModule.f(O, key = keys[i++], Properties[key]);
+      return O;
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/object-define-property.js":
+    /*!******************************************************************!*\
+      !*** ./node_modules/core-js/internals/object-define-property.js ***!
+      \******************************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var DESCRIPTORS = __webpack_require__(/*! ../internals/descriptors */ "./node_modules/core-js/internals/descriptors.js");
+    var IE8_DOM_DEFINE = __webpack_require__(/*! ../internals/ie8-dom-define */ "./node_modules/core-js/internals/ie8-dom-define.js");
+    var anObject = __webpack_require__(/*! ../internals/an-object */ "./node_modules/core-js/internals/an-object.js");
+    var toPrimitive = __webpack_require__(/*! ../internals/to-primitive */ "./node_modules/core-js/internals/to-primitive.js");
+
+    var nativeDefineProperty = Object.defineProperty;
+
+    exports.f = DESCRIPTORS ? nativeDefineProperty : function defineProperty(O, P, Attributes) {
+      anObject(O);
+      P = toPrimitive(P, true);
+      anObject(Attributes);
+      if (IE8_DOM_DEFINE) try {
+        return nativeDefineProperty(O, P, Attributes);
+      } catch (error) { /* empty */ }
+      if ('get' in Attributes || 'set' in Attributes) throw TypeError('Accessors not supported');
+      if ('value' in Attributes) O[P] = Attributes.value;
+      return O;
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/object-get-own-property-descriptor.js":
+    /*!******************************************************************************!*\
+      !*** ./node_modules/core-js/internals/object-get-own-property-descriptor.js ***!
+      \******************************************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var DESCRIPTORS = __webpack_require__(/*! ../internals/descriptors */ "./node_modules/core-js/internals/descriptors.js");
+    var propertyIsEnumerableModule = __webpack_require__(/*! ../internals/object-property-is-enumerable */ "./node_modules/core-js/internals/object-property-is-enumerable.js");
+    var createPropertyDescriptor = __webpack_require__(/*! ../internals/create-property-descriptor */ "./node_modules/core-js/internals/create-property-descriptor.js");
+    var toIndexedObject = __webpack_require__(/*! ../internals/to-indexed-object */ "./node_modules/core-js/internals/to-indexed-object.js");
+    var toPrimitive = __webpack_require__(/*! ../internals/to-primitive */ "./node_modules/core-js/internals/to-primitive.js");
+    var has = __webpack_require__(/*! ../internals/has */ "./node_modules/core-js/internals/has.js");
+    var IE8_DOM_DEFINE = __webpack_require__(/*! ../internals/ie8-dom-define */ "./node_modules/core-js/internals/ie8-dom-define.js");
+
+    var nativeGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+
+    exports.f = DESCRIPTORS ? nativeGetOwnPropertyDescriptor : function getOwnPropertyDescriptor(O, P) {
+      O = toIndexedObject(O);
+      P = toPrimitive(P, true);
+      if (IE8_DOM_DEFINE) try {
+        return nativeGetOwnPropertyDescriptor(O, P);
+      } catch (error) { /* empty */ }
+      if (has(O, P)) return createPropertyDescriptor(!propertyIsEnumerableModule.f.call(O, P), O[P]);
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/object-get-own-property-names.js":
+    /*!*************************************************************************!*\
+      !*** ./node_modules/core-js/internals/object-get-own-property-names.js ***!
+      \*************************************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    // 19.1.2.7 / 15.2.3.4 Object.getOwnPropertyNames(O)
+    var internalObjectKeys = __webpack_require__(/*! ../internals/object-keys-internal */ "./node_modules/core-js/internals/object-keys-internal.js");
+    var enumBugKeys = __webpack_require__(/*! ../internals/enum-bug-keys */ "./node_modules/core-js/internals/enum-bug-keys.js");
+
+    var hiddenKeys = enumBugKeys.concat('length', 'prototype');
+
+    exports.f = Object.getOwnPropertyNames || function getOwnPropertyNames(O) {
+      return internalObjectKeys(O, hiddenKeys);
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/object-get-own-property-symbols.js":
+    /*!***************************************************************************!*\
+      !*** ./node_modules/core-js/internals/object-get-own-property-symbols.js ***!
+      \***************************************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports) {
+
+    exports.f = Object.getOwnPropertySymbols;
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/object-get-prototype-of.js":
+    /*!*******************************************************************!*\
+      !*** ./node_modules/core-js/internals/object-get-prototype-of.js ***!
+      \*******************************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var has = __webpack_require__(/*! ../internals/has */ "./node_modules/core-js/internals/has.js");
+    var toObject = __webpack_require__(/*! ../internals/to-object */ "./node_modules/core-js/internals/to-object.js");
+    var sharedKey = __webpack_require__(/*! ../internals/shared-key */ "./node_modules/core-js/internals/shared-key.js");
+    var CORRECT_PROTOTYPE_GETTER = __webpack_require__(/*! ../internals/correct-prototype-getter */ "./node_modules/core-js/internals/correct-prototype-getter.js");
+
+    var IE_PROTO = sharedKey('IE_PROTO');
+    var ObjectPrototype = Object.prototype;
+
+    // 19.1.2.9 / 15.2.3.2 Object.getPrototypeOf(O)
+    module.exports = CORRECT_PROTOTYPE_GETTER ? Object.getPrototypeOf : function (O) {
+      O = toObject(O);
+      if (has(O, IE_PROTO)) return O[IE_PROTO];
+      if (typeof O.constructor == 'function' && O instanceof O.constructor) {
+        return O.constructor.prototype;
+      } return O instanceof Object ? ObjectPrototype : null;
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/object-keys-internal.js":
+    /*!****************************************************************!*\
+      !*** ./node_modules/core-js/internals/object-keys-internal.js ***!
+      \****************************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var has = __webpack_require__(/*! ../internals/has */ "./node_modules/core-js/internals/has.js");
+    var toIndexedObject = __webpack_require__(/*! ../internals/to-indexed-object */ "./node_modules/core-js/internals/to-indexed-object.js");
+    var arrayIncludes = __webpack_require__(/*! ../internals/array-includes */ "./node_modules/core-js/internals/array-includes.js");
+    var hiddenKeys = __webpack_require__(/*! ../internals/hidden-keys */ "./node_modules/core-js/internals/hidden-keys.js");
+
+    var arrayIndexOf = arrayIncludes(false);
+
+    module.exports = function (object, names) {
+      var O = toIndexedObject(object);
+      var i = 0;
+      var result = [];
+      var key;
+      for (key in O) !has(hiddenKeys, key) && has(O, key) && result.push(key);
+      // Don't enum bug & hidden keys
+      while (names.length > i) if (has(O, key = names[i++])) {
+        ~arrayIndexOf(result, key) || result.push(key);
+      }
+      return result;
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/object-keys.js":
+    /*!*******************************************************!*\
+      !*** ./node_modules/core-js/internals/object-keys.js ***!
+      \*******************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var internalObjectKeys = __webpack_require__(/*! ../internals/object-keys-internal */ "./node_modules/core-js/internals/object-keys-internal.js");
+    var enumBugKeys = __webpack_require__(/*! ../internals/enum-bug-keys */ "./node_modules/core-js/internals/enum-bug-keys.js");
+
+    // 19.1.2.14 / 15.2.3.14 Object.keys(O)
+    module.exports = Object.keys || function keys(O) {
+      return internalObjectKeys(O, enumBugKeys);
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/object-property-is-enumerable.js":
+    /*!*************************************************************************!*\
+      !*** ./node_modules/core-js/internals/object-property-is-enumerable.js ***!
+      \*************************************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var nativePropertyIsEnumerable = {}.propertyIsEnumerable;
+    var getOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+
+    // Nashorn ~ JDK8 bug
+    var NASHORN_BUG = getOwnPropertyDescriptor && !nativePropertyIsEnumerable.call({ 1: 2 }, 1);
+
+    exports.f = NASHORN_BUG ? function propertyIsEnumerable(V) {
+      var descriptor = getOwnPropertyDescriptor(this, V);
+      return !!descriptor && descriptor.enumerable;
+    } : nativePropertyIsEnumerable;
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/object-set-prototype-of.js":
+    /*!*******************************************************************!*\
+      !*** ./node_modules/core-js/internals/object-set-prototype-of.js ***!
+      \*******************************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var validateSetPrototypeOfArguments = __webpack_require__(/*! ../internals/validate-set-prototype-of-arguments */ "./node_modules/core-js/internals/validate-set-prototype-of-arguments.js");
+
+    // Works with __proto__ only. Old v8 can't work with null proto objects.
+    /* eslint-disable no-proto */
+    module.exports = Object.setPrototypeOf || ('__proto__' in {} ? function () {
+      var correctSetter = false;
+      var test = {};
+      var setter;
+      try {
+        setter = Object.getOwnPropertyDescriptor(Object.prototype, '__proto__').set;
+        setter.call(test, []);
+        correctSetter = test instanceof Array;
+      } catch (error) { /* empty */ }
+      return function setPrototypeOf(O, proto) {
+        validateSetPrototypeOfArguments(O, proto);
+        if (correctSetter) setter.call(O, proto);
+        else O.__proto__ = proto;
+        return O;
+      };
+    }() : undefined);
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/own-keys.js":
+    /*!****************************************************!*\
+      !*** ./node_modules/core-js/internals/own-keys.js ***!
+      \****************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var global = __webpack_require__(/*! ../internals/global */ "./node_modules/core-js/internals/global.js");
+    var getOwnPropertyNamesModule = __webpack_require__(/*! ../internals/object-get-own-property-names */ "./node_modules/core-js/internals/object-get-own-property-names.js");
+    var getOwnPropertySymbolsModule = __webpack_require__(/*! ../internals/object-get-own-property-symbols */ "./node_modules/core-js/internals/object-get-own-property-symbols.js");
+    var anObject = __webpack_require__(/*! ../internals/an-object */ "./node_modules/core-js/internals/an-object.js");
+
+    var Reflect = global.Reflect;
+
+    // all object keys, includes non-enumerable and symbols
+    module.exports = Reflect && Reflect.ownKeys || function ownKeys(it) {
+      var keys = getOwnPropertyNamesModule.f(anObject(it));
+      var getOwnPropertySymbols = getOwnPropertySymbolsModule.f;
+      return getOwnPropertySymbols ? keys.concat(getOwnPropertySymbols(it)) : keys;
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/path.js":
+    /*!************************************************!*\
+      !*** ./node_modules/core-js/internals/path.js ***!
+      \************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    module.exports = __webpack_require__(/*! ../internals/global */ "./node_modules/core-js/internals/global.js");
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/redefine.js":
+    /*!****************************************************!*\
+      !*** ./node_modules/core-js/internals/redefine.js ***!
+      \****************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var global = __webpack_require__(/*! ../internals/global */ "./node_modules/core-js/internals/global.js");
+    var shared = __webpack_require__(/*! ../internals/shared */ "./node_modules/core-js/internals/shared.js");
+    var hide = __webpack_require__(/*! ../internals/hide */ "./node_modules/core-js/internals/hide.js");
+    var has = __webpack_require__(/*! ../internals/has */ "./node_modules/core-js/internals/has.js");
+    var setGlobal = __webpack_require__(/*! ../internals/set-global */ "./node_modules/core-js/internals/set-global.js");
+    var nativeFunctionToString = __webpack_require__(/*! ../internals/function-to-string */ "./node_modules/core-js/internals/function-to-string.js");
+    var InternalStateModule = __webpack_require__(/*! ../internals/internal-state */ "./node_modules/core-js/internals/internal-state.js");
+
+    var getInternalState = InternalStateModule.get;
+    var enforceInternalState = InternalStateModule.enforce;
+    var TEMPLATE = String(nativeFunctionToString).split('toString');
+
+    shared('inspectSource', function (it) {
+      return nativeFunctionToString.call(it);
+    });
+
+    (module.exports = function (O, key, value, options) {
+      var unsafe = options ? !!options.unsafe : false;
+      var simple = options ? !!options.enumerable : false;
+      var noTargetGet = options ? !!options.noTargetGet : false;
+      if (typeof value == 'function') {
+        if (typeof key == 'string' && !has(value, 'name')) hide(value, 'name', key);
+        enforceInternalState(value).source = TEMPLATE.join(typeof key == 'string' ? key : '');
+      }
+      if (O === global) {
+        if (simple) O[key] = value;
+        else setGlobal(key, value);
+        return;
+      } else if (!unsafe) {
+        delete O[key];
+      } else if (!noTargetGet && O[key]) {
+        simple = true;
+      }
+      if (simple) O[key] = value;
+      else hide(O, key, value);
+    // add fake Function#toString for correct work wrapped methods / constructors with methods like LoDash isNative
+    })(Function.prototype, 'toString', function toString() {
+      return typeof this == 'function' && getInternalState(this).source || nativeFunctionToString.call(this);
+    });
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/require-object-coercible.js":
+    /*!********************************************************************!*\
+      !*** ./node_modules/core-js/internals/require-object-coercible.js ***!
+      \********************************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports) {
+
+    // `RequireObjectCoercible` abstract operation
+    // https://tc39.github.io/ecma262/#sec-requireobjectcoercible
+    module.exports = function (it) {
+      if (it == undefined) throw TypeError("Can't call method on " + it);
+      return it;
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/set-global.js":
+    /*!******************************************************!*\
+      !*** ./node_modules/core-js/internals/set-global.js ***!
+      \******************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var global = __webpack_require__(/*! ../internals/global */ "./node_modules/core-js/internals/global.js");
+    var hide = __webpack_require__(/*! ../internals/hide */ "./node_modules/core-js/internals/hide.js");
+
+    module.exports = function (key, value) {
+      try {
+        hide(global, key, value);
+      } catch (error) {
+        global[key] = value;
+      } return value;
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/set-to-string-tag.js":
+    /*!*************************************************************!*\
+      !*** ./node_modules/core-js/internals/set-to-string-tag.js ***!
+      \*************************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var defineProperty = __webpack_require__(/*! ../internals/object-define-property */ "./node_modules/core-js/internals/object-define-property.js").f;
+    var has = __webpack_require__(/*! ../internals/has */ "./node_modules/core-js/internals/has.js");
+    var wellKnownSymbol = __webpack_require__(/*! ../internals/well-known-symbol */ "./node_modules/core-js/internals/well-known-symbol.js");
+
+    var TO_STRING_TAG = wellKnownSymbol('toStringTag');
+
+    module.exports = function (it, TAG, STATIC) {
+      if (it && !has(it = STATIC ? it : it.prototype, TO_STRING_TAG)) {
+        defineProperty(it, TO_STRING_TAG, { configurable: true, value: TAG });
+      }
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/shared-key.js":
+    /*!******************************************************!*\
+      !*** ./node_modules/core-js/internals/shared-key.js ***!
+      \******************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var shared = __webpack_require__(/*! ../internals/shared */ "./node_modules/core-js/internals/shared.js");
+    var uid = __webpack_require__(/*! ../internals/uid */ "./node_modules/core-js/internals/uid.js");
+
+    var keys = shared('keys');
+
+    module.exports = function (key) {
+      return keys[key] || (keys[key] = uid(key));
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/shared.js":
+    /*!**************************************************!*\
+      !*** ./node_modules/core-js/internals/shared.js ***!
+      \**************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var global = __webpack_require__(/*! ../internals/global */ "./node_modules/core-js/internals/global.js");
+    var setGlobal = __webpack_require__(/*! ../internals/set-global */ "./node_modules/core-js/internals/set-global.js");
+    var IS_PURE = __webpack_require__(/*! ../internals/is-pure */ "./node_modules/core-js/internals/is-pure.js");
+
+    var SHARED = '__core-js_shared__';
+    var store = global[SHARED] || setGlobal(SHARED, {});
+
+    (module.exports = function (key, value) {
+      return store[key] || (store[key] = value !== undefined ? value : {});
+    })('versions', []).push({
+      version: '3.1.3',
+      mode: IS_PURE ? 'pure' : 'global',
+      copyright: '© 2019 Denis Pushkarev (zloirock.ru)'
+    });
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/string-at.js":
+    /*!*****************************************************!*\
+      !*** ./node_modules/core-js/internals/string-at.js ***!
+      \*****************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var toInteger = __webpack_require__(/*! ../internals/to-integer */ "./node_modules/core-js/internals/to-integer.js");
+    var requireObjectCoercible = __webpack_require__(/*! ../internals/require-object-coercible */ "./node_modules/core-js/internals/require-object-coercible.js");
+
+    // CONVERT_TO_STRING: true  -> String#at
+    // CONVERT_TO_STRING: false -> String#codePointAt
+    module.exports = function (that, pos, CONVERT_TO_STRING) {
+      var S = String(requireObjectCoercible(that));
+      var position = toInteger(pos);
+      var size = S.length;
+      var first, second;
+      if (position < 0 || position >= size) return CONVERT_TO_STRING ? '' : undefined;
+      first = S.charCodeAt(position);
+      return first < 0xD800 || first > 0xDBFF || position + 1 === size
+        || (second = S.charCodeAt(position + 1)) < 0xDC00 || second > 0xDFFF
+          ? CONVERT_TO_STRING ? S.charAt(position) : first
+          : CONVERT_TO_STRING ? S.slice(position, position + 2) : (first - 0xD800 << 10) + (second - 0xDC00) + 0x10000;
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/to-absolute-index.js":
+    /*!*************************************************************!*\
+      !*** ./node_modules/core-js/internals/to-absolute-index.js ***!
+      \*************************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var toInteger = __webpack_require__(/*! ../internals/to-integer */ "./node_modules/core-js/internals/to-integer.js");
+
+    var max = Math.max;
+    var min = Math.min;
+
+    // Helper for a popular repeating case of the spec:
+    // Let integer be ? ToInteger(index).
+    // If integer < 0, let result be max((length + integer), 0); else let result be min(length, length).
+    module.exports = function (index, length) {
+      var integer = toInteger(index);
+      return integer < 0 ? max(integer + length, 0) : min(integer, length);
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/to-indexed-object.js":
+    /*!*************************************************************!*\
+      !*** ./node_modules/core-js/internals/to-indexed-object.js ***!
+      \*************************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    // toObject with fallback for non-array-like ES3 strings
+    var IndexedObject = __webpack_require__(/*! ../internals/indexed-object */ "./node_modules/core-js/internals/indexed-object.js");
+    var requireObjectCoercible = __webpack_require__(/*! ../internals/require-object-coercible */ "./node_modules/core-js/internals/require-object-coercible.js");
+
+    module.exports = function (it) {
+      return IndexedObject(requireObjectCoercible(it));
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/to-integer.js":
+    /*!******************************************************!*\
+      !*** ./node_modules/core-js/internals/to-integer.js ***!
+      \******************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports) {
+
+    var ceil = Math.ceil;
+    var floor = Math.floor;
+
+    // `ToInteger` abstract operation
+    // https://tc39.github.io/ecma262/#sec-tointeger
+    module.exports = function (argument) {
+      return isNaN(argument = +argument) ? 0 : (argument > 0 ? floor : ceil)(argument);
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/to-length.js":
+    /*!*****************************************************!*\
+      !*** ./node_modules/core-js/internals/to-length.js ***!
+      \*****************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var toInteger = __webpack_require__(/*! ../internals/to-integer */ "./node_modules/core-js/internals/to-integer.js");
+
+    var min = Math.min;
+
+    // `ToLength` abstract operation
+    // https://tc39.github.io/ecma262/#sec-tolength
+    module.exports = function (argument) {
+      return argument > 0 ? min(toInteger(argument), 0x1FFFFFFFFFFFFF) : 0; // 2 ** 53 - 1 == 9007199254740991
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/to-object.js":
+    /*!*****************************************************!*\
+      !*** ./node_modules/core-js/internals/to-object.js ***!
+      \*****************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var requireObjectCoercible = __webpack_require__(/*! ../internals/require-object-coercible */ "./node_modules/core-js/internals/require-object-coercible.js");
+
+    // `ToObject` abstract operation
+    // https://tc39.github.io/ecma262/#sec-toobject
+    module.exports = function (argument) {
+      return Object(requireObjectCoercible(argument));
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/to-primitive.js":
+    /*!********************************************************!*\
+      !*** ./node_modules/core-js/internals/to-primitive.js ***!
+      \********************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var isObject = __webpack_require__(/*! ../internals/is-object */ "./node_modules/core-js/internals/is-object.js");
+
+    // 7.1.1 ToPrimitive(input [, PreferredType])
+    // instead of the ES6 spec version, we didn't implement @@toPrimitive case
+    // and the second argument - flag - preferred type is a string
+    module.exports = function (it, S) {
+      if (!isObject(it)) return it;
+      var fn, val;
+      if (S && typeof (fn = it.toString) == 'function' && !isObject(val = fn.call(it))) return val;
+      if (typeof (fn = it.valueOf) == 'function' && !isObject(val = fn.call(it))) return val;
+      if (!S && typeof (fn = it.toString) == 'function' && !isObject(val = fn.call(it))) return val;
+      throw TypeError("Can't convert object to primitive value");
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/uid.js":
+    /*!***********************************************!*\
+      !*** ./node_modules/core-js/internals/uid.js ***!
+      \***********************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports) {
+
+    var id = 0;
+    var postfix = Math.random();
+
+    module.exports = function (key) {
+      return 'Symbol('.concat(key === undefined ? '' : key, ')_', (++id + postfix).toString(36));
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/validate-set-prototype-of-arguments.js":
+    /*!*******************************************************************************!*\
+      !*** ./node_modules/core-js/internals/validate-set-prototype-of-arguments.js ***!
+      \*******************************************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var isObject = __webpack_require__(/*! ../internals/is-object */ "./node_modules/core-js/internals/is-object.js");
+    var anObject = __webpack_require__(/*! ../internals/an-object */ "./node_modules/core-js/internals/an-object.js");
+
+    module.exports = function (O, proto) {
+      anObject(O);
+      if (!isObject(proto) && proto !== null) {
+        throw TypeError("Can't set " + String(proto) + ' as a prototype');
+      }
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/well-known-symbol.js":
+    /*!*************************************************************!*\
+      !*** ./node_modules/core-js/internals/well-known-symbol.js ***!
+      \*************************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var global = __webpack_require__(/*! ../internals/global */ "./node_modules/core-js/internals/global.js");
+    var shared = __webpack_require__(/*! ../internals/shared */ "./node_modules/core-js/internals/shared.js");
+    var uid = __webpack_require__(/*! ../internals/uid */ "./node_modules/core-js/internals/uid.js");
+    var NATIVE_SYMBOL = __webpack_require__(/*! ../internals/native-symbol */ "./node_modules/core-js/internals/native-symbol.js");
+
+    var Symbol = global.Symbol;
+    var store = shared('wks');
+
+    module.exports = function (name) {
+      return store[name] || (store[name] = NATIVE_SYMBOL && Symbol[name]
+        || (NATIVE_SYMBOL ? Symbol : uid)('Symbol.' + name));
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/modules/es.array.from.js":
+    /*!*******************************************************!*\
+      !*** ./node_modules/core-js/modules/es.array.from.js ***!
+      \*******************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var $ = __webpack_require__(/*! ../internals/export */ "./node_modules/core-js/internals/export.js");
+    var from = __webpack_require__(/*! ../internals/array-from */ "./node_modules/core-js/internals/array-from.js");
+    var checkCorrectnessOfIteration = __webpack_require__(/*! ../internals/check-correctness-of-iteration */ "./node_modules/core-js/internals/check-correctness-of-iteration.js");
+
+    var INCORRECT_ITERATION = !checkCorrectnessOfIteration(function (iterable) {
+    });
+
+    // `Array.from` method
+    // https://tc39.github.io/ecma262/#sec-array.from
+    $({ target: 'Array', stat: true, forced: INCORRECT_ITERATION }, {
+      from: from
+    });
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/modules/es.string.iterator.js":
+    /*!************************************************************!*\
+      !*** ./node_modules/core-js/modules/es.string.iterator.js ***!
+      \************************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var codePointAt = __webpack_require__(/*! ../internals/string-at */ "./node_modules/core-js/internals/string-at.js");
+    var InternalStateModule = __webpack_require__(/*! ../internals/internal-state */ "./node_modules/core-js/internals/internal-state.js");
+    var defineIterator = __webpack_require__(/*! ../internals/define-iterator */ "./node_modules/core-js/internals/define-iterator.js");
+
+    var STRING_ITERATOR = 'String Iterator';
+    var setInternalState = InternalStateModule.set;
+    var getInternalState = InternalStateModule.getterFor(STRING_ITERATOR);
+
+    // `String.prototype[@@iterator]` method
+    // https://tc39.github.io/ecma262/#sec-string.prototype-@@iterator
+    defineIterator(String, 'String', function (iterated) {
+      setInternalState(this, {
+        type: STRING_ITERATOR,
+        string: String(iterated),
+        index: 0
+      });
+    // `%StringIteratorPrototype%.next` method
+    // https://tc39.github.io/ecma262/#sec-%stringiteratorprototype%.next
+    }, function next() {
+      var state = getInternalState(this);
+      var string = state.string;
+      var index = state.index;
+      var point;
+      if (index >= string.length) return { value: undefined, done: true };
+      point = codePointAt(string, index, true);
+      state.index += point.length;
+      return { value: point, done: false };
+    });
+
+
+    /***/ }),
+
+    /***/ "./node_modules/webpack/buildin/global.js":
+    /*!***********************************!*\
+      !*** (webpack)/buildin/global.js ***!
+      \***********************************/
+    /*! no static exports found */
+    /***/ (function(module, exports) {
+
+    var g;
+
+    // This works in non-strict mode
+    g = (function() {
+    	return this;
+    })();
+
+    try {
+    	// This works if eval is allowed (see CSP)
+    	g = g || Function("return this")() || (1, eval)("this");
+    } catch (e) {
+    	// This works if the window reference is available
+    	if (typeof window === "object") g = window;
+    }
+
+    // g can still be undefined, but nothing to do about it...
+    // We return undefined, instead of nothing here, so it's
+    // easier to handle this case. if(!global) { ...}
+
+    module.exports = g;
+
+
+    /***/ }),
+
+    /***/ "./src/default-attrs.json":
+    /*!********************************!*\
+      !*** ./src/default-attrs.json ***!
+      \********************************/
+    /*! exports provided: xmlns, width, height, viewBox, fill, stroke, stroke-width, stroke-linecap, stroke-linejoin, default */
+    /***/ (function(module) {
+
+    module.exports = {"xmlns":"http://www.w3.org/2000/svg","width":24,"height":24,"viewBox":"0 0 24 24","fill":"none","stroke":"currentColor","stroke-width":2,"stroke-linecap":"round","stroke-linejoin":"round"};
+
+    /***/ }),
+
+    /***/ "./src/icon.js":
+    /*!*********************!*\
+      !*** ./src/icon.js ***!
+      \*********************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+
+    var _extends = Object.assign || function (target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i]; for (var key in source) { if (Object.prototype.hasOwnProperty.call(source, key)) { target[key] = source[key]; } } } return target; };
+
+    var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
+
+    var _dedupe = __webpack_require__(/*! classnames/dedupe */ "./node_modules/classnames/dedupe.js");
+
+    var _dedupe2 = _interopRequireDefault(_dedupe);
+
+    var _defaultAttrs = __webpack_require__(/*! ./default-attrs.json */ "./src/default-attrs.json");
+
+    var _defaultAttrs2 = _interopRequireDefault(_defaultAttrs);
+
+    function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+    function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+
+    var Icon = function () {
+      function Icon(name, contents) {
+        var tags = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : [];
+
+        _classCallCheck(this, Icon);
+
+        this.name = name;
+        this.contents = contents;
+        this.tags = tags;
+        this.attrs = _extends({}, _defaultAttrs2.default, { class: 'feather feather-' + name });
+      }
+
+      /**
+       * Create an SVG string.
+       * @param {Object} attrs
+       * @returns {string}
+       */
+
+
+      _createClass(Icon, [{
+        key: 'toSvg',
+        value: function toSvg() {
+          var attrs = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : {};
+
+          var combinedAttrs = _extends({}, this.attrs, attrs, { class: (0, _dedupe2.default)(this.attrs.class, attrs.class) });
+
+          return '<svg ' + attrsToString(combinedAttrs) + '>' + this.contents + '</svg>';
+        }
+
+        /**
+         * Return string representation of an `Icon`.
+         *
+         * Added for backward compatibility. If old code expects `feather.icons.<name>`
+         * to be a string, `toString()` will get implicitly called.
+         *
+         * @returns {string}
+         */
+
+      }, {
+        key: 'toString',
+        value: function toString() {
+          return this.contents;
+        }
+      }]);
+
+      return Icon;
+    }();
+
+    /**
+     * Convert attributes object to string of HTML attributes.
+     * @param {Object} attrs
+     * @returns {string}
+     */
+
+
+    function attrsToString(attrs) {
+      return Object.keys(attrs).map(function (key) {
+        return key + '="' + attrs[key] + '"';
+      }).join(' ');
+    }
+
+    exports.default = Icon;
+
+    /***/ }),
+
+    /***/ "./src/icons.js":
+    /*!**********************!*\
+      !*** ./src/icons.js ***!
+      \**********************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+
+    var _icon = __webpack_require__(/*! ./icon */ "./src/icon.js");
+
+    var _icon2 = _interopRequireDefault(_icon);
+
+    var _icons = __webpack_require__(/*! ../dist/icons.json */ "./dist/icons.json");
+
+    var _icons2 = _interopRequireDefault(_icons);
+
+    var _tags = __webpack_require__(/*! ./tags.json */ "./src/tags.json");
+
+    var _tags2 = _interopRequireDefault(_tags);
+
+    function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+    exports.default = Object.keys(_icons2.default).map(function (key) {
+      return new _icon2.default(key, _icons2.default[key], _tags2.default[key]);
+    }).reduce(function (object, icon) {
+      object[icon.name] = icon;
+      return object;
+    }, {});
+
+    /***/ }),
+
+    /***/ "./src/index.js":
+    /*!**********************!*\
+      !*** ./src/index.js ***!
+      \**********************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+
+    var _icons = __webpack_require__(/*! ./icons */ "./src/icons.js");
+
+    var _icons2 = _interopRequireDefault(_icons);
+
+    var _toSvg = __webpack_require__(/*! ./to-svg */ "./src/to-svg.js");
+
+    var _toSvg2 = _interopRequireDefault(_toSvg);
+
+    var _replace = __webpack_require__(/*! ./replace */ "./src/replace.js");
+
+    var _replace2 = _interopRequireDefault(_replace);
+
+    function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+    module.exports = { icons: _icons2.default, toSvg: _toSvg2.default, replace: _replace2.default };
+
+    /***/ }),
+
+    /***/ "./src/replace.js":
+    /*!************************!*\
+      !*** ./src/replace.js ***!
+      \************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+
+    var _extends = Object.assign || function (target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i]; for (var key in source) { if (Object.prototype.hasOwnProperty.call(source, key)) { target[key] = source[key]; } } } return target; }; /* eslint-env browser */
+
+
+    var _dedupe = __webpack_require__(/*! classnames/dedupe */ "./node_modules/classnames/dedupe.js");
+
+    var _dedupe2 = _interopRequireDefault(_dedupe);
+
+    var _icons = __webpack_require__(/*! ./icons */ "./src/icons.js");
+
+    var _icons2 = _interopRequireDefault(_icons);
+
+    function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+    /**
+     * Replace all HTML elements that have a `data-feather` attribute with SVG markup
+     * corresponding to the element's `data-feather` attribute value.
+     * @param {Object} attrs
+     */
+    function replace() {
+      var attrs = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : {};
+
+      if (typeof document === 'undefined') {
+        throw new Error('`feather.replace()` only works in a browser environment.');
+      }
+
+      var elementsToReplace = document.querySelectorAll('[data-feather]');
+
+      Array.from(elementsToReplace).forEach(function (element) {
+        return replaceElement(element, attrs);
+      });
+    }
+
+    /**
+     * Replace a single HTML element with SVG markup
+     * corresponding to the element's `data-feather` attribute value.
+     * @param {HTMLElement} element
+     * @param {Object} attrs
+     */
+    function replaceElement(element) {
+      var attrs = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
+
+      var elementAttrs = getAttrs(element);
+      var name = elementAttrs['data-feather'];
+      delete elementAttrs['data-feather'];
+
+      var svgString = _icons2.default[name].toSvg(_extends({}, attrs, elementAttrs, { class: (0, _dedupe2.default)(attrs.class, elementAttrs.class) }));
+      var svgDocument = new DOMParser().parseFromString(svgString, 'image/svg+xml');
+      var svgElement = svgDocument.querySelector('svg');
+
+      element.parentNode.replaceChild(svgElement, element);
+    }
+
+    /**
+     * Get the attributes of an HTML element.
+     * @param {HTMLElement} element
+     * @returns {Object}
+     */
+    function getAttrs(element) {
+      return Array.from(element.attributes).reduce(function (attrs, attr) {
+        attrs[attr.name] = attr.value;
+        return attrs;
+      }, {});
+    }
+
+    exports.default = replace;
+
+    /***/ }),
+
+    /***/ "./src/tags.json":
+    /*!***********************!*\
+      !*** ./src/tags.json ***!
+      \***********************/
+    /*! exports provided: activity, airplay, alert-circle, alert-octagon, alert-triangle, align-center, align-justify, align-left, align-right, anchor, archive, at-sign, award, aperture, bar-chart, bar-chart-2, battery, battery-charging, bell, bell-off, bluetooth, book-open, book, bookmark, box, briefcase, calendar, camera, cast, circle, clipboard, clock, cloud-drizzle, cloud-lightning, cloud-rain, cloud-snow, cloud, codepen, codesandbox, code, coffee, columns, command, compass, copy, corner-down-left, corner-down-right, corner-left-down, corner-left-up, corner-right-down, corner-right-up, corner-up-left, corner-up-right, cpu, credit-card, crop, crosshair, database, delete, disc, dollar-sign, droplet, edit, edit-2, edit-3, eye, eye-off, external-link, facebook, fast-forward, figma, file-minus, file-plus, file-text, film, filter, flag, folder-minus, folder-plus, folder, framer, frown, gift, git-branch, git-commit, git-merge, git-pull-request, github, gitlab, globe, hard-drive, hash, headphones, heart, help-circle, hexagon, home, image, inbox, instagram, key, layers, layout, life-bouy, link, link-2, linkedin, list, lock, log-in, log-out, mail, map-pin, map, maximize, maximize-2, meh, menu, message-circle, message-square, mic-off, mic, minimize, minimize-2, minus, monitor, moon, more-horizontal, more-vertical, mouse-pointer, move, music, navigation, navigation-2, octagon, package, paperclip, pause, pause-circle, pen-tool, percent, phone-call, phone-forwarded, phone-incoming, phone-missed, phone-off, phone-outgoing, phone, play, pie-chart, play-circle, plus, plus-circle, plus-square, pocket, power, printer, radio, refresh-cw, refresh-ccw, repeat, rewind, rotate-ccw, rotate-cw, rss, save, scissors, search, send, settings, share-2, shield, shield-off, shopping-bag, shopping-cart, shuffle, skip-back, skip-forward, slack, slash, sliders, smartphone, smile, speaker, star, stop-circle, sun, sunrise, sunset, tablet, tag, target, terminal, thermometer, thumbs-down, thumbs-up, toggle-left, toggle-right, tool, trash, trash-2, triangle, truck, tv, twitch, twitter, type, umbrella, unlock, user-check, user-minus, user-plus, user-x, user, users, video-off, video, voicemail, volume, volume-1, volume-2, volume-x, watch, wifi-off, wifi, wind, x-circle, x-octagon, x-square, x, youtube, zap-off, zap, zoom-in, zoom-out, default */
+    /***/ (function(module) {
+
+    module.exports = {"activity":["pulse","health","action","motion"],"airplay":["stream","cast","mirroring"],"alert-circle":["warning","alert","danger"],"alert-octagon":["warning","alert","danger"],"alert-triangle":["warning","alert","danger"],"align-center":["text alignment","center"],"align-justify":["text alignment","justified"],"align-left":["text alignment","left"],"align-right":["text alignment","right"],"anchor":[],"archive":["index","box"],"at-sign":["mention","at","email","message"],"award":["achievement","badge"],"aperture":["camera","photo"],"bar-chart":["statistics","diagram","graph"],"bar-chart-2":["statistics","diagram","graph"],"battery":["power","electricity"],"battery-charging":["power","electricity"],"bell":["alarm","notification","sound"],"bell-off":["alarm","notification","silent"],"bluetooth":["wireless"],"book-open":["read","library"],"book":["read","dictionary","booklet","magazine","library"],"bookmark":["read","clip","marker","tag"],"box":["cube"],"briefcase":["work","bag","baggage","folder"],"calendar":["date"],"camera":["photo"],"cast":["chromecast","airplay"],"circle":["off","zero","record"],"clipboard":["copy"],"clock":["time","watch","alarm"],"cloud-drizzle":["weather","shower"],"cloud-lightning":["weather","bolt"],"cloud-rain":["weather"],"cloud-snow":["weather","blizzard"],"cloud":["weather"],"codepen":["logo"],"codesandbox":["logo"],"code":["source","programming"],"coffee":["drink","cup","mug","tea","cafe","hot","beverage"],"columns":["layout"],"command":["keyboard","cmd","terminal","prompt"],"compass":["navigation","safari","travel","direction"],"copy":["clone","duplicate"],"corner-down-left":["arrow","return"],"corner-down-right":["arrow"],"corner-left-down":["arrow"],"corner-left-up":["arrow"],"corner-right-down":["arrow"],"corner-right-up":["arrow"],"corner-up-left":["arrow"],"corner-up-right":["arrow"],"cpu":["processor","technology"],"credit-card":["purchase","payment","cc"],"crop":["photo","image"],"crosshair":["aim","target"],"database":["storage","memory"],"delete":["remove"],"disc":["album","cd","dvd","music"],"dollar-sign":["currency","money","payment"],"droplet":["water"],"edit":["pencil","change"],"edit-2":["pencil","change"],"edit-3":["pencil","change"],"eye":["view","watch"],"eye-off":["view","watch","hide","hidden"],"external-link":["outbound"],"facebook":["logo","social"],"fast-forward":["music"],"figma":["logo","design","tool"],"file-minus":["delete","remove","erase"],"file-plus":["add","create","new"],"file-text":["data","txt","pdf"],"film":["movie","video"],"filter":["funnel","hopper"],"flag":["report"],"folder-minus":["directory"],"folder-plus":["directory"],"folder":["directory"],"framer":["logo","design","tool"],"frown":["emoji","face","bad","sad","emotion"],"gift":["present","box","birthday","party"],"git-branch":["code","version control"],"git-commit":["code","version control"],"git-merge":["code","version control"],"git-pull-request":["code","version control"],"github":["logo","version control"],"gitlab":["logo","version control"],"globe":["world","browser","language","translate"],"hard-drive":["computer","server","memory","data"],"hash":["hashtag","number","pound"],"headphones":["music","audio","sound"],"heart":["like","love","emotion"],"help-circle":["question mark"],"hexagon":["shape","node.js","logo"],"home":["house","living"],"image":["picture"],"inbox":["email"],"instagram":["logo","camera"],"key":["password","login","authentication","secure"],"layers":["stack"],"layout":["window","webpage"],"life-bouy":["help","life ring","support"],"link":["chain","url"],"link-2":["chain","url"],"linkedin":["logo","social media"],"list":["options"],"lock":["security","password","secure"],"log-in":["sign in","arrow","enter"],"log-out":["sign out","arrow","exit"],"mail":["email","message"],"map-pin":["location","navigation","travel","marker"],"map":["location","navigation","travel"],"maximize":["fullscreen"],"maximize-2":["fullscreen","arrows","expand"],"meh":["emoji","face","neutral","emotion"],"menu":["bars","navigation","hamburger"],"message-circle":["comment","chat"],"message-square":["comment","chat"],"mic-off":["record","sound","mute"],"mic":["record","sound","listen"],"minimize":["exit fullscreen","close"],"minimize-2":["exit fullscreen","arrows","close"],"minus":["subtract"],"monitor":["tv","screen","display"],"moon":["dark","night"],"more-horizontal":["ellipsis"],"more-vertical":["ellipsis"],"mouse-pointer":["arrow","cursor"],"move":["arrows"],"music":["note"],"navigation":["location","travel"],"navigation-2":["location","travel"],"octagon":["stop"],"package":["box","container"],"paperclip":["attachment"],"pause":["music","stop"],"pause-circle":["music","audio","stop"],"pen-tool":["vector","drawing"],"percent":["discount"],"phone-call":["ring"],"phone-forwarded":["call"],"phone-incoming":["call"],"phone-missed":["call"],"phone-off":["call","mute"],"phone-outgoing":["call"],"phone":["call"],"play":["music","start"],"pie-chart":["statistics","diagram"],"play-circle":["music","start"],"plus":["add","new"],"plus-circle":["add","new"],"plus-square":["add","new"],"pocket":["logo","save"],"power":["on","off"],"printer":["fax","office","device"],"radio":["signal"],"refresh-cw":["synchronise","arrows"],"refresh-ccw":["arrows"],"repeat":["loop","arrows"],"rewind":["music"],"rotate-ccw":["arrow"],"rotate-cw":["arrow"],"rss":["feed","subscribe"],"save":["floppy disk"],"scissors":["cut"],"search":["find","magnifier","magnifying glass"],"send":["message","mail","email","paper airplane","paper aeroplane"],"settings":["cog","edit","gear","preferences"],"share-2":["network","connections"],"shield":["security","secure"],"shield-off":["security","insecure"],"shopping-bag":["ecommerce","cart","purchase","store"],"shopping-cart":["ecommerce","cart","purchase","store"],"shuffle":["music"],"skip-back":["music"],"skip-forward":["music"],"slack":["logo"],"slash":["ban","no"],"sliders":["settings","controls"],"smartphone":["cellphone","device"],"smile":["emoji","face","happy","good","emotion"],"speaker":["audio","music"],"star":["bookmark","favorite","like"],"stop-circle":["media","music"],"sun":["brightness","weather","light"],"sunrise":["weather","time","morning","day"],"sunset":["weather","time","evening","night"],"tablet":["device"],"tag":["label"],"target":["logo","bullseye"],"terminal":["code","command line","prompt"],"thermometer":["temperature","celsius","fahrenheit","weather"],"thumbs-down":["dislike","bad","emotion"],"thumbs-up":["like","good","emotion"],"toggle-left":["on","off","switch"],"toggle-right":["on","off","switch"],"tool":["settings","spanner"],"trash":["garbage","delete","remove","bin"],"trash-2":["garbage","delete","remove","bin"],"triangle":["delta"],"truck":["delivery","van","shipping","transport","lorry"],"tv":["television","stream"],"twitch":["logo"],"twitter":["logo","social"],"type":["text"],"umbrella":["rain","weather"],"unlock":["security"],"user-check":["followed","subscribed"],"user-minus":["delete","remove","unfollow","unsubscribe"],"user-plus":["new","add","create","follow","subscribe"],"user-x":["delete","remove","unfollow","unsubscribe","unavailable"],"user":["person","account"],"users":["group"],"video-off":["camera","movie","film"],"video":["camera","movie","film"],"voicemail":["phone"],"volume":["music","sound","mute"],"volume-1":["music","sound"],"volume-2":["music","sound"],"volume-x":["music","sound","mute"],"watch":["clock","time"],"wifi-off":["disabled"],"wifi":["connection","signal","wireless"],"wind":["weather","air"],"x-circle":["cancel","close","delete","remove","times","clear"],"x-octagon":["delete","stop","alert","warning","times","clear"],"x-square":["cancel","close","delete","remove","times","clear"],"x":["cancel","close","delete","remove","times","clear"],"youtube":["logo","video","play"],"zap-off":["flash","camera","lightning"],"zap":["flash","camera","lightning"],"zoom-in":["magnifying glass"],"zoom-out":["magnifying glass"]};
+
+    /***/ }),
+
+    /***/ "./src/to-svg.js":
+    /*!***********************!*\
+      !*** ./src/to-svg.js ***!
+      \***********************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+
+    var _icons = __webpack_require__(/*! ./icons */ "./src/icons.js");
+
+    var _icons2 = _interopRequireDefault(_icons);
+
+    function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+    /**
+     * Create an SVG string.
+     * @deprecated
+     * @param {string} name
+     * @param {Object} attrs
+     * @returns {string}
+     */
+    function toSvg(name) {
+      var attrs = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
+
+      console.warn('feather.toSvg() is deprecated. Please use feather.icons[name].toSvg() instead.');
+
+      if (!name) {
+        throw new Error('The required `key` (icon name) parameter is missing.');
+      }
+
+      if (!_icons2.default[name]) {
+        throw new Error('No icon matching \'' + name + '\'. See the complete list of icons at https://feathericons.com');
+      }
+
+      return _icons2.default[name].toSvg(attrs);
+    }
+
+    exports.default = toSvg;
+
+    /***/ }),
+
+    /***/ 0:
+    /*!**************************************************!*\
+      !*** multi core-js/es/array/from ./src/index.js ***!
+      \**************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    __webpack_require__(/*! core-js/es/array/from */"./node_modules/core-js/es/array/from.js");
+    module.exports = __webpack_require__(/*! /home/travis/build/feathericons/feather/src/index.js */"./src/index.js");
+
+
+    /***/ })
+
+    /******/ });
+    });
+    //# sourceMappingURL=feather.js.map
+    });
+
+    var feather$1 = unwrapExports(feather);
+
+    /* src/Icon.svelte generated by Svelte v3.20.1 */
+
+    function create_fragment$e(ctx) {
+    	let html_tag;
+
+    	let raw_value = (feather$1.icons[/*icon*/ ctx[0]]
+    	? feather$1.icons[/*icon*/ ctx[0]].toSvg({
+    			class: /*$$props*/ ctx[2].class,
+    			.../*attr*/ ctx[1]
+    		})
+    	: "") + "";
+
+    	const block = {
+    		c: function create() {
+    			html_tag = new HtmlTag(raw_value, null);
+    		},
+    		l: function claim(nodes) {
+    			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
+    		},
+    		m: function mount(target, anchor) {
+    			html_tag.m(target, anchor);
+    		},
+    		p: function update(ctx, [dirty]) {
+    			if (dirty & /*icon, $$props, attr*/ 7 && raw_value !== (raw_value = (feather$1.icons[/*icon*/ ctx[0]]
+    			? feather$1.icons[/*icon*/ ctx[0]].toSvg({
+    					class: /*$$props*/ ctx[2].class,
+    					.../*attr*/ ctx[1]
+    				})
+    			: "") + "")) html_tag.p(raw_value);
+    		},
+    		i: noop,
+    		o: noop,
+    		d: function destroy(detaching) {
+    			if (detaching) html_tag.d();
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_fragment$e.name,
+    		type: "component",
+    		source: "",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    function instance$e($$self, $$props, $$invalidate) {
+    	let { icon = "square" } = $$props;
+    	let { attr = {} } = $$props;
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Icon", $$slots, []);
+
+    	$$self.$set = $$new_props => {
+    		$$invalidate(2, $$props = assign(assign({}, $$props), exclude_internal_props($$new_props)));
+    		if ("icon" in $$new_props) $$invalidate(0, icon = $$new_props.icon);
+    		if ("attr" in $$new_props) $$invalidate(1, attr = $$new_props.attr);
+    	};
+
+    	$$self.$capture_state = () => ({ feather: feather$1, icon, attr });
+
+    	$$self.$inject_state = $$new_props => {
+    		$$invalidate(2, $$props = assign(assign({}, $$props), $$new_props));
+    		if ("icon" in $$props) $$invalidate(0, icon = $$new_props.icon);
+    		if ("attr" in $$props) $$invalidate(1, attr = $$new_props.attr);
+    	};
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
+
+    	$$props = exclude_internal_props($$props);
+    	return [icon, attr, $$props];
+    }
+
+    class Icon extends SvelteComponentDev {
+    	constructor(options) {
+    		super(options);
+    		init(this, options, instance$e, create_fragment$e, safe_not_equal, { icon: 0, attr: 1 });
+
+    		dispatch_dev("SvelteRegisterComponent", {
+    			component: this,
+    			tagName: "Icon",
+    			options,
+    			id: create_fragment$e.name
+    		});
+    	}
+
+    	get icon() {
+    		throw new Error("<Icon>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	set icon(value) {
+    		throw new Error("<Icon>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	get attr() {
+    		throw new Error("<Icon>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	set attr(value) {
+    		throw new Error("<Icon>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+    }
+
+    /* src/components/Side.svelte generated by Svelte v3.20.1 */
+    const file$b = "src/components/Side.svelte";
+
+    function create_fragment$f(ctx) {
+    	let div4;
+    	let ul;
+    	let li0;
+    	let a0;
+    	let span0;
+    	let t0;
+    	let div0;
+    	let t2;
+    	let li1;
+    	let a1;
+    	let span1;
+    	let t3;
+    	let div1;
+    	let t5;
+    	let li2;
+    	let a2;
+    	let span2;
+    	let t6;
+    	let div2;
+    	let t8;
+    	let li3;
+    	let a3;
+    	let span3;
+    	let t9;
+    	let div3;
+    	let current;
+    	const icon0 = new Icon({ props: { icon: "home" }, $$inline: true });
+
+    	const icon1 = new Icon({
+    			props: { icon: "server" },
+    			$$inline: true
+    		});
+
+    	const icon2 = new Icon({
+    			props: { icon: "folder" },
+    			$$inline: true
+    		});
+
+    	const icon3 = new Icon({
+    			props: { icon: "user-check" },
+    			$$inline: true
+    		});
+
+    	const block = {
+    		c: function create() {
+    			div4 = element("div");
+    			ul = element("ul");
+    			li0 = element("li");
+    			a0 = element("a");
+    			span0 = element("span");
+    			create_component(icon0.$$.fragment);
+    			t0 = space();
+    			div0 = element("div");
+    			div0.textContent = "Home";
+    			t2 = space();
+    			li1 = element("li");
+    			a1 = element("a");
+    			span1 = element("span");
+    			create_component(icon1.$$.fragment);
+    			t3 = space();
+    			div1 = element("div");
+    			div1.textContent = "Problems";
+    			t5 = space();
+    			li2 = element("li");
+    			a2 = element("a");
+    			span2 = element("span");
+    			create_component(icon2.$$.fragment);
+    			t6 = space();
+    			div2 = element("div");
+    			div2.textContent = "Tests";
+    			t8 = space();
+    			li3 = element("li");
+    			a3 = element("a");
+    			span3 = element("span");
+    			create_component(icon3.$$.fragment);
+    			t9 = space();
+    			div3 = element("div");
+    			div3.textContent = "Results";
+    			attr_dev(span0, "class", "icon svelte-4j4wa5");
+    			add_location(span0, file$b, 68, 16, 2839);
+    			attr_dev(div0, "class", "name svelte-4j4wa5");
+    			add_location(div0, file$b, 71, 17, 2939);
+    			attr_dev(a0, "href", "/admin");
+    			attr_dev(a0, "class", "active svelte-4j4wa5");
+    			add_location(a0, file$b, 67, 16, 2790);
+    			attr_dev(li0, "class", "svelte-4j4wa5");
+    			add_location(li0, file$b, 67, 12, 2786);
+    			attr_dev(span1, "class", "icon svelte-4j4wa5");
+    			add_location(span1, file$b, 75, 17, 3066);
+    			attr_dev(div1, "class", "name svelte-4j4wa5");
+    			add_location(div1, file$b, 78, 17, 3168);
+    			attr_dev(a1, "href", "/showproblems");
+    			attr_dev(a1, "class", "svelte-4j4wa5");
+    			add_location(a1, file$b, 74, 16, 3024);
+    			attr_dev(li1, "class", "svelte-4j4wa5");
+    			add_location(li1, file$b, 74, 12, 3020);
+    			attr_dev(span2, "class", "icon svelte-4j4wa5");
+    			add_location(span2, file$b, 82, 16, 3298);
+    			attr_dev(div2, "class", "name svelte-4j4wa5");
+    			add_location(div2, file$b, 85, 17, 3400);
+    			attr_dev(a2, "href", "/showtests");
+    			attr_dev(a2, "class", "svelte-4j4wa5");
+    			add_location(a2, file$b, 81, 16, 3260);
+    			attr_dev(li2, "class", "svelte-4j4wa5");
+    			add_location(li2, file$b, 81, 12, 3256);
+    			attr_dev(span3, "class", "icon svelte-4j4wa5");
+    			add_location(span3, file$b, 89, 17, 3528);
+    			attr_dev(div3, "class", "name svelte-4j4wa5");
+    			add_location(div3, file$b, 92, 17, 3634);
+    			attr_dev(a3, "href", "/showresults");
+    			attr_dev(a3, "class", "svelte-4j4wa5");
+    			add_location(a3, file$b, 88, 16, 3487);
+    			attr_dev(li3, "class", "svelte-4j4wa5");
+    			add_location(li3, file$b, 88, 12, 3483);
+    			attr_dev(ul, "class", "svelte-4j4wa5");
+    			add_location(ul, file$b, 66, 8, 2769);
+    			attr_dev(div4, "class", "sidebar svelte-4j4wa5");
+    			add_location(div4, file$b, 65, 4, 2739);
+    		},
+    		l: function claim(nodes) {
+    			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, div4, anchor);
+    			append_dev(div4, ul);
+    			append_dev(ul, li0);
+    			append_dev(li0, a0);
+    			append_dev(a0, span0);
+    			mount_component(icon0, span0, null);
+    			append_dev(a0, t0);
+    			append_dev(a0, div0);
+    			append_dev(ul, t2);
+    			append_dev(ul, li1);
+    			append_dev(li1, a1);
+    			append_dev(a1, span1);
+    			mount_component(icon1, span1, null);
+    			append_dev(a1, t3);
+    			append_dev(a1, div1);
+    			append_dev(ul, t5);
+    			append_dev(ul, li2);
+    			append_dev(li2, a2);
+    			append_dev(a2, span2);
+    			mount_component(icon2, span2, null);
+    			append_dev(a2, t6);
+    			append_dev(a2, div2);
+    			append_dev(ul, t8);
+    			append_dev(ul, li3);
+    			append_dev(li3, a3);
+    			append_dev(a3, span3);
+    			mount_component(icon3, span3, null);
+    			append_dev(a3, t9);
+    			append_dev(a3, div3);
+    			current = true;
+    		},
+    		p: noop,
+    		i: function intro(local) {
+    			if (current) return;
+    			transition_in(icon0.$$.fragment, local);
+    			transition_in(icon1.$$.fragment, local);
+    			transition_in(icon2.$$.fragment, local);
+    			transition_in(icon3.$$.fragment, local);
+    			current = true;
+    		},
+    		o: function outro(local) {
+    			transition_out(icon0.$$.fragment, local);
+    			transition_out(icon1.$$.fragment, local);
+    			transition_out(icon2.$$.fragment, local);
+    			transition_out(icon3.$$.fragment, local);
+    			current = false;
+    		},
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(div4);
+    			destroy_component(icon0);
+    			destroy_component(icon1);
+    			destroy_component(icon2);
+    			destroy_component(icon3);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_fragment$f.name,
+    		type: "component",
+    		source: "",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    function instance$f($$self, $$props, $$invalidate) {
+    	const writable_props = [];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<Side> was created with unknown prop '${key}'`);
+    	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Side", $$slots, []);
+    	$$self.$capture_state = () => ({ Icon, Navbar });
+    	return [];
+    }
+
+    class Side extends SvelteComponentDev {
+    	constructor(options) {
+    		super(options);
+    		init(this, options, instance$f, create_fragment$f, safe_not_equal, {});
+
+    		dispatch_dev("SvelteRegisterComponent", {
+    			component: this,
+    			tagName: "Side",
+    			options,
+    			id: create_fragment$f.name
+    		});
+    	}
+    }
+
+    /* src/routes/Admin.svelte generated by Svelte v3.20.1 */
+
+    const { console: console_1$5 } = globals;
+    const file$c = "src/routes/Admin.svelte";
 
     function get_each_context$2(ctx, list, i) {
     	const child_ctx = ctx.slice();
-    	child_ctx[23] = list[i];
+    	child_ctx[21] = list[i];
     	return child_ctx;
     }
 
     function get_each_context_1(ctx, list, i) {
     	const child_ctx = ctx.slice();
-    	child_ctx[26] = list[i];
+    	child_ctx[24] = list[i];
     	return child_ctx;
     }
 
-    function get_each_context_2(ctx, list, i) {
-    	const child_ctx = ctx.slice();
-    	child_ctx[31] = list[i];
-    	return child_ctx;
-    }
-
-    function get_each_context_3(ctx, list, i) {
-    	const child_ctx = ctx.slice();
-    	child_ctx[34] = list[i];
-    	return child_ctx;
-    }
-
-    // (215:12) {:catch err}
-    function create_catch_block_1(ctx) {
-    	let t0;
-    	let t1_value = /*err*/ ctx[30] + "";
-    	let t1;
-
-    	const block = {
-    		c: function create() {
-    			t0 = text("Error: ");
-    			t1 = text(t1_value);
-    		},
-    		m: function mount(target, anchor) {
-    			insert_dev(target, t0, anchor);
-    			insert_dev(target, t1, anchor);
-    		},
-    		p: function update(ctx, dirty) {
-    			if (dirty[0] & /*$Test*/ 32 && t1_value !== (t1_value = /*err*/ ctx[30] + "")) set_data_dev(t1, t1_value);
-    		},
-    		d: function destroy(detaching) {
-    			if (detaching) detach_dev(t0);
-    			if (detaching) detach_dev(t1);
-    		}
-    	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_catch_block_1.name,
-    		type: "catch",
-    		source: "(215:12) {:catch err}",
-    		ctx
-    	});
-
-    	return block;
-    }
-
-    // (207:12) {:then result}
-    function create_then_block_1(ctx) {
-    	let each_1_anchor;
-    	let each_value_3 = /*result*/ ctx[29].data.allTests;
-    	let each_blocks = [];
-
-    	for (let i = 0; i < each_value_3.length; i += 1) {
-    		each_blocks[i] = create_each_block_3(get_each_context_3(ctx, each_value_3, i));
-    	}
-
-    	const block = {
-    		c: function create() {
-    			for (let i = 0; i < each_blocks.length; i += 1) {
-    				each_blocks[i].c();
-    			}
-
-    			each_1_anchor = empty();
-    		},
-    		m: function mount(target, anchor) {
-    			for (let i = 0; i < each_blocks.length; i += 1) {
-    				each_blocks[i].m(target, anchor);
-    			}
-
-    			insert_dev(target, each_1_anchor, anchor);
-    		},
-    		p: function update(ctx, dirty) {
-    			if (dirty[0] & /*$Test*/ 32) {
-    				each_value_3 = /*result*/ ctx[29].data.allTests;
-    				let i;
-
-    				for (i = 0; i < each_value_3.length; i += 1) {
-    					const child_ctx = get_each_context_3(ctx, each_value_3, i);
-
-    					if (each_blocks[i]) {
-    						each_blocks[i].p(child_ctx, dirty);
-    					} else {
-    						each_blocks[i] = create_each_block_3(child_ctx);
-    						each_blocks[i].c();
-    						each_blocks[i].m(each_1_anchor.parentNode, each_1_anchor);
-    					}
-    				}
-
-    				for (; i < each_blocks.length; i += 1) {
-    					each_blocks[i].d(1);
-    				}
-
-    				each_blocks.length = each_value_3.length;
-    			}
-    		},
-    		d: function destroy(detaching) {
-    			destroy_each(each_blocks, detaching);
-    			if (detaching) detach_dev(each_1_anchor);
-    		}
-    	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_then_block_1.name,
-    		type: "then",
-    		source: "(207:12) {:then result}",
-    		ctx
-    	});
-
-    	return block;
-    }
-
-    // (208:14) {#each result.data.allTests as test}
-    function create_each_block_3(ctx) {
-    	let li;
-    	let a;
-    	let t0_value = /*test*/ ctx[34].testName + "";
-    	let t0;
-    	let a_href_value;
-    	let t1;
-
-    	const block = {
-    		c: function create() {
-    			li = element("li");
-    			a = element("a");
-    			t0 = text(t0_value);
-    			t1 = space();
-    			attr_dev(a, "href", a_href_value = "http://localhost:5000/test/" + /*test*/ ctx[34].id);
-    			add_location(a, file$b, 209, 18, 7370);
-    			attr_dev(li, "class", "prob svelte-r6lcc4");
-    			add_location(li, file$b, 208, 16, 7334);
-    		},
-    		m: function mount(target, anchor) {
-    			insert_dev(target, li, anchor);
-    			append_dev(li, a);
-    			append_dev(a, t0);
-    			append_dev(li, t1);
-    		},
-    		p: function update(ctx, dirty) {
-    			if (dirty[0] & /*$Test*/ 32 && t0_value !== (t0_value = /*test*/ ctx[34].testName + "")) set_data_dev(t0, t0_value);
-
-    			if (dirty[0] & /*$Test*/ 32 && a_href_value !== (a_href_value = "http://localhost:5000/test/" + /*test*/ ctx[34].id)) {
-    				attr_dev(a, "href", a_href_value);
-    			}
-    		},
-    		d: function destroy(detaching) {
-    			if (detaching) detach_dev(li);
-    		}
-    	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_each_block_3.name,
-    		type: "each",
-    		source: "(208:14) {#each result.data.allTests as test}",
-    		ctx
-    	});
-
-    	return block;
-    }
-
-    // (205:26)                Loading...             {:then result}
-    function create_pending_block_1(ctx) {
-    	let t;
-
-    	const block = {
-    		c: function create() {
-    			t = text("Loading...");
-    		},
-    		m: function mount(target, anchor) {
-    			insert_dev(target, t, anchor);
-    		},
-    		p: noop,
-    		d: function destroy(detaching) {
-    			if (detaching) detach_dev(t);
-    		}
-    	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_pending_block_1.name,
-    		type: "pending",
-    		source: "(205:26)                Loading...             {:then result}",
-    		ctx
-    	});
-
-    	return block;
-    }
-
-    // (221:10) <Modal>
-    function create_default_slot_1(ctx) {
-    	let current;
-
-    	const testmodal = new TestModal({
-    			props: { changeCheck: /*handleTestAdd*/ ctx[10] },
-    			$$inline: true
-    		});
-
-    	const block = {
-    		c: function create() {
-    			create_component(testmodal.$$.fragment);
-    		},
-    		m: function mount(target, anchor) {
-    			mount_component(testmodal, target, anchor);
-    			current = true;
-    		},
-    		p: noop,
-    		i: function intro(local) {
-    			if (current) return;
-    			transition_in(testmodal.$$.fragment, local);
-    			current = true;
-    		},
-    		o: function outro(local) {
-    			transition_out(testmodal.$$.fragment, local);
-    			current = false;
-    		},
-    		d: function destroy(detaching) {
-    			destroy_component(testmodal, detaching);
-    		}
-    	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_default_slot_1.name,
-    		type: "slot",
-    		source: "(221:10) <Modal>",
-    		ctx
-    	});
-
-    	return block;
-    }
-
-    // (242:12) {:catch err}
-    function create_catch_block$1(ctx) {
-    	let t0;
-    	let t1_value = /*err*/ ctx[30] + "";
-    	let t1;
-
-    	const block = {
-    		c: function create() {
-    			t0 = text("Error: ");
-    			t1 = text(t1_value);
-    		},
-    		m: function mount(target, anchor) {
-    			insert_dev(target, t0, anchor);
-    			insert_dev(target, t1, anchor);
-    		},
-    		p: function update(ctx, dirty) {
-    			if (dirty[0] & /*$Problem*/ 64 && t1_value !== (t1_value = /*err*/ ctx[30] + "")) set_data_dev(t1, t1_value);
-    		},
-    		d: function destroy(detaching) {
-    			if (detaching) detach_dev(t0);
-    			if (detaching) detach_dev(t1);
-    		}
-    	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_catch_block$1.name,
-    		type: "catch",
-    		source: "(242:12) {:catch err}",
-    		ctx
-    	});
-
-    	return block;
-    }
-
-    // (234:12) {:then result}
-    function create_then_block$1(ctx) {
-    	let each_1_anchor;
-    	let each_value_2 = /*result*/ ctx[29].data.allProblems;
-    	let each_blocks = [];
-
-    	for (let i = 0; i < each_value_2.length; i += 1) {
-    		each_blocks[i] = create_each_block_2(get_each_context_2(ctx, each_value_2, i));
-    	}
-
-    	const block = {
-    		c: function create() {
-    			for (let i = 0; i < each_blocks.length; i += 1) {
-    				each_blocks[i].c();
-    			}
-
-    			each_1_anchor = empty();
-    		},
-    		m: function mount(target, anchor) {
-    			for (let i = 0; i < each_blocks.length; i += 1) {
-    				each_blocks[i].m(target, anchor);
-    			}
-
-    			insert_dev(target, each_1_anchor, anchor);
-    		},
-    		p: function update(ctx, dirty) {
-    			if (dirty[0] & /*$Problem*/ 64) {
-    				each_value_2 = /*result*/ ctx[29].data.allProblems;
-    				let i;
-
-    				for (i = 0; i < each_value_2.length; i += 1) {
-    					const child_ctx = get_each_context_2(ctx, each_value_2, i);
-
-    					if (each_blocks[i]) {
-    						each_blocks[i].p(child_ctx, dirty);
-    					} else {
-    						each_blocks[i] = create_each_block_2(child_ctx);
-    						each_blocks[i].c();
-    						each_blocks[i].m(each_1_anchor.parentNode, each_1_anchor);
-    					}
-    				}
-
-    				for (; i < each_blocks.length; i += 1) {
-    					each_blocks[i].d(1);
-    				}
-
-    				each_blocks.length = each_value_2.length;
-    			}
-    		},
-    		d: function destroy(detaching) {
-    			destroy_each(each_blocks, detaching);
-    			if (detaching) detach_dev(each_1_anchor);
-    		}
-    	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_then_block$1.name,
-    		type: "then",
-    		source: "(234:12) {:then result}",
-    		ctx
-    	});
-
-    	return block;
-    }
-
-    // (235:14) {#each result.data.allProblems as prob}
-    function create_each_block_2(ctx) {
-    	let li;
-    	let a;
-    	let t0_value = /*prob*/ ctx[31].problemName + "";
-    	let t0;
-    	let a_href_value;
-    	let t1;
-
-    	const block = {
-    		c: function create() {
-    			li = element("li");
-    			a = element("a");
-    			t0 = text(t0_value);
-    			t1 = space();
-    			attr_dev(a, "href", a_href_value = "http://localhost:5000/problem/" + /*prob*/ ctx[31].id);
-    			add_location(a, file$b, 236, 18, 8205);
-    			attr_dev(li, "class", "prob svelte-r6lcc4");
-    			add_location(li, file$b, 235, 16, 8169);
-    		},
-    		m: function mount(target, anchor) {
-    			insert_dev(target, li, anchor);
-    			append_dev(li, a);
-    			append_dev(a, t0);
-    			append_dev(li, t1);
-    		},
-    		p: function update(ctx, dirty) {
-    			if (dirty[0] & /*$Problem*/ 64 && t0_value !== (t0_value = /*prob*/ ctx[31].problemName + "")) set_data_dev(t0, t0_value);
-
-    			if (dirty[0] & /*$Problem*/ 64 && a_href_value !== (a_href_value = "http://localhost:5000/problem/" + /*prob*/ ctx[31].id)) {
-    				attr_dev(a, "href", a_href_value);
-    			}
-    		},
-    		d: function destroy(detaching) {
-    			if (detaching) detach_dev(li);
-    		}
-    	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_each_block_2.name,
-    		type: "each",
-    		source: "(235:14) {#each result.data.allProblems as prob}",
-    		ctx
-    	});
-
-    	return block;
-    }
-
-    // (232:29)                Loading...             {:then result}
-    function create_pending_block$1(ctx) {
-    	let t;
-
-    	const block = {
-    		c: function create() {
-    			t = text("Loading...");
-    		},
-    		m: function mount(target, anchor) {
-    			insert_dev(target, t, anchor);
-    		},
-    		p: noop,
-    		d: function destroy(detaching) {
-    			if (detaching) detach_dev(t);
-    		}
-    	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_pending_block$1.name,
-    		type: "pending",
-    		source: "(232:29)                Loading...             {:then result}",
-    		ctx
-    	});
-
-    	return block;
-    }
-
-    // (248:10) <Modal>
-    function create_default_slot$1(ctx) {
-    	let current;
-
-    	const content = new ProblemModal({
-    			props: { changeCheck: /*handleProblemAdd*/ ctx[9] },
-    			$$inline: true
-    		});
-
-    	const block = {
-    		c: function create() {
-    			create_component(content.$$.fragment);
-    		},
-    		m: function mount(target, anchor) {
-    			mount_component(content, target, anchor);
-    			current = true;
-    		},
-    		p: noop,
-    		i: function intro(local) {
-    			if (current) return;
-    			transition_in(content.$$.fragment, local);
-    			current = true;
-    		},
-    		o: function outro(local) {
-    			transition_out(content.$$.fragment, local);
-    			current = false;
-    		},
-    		d: function destroy(detaching) {
-    			destroy_component(content, detaching);
-    		}
-    	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_default_slot$1.name,
-    		type: "slot",
-    		source: "(248:10) <Modal>",
-    		ctx
-    	});
-
-    	return block;
-    }
-
-    // (376:4) {:else}
+    // (314:4) {:else}
     function create_else_block$1(ctx) {
     	let div3;
     	let div2;
@@ -37710,22 +40416,22 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			div1 = element("div");
     			h4 = element("h4");
     			h4.textContent = "User Chat";
-    			attr_dev(img, "class", "chat-notification-logo svelte-r6lcc4");
+    			attr_dev(img, "class", "chat-notification-logo svelte-1h6cv5z");
     			if (img.src !== (img_src_value = "https://img.icons8.com/cotton/50/000000/filled-chat.png")) attr_dev(img, "src", img_src_value);
     			attr_dev(img, "alt", "ChitChat Logo");
-    			add_location(img, file$b, 379, 12, 12697);
-    			attr_dev(div0, "class", "chat-notification-logo-wrapper svelte-r6lcc4");
-    			add_location(div0, file$b, 378, 10, 12640);
-    			attr_dev(h4, "class", "chat-notification-title svelte-r6lcc4");
-    			add_location(h4, file$b, 385, 12, 12939);
-    			attr_dev(div1, "class", "chat-notification-content svelte-r6lcc4");
-    			add_location(div1, file$b, 384, 10, 12887);
-    			attr_dev(div2, "class", "chat-notification svelte-r6lcc4");
-    			add_location(div2, file$b, 377, 8, 12598);
-    			attr_dev(div3, "class", "btm svelte-r6lcc4");
-    			add_location(div3, file$b, 376, 6, 12554);
+    			add_location(img, file$c, 317, 12, 11038);
+    			attr_dev(div0, "class", "chat-notification-logo-wrapper svelte-1h6cv5z");
+    			add_location(div0, file$c, 316, 10, 10981);
+    			attr_dev(h4, "class", "chat-notification-title svelte-1h6cv5z");
+    			add_location(h4, file$c, 323, 12, 11280);
+    			attr_dev(div1, "class", "chat-notification-content svelte-1h6cv5z");
+    			add_location(div1, file$c, 322, 10, 11228);
+    			attr_dev(div2, "class", "chat-notification svelte-1h6cv5z");
+    			add_location(div2, file$c, 315, 8, 10939);
+    			attr_dev(div3, "class", "btm svelte-1h6cv5z");
+    			add_location(div3, file$c, 314, 6, 10895);
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, div3, anchor);
     			append_dev(div3, div2);
     			append_dev(div2, div0);
@@ -37733,7 +40439,8 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			append_dev(div2, t0);
     			append_dev(div2, div1);
     			append_dev(div1, h4);
-    			dispose = listen_dev(div3, "click", /*joined*/ ctx[11], false, false, false);
+    			if (remount) dispose();
+    			dispose = listen_dev(div3, "click", /*joined*/ ctx[5], false, false, false);
     		},
     		p: noop,
     		d: function destroy(detaching) {
@@ -37746,14 +40453,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_else_block$1.name,
     		type: "else",
-    		source: "(376:4) {:else}",
+    		source: "(314:4) {:else}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (257:4) {#if hasJoinedChat}
+    // (195:4) {#if hasJoinedChat}
     function create_if_block$3(ctx) {
     	let div15;
     	let div3;
@@ -37794,6 +40501,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	let img_src_value;
     	let dispose;
     	let each_value_1 = /*channels*/ ctx[1];
+    	validate_each_argument(each_value_1);
     	let each_blocks_1 = [];
 
     	for (let i = 0; i < each_value_1.length; i += 1) {
@@ -37801,6 +40509,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	}
 
     	let each_value = /*output*/ ctx[3];
+    	validate_each_argument(each_value);
     	let each_blocks = [];
 
     	for (let i = 0; i < each_value.length; i += 1) {
@@ -37859,71 +40568,71 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			div17 = element("div");
     			div16 = element("div");
     			img = element("img");
-    			add_location(p0, file$b, 267, 14, 9035);
+    			add_location(p0, file$c, 205, 14, 7376);
     			attr_dev(div0, "class", "flex");
-    			add_location(div0, file$b, 265, 12, 9001);
+    			add_location(div0, file$c, 203, 12, 7342);
     			attr_dev(div1, "class", "py-2 px-3 bg-grey-lighter flex flex-row justify-between\n            items-center");
-    			add_location(div1, file$b, 262, 10, 8882);
+    			add_location(div1, file$c, 200, 10, 7223);
     			attr_dev(div2, "class", "bg-grey-lighter flex-1 overflow-auto");
-    			add_location(div2, file$b, 272, 10, 9129);
+    			add_location(div2, file$c, 210, 10, 7470);
     			attr_dev(div3, "class", "w-1/3 border flex flex-col");
-    			add_location(div3, file$b, 259, 8, 8804);
+    			add_location(div3, file$c, 197, 8, 7145);
     			attr_dev(p1, "class", "text-grey-darkest");
-    			add_location(p1, file$b, 303, 16, 10120);
+    			add_location(p1, file$c, 241, 16, 8461);
     			attr_dev(div4, "class", "flex items-bottom justify-between");
-    			add_location(div4, file$b, 302, 14, 10056);
+    			add_location(div4, file$c, 240, 14, 8397);
     			attr_dev(p2, "class", "text-grey-dark mt-1 text-sm");
-    			add_location(p2, file$b, 305, 14, 10202);
+    			add_location(p2, file$c, 243, 14, 8543);
     			attr_dev(div5, "class", "ml-4 flex-1 border-b border-grey-lighter py-4");
-    			add_location(div5, file$b, 301, 12, 9982);
+    			add_location(div5, file$c, 239, 12, 8323);
     			attr_dev(div6, "class", "px-3 flex-row items-center bg-grey-light cursor-pointer\n            rounded-lg");
-    			add_location(div6, file$b, 298, 10, 9865);
+    			add_location(div6, file$c, 236, 10, 8206);
     			attr_dev(p3, "class", "text-grey-darkest");
-    			add_location(p3, file$b, 317, 20, 10742);
+    			add_location(p3, file$c, 255, 20, 9083);
     			attr_dev(div7, "class", "flex items-bottom justify-between");
-    			add_location(div7, file$b, 316, 18, 10674);
+    			add_location(div7, file$c, 254, 18, 9015);
     			attr_dev(p4, "class", "text-grey-dark mt-1 text-sm");
-    			add_location(p4, file$b, 320, 18, 10825);
+    			add_location(p4, file$c, 258, 18, 9166);
     			attr_dev(div8, "class", "ml-4 flex-1 border-b border-grey-lighter py-4");
-    			add_location(div8, file$b, 315, 16, 10596);
+    			add_location(div8, file$c, 253, 16, 8937);
     			attr_dev(div9, "class", "flex-1 overflow-auto");
-    			add_location(div9, file$b, 314, 14, 10545);
+    			add_location(div9, file$c, 252, 14, 8886);
     			attr_dev(div10, "class", "message-form");
-    			add_location(div10, file$b, 313, 12, 10504);
+    			add_location(div10, file$c, 251, 12, 8845);
     			attr_dev(div11, "class", "container mx-auto overflow-auto margin-bottom:10%;");
     			set_style(div11, "bottom", "120px");
     			set_style(div11, "right", "55px");
     			set_style(div11, "height", "380px");
     			set_style(div11, "width", "390px");
-    			add_location(div11, file$b, 310, 10, 10337);
+    			add_location(div11, file$c, 248, 10, 8678);
     			attr_dev(input, "type", "search");
     			attr_dev(input, "name", "serch");
     			attr_dev(input, "placeholder", "Type Message and Press Enter");
-    			attr_dev(input, "class", "bg-white h-10 px-5 pr-10 rounded-full text-sm\n                  focus:outline-none svelte-r6lcc4");
-    			add_location(input, file$b, 344, 16, 11719);
-    			add_location(form, file$b, 342, 14, 11610);
+    			attr_dev(input, "class", "bg-white h-10 px-5 pr-10 rounded-full text-sm\n                  focus:outline-none svelte-1h6cv5z");
+    			add_location(input, file$c, 282, 16, 10060);
+    			add_location(form, file$c, 280, 14, 9951);
     			attr_dev(div12, "class", "relative text-gray-600");
-    			add_location(div12, file$b, 341, 12, 11559);
+    			add_location(div12, file$c, 279, 12, 9900);
     			attr_dev(div13, "class", "container block");
     			set_style(div13, "position", "absolute");
     			set_style(div13, "bottom", "0");
-    			add_location(div13, file$b, 340, 10, 11477);
+    			add_location(div13, file$c, 278, 10, 9818);
     			attr_dev(div14, "class", "w-2/3 border flex flex-col");
-    			add_location(div14, file$b, 294, 8, 9784);
-    			attr_dev(div15, "class", "chat flex flex-row shadow-xl rounded-lg svelte-r6lcc4");
-    			add_location(div15, file$b, 257, 6, 8721);
-    			attr_dev(img, "class", "chat-notification-logo svelte-r6lcc4");
+    			add_location(div14, file$c, 232, 8, 8125);
+    			attr_dev(div15, "class", "chat flex flex-row shadow-xl rounded-lg svelte-1h6cv5z");
+    			add_location(div15, file$c, 195, 6, 7062);
+    			attr_dev(img, "class", "chat-notification-logo svelte-1h6cv5z");
     			if (img.src !== (img_src_value = "https://img.icons8.com/cute-clipart/50/000000/close-window.png")) attr_dev(img, "src", img_src_value);
     			attr_dev(img, "alt", "ChitChat Logo");
-    			add_location(img, file$b, 368, 12, 12321);
-    			attr_dev(div16, "class", "chat-notification-logo-wrapper svelte-r6lcc4");
-    			add_location(div16, file$b, 367, 10, 12264);
-    			attr_dev(div17, "class", "chat-notification svelte-r6lcc4");
-    			add_location(div17, file$b, 366, 8, 12222);
-    			attr_dev(div18, "class", "btm svelte-r6lcc4");
-    			add_location(div18, file$b, 365, 6, 12179);
+    			add_location(img, file$c, 306, 12, 10662);
+    			attr_dev(div16, "class", "chat-notification-logo-wrapper svelte-1h6cv5z");
+    			add_location(div16, file$c, 305, 10, 10605);
+    			attr_dev(div17, "class", "chat-notification svelte-1h6cv5z");
+    			add_location(div17, file$c, 304, 8, 10563);
+    			attr_dev(div18, "class", "btm svelte-1h6cv5z");
+    			add_location(div18, file$c, 303, 6, 10520);
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, div15, anchor);
     			append_dev(div15, div3);
     			append_dev(div3, div1);
@@ -37971,27 +40680,29 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			append_dev(div18, div17);
     			append_dev(div17, div16);
     			append_dev(div16, img);
+    			if (remount) run_all(dispose);
 
     			dispose = [
-    				listen_dev(input, "input", /*input_input_handler*/ ctx[22]),
+    				listen_dev(input, "input", /*input_input_handler*/ ctx[20]),
     				listen_dev(
     					form,
     					"submit",
     					prevent_default(function () {
-    						if (is_function(publish(/*newMessage*/ ctx[2], "channel." + /*userName*/ ctx[13]))) publish(/*newMessage*/ ctx[2], "channel." + /*userName*/ ctx[13]).apply(this, arguments);
+    						if (is_function(publish(/*newMessage*/ ctx[2], "channel." + /*userName*/ ctx[7]))) publish(/*newMessage*/ ctx[2], "channel." + /*userName*/ ctx[7]).apply(this, arguments);
     					}),
     					false,
     					true,
     					false
     				),
-    				listen_dev(div18, "click", /*close*/ ctx[12], false, false, false)
+    				listen_dev(div18, "click", /*close*/ ctx[6], false, false, false)
     			];
     		},
     		p: function update(new_ctx, dirty) {
     			ctx = new_ctx;
 
-    			if (dirty[0] & /*changeChannel, channels*/ 16386) {
+    			if (dirty & /*changeChannel, channels*/ 258) {
     				each_value_1 = /*channels*/ ctx[1];
+    				validate_each_argument(each_value_1);
     				let i;
 
     				for (i = 0; i < each_value_1.length; i += 1) {
@@ -38013,10 +40724,11 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     				each_blocks_1.length = each_value_1.length;
     			}
 
-    			if (dirty[0] & /*channelName*/ 16) set_data_dev(t3, /*channelName*/ ctx[4]);
+    			if (dirty & /*channelName*/ 16) set_data_dev(t3, /*channelName*/ ctx[4]);
 
-    			if (dirty[0] & /*output*/ 8) {
+    			if (dirty & /*output*/ 8) {
     				each_value = /*output*/ ctx[3];
+    				validate_each_argument(each_value);
     				let i;
 
     				for (i = 0; i < each_value.length; i += 1) {
@@ -38038,7 +40750,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     				each_blocks.length = each_value.length;
     			}
 
-    			if (dirty[0] & /*newMessage*/ 4) {
+    			if (dirty & /*newMessage*/ 4) {
     				set_input_value(input, /*newMessage*/ ctx[2]);
     			}
     		},
@@ -38056,20 +40768,20 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_if_block$3.name,
     		type: "if",
-    		source: "(257:4) {#if hasJoinedChat}",
+    		source: "(195:4) {#if hasJoinedChat}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (275:12) {#each channels as channel}
+    // (213:12) {#each channels as channel}
     function create_each_block_1(ctx) {
     	let div2;
     	let div1;
     	let div0;
     	let p;
-    	let t0_value = /*channel*/ ctx[26] + "";
+    	let t0_value = /*channel*/ ctx[24] + "";
     	let t0;
     	let t1;
     	let dispose;
@@ -38083,27 +40795,28 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			t0 = text(t0_value);
     			t1 = space();
     			attr_dev(p, "class", "text-grey-darkest");
-    			add_location(p, file$b, 282, 20, 9585);
+    			add_location(p, file$c, 220, 20, 7926);
     			attr_dev(div0, "class", "flex items-bottom justify-between");
-    			add_location(div0, file$b, 281, 18, 9517);
+    			add_location(div0, file$c, 219, 18, 7858);
     			attr_dev(div1, "class", "ml-4 flex-1 border-b border-grey-lighter py-4");
-    			add_location(div1, file$b, 280, 16, 9439);
+    			add_location(div1, file$c, 218, 16, 7780);
     			attr_dev(div2, "class", "bg-white hover:bg-gray-400 px-3 flex items-center\n                hover:bg-grey-lighter cursor-pointer");
-    			add_location(div2, file$b, 275, 14, 9235);
+    			add_location(div2, file$c, 213, 14, 7576);
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, div2, anchor);
     			append_dev(div2, div1);
     			append_dev(div1, div0);
     			append_dev(div0, p);
     			append_dev(p, t0);
     			append_dev(div2, t1);
+    			if (remount) dispose();
 
     			dispose = listen_dev(
     				div2,
     				"click",
     				function () {
-    					if (is_function(/*changeChannel*/ ctx[14]({ channel: /*channel*/ ctx[26] }))) /*changeChannel*/ ctx[14]({ channel: /*channel*/ ctx[26] }).apply(this, arguments);
+    					if (is_function(/*changeChannel*/ ctx[8]({ channel: /*channel*/ ctx[24] }))) /*changeChannel*/ ctx[8]({ channel: /*channel*/ ctx[24] }).apply(this, arguments);
     				},
     				false,
     				false,
@@ -38112,7 +40825,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		},
     		p: function update(new_ctx, dirty) {
     			ctx = new_ctx;
-    			if (dirty[0] & /*channels*/ 2 && t0_value !== (t0_value = /*channel*/ ctx[26] + "")) set_data_dev(t0, t0_value);
+    			if (dirty & /*channels*/ 2 && t0_value !== (t0_value = /*channel*/ ctx[24] + "")) set_data_dev(t0, t0_value);
     		},
     		d: function destroy(detaching) {
     			if (detaching) detach_dev(div2);
@@ -38124,19 +40837,19 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_each_block_1.name,
     		type: "each",
-    		source: "(275:12) {#each channels as channel}",
+    		source: "(213:12) {#each channels as channel}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (325:16) {#each output as message}
+    // (263:16) {#each output as message}
     function create_each_block$2(ctx) {
     	let div1;
     	let div0;
     	let p;
-    	let t0_value = /*message*/ ctx[23] + "";
+    	let t0_value = /*message*/ ctx[21] + "";
     	let t0;
     	let t1;
 
@@ -38148,12 +40861,12 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			t0 = text(t0_value);
     			t1 = space();
     			attr_dev(p, "class", "text-sm mt-1");
-    			add_location(p, file$b, 329, 22, 11223);
+    			add_location(p, file$c, 267, 22, 9564);
     			attr_dev(div0, "class", "rounded py-2 px-3");
     			set_style(div0, "background-color", "#E2F7CB");
-    			add_location(div0, file$b, 326, 20, 11091);
+    			add_location(div0, file$c, 264, 20, 9432);
     			attr_dev(div1, "class", "flex justify-end mb-2");
-    			add_location(div1, file$b, 325, 18, 11035);
+    			add_location(div1, file$c, 263, 18, 9376);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div1, anchor);
@@ -38163,7 +40876,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			append_dev(div1, t1);
     		},
     		p: function update(ctx, dirty) {
-    			if (dirty[0] & /*output*/ 8 && t0_value !== (t0_value = /*message*/ ctx[23] + "")) set_data_dev(t0, t0_value);
+    			if (dirty & /*output*/ 8 && t0_value !== (t0_value = /*message*/ ctx[21] + "")) set_data_dev(t0, t0_value);
     		},
     		d: function destroy(detaching) {
     			if (detaching) detach_dev(div1);
@@ -38174,84 +40887,24 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_each_block$2.name,
     		type: "each",
-    		source: "(325:16) {#each output as message}",
+    		source: "(263:16) {#each output as message}",
     		ctx
     	});
 
     	return block;
     }
 
-    function create_fragment$e(ctx) {
+    function create_fragment$g(ctx) {
     	let link;
     	let t0;
     	let body;
+    	let header;
     	let t1;
-    	let div10;
-    	let div4;
-    	let div3;
-    	let div1;
-    	let div0;
-    	let t3;
-    	let ol0;
-    	let promise;
-    	let t4;
-    	let div2;
-    	let t5;
-    	let div9;
-    	let div8;
-    	let div6;
-    	let div5;
-    	let t7;
-    	let ol1;
-    	let promise_1;
-    	let t8;
-    	let div7;
-    	let t9;
-    	let div11;
+    	let t2;
+    	let div;
     	let current;
     	const navbar = new Navbar({ $$inline: true });
-
-    	let info = {
-    		ctx,
-    		current: null,
-    		token: null,
-    		pending: create_pending_block_1,
-    		then: create_then_block_1,
-    		catch: create_catch_block_1,
-    		value: 29,
-    		error: 30
-    	};
-
-    	handle_promise(promise = /*$Test*/ ctx[5], info);
-
-    	const modal0 = new Modal({
-    			props: {
-    				$$slots: { default: [create_default_slot_1] },
-    				$$scope: { ctx }
-    			},
-    			$$inline: true
-    		});
-
-    	let info_1 = {
-    		ctx,
-    		current: null,
-    		token: null,
-    		pending: create_pending_block$1,
-    		then: create_then_block$1,
-    		catch: create_catch_block$1,
-    		value: 29,
-    		error: 30
-    	};
-
-    	handle_promise(promise_1 = /*$Problem*/ ctx[6], info_1);
-
-    	const modal1 = new Modal({
-    			props: {
-    				$$slots: { default: [create_default_slot$1] },
-    				$$scope: { ctx }
-    			},
-    			$$inline: true
-    		});
+    	const sidebar = new Side({ $$inline: true });
 
     	function select_block_type(ctx, dirty) {
     		if (/*hasJoinedChat*/ ctx[0]) return create_if_block$3;
@@ -38266,68 +40919,20 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			link = element("link");
     			t0 = space();
     			body = element("body");
+    			header = element("header");
     			create_component(navbar.$$.fragment);
     			t1 = space();
-    			div10 = element("div");
-    			div4 = element("div");
-    			div3 = element("div");
-    			div1 = element("div");
-    			div0 = element("div");
-    			div0.textContent = "Your Tests";
-    			t3 = space();
-    			ol0 = element("ol");
-    			info.block.c();
-    			t4 = space();
-    			div2 = element("div");
-    			create_component(modal0.$$.fragment);
-    			t5 = space();
-    			div9 = element("div");
-    			div8 = element("div");
-    			div6 = element("div");
-    			div5 = element("div");
-    			div5.textContent = "Your Problems";
-    			t7 = space();
-    			ol1 = element("ol");
-    			info_1.block.c();
-    			t8 = space();
-    			div7 = element("div");
-    			create_component(modal1.$$.fragment);
-    			t9 = space();
-    			div11 = element("div");
+    			create_component(sidebar.$$.fragment);
+    			t2 = space();
+    			div = element("div");
     			if_block.c();
     			attr_dev(link, "href", "https://unpkg.com/tailwindcss@^1.0/dist/tailwind.min.css");
     			attr_dev(link, "rel", "stylesheet");
-    			add_location(link, file$b, 191, 0, 6835);
-    			attr_dev(div0, "class", "font-bold text-xl mb-2");
-    			add_location(div0, file$b, 202, 10, 7120);
-    			add_location(ol0, file$b, 203, 10, 7183);
-    			attr_dev(div1, "class", "px-6 py-4");
-    			add_location(div1, file$b, 201, 8, 7086);
-    			attr_dev(div2, "class", "px-6 py-4");
-    			set_style(div2, "margin-right", "5%");
-    			add_location(div2, file$b, 219, 8, 7633);
-    			attr_dev(div3, "class", "max-w-lg rounded overflow-hidden shadow-lg");
-    			add_location(div3, file$b, 200, 6, 7021);
-    			attr_dev(div4, "class", "w-1/2 h-12");
-    			add_location(div4, file$b, 199, 4, 6990);
-    			attr_dev(div5, "class", "font-bold text-xl mb-2");
-    			add_location(div5, file$b, 229, 10, 7946);
-    			add_location(ol1, file$b, 230, 10, 8012);
-    			attr_dev(div6, "class", "px-6 py-4");
-    			add_location(div6, file$b, 228, 8, 7912);
-    			attr_dev(div7, "class", "px-6 py-4");
-    			set_style(div7, "margin-right", "10%");
-    			add_location(div7, file$b, 246, 8, 8474);
-    			attr_dev(div8, "class", "max-w-lg rounded overflow-hidden shadow-lg");
-    			add_location(div8, file$b, 227, 6, 7847);
-    			attr_dev(div9, "class", "w-1/2 h-12");
-    			add_location(div9, file$b, 226, 4, 7816);
-    			attr_dev(div10, "id", "blk");
-    			attr_dev(div10, "class", "flex mb-4 svelte-r6lcc4");
-    			add_location(div10, file$b, 198, 2, 6953);
-    			attr_dev(div11, "class", "container");
-    			add_location(div11, file$b, 255, 2, 8667);
-    			add_location(body, file$b, 194, 0, 6929);
+    			add_location(link, file$c, 184, 0, 6862);
+    			add_location(header, file$c, 189, 0, 6964);
+    			attr_dev(div, "class", "container");
+    			add_location(div, file$c, 193, 2, 7008);
+    			add_location(body, file$c, 188, 0, 6957);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -38336,72 +40941,16 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			insert_dev(target, link, anchor);
     			insert_dev(target, t0, anchor);
     			insert_dev(target, body, anchor);
-    			mount_component(navbar, body, null);
-    			append_dev(body, t1);
-    			append_dev(body, div10);
-    			append_dev(div10, div4);
-    			append_dev(div4, div3);
-    			append_dev(div3, div1);
-    			append_dev(div1, div0);
-    			append_dev(div1, t3);
-    			append_dev(div1, ol0);
-    			info.block.m(ol0, info.anchor = null);
-    			info.mount = () => ol0;
-    			info.anchor = null;
-    			append_dev(div3, t4);
-    			append_dev(div3, div2);
-    			mount_component(modal0, div2, null);
-    			append_dev(div10, t5);
-    			append_dev(div10, div9);
-    			append_dev(div9, div8);
-    			append_dev(div8, div6);
-    			append_dev(div6, div5);
-    			append_dev(div6, t7);
-    			append_dev(div6, ol1);
-    			info_1.block.m(ol1, info_1.anchor = null);
-    			info_1.mount = () => ol1;
-    			info_1.anchor = null;
-    			append_dev(div8, t8);
-    			append_dev(div8, div7);
-    			mount_component(modal1, div7, null);
-    			append_dev(body, t9);
-    			append_dev(body, div11);
-    			if_block.m(div11, null);
+    			append_dev(body, header);
+    			mount_component(navbar, header, null);
+    			append_dev(header, t1);
+    			mount_component(sidebar, header, null);
+    			append_dev(body, t2);
+    			append_dev(body, div);
+    			if_block.m(div, null);
     			current = true;
     		},
-    		p: function update(new_ctx, dirty) {
-    			ctx = new_ctx;
-    			info.ctx = ctx;
-
-    			if (dirty[0] & /*$Test*/ 32 && promise !== (promise = /*$Test*/ ctx[5]) && handle_promise(promise, info)) ; else {
-    				const child_ctx = ctx.slice();
-    				child_ctx[29] = info.resolved;
-    				info.block.p(child_ctx, dirty);
-    			}
-
-    			const modal0_changes = {};
-
-    			if (dirty[1] & /*$$scope*/ 64) {
-    				modal0_changes.$$scope = { dirty, ctx };
-    			}
-
-    			modal0.$set(modal0_changes);
-    			info_1.ctx = ctx;
-
-    			if (dirty[0] & /*$Problem*/ 64 && promise_1 !== (promise_1 = /*$Problem*/ ctx[6]) && handle_promise(promise_1, info_1)) ; else {
-    				const child_ctx = ctx.slice();
-    				child_ctx[29] = info_1.resolved;
-    				info_1.block.p(child_ctx, dirty);
-    			}
-
-    			const modal1_changes = {};
-
-    			if (dirty[1] & /*$$scope*/ 64) {
-    				modal1_changes.$$scope = { dirty, ctx };
-    			}
-
-    			modal1.$set(modal1_changes);
-
+    		p: function update(ctx, [dirty]) {
     			if (current_block_type === (current_block_type = select_block_type(ctx)) && if_block) {
     				if_block.p(ctx, dirty);
     			} else {
@@ -38410,21 +40959,19 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     				if (if_block) {
     					if_block.c();
-    					if_block.m(div11, null);
+    					if_block.m(div, null);
     				}
     			}
     		},
     		i: function intro(local) {
     			if (current) return;
     			transition_in(navbar.$$.fragment, local);
-    			transition_in(modal0.$$.fragment, local);
-    			transition_in(modal1.$$.fragment, local);
+    			transition_in(sidebar.$$.fragment, local);
     			current = true;
     		},
     		o: function outro(local) {
     			transition_out(navbar.$$.fragment, local);
-    			transition_out(modal0.$$.fragment, local);
-    			transition_out(modal1.$$.fragment, local);
+    			transition_out(sidebar.$$.fragment, local);
     			current = false;
     		},
     		d: function destroy(detaching) {
@@ -38432,21 +40979,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			if (detaching) detach_dev(t0);
     			if (detaching) detach_dev(body);
     			destroy_component(navbar);
-    			info.block.d();
-    			info.token = null;
-    			info = null;
-    			destroy_component(modal0);
-    			info_1.block.d();
-    			info_1.token = null;
-    			info_1 = null;
-    			destroy_component(modal1);
+    			destroy_component(sidebar);
     			if_block.d();
     		}
     	};
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$e.name,
+    		id: create_fragment$g.name,
     		type: "component",
     		source: "",
     		ctx
@@ -38460,18 +41000,12 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	if (match) return match[2];
     }
 
-    function instance$e($$self, $$props, $$invalidate) {
-    	let $Test;
-    	let $Problem;
+    function instance$g($$self, $$props, $$invalidate) {
     	const client = getClient();
     	const tokens = cookieHandler.getCookie("access_token").split(".");
     	console.log(atob(tokens[1]));
     	const Test = query(client, { query: apolloClient.allTests });
-    	validate_store(Test, "Test");
-    	component_subscribe($$self, Test, value => $$invalidate(5, $Test = value));
     	const Problem = query(client, { query: apolloClient.getProblems });
-    	validate_store(Problem, "Problem");
-    	component_subscribe($$self, Problem, value => $$invalidate(6, $Problem = value));
 
     	const handleProblemAdd = () => {
     		Problem.refetch();
@@ -38544,14 +41078,55 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		$$invalidate(4, channelName = m.channel);
     	};
 
+    	const writable_props = [];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$5.warn(`<Admin> was created with unknown prop '${key}'`);
+    	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Admin", $$slots, []);
+
     	function input_input_handler() {
     		newMessage = this.value;
     		$$invalidate(2, newMessage);
     	}
 
-    	$$self.$capture_state = () => {
-    		return {};
-    	};
+    	$$self.$capture_state = () => ({
+    		apolloClient,
+    		getClient,
+    		query,
+    		Modal,
+    		Content: ProblemModal,
+    		TestModal,
+    		Navbar,
+    		Sidebar: Side,
+    		publish,
+    		grantPermissions,
+    		pubnub,
+    		cookieHandler,
+    		client,
+    		tokens,
+    		Test,
+    		Problem,
+    		handleProblemAdd,
+    		handleTestAdd,
+    		hasJoinedChat,
+    		channels,
+    		username,
+    		newMessage,
+    		messages,
+    		output,
+    		joined,
+    		close,
+    		getCookie: getCookie$1,
+    		userEmail,
+    		sEmails,
+    		userName,
+    		user,
+    		channelName,
+    		changeChannel
+    	});
 
     	$$self.$inject_state = $$props => {
     		if ("hasJoinedChat" in $$props) $$invalidate(0, hasJoinedChat = $$props.hasJoinedChat);
@@ -38561,11 +41136,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		if ("messages" in $$props) messages = $$props.messages;
     		if ("output" in $$props) $$invalidate(3, output = $$props.output);
     		if ("sEmails" in $$props) sEmails = $$props.sEmails;
-    		if ("userName" in $$props) $$invalidate(13, userName = $$props.userName);
+    		if ("userName" in $$props) $$invalidate(7, userName = $$props.userName);
     		if ("channelName" in $$props) $$invalidate(4, channelName = $$props.channelName);
-    		if ("$Test" in $$props) Test.set($Test = $$props.$Test);
-    		if ("$Problem" in $$props) Problem.set($Problem = $$props.$Problem);
     	};
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
 
     	return [
     		hasJoinedChat,
@@ -38573,18 +41150,16 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		newMessage,
     		output,
     		channelName,
-    		$Test,
-    		$Problem,
-    		Test,
-    		Problem,
-    		handleProblemAdd,
-    		handleTestAdd,
     		joined,
     		close,
     		userName,
     		changeChannel,
     		client,
     		tokens,
+    		Test,
+    		Problem,
+    		handleProblemAdd,
+    		handleTestAdd,
     		username,
     		messages,
     		userEmail,
@@ -38597,22 +41172,22 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Admin extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$e, create_fragment$e, safe_not_equal, {}, [-1, -1]);
+    		init(this, options, instance$g, create_fragment$g, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Admin",
     			options,
-    			id: create_fragment$e.name
+    			id: create_fragment$g.name
     		});
     	}
     }
 
-    /* src/routes/Login.svelte generated by Svelte v3.18.1 */
+    /* src/routes/Login.svelte generated by Svelte v3.20.1 */
 
-    const file$c = "src/routes/Login.svelte";
+    const file$d = "src/routes/Login.svelte";
 
-    function create_fragment$f(ctx) {
+    function create_fragment$h(ctx) {
     	let link;
     	let t0;
     	let body;
@@ -38673,52 +41248,52 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			p1.textContent = "Try Out.";
     			attr_dev(link, "href", "https://unpkg.com/tailwindcss@^1.0/dist/tailwind.min.css");
     			attr_dev(link, "rel", "stylesheet");
-    			add_location(link, file$c, 67, 0, 3074);
+    			add_location(link, file$d, 67, 0, 3074);
     			attr_dev(h2, "class", "text-2xl font-semibold text-gray-700 text-center");
-    			add_location(h2, file$c, 81, 8, 3474);
+    			add_location(h2, file$d, 81, 8, 3474);
     			attr_dev(p0, "class", "text-xl text-gray-600 text-center");
-    			add_location(p0, file$c, 84, 8, 3578);
+    			add_location(p0, file$d, 84, 8, 3578);
     			attr_dev(path0, "d", "M36.3425 16.7358H35V16.6667H20V23.3333H29.4192C28.045 27.2142\n                24.3525 30 20 30C14.4775 30 10 25.5225 10 20C10 14.4775 14.4775\n                9.99999 20 9.99999C22.5492 9.99999 24.8683 10.9617 26.6342\n                12.5325L31.3483 7.81833C28.3717 5.04416 24.39 3.33333 20\n                3.33333C10.7958 3.33333 3.33335 10.7958 3.33335 20C3.33335\n                29.2042 10.7958 36.6667 20 36.6667C29.2042 36.6667 36.6667\n                29.2042 36.6667 20C36.6667 18.8825 36.5517 17.7917 36.3425\n                16.7358Z");
     			attr_dev(path0, "fill", "#FFC107");
-    			add_location(path0, file$c, 91, 14, 3922);
+    			add_location(path0, file$d, 91, 14, 3922);
     			attr_dev(path1, "d", "M5.25497 12.2425L10.7308 16.2583C12.2125 12.59 15.8008\n                9.99999 20 9.99999C22.5491 9.99999 24.8683 10.9617 26.6341\n                12.5325L31.3483 7.81833C28.3716 5.04416 24.39 3.33333 20\n                3.33333C13.5983 3.33333 8.04663 6.94749 5.25497 12.2425Z");
     			attr_dev(path1, "fill", "#FF3D00");
-    			add_location(path1, file$c, 101, 14, 4536);
+    			add_location(path1, file$d, 101, 14, 4536);
     			attr_dev(path2, "d", "M20 36.6667C24.305 36.6667 28.2167 35.0192 31.1742\n                32.34L26.0159 27.975C24.3425 29.2425 22.2625 30 20 30C15.665 30\n                11.9842 27.2359 10.5975 23.3784L5.16254 27.5659C7.92087 32.9634\n                13.5225 36.6667 20 36.6667Z");
     			attr_dev(path2, "fill", "#4CAF50");
-    			add_location(path2, file$c, 107, 14, 4886);
+    			add_location(path2, file$d, 107, 14, 4886);
     			attr_dev(path3, "d", "M36.3425 16.7358H35V16.6667H20V23.3333H29.4192C28.7592\n                25.1975 27.56 26.805 26.0133 27.9758C26.0142 27.975 26.015\n                27.975 26.0158 27.9742L31.1742 32.3392C30.8092 32.6708 36.6667\n                28.3333 36.6667 20C36.6667 18.8825 36.5517 17.7917 36.3425\n                16.7358Z");
     			attr_dev(path3, "fill", "#1976D2");
-    			add_location(path3, file$c, 113, 14, 5215);
+    			add_location(path3, file$d, 113, 14, 5215);
     			attr_dev(svg, "class", "h-6 w-6");
     			attr_dev(svg, "viewBox", "0 0 40 40");
-    			add_location(svg, file$c, 90, 12, 3866);
+    			add_location(svg, file$d, 90, 12, 3866);
     			attr_dev(div0, "class", "px-4 py-3");
-    			add_location(div0, file$c, 89, 10, 3830);
+    			add_location(div0, file$d, 89, 10, 3830);
     			attr_dev(h1, "class", "px-4 py-3 w-5/6 text-center text-gray-600 font-bold");
-    			add_location(h1, file$c, 122, 10, 5630);
+    			add_location(h1, file$d, 122, 10, 5630);
     			attr_dev(a, "href", "http://localhost:3000/auth/google");
     			attr_dev(a, "class", "flex items-center justify-center mt-4 text-white rounded-lg\n          shadow-md hover:bg-gray-100");
-    			add_location(a, file$c, 85, 8, 3649);
+    			add_location(a, file$d, 85, 8, 3649);
     			attr_dev(div1, "class", "flex flex-col justify-center md:justify-start w-full p-8 lg:w-1/2\n        m-64 lg:px-32 my-auto pt-8 ");
-    			add_location(div1, file$c, 78, 6, 3342);
+    			add_location(div1, file$d, 78, 6, 3342);
     			attr_dev(div2, "class", "w-full md:w-1/2 flex flex-col");
-    			add_location(div2, file$c, 76, 4, 3291);
+    			add_location(div2, file$d, 76, 4, 3291);
     			attr_dev(img, "alt", "acchi picture");
     			attr_dev(img, "class", "object-cover w-full h-screen hidden md:block");
     			if (img.src !== (img_src_value = "https://source.unsplash.com/IXUM4cJynP0")) attr_dev(img, "src", img_src_value);
-    			add_location(img, file$c, 133, 6, 5861);
+    			add_location(img, file$d, 133, 6, 5861);
     			attr_dev(p1, "class", "line-1 anim-typewriter font-semibold text-gray-900 svelte-1imoluh");
     			set_style(p1, "font-size", "70px");
-    			add_location(p1, file$c, 138, 8, 6049);
+    			add_location(p1, file$d, 138, 8, 6049);
     			attr_dev(div3, "class", "centered svelte-1imoluh");
-    			add_location(div3, file$c, 137, 6, 6018);
+    			add_location(div3, file$d, 137, 6, 6018);
     			attr_dev(div4, "class", "container w-1/2 shadow-2xl svelte-1imoluh");
-    			add_location(div4, file$c, 132, 4, 5814);
+    			add_location(div4, file$d, 132, 4, 5814);
     			attr_dev(div5, "class", "w-full flex flex-wrap");
-    			add_location(div5, file$c, 73, 2, 3223);
+    			add_location(div5, file$d, 73, 2, 3223);
     			attr_dev(body, "class", "bg-white font-family-karla h-screen svelte-1imoluh");
-    			add_location(body, file$c, 71, 0, 3169);
+    			add_location(body, file$d, 71, 0, 3169);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -38762,7 +41337,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$f.name,
+    		id: create_fragment$h.name,
     		type: "component",
     		source: "",
     		ctx
@@ -38771,29 +41346,248 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
+    function myFunction$1() {
+    	location.replace("http://localhost:3000/auth/google");
+    }
+
+    function instance$h($$self, $$props, $$invalidate) {
+    	const writable_props = [];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<Login> was created with unknown prop '${key}'`);
+    	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Login", $$slots, []);
+    	$$self.$capture_state = () => ({ myFunction: myFunction$1 });
+    	return [];
+    }
+
     class Login extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, null, create_fragment$f, safe_not_equal, {});
+    		init(this, options, instance$h, create_fragment$h, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Login",
     			options,
-    			id: create_fragment$f.name
+    			id: create_fragment$h.name
     		});
     	}
     }
 
-    /* src/routes/Problems.svelte generated by Svelte v3.18.1 */
+    /* src/inputTest.svelte generated by Svelte v3.20.1 */
 
-    const { console: console_1$2 } = globals;
-    const file$d = "src/routes/Problems.svelte";
+    const { console: console_1$6 } = globals;
+    const file$e = "src/inputTest.svelte";
 
-    // (122:4) {:catch err}
-    function create_catch_block$2(ctx) {
+    function create_fragment$i(ctx) {
+    	let div0;
     	let t0;
-    	let t1_value = /*err*/ ctx[7] + "";
+    	let div1;
+    	let t1;
+    	let dispose;
+
+    	const block = {
+    		c: function create() {
+    			div0 = element("div");
+    			t0 = space();
+    			div1 = element("div");
+    			t1 = text(/*inputstatus*/ ctx[0]);
+    			attr_dev(div0, "id", "inputEditor");
+    			attr_dev(div0, "class", "editor flex-grow svelte-170ngk4");
+    			add_location(div0, file$e, 72, 0, 2267);
+    			add_location(div1, file$e, 73, 0, 2338);
+    		},
+    		l: function claim(nodes) {
+    			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
+    		},
+    		m: function mount(target, anchor, remount) {
+    			insert_dev(target, div0, anchor);
+    			insert_dev(target, t0, anchor);
+    			insert_dev(target, div1, anchor);
+    			append_dev(div1, t1);
+    			if (remount) dispose();
+    			dispose = listen_dev(div0, "keydown", /*onInput*/ ctx[1], false, false, false);
+    		},
+    		p: function update(ctx, [dirty]) {
+    			if (dirty & /*inputstatus*/ 1) set_data_dev(t1, /*inputstatus*/ ctx[0]);
+    		},
+    		i: noop,
+    		o: noop,
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(div0);
+    			if (detaching) detach_dev(t0);
+    			if (detaching) detach_dev(div1);
+    			dispose();
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_fragment$i.name,
+    		type: "component",
+    		source: "",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    function instance$i($$self, $$props, $$invalidate) {
+    	let { inputChange } = $$props;
+    	let { inputVal } = $$props;
+    	let ieditor;
+    	let test_case = "";
+
+    	onMount(() => {
+    		ace.config.set("basePath", "ace-builds/src-noconflict/");
+    		ieditor = ace.edit("inputEditor");
+
+    		ieditor.setOptions({
+    			enableBasicAutocompletion: true,
+    			enableSnippets: true,
+    			highlightActiveLine: true,
+    			showPrintMargin: false,
+    			theme: "ace/theme/tomorrow_night",
+    			mode: "ace/mode/javascript",
+    			enableLiveAutocompletion: true,
+    			useWorker: false
+    		});
+    	});
+
+    	afterUpdate(() => {
+    		let pos = ieditor.session.selection.toJSON();
+    		ieditor.session.setValue(inputVal);
+    		ieditor.session.selection.fromJSON(pos);
+    	});
+
+    	const onInput = (function onInput() {
+    		let timer;
+
+    		return e => {
+    			clearTimeout(timer);
+
+    			timer = setTimeout(
+    				() => {
+    					test_case = ieditor.getValue();
+    					inputChange(test_case);
+
+    					try {
+    						JSON.parse(test_case);
+    						$$invalidate(0, inputstatus = "Correct");
+    					} catch(err) {
+    						console.log(err.message);
+    						$$invalidate(0, inputstatus = err.message);
+    					}
+    				},
+    				10
+    			);
+    		};
+    	})();
+
+    	try {
+    		JSON.parse(test_case);
+    		inputstatus = "Correct";
+    	} catch(err) {
+    		console.log(err.message);
+    	}
+
+    	const writable_props = ["inputChange", "inputVal"];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$6.warn(`<InputTest> was created with unknown prop '${key}'`);
+    	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("InputTest", $$slots, []);
+
+    	$$self.$set = $$props => {
+    		if ("inputChange" in $$props) $$invalidate(2, inputChange = $$props.inputChange);
+    		if ("inputVal" in $$props) $$invalidate(3, inputVal = $$props.inputVal);
+    	};
+
+    	$$self.$capture_state = () => ({
+    		onMount,
+    		afterUpdate,
+    		beforeUpdate,
+    		inputChange,
+    		inputVal,
+    		ieditor,
+    		test_case,
+    		onInput,
+    		inputstatus
+    	});
+
+    	$$self.$inject_state = $$props => {
+    		if ("inputChange" in $$props) $$invalidate(2, inputChange = $$props.inputChange);
+    		if ("inputVal" in $$props) $$invalidate(3, inputVal = $$props.inputVal);
+    		if ("ieditor" in $$props) ieditor = $$props.ieditor;
+    		if ("test_case" in $$props) test_case = $$props.test_case;
+    		if ("inputstatus" in $$props) $$invalidate(0, inputstatus = $$props.inputstatus);
+    	};
+
+    	let inputstatus;
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
+
+    	 $$invalidate(0, inputstatus = "Corret");
+    	return [inputstatus, onInput, inputChange, inputVal];
+    }
+
+    class InputTest extends SvelteComponentDev {
+    	constructor(options) {
+    		super(options);
+    		init(this, options, instance$i, create_fragment$i, safe_not_equal, { inputChange: 2, inputVal: 3 });
+
+    		dispatch_dev("SvelteRegisterComponent", {
+    			component: this,
+    			tagName: "InputTest",
+    			options,
+    			id: create_fragment$i.name
+    		});
+
+    		const { ctx } = this.$$;
+    		const props = options.props || {};
+
+    		if (/*inputChange*/ ctx[2] === undefined && !("inputChange" in props)) {
+    			console_1$6.warn("<InputTest> was created without expected prop 'inputChange'");
+    		}
+
+    		if (/*inputVal*/ ctx[3] === undefined && !("inputVal" in props)) {
+    			console_1$6.warn("<InputTest> was created without expected prop 'inputVal'");
+    		}
+    	}
+
+    	get inputChange() {
+    		throw new Error("<InputTest>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	set inputChange(value) {
+    		throw new Error("<InputTest>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	get inputVal() {
+    		throw new Error("<InputTest>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	set inputVal(value) {
+    		throw new Error("<InputTest>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+    }
+
+    /* src/routes/Problems.svelte generated by Svelte v3.20.1 */
+
+    const { console: console_1$7 } = globals;
+    const file$f = "src/routes/Problems.svelte";
+
+    // (123:4) {:catch err}
+    function create_catch_block$1(ctx) {
+    	let t0;
+    	let t1_value = /*err*/ ctx[8] + "";
     	let t1;
 
     	const block = {
@@ -38806,7 +41600,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			insert_dev(target, t1, anchor);
     		},
     		p: function update(ctx, dirty) {
-    			if (dirty & /*$problem*/ 2 && t1_value !== (t1_value = /*err*/ ctx[7] + "")) set_data_dev(t1, t1_value);
+    			if (dirty & /*$problem*/ 2 && t1_value !== (t1_value = /*err*/ ctx[8] + "")) set_data_dev(t1, t1_value);
     		},
     		d: function destroy(detaching) {
     			if (detaching) detach_dev(t0);
@@ -38816,9 +41610,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_catch_block$2.name,
+    		id: create_catch_block$1.name,
     		type: "catch",
-    		source: "(122:4) {:catch err}",
+    		source: "(123:4) {:catch err}",
     		ctx
     	});
 
@@ -38826,21 +41620,21 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (53:4) {:then result}
-    function create_then_block$2(ctx) {
+    function create_then_block$1(ctx) {
     	let div3;
     	let div0;
-    	let t0_value = /*result*/ ctx[6].data.problemById.problemName + "";
+    	let t0_value = /*result*/ ctx[7].data.problemById.problemName + "";
     	let t0;
     	let t1;
     	let div1;
     	let t2;
-    	let t3_value = /*result*/ ctx[6].data.problemById.datalimit + "";
+    	let t3_value = /*result*/ ctx[7].data.problemById.datalimit + "";
     	let t3;
     	let t4;
     	let t5;
     	let div2;
     	let t6;
-    	let t7_value = /*result*/ ctx[6].data.problemById.timelimit + "";
+    	let t7_value = /*result*/ ctx[7].data.problemById.timelimit + "";
     	let t7;
     	let t8;
     	let t9;
@@ -38851,7 +41645,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	let label0;
     	let t11;
     	let p0;
-    	let t12_value = /*result*/ ctx[6].data.problemById.description + "";
+    	let t12_value = /*result*/ ctx[7].data.problemById.description + "";
     	let t12;
     	let t13;
     	let div5;
@@ -38870,12 +41664,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	let label3;
     	let t21;
     	let p1;
-    	let t22_value = /*result*/ ctx[6].data.problemById.tags + "";
+    	let t22_value = /*result*/ ctx[7].data.problemById.tags + "";
     	let t22;
     	let t23;
     	let div12;
     	let div11;
     	let button0;
+    	let t24;
+    	let button0_lick_value;
     	let t25;
     	let button1;
     	let dispose;
@@ -38928,64 +41724,65 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			div12 = element("div");
     			div11 = element("div");
     			button0 = element("button");
-    			button0.textContent = "Edit";
+    			t24 = text("Edit");
     			t25 = space();
     			button1 = element("button");
     			button1.textContent = "Delete";
     			attr_dev(div0, "class", "font-bold text-2xl text-elight mx-auto");
-    			add_location(div0, file$d, 54, 8, 1843);
+    			add_location(div0, file$f, 54, 8, 1908);
     			attr_dev(div1, "class", " text-xl text-elight mx-auto");
-    			add_location(div1, file$d, 57, 8, 1967);
+    			add_location(div1, file$f, 57, 8, 2032);
     			attr_dev(div2, "class", " text-xl text-elight mx-auto");
-    			add_location(div2, file$d, 60, 8, 2096);
+    			add_location(div2, file$f, 60, 8, 2161);
     			attr_dev(div3, "class", "mx-auto mt-8 max-w-xl flex flex-col");
-    			add_location(div3, file$d, 53, 6, 1785);
+    			add_location(div3, file$f, 53, 6, 1850);
     			attr_dev(label0, "class", " text-2xl text-elight mb-3 my-2");
-    			add_location(label0, file$d, 69, 14, 2431);
+    			add_location(label0, file$f, 69, 14, 2496);
     			attr_dev(p0, "class", "text-xl text-elight");
-    			add_location(p0, file$d, 70, 14, 2512);
+    			add_location(p0, file$f, 70, 14, 2577);
     			attr_dev(div4, "class", "w-full h-full px-3 flex flex-col");
-    			add_location(div4, file$d, 68, 12, 2370);
+    			add_location(div4, file$f, 68, 12, 2435);
     			attr_dev(label1, "class", " text-2xl text-elight mb-3 my-2");
-    			add_location(label1, file$d, 76, 14, 2710);
-    			textarea0.value = textarea0_value_value = JSON.parse(/*result*/ ctx[6].data.problemById.problemTests);
+    			add_location(label1, file$f, 76, 14, 2775);
+    			textarea0.value = textarea0_value_value = JSON.parse(/*result*/ ctx[7].data.problemById.problemTests);
     			attr_dev(textarea0, "class", " w-full bg-edark flex-grow text-elight text-2xl border\n                rounded py-3 px-4 mb-3 leading-tight focus:outline-none\n                focus:border-white h-48 resize-none");
     			attr_dev(textarea0, "id", "message");
     			textarea0.readOnly = true;
-    			add_location(textarea0, file$d, 77, 14, 2789);
+    			add_location(textarea0, file$f, 77, 14, 2854);
     			attr_dev(div5, "class", "w-full h-full px-3 flex flex-col");
-    			add_location(div5, file$d, 75, 12, 2649);
+    			add_location(div5, file$f, 75, 12, 2714);
     			attr_dev(label2, "class", " text-2xl text-elight mb-3 my-2");
-    			add_location(label2, file$d, 86, 14, 3224);
-    			textarea1.value = textarea1_value_value = /*result*/ ctx[6].data.problemById.solution;
+    			add_location(label2, file$f, 86, 14, 3289);
+    			textarea1.value = textarea1_value_value = /*result*/ ctx[7].data.problemById.solution;
     			attr_dev(textarea1, "class", " flex-grow w-full bg-edark text-elight text-2xl border\n                rounded py-3 px-4 mb-3 leading-tight focus:outline-none\n                focus:border-white h-48 resize-none");
     			attr_dev(textarea1, "id", "message");
     			textarea1.readOnly = true;
-    			add_location(textarea1, file$d, 87, 14, 3302);
+    			add_location(textarea1, file$f, 87, 14, 3367);
     			attr_dev(div6, "class", "flex flex-col w-full h-full px-3");
-    			add_location(div6, file$d, 85, 12, 3163);
+    			add_location(div6, file$f, 85, 12, 3228);
     			attr_dev(label3, "class", " text-2xl text-elight mb-3 my-2");
-    			add_location(label3, file$d, 97, 14, 3722);
+    			add_location(label3, file$f, 97, 14, 3787);
     			attr_dev(p1, "class", "text-xl text-elight");
-    			add_location(p1, file$d, 98, 14, 3796);
+    			add_location(p1, file$f, 98, 14, 3861);
     			attr_dev(div7, "class", "w-full h-full px-3 flex flex-col");
-    			add_location(div7, file$d, 96, 12, 3661);
+    			add_location(div7, file$f, 96, 12, 3726);
     			attr_dev(div8, "class", "px-12 py-8");
-    			add_location(div8, file$d, 67, 10, 2333);
+    			add_location(div8, file$f, 67, 10, 2398);
     			attr_dev(div9, "class", "rounded shadow-lg");
-    			add_location(div9, file$d, 66, 8, 2291);
+    			add_location(div9, file$f, 66, 8, 2356);
     			attr_dev(div10, "class", "bg-dark max-w-6xl mt-12 mx-auto");
-    			add_location(div10, file$d, 64, 6, 2236);
+    			add_location(div10, file$f, 64, 6, 2301);
+    			attr_dev(button0, "lick", button0_lick_value = /*func*/ ctx[6]);
     			attr_dev(button0, "class", "savebutton hover:bg-white hover:text-edark font-bold py-2\n            px-4 border rounded svelte-wdit4e");
-    			add_location(button0, file$d, 105, 10, 4034);
+    			add_location(button0, file$f, 105, 10, 4099);
     			attr_dev(button1, "class", "savebutton hover:bg-white hover:text-edark font-bold py-2\n            px-4 border rounded svelte-wdit4e");
-    			add_location(button1, file$d, 113, 10, 4345);
+    			add_location(button1, file$f, 114, 10, 4411);
     			attr_dev(div11, "class", "float-right ");
-    			add_location(div11, file$d, 104, 8, 3997);
+    			add_location(div11, file$f, 104, 8, 4062);
     			attr_dev(div12, "class", "max-w-6xl my-4 mb-32 flex flex-col mx-auto");
-    			add_location(div12, file$d, 103, 6, 3932);
+    			add_location(div12, file$f, 103, 6, 3997);
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, div3, anchor);
     			append_dev(div3, div0);
     			append_dev(div0, t0);
@@ -39028,29 +41825,35 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			insert_dev(target, div12, anchor);
     			append_dev(div12, div11);
     			append_dev(div11, button0);
+    			append_dev(button0, t24);
     			append_dev(div11, t25);
     			append_dev(div11, button1);
+    			if (remount) run_all(dispose);
 
     			dispose = [
-    				listen_dev(button0, "click", /*click_handler*/ ctx[5], false, false, false),
+    				listen_dev(button0, "c", /*c_handler*/ ctx[5], false, false, false),
     				listen_dev(button1, "click", /*deleteProblemHandler*/ ctx[3], false, false, false)
     			];
     		},
     		p: function update(ctx, dirty) {
-    			if (dirty & /*$problem*/ 2 && t0_value !== (t0_value = /*result*/ ctx[6].data.problemById.problemName + "")) set_data_dev(t0, t0_value);
-    			if (dirty & /*$problem*/ 2 && t3_value !== (t3_value = /*result*/ ctx[6].data.problemById.datalimit + "")) set_data_dev(t3, t3_value);
-    			if (dirty & /*$problem*/ 2 && t7_value !== (t7_value = /*result*/ ctx[6].data.problemById.timelimit + "")) set_data_dev(t7, t7_value);
-    			if (dirty & /*$problem*/ 2 && t12_value !== (t12_value = /*result*/ ctx[6].data.problemById.description + "")) set_data_dev(t12, t12_value);
+    			if (dirty & /*$problem*/ 2 && t0_value !== (t0_value = /*result*/ ctx[7].data.problemById.problemName + "")) set_data_dev(t0, t0_value);
+    			if (dirty & /*$problem*/ 2 && t3_value !== (t3_value = /*result*/ ctx[7].data.problemById.datalimit + "")) set_data_dev(t3, t3_value);
+    			if (dirty & /*$problem*/ 2 && t7_value !== (t7_value = /*result*/ ctx[7].data.problemById.timelimit + "")) set_data_dev(t7, t7_value);
+    			if (dirty & /*$problem*/ 2 && t12_value !== (t12_value = /*result*/ ctx[7].data.problemById.description + "")) set_data_dev(t12, t12_value);
 
-    			if (dirty & /*$problem*/ 2 && textarea0_value_value !== (textarea0_value_value = JSON.parse(/*result*/ ctx[6].data.problemById.problemTests))) {
+    			if (dirty & /*$problem*/ 2 && textarea0_value_value !== (textarea0_value_value = JSON.parse(/*result*/ ctx[7].data.problemById.problemTests))) {
     				prop_dev(textarea0, "value", textarea0_value_value);
     			}
 
-    			if (dirty & /*$problem*/ 2 && textarea1_value_value !== (textarea1_value_value = /*result*/ ctx[6].data.problemById.solution)) {
+    			if (dirty & /*$problem*/ 2 && textarea1_value_value !== (textarea1_value_value = /*result*/ ctx[7].data.problemById.solution)) {
     				prop_dev(textarea1, "value", textarea1_value_value);
     			}
 
-    			if (dirty & /*$problem*/ 2 && t22_value !== (t22_value = /*result*/ ctx[6].data.problemById.tags + "")) set_data_dev(t22, t22_value);
+    			if (dirty & /*$problem*/ 2 && t22_value !== (t22_value = /*result*/ ctx[7].data.problemById.tags + "")) set_data_dev(t22, t22_value);
+
+    			if (dirty & /*currentRoute*/ 1 && button0_lick_value !== (button0_lick_value = /*func*/ ctx[6])) {
+    				attr_dev(button0, "lick", button0_lick_value);
+    			}
     		},
     		d: function destroy(detaching) {
     			if (detaching) detach_dev(div3);
@@ -39064,7 +41867,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_then_block$2.name,
+    		id: create_then_block$1.name,
     		type: "then",
     		source: "(53:4) {:then result}",
     		ctx
@@ -39074,7 +41877,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (51:21)        Loading...     {:then result}
-    function create_pending_block$2(ctx) {
+    function create_pending_block$1(ctx) {
     	let t;
 
     	const block = {
@@ -39092,7 +41895,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_pending_block$2.name,
+    		id: create_pending_block$1.name,
     		type: "pending",
     		source: "(51:21)        Loading...     {:then result}",
     		ctx
@@ -39101,26 +41904,28 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function create_fragment$g(ctx) {
+    function create_fragment$j(ctx) {
     	let link;
     	let t0;
     	let div1;
     	let header;
     	let t1;
+    	let t2;
     	let div0;
     	let promise;
     	let current;
     	const navbar = new Navbar({ $$inline: true });
+    	const sidebar = new Side({ $$inline: true });
 
     	let info = {
     		ctx,
     		current: null,
     		token: null,
-    		pending: create_pending_block$2,
-    		then: create_then_block$2,
-    		catch: create_catch_block$2,
-    		value: 6,
-    		error: 7
+    		pending: create_pending_block$1,
+    		then: create_then_block$1,
+    		catch: create_catch_block$1,
+    		value: 7,
+    		error: 8
     	};
 
     	handle_promise(promise = /*$problem*/ ctx[1], info);
@@ -39133,16 +41938,18 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			header = element("header");
     			create_component(navbar.$$.fragment);
     			t1 = space();
+    			create_component(sidebar.$$.fragment);
+    			t2 = space();
     			div0 = element("div");
     			info.block.c();
     			attr_dev(link, "href", "https://unpkg.com/tailwindcss@^1.0/dist/tailwind.min.css");
     			attr_dev(link, "rel", "stylesheet");
-    			add_location(link, file$d, 41, 0, 1480);
-    			add_location(header, file$d, 46, 2, 1632);
+    			add_location(link, file$f, 40, 0, 1529);
+    			add_location(header, file$f, 45, 2, 1681);
     			attr_dev(div0, "class", "bg-edark flex flex-col overflow-auto");
-    			add_location(div0, file$d, 49, 2, 1670);
+    			add_location(div0, file$f, 49, 2, 1735);
     			attr_dev(div1, "class", "bg-edark h-full flex flex-col box-border");
-    			add_location(div1, file$d, 45, 0, 1575);
+    			add_location(div1, file$f, 44, 0, 1624);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -39153,7 +41960,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			insert_dev(target, div1, anchor);
     			append_dev(div1, header);
     			mount_component(navbar, header, null);
-    			append_dev(div1, t1);
+    			append_dev(header, t1);
+    			mount_component(sidebar, header, null);
+    			append_dev(div1, t2);
     			append_dev(div1, div0);
     			info.block.m(div0, info.anchor = null);
     			info.mount = () => div0;
@@ -39166,17 +41975,19 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     			if (dirty & /*$problem*/ 2 && promise !== (promise = /*$problem*/ ctx[1]) && handle_promise(promise, info)) ; else {
     				const child_ctx = ctx.slice();
-    				child_ctx[6] = info.resolved;
+    				child_ctx[7] = info.resolved;
     				info.block.p(child_ctx, dirty);
     			}
     		},
     		i: function intro(local) {
     			if (current) return;
     			transition_in(navbar.$$.fragment, local);
+    			transition_in(sidebar.$$.fragment, local);
     			current = true;
     		},
     		o: function outro(local) {
     			transition_out(navbar.$$.fragment, local);
+    			transition_out(sidebar.$$.fragment, local);
     			current = false;
     		},
     		d: function destroy(detaching) {
@@ -39184,6 +41995,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			if (detaching) detach_dev(t0);
     			if (detaching) detach_dev(div1);
     			destroy_component(navbar);
+    			destroy_component(sidebar);
     			info.block.d();
     			info.token = null;
     			info = null;
@@ -39192,7 +42004,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$g.name,
+    		id: create_fragment$j.name,
     		type: "component",
     		source: "",
     		ctx
@@ -39201,7 +42013,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$f($$self, $$props, $$invalidate) {
+    function instance$j($$self, $$props, $$invalidate) {
     	let $problem;
     	let { currentRoute } = $$props;
     	console.log(currentRoute);
@@ -39237,10 +42049,17 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	const writable_props = ["currentRoute"];
 
     	Object.keys($$props).forEach(key => {
-    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$2.warn(`<Problems> was created with unknown prop '${key}'`);
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$7.warn(`<Problems> was created with unknown prop '${key}'`);
     	});
 
-    	const click_handler = () => {
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Problems", $$slots, []);
+
+    	function c_handler(event) {
+    		bubble($$self, event);
+    	}
+
+    	const func = () => {
     		location.replace(`http://localhost:5000/editProblem/${currentRoute.namedParams.id}`);
     	};
 
@@ -39248,35 +42067,49 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		if ("currentRoute" in $$props) $$invalidate(0, currentRoute = $$props.currentRoute);
     	};
 
-    	$$self.$capture_state = () => {
-    		return { currentRoute, $problem };
-    	};
+    	$$self.$capture_state = () => ({
+    		apolloClient,
+    		getClient,
+    		query,
+    		mutate,
+    		Navbar,
+    		Sidebar: Side,
+    		InputWindow: InputTest,
+    		currentRoute,
+    		client,
+    		problem,
+    		deleteProblemHandler,
+    		$problem
+    	});
 
     	$$self.$inject_state = $$props => {
     		if ("currentRoute" in $$props) $$invalidate(0, currentRoute = $$props.currentRoute);
-    		if ("$problem" in $$props) problem.set($problem = $$props.$problem);
     	};
 
-    	return [currentRoute, $problem, problem, deleteProblemHandler, client, click_handler];
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
+
+    	return [currentRoute, $problem, problem, deleteProblemHandler, client, c_handler, func];
     }
 
     class Problems extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$f, create_fragment$g, safe_not_equal, { currentRoute: 0 });
+    		init(this, options, instance$j, create_fragment$j, safe_not_equal, { currentRoute: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Problems",
     			options,
-    			id: create_fragment$g.name
+    			id: create_fragment$j.name
     		});
 
     		const { ctx } = this.$$;
     		const props = options.props || {};
 
     		if (/*currentRoute*/ ctx[0] === undefined && !("currentRoute" in props)) {
-    			console_1$2.warn("<Problems> was created without expected prop 'currentRoute'");
+    			console_1$7.warn("<Problems> was created without expected prop 'currentRoute'");
     		}
     	}
 
@@ -39289,10 +42122,10 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	}
     }
 
-    /* src/routes/Tests.svelte generated by Svelte v3.18.1 */
+    /* src/routes/Tests.svelte generated by Svelte v3.20.1 */
 
-    const { console: console_1$3 } = globals;
-    const file$e = "src/routes/Tests.svelte";
+    const { console: console_1$8 } = globals;
+    const file$g = "src/routes/Tests.svelte";
 
     function get_each_context$3(ctx, list, i) {
     	const child_ctx = ctx.slice();
@@ -39307,7 +42140,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (179:4) {:catch err}
-    function create_catch_block_1$1(ctx) {
+    function create_catch_block_1(ctx) {
     	let t0;
     	let t1_value = /*err*/ ctx[9] + "";
     	let t1;
@@ -39334,7 +42167,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_catch_block_1$1.name,
+    		id: create_catch_block_1.name,
     		type: "catch",
     		source: "(179:4) {:catch err}",
     		ctx
@@ -39344,7 +42177,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (80:4) {:then result}
-    function create_then_block$3(ctx) {
+    function create_then_block$2(ctx) {
     	let t0;
     	let div16;
     	let div13;
@@ -39397,6 +42230,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	let dispose;
     	const navbar = new Navbar({ $$inline: true });
     	let each_value_1 = /*result*/ ctx[8].data.testById.problems;
+    	validate_each_argument(each_value_1);
     	let each_blocks = [];
 
     	for (let i = 0; i < each_value_1.length; i += 1) {
@@ -39407,9 +42241,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		ctx,
     		current: null,
     		token: null,
-    		pending: create_pending_block_1$1,
-    		then: create_then_block_1$1,
-    		catch: create_catch_block$3,
+    		pending: create_pending_block_1,
+    		then: create_then_block_1,
+    		catch: create_catch_block$2,
     		value: 8,
     		error: 9
     	};
@@ -39480,61 +42314,61 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			button2 = element("button");
     			button2.textContent = "Delete";
     			attr_dev(br0, "class", "my-24");
-    			add_location(br0, file$e, 89, 16, 3104);
+    			add_location(br0, file$g, 89, 16, 3104);
     			attr_dev(div0, "class", "font-bold text-3xl mb-2");
-    			add_location(div0, file$e, 93, 20, 3252);
+    			add_location(div0, file$g, 93, 20, 3252);
     			attr_dev(div1, "class", "flex-initial text-center px-4 py-2 m-2");
-    			add_location(div1, file$e, 92, 18, 3179);
+    			add_location(div1, file$g, 92, 18, 3179);
     			attr_dev(div2, "class", "flex");
-    			add_location(div2, file$e, 91, 16, 3142);
+    			add_location(div2, file$g, 91, 16, 3142);
     			attr_dev(p0, "class", "font-bold text-2xl mb-2");
-    			add_location(p0, file$e, 99, 16, 3436);
+    			add_location(p0, file$g, 99, 16, 3436);
     			attr_dev(p1, "class", "text-gray-700 text-2xl");
-    			add_location(p1, file$e, 100, 16, 3510);
-    			add_location(br1, file$e, 103, 16, 3639);
-    			add_location(br2, file$e, 104, 16, 3662);
+    			add_location(p1, file$g, 100, 16, 3510);
+    			add_location(br1, file$g, 103, 16, 3639);
+    			add_location(br2, file$g, 104, 16, 3662);
     			attr_dev(p2, "class", "font-bold text-2xl mb-2");
-    			add_location(p2, file$e, 105, 16, 3685);
-    			add_location(ul, file$e, 106, 16, 3751);
+    			add_location(p2, file$g, 105, 16, 3685);
+    			add_location(ul, file$g, 106, 16, 3751);
     			attr_dev(div3, "class", "px-12 py-8");
-    			add_location(div3, file$e, 87, 14, 3062);
+    			add_location(div3, file$g, 87, 14, 3062);
     			attr_dev(div4, "class", "max-w-auto rounded overflow-hidden shadow-lg");
-    			add_location(div4, file$e, 86, 12, 2989);
+    			add_location(div4, file$g, 86, 12, 2989);
     			attr_dev(div5, "class", "p-8 mx-2 mt-24 items-center");
-    			add_location(div5, file$e, 85, 10, 2935);
+    			add_location(div5, file$g, 85, 10, 2935);
     			attr_dev(div6, "class", "font-bold text-3xl mb-2");
-    			add_location(div6, file$e, 129, 22, 4550);
+    			add_location(div6, file$g, 129, 22, 4550);
     			attr_dev(div7, "class", "flex-initial text-center px-4 py-2 m-2");
-    			add_location(div7, file$e, 128, 20, 4475);
+    			add_location(div7, file$g, 128, 20, 4475);
     			attr_dev(div8, "class", "flex");
-    			add_location(div8, file$e, 127, 18, 4436);
-    			add_location(ol, file$e, 132, 18, 4679);
+    			add_location(div8, file$g, 127, 18, 4436);
+    			add_location(ol, file$g, 132, 18, 4679);
     			attr_dev(div9, "class", "px-6 py-4");
-    			add_location(div9, file$e, 126, 16, 4394);
+    			add_location(div9, file$g, 126, 16, 4394);
     			attr_dev(div10, "class", "max-w-auto rounded overflow-hidden shadow-lg");
-    			add_location(div10, file$e, 125, 14, 4319);
+    			add_location(div10, file$g, 125, 14, 4319);
     			attr_dev(div11, "class", "p-8 mx-2 mt-24 items-center");
-    			add_location(div11, file$e, 124, 12, 4263);
+    			add_location(div11, file$g, 124, 12, 4263);
     			attr_dev(div12, "class", "w-1/2 h-12");
-    			add_location(div12, file$e, 123, 10, 4226);
+    			add_location(div12, file$g, 123, 10, 4226);
     			attr_dev(div13, "class", "h-12 w-1/2");
-    			add_location(div13, file$e, 83, 8, 2899);
+    			add_location(div13, file$g, 83, 8, 2899);
     			attr_dev(button0, "class", "savebutton bg-red-500 hover:bg-red-700 text-white font-bold\n              py-2 px-4 border border-red-700 rounded svelte-whjnru");
-    			add_location(button0, file$e, 152, 12, 5322);
+    			add_location(button0, file$g, 152, 12, 5322);
     			attr_dev(button1, "class", "bg-red-500 hover:bg-red-700 text-white font-bold py-2\n                px-4 border border-red-700 rounded");
-    			add_location(button1, file$e, 161, 14, 5746);
+    			add_location(button1, file$g, 161, 14, 5746);
     			attr_dev(a, "href", a_href_value = "http://localhost:5000/sendtest/" + /*result*/ ctx[8].data.testById.id);
-    			add_location(a, file$e, 160, 12, 5664);
+    			add_location(a, file$g, 160, 12, 5664);
     			attr_dev(button2, "class", "deleteButton bg-red-500 hover:bg-red-700 text-white\n              font-bold py-2 px-4 border border-red-700 rounded svelte-whjnru");
-    			add_location(button2, file$e, 167, 12, 5963);
+    			add_location(button2, file$g, 167, 12, 5963);
     			attr_dev(div14, "class", "flex buttonbox svelte-whjnru");
-    			add_location(div14, file$e, 151, 10, 5281);
+    			add_location(div14, file$g, 151, 10, 5281);
     			attr_dev(div15, "class", "px-4 py-2");
-    			add_location(div15, file$e, 150, 8, 5247);
+    			add_location(div15, file$g, 150, 8, 5247);
     			attr_dev(div16, "class", "flex mb-4 h-12");
-    			add_location(div16, file$e, 82, 6, 2862);
+    			add_location(div16, file$g, 82, 6, 2862);
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			mount_component(navbar, target, anchor);
     			insert_dev(target, t0, anchor);
     			insert_dev(target, div16, anchor);
@@ -39589,6 +42423,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			append_dev(div14, t19);
     			append_dev(div14, button2);
     			current = true;
+    			if (remount) run_all(dispose);
 
     			dispose = [
     				listen_dev(button0, "click", click_handler, false, false, false),
@@ -39602,6 +42437,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     			if (dirty & /*$test*/ 1) {
     				each_value_1 = /*result*/ ctx[8].data.testById.problems;
+    				validate_each_argument(each_value_1);
     				let i;
 
     				for (i = 0; i < each_value_1.length; i += 1) {
@@ -39658,7 +42494,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_then_block$3.name,
+    		id: create_then_block$2.name,
     		type: "then",
     		source: "(80:4) {:then result}",
     		ctx
@@ -39684,9 +42520,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			t1 = space();
     			attr_dev(a, "target", "_blank");
     			attr_dev(a, "href", a_href_value = "http://localhost:5000/problem/" + /*problem*/ ctx[12].id);
-    			add_location(a, file$e, 109, 22, 3891);
+    			add_location(a, file$g, 109, 22, 3891);
     			attr_dev(li, "class", "text-xl mb-2");
-    			add_location(li, file$e, 108, 20, 3843);
+    			add_location(li, file$g, 108, 20, 3843);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, li, anchor);
@@ -39718,7 +42554,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (142:20) {:catch err}
-    function create_catch_block$3(ctx) {
+    function create_catch_block$2(ctx) {
     	let t0;
     	let t1_value = /*err*/ ctx[9] + "";
     	let t1;
@@ -39743,7 +42579,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_catch_block$3.name,
+    		id: create_catch_block$2.name,
     		type: "catch",
     		source: "(142:20) {:catch err}",
     		ctx
@@ -39753,9 +42589,10 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (136:20) {:then result}
-    function create_then_block_1$1(ctx) {
+    function create_then_block_1(ctx) {
     	let each_1_anchor;
     	let each_value = /*result*/ ctx[8].data.getAttempt;
+    	validate_each_argument(each_value);
     	let each_blocks = [];
 
     	for (let i = 0; i < each_value.length; i += 1) {
@@ -39780,6 +42617,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		p: function update(ctx, dirty) {
     			if (dirty & /*$attempt*/ 2) {
     				each_value = /*result*/ ctx[8].data.getAttempt;
+    				validate_each_argument(each_value);
     				let i;
 
     				for (i = 0; i < each_value.length; i += 1) {
@@ -39809,7 +42647,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_then_block_1$1.name,
+    		id: create_then_block_1.name,
     		type: "then",
     		source: "(136:20) {:then result}",
     		ctx
@@ -39837,8 +42675,8 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			t1 = text(" :- ");
     			t2 = text(t2_value);
     			t3 = space();
-    			add_location(li, file$e, 138, 26, 4912);
-    			add_location(label, file$e, 137, 24, 4878);
+    			add_location(li, file$g, 138, 26, 4912);
+    			add_location(label, file$g, 137, 24, 4878);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, label, anchor);
@@ -39869,7 +42707,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (134:37)                        Loading...                     {:then result}
-    function create_pending_block_1$1(ctx) {
+    function create_pending_block_1(ctx) {
     	let t;
 
     	const block = {
@@ -39887,7 +42725,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_pending_block_1$1.name,
+    		id: create_pending_block_1.name,
     		type: "pending",
     		source: "(134:37)                        Loading...                     {:then result}",
     		ctx
@@ -39897,7 +42735,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (78:18)        Loading ...     {:then result}
-    function create_pending_block$3(ctx) {
+    function create_pending_block$2(ctx) {
     	let t;
 
     	const block = {
@@ -39917,7 +42755,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_pending_block$3.name,
+    		id: create_pending_block$2.name,
     		type: "pending",
     		source: "(78:18)        Loading ...     {:then result}",
     		ctx
@@ -39926,7 +42764,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function create_fragment$h(ctx) {
+    function create_fragment$k(ctx) {
     	let link;
     	let t;
     	let body;
@@ -39938,9 +42776,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		ctx,
     		current: null,
     		token: null,
-    		pending: create_pending_block$3,
-    		then: create_then_block$3,
-    		catch: create_catch_block_1$1,
+    		pending: create_pending_block$2,
+    		then: create_then_block$2,
+    		catch: create_catch_block_1,
     		value: 8,
     		error: 9,
     		blocks: [,,,]
@@ -39957,9 +42795,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			info.block.c();
     			attr_dev(link, "href", "https://unpkg.com/tailwindcss@^1.0/dist/tailwind.min.css");
     			attr_dev(link, "rel", "stylesheet");
-    			add_location(link, file$e, 72, 0, 2621);
-    			add_location(div, file$e, 76, 2, 2724);
-    			add_location(body, file$e, 75, 0, 2715);
+    			add_location(link, file$g, 72, 0, 2621);
+    			add_location(div, file$g, 76, 2, 2724);
+    			add_location(body, file$g, 75, 0, 2715);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -40009,7 +42847,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$h.name,
+    		id: create_fragment$k.name,
     		type: "component",
     		source: "",
     		ctx
@@ -40018,7 +42856,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$g($$self, $$props, $$invalidate) {
+    function instance$k($$self, $$props, $$invalidate) {
     	let $test;
     	let $attempt;
     	let { currentRoute } = $$props;
@@ -40056,8 +42894,11 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	const writable_props = ["currentRoute"];
 
     	Object.keys($$props).forEach(key => {
-    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$3.warn(`<Tests> was created with unknown prop '${key}'`);
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$8.warn(`<Tests> was created with unknown prop '${key}'`);
     	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Tests", $$slots, []);
 
     	const click_handler = result => {
     		location.replace(`http://localhost:5000/editTest/${result.data.testById.id}`);
@@ -40067,15 +42908,28 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		if ("currentRoute" in $$props) $$invalidate(5, currentRoute = $$props.currentRoute);
     	};
 
-    	$$self.$capture_state = () => {
-    		return { currentRoute, $test, $attempt };
-    	};
+    	$$self.$capture_state = () => ({
+    		apolloClient,
+    		getClient,
+    		query,
+    		mutate,
+    		Navbar,
+    		currentRoute,
+    		client,
+    		test,
+    		attempt,
+    		deleteTestHandler,
+    		$test,
+    		$attempt
+    	});
 
     	$$self.$inject_state = $$props => {
     		if ("currentRoute" in $$props) $$invalidate(5, currentRoute = $$props.currentRoute);
-    		if ("$test" in $$props) test.set($test = $$props.$test);
-    		if ("$attempt" in $$props) attempt.set($attempt = $$props.$attempt);
     	};
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
 
     	return [
     		$test,
@@ -40092,20 +42946,20 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Tests extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$g, create_fragment$h, safe_not_equal, { currentRoute: 5 });
+    		init(this, options, instance$k, create_fragment$k, safe_not_equal, { currentRoute: 5 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Tests",
     			options,
-    			id: create_fragment$h.name
+    			id: create_fragment$k.name
     		});
 
     		const { ctx } = this.$$;
     		const props = options.props || {};
 
     		if (/*currentRoute*/ ctx[5] === undefined && !("currentRoute" in props)) {
-    			console_1$3.warn("<Tests> was created without expected prop 'currentRoute'");
+    			console_1$8.warn("<Tests> was created without expected prop 'currentRoute'");
     		}
     	}
 
@@ -40118,13 +42972,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	}
     }
 
-    /* src/routes/send_test.svelte generated by Svelte v3.18.1 */
+    /* src/routes/send_test.svelte generated by Svelte v3.20.1 */
 
-    const { console: console_1$4 } = globals;
-    const file$f = "src/routes/send_test.svelte";
+    const { console: console_1$9 } = globals;
+    const file$h = "src/routes/send_test.svelte";
 
     // (151:8) {:catch err}
-    function create_catch_block$4(ctx) {
+    function create_catch_block$3(ctx) {
     	let t0;
     	let t1_value = /*err*/ ctx[9] + "";
     	let t1;
@@ -40149,7 +43003,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_catch_block$4.name,
+    		id: create_catch_block$3.name,
     		type: "catch",
     		source: "(151:8) {:catch err}",
     		ctx
@@ -40159,7 +43013,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (82:8) {:then result}
-    function create_then_block$4(ctx) {
+    function create_then_block$3(ctx) {
     	let div7;
     	let div6;
     	let div2;
@@ -40212,45 +43066,45 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			button.textContent = "Send Test";
     			attr_dev(label0, "class", "block text-gray-500 font-bold md:text-right mb-1\n                    md:mb-0 pr-4");
     			attr_dev(label0, "for", "inline-full-name");
-    			add_location(label0, file$f, 87, 18, 3157);
+    			add_location(label0, file$h, 87, 18, 3157);
     			attr_dev(div0, "class", "md:w-1/5");
-    			add_location(div0, file$f, 86, 16, 3116);
+    			add_location(div0, file$h, 86, 16, 3116);
     			attr_dev(input0, "class", "bg-gray-200 appearance-none border-2 border-gray-200\n                    rounded w-full py-2 px-4 text-gray-700 leading-tight\n                    focus:outline-none focus:bg-white focus:border-purple-500");
     			attr_dev(input0, "id", "inline-full-name");
     			attr_dev(input0, "type", "text");
     			input0.value = input0_value_value = "localhost:5000/givetest/" + /*result*/ ctx[8].data.getToken.token;
     			input0.readOnly = true;
-    			add_location(input0, file$f, 95, 18, 3455);
+    			add_location(input0, file$h, 95, 18, 3455);
     			attr_dev(div1, "class", "md:w-3/5");
-    			add_location(div1, file$f, 94, 16, 3414);
+    			add_location(div1, file$h, 94, 16, 3414);
     			attr_dev(div2, "class", "md:flex md:items-center mb-6");
-    			add_location(div2, file$f, 85, 14, 3057);
+    			add_location(div2, file$h, 85, 14, 3057);
     			attr_dev(label1, "class", "block text-gray-500 font-bold md:text-right mb-1\n                    md:mb-0 pr-4");
     			attr_dev(label1, "for", "inline-full-name");
-    			add_location(label1, file$f, 107, 18, 4039);
+    			add_location(label1, file$h, 107, 18, 4039);
     			attr_dev(div3, "class", "md:w-1/5");
-    			add_location(div3, file$f, 106, 16, 3998);
+    			add_location(div3, file$h, 106, 16, 3998);
     			attr_dev(input1, "class", "bg-gray-200 appearance-none border-2 border-gray-200\n                    rounded w-full py-2 px-4 text-gray-700 leading-tight\n                    focus:outline-none focus:bg-white focus:border-purple-500");
     			attr_dev(input1, "id", "inline-full-name");
     			attr_dev(input1, "type", "text");
     			attr_dev(input1, "placeholder", "Enter Email");
-    			add_location(input1, file$f, 115, 18, 4333);
+    			add_location(input1, file$h, 115, 18, 4333);
     			attr_dev(div4, "class", "md:w-3/5");
-    			add_location(div4, file$f, 114, 16, 4292);
+    			add_location(div4, file$h, 114, 16, 4292);
     			attr_dev(div5, "class", "md:flex md:items-center mb-6");
-    			add_location(div5, file$f, 105, 14, 3939);
+    			add_location(div5, file$h, 105, 14, 3939);
     			attr_dev(div6, "class", "max-w-auto rounded overflow-hidden shadow-lg");
-    			add_location(div6, file$f, 84, 12, 2984);
+    			add_location(div6, file$h, 84, 12, 2984);
     			attr_dev(div7, "class", "p-8 mx-2 mt-24 items-center");
-    			add_location(div7, file$f, 83, 10, 2930);
+    			add_location(div7, file$h, 83, 10, 2930);
     			attr_dev(button, "class", "bg-red-500 hover:bg-red-700 text-white font-bold py-2\n                px-4 border border-red-700 rounded");
-    			add_location(button, file$f, 129, 14, 4903);
+    			add_location(button, file$h, 129, 14, 4903);
     			attr_dev(div8, "class", "flex buttonbox svelte-1icsd5l");
-    			add_location(div8, file$f, 128, 12, 4860);
+    			add_location(div8, file$h, 128, 12, 4860);
     			attr_dev(div9, "class", "px-4 py-2");
-    			add_location(div9, file$f, 127, 10, 4824);
+    			add_location(div9, file$h, 127, 10, 4824);
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, div7, anchor);
     			append_dev(div7, div6);
     			append_dev(div6, div2);
@@ -40271,6 +43125,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			insert_dev(target, div9, anchor);
     			append_dev(div9, div8);
     			append_dev(div8, button);
+    			if (remount) run_all(dispose);
 
     			dispose = [
     				listen_dev(input1, "input", /*input1_input_handler*/ ctx[6]),
@@ -40298,7 +43153,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_then_block$4.name,
+    		id: create_then_block$3.name,
     		type: "then",
     		source: "(82:8) {:then result}",
     		ctx
@@ -40308,7 +43163,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (80:23)            Loading...         {:then result}
-    function create_pending_block$4(ctx) {
+    function create_pending_block$3(ctx) {
     	let t;
 
     	const block = {
@@ -40326,7 +43181,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_pending_block$4.name,
+    		id: create_pending_block$3.name,
     		type: "pending",
     		source: "(80:23)            Loading...         {:then result}",
     		ctx
@@ -40335,7 +43190,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function create_fragment$i(ctx) {
+    function create_fragment$l(ctx) {
     	let link;
     	let t0;
     	let body;
@@ -40354,9 +43209,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		ctx,
     		current: null,
     		token: null,
-    		pending: create_pending_block$4,
-    		then: create_then_block$4,
-    		catch: create_catch_block$4,
+    		pending: create_pending_block$3,
+    		then: create_then_block$3,
+    		catch: create_catch_block$3,
     		value: 8,
     		error: 9
     	};
@@ -40380,16 +43235,16 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			info.block.c();
     			attr_dev(link, "href", "https://unpkg.com/tailwindcss@^1.0/dist/tailwind.min.css");
     			attr_dev(link, "rel", "stylesheet");
-    			add_location(link, file$f, 67, 0, 2564);
-    			add_location(strong, file$f, 75, 6, 2770);
+    			add_location(link, file$h, 67, 0, 2564);
+    			add_location(strong, file$h, 75, 6, 2770);
     			attr_dev(h1, "class", "heading svelte-1icsd5l");
-    			add_location(h1, file$f, 74, 4, 2743);
+    			add_location(h1, file$h, 74, 4, 2743);
     			attr_dev(div0, "class", "h-12");
-    			add_location(div0, file$f, 78, 6, 2832);
+    			add_location(div0, file$h, 78, 6, 2832);
     			attr_dev(div1, "class", "");
-    			add_location(div1, file$f, 77, 4, 2811);
-    			add_location(div2, file$f, 71, 2, 2667);
-    			add_location(body, file$f, 70, 0, 2658);
+    			add_location(div1, file$h, 77, 4, 2811);
+    			add_location(div2, file$h, 71, 2, 2667);
+    			add_location(body, file$h, 70, 0, 2658);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -40443,7 +43298,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$i.name,
+    		id: create_fragment$l.name,
     		type: "component",
     		source: "",
     		ctx
@@ -40452,7 +43307,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$h($$self, $$props, $$invalidate) {
+    function instance$l($$self, $$props, $$invalidate) {
     	let $token;
     	let { currentRoute } = $$props;
     	const client = getClient();
@@ -40469,8 +43324,11 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	const writable_props = ["currentRoute"];
 
     	Object.keys($$props).forEach(key => {
-    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$4.warn(`<Send_test> was created with unknown prop '${key}'`);
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$9.warn(`<Send_test> was created with unknown prop '${key}'`);
     	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Send_test", $$slots, []);
 
     	function input1_input_handler() {
     		email = this.value;
@@ -40495,16 +43353,29 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		if ("currentRoute" in $$props) $$invalidate(5, currentRoute = $$props.currentRoute);
     	};
 
-    	$$self.$capture_state = () => {
-    		return { currentRoute, email, mailBody, $token };
-    	};
+    	$$self.$capture_state = () => ({
+    		currentRoute,
+    		getClient,
+    		query,
+    		mutate,
+    		apolloClient,
+    		Navbar,
+    		client,
+    		token,
+    		email,
+    		mailBody,
+    		$token
+    	});
 
     	$$self.$inject_state = $$props => {
     		if ("currentRoute" in $$props) $$invalidate(5, currentRoute = $$props.currentRoute);
     		if ("email" in $$props) $$invalidate(0, email = $$props.email);
     		if ("mailBody" in $$props) $$invalidate(1, mailBody = $$props.mailBody);
-    		if ("$token" in $$props) token.set($token = $$props.$token);
     	};
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
 
     	return [
     		email,
@@ -40521,20 +43392,20 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Send_test extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$h, create_fragment$i, safe_not_equal, { currentRoute: 5 });
+    		init(this, options, instance$l, create_fragment$l, safe_not_equal, { currentRoute: 5 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Send_test",
     			options,
-    			id: create_fragment$i.name
+    			id: create_fragment$l.name
     		});
 
     		const { ctx } = this.$$;
     		const props = options.props || {};
 
     		if (/*currentRoute*/ ctx[5] === undefined && !("currentRoute" in props)) {
-    			console_1$4.warn("<Send_test> was created without expected prop 'currentRoute'");
+    			console_1$9.warn("<Send_test> was created without expected prop 'currentRoute'");
     		}
     	}
 
@@ -40547,8 +43418,10 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	}
     }
 
-    /* src/routes/newTest.svelte generated by Svelte v3.18.1 */
-    const file$g = "src/routes/newTest.svelte";
+    /* src/routes/newTest.svelte generated by Svelte v3.20.1 */
+
+    const { console: console_1$a } = globals;
+    const file$i = "src/routes/newTest.svelte";
 
     function get_each_context$4(ctx, list, i) {
     	const child_ctx = ctx.slice();
@@ -40573,7 +43446,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			li = element("li");
     			t = text(t_value);
     			attr_dev(li, "class", "text-xl mb-2");
-    			add_location(li, file$g, 184, 18, 6898);
+    			add_location(li, file$i, 184, 18, 6898);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, li, anchor);
@@ -40599,7 +43472,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (222:16) {:catch err}
-    function create_catch_block$5(ctx) {
+    function create_catch_block$4(ctx) {
     	let t0;
     	let t1_value = /*err*/ ctx[14] + "";
     	let t1;
@@ -40624,7 +43497,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_catch_block$5.name,
+    		id: create_catch_block$4.name,
     		type: "catch",
     		source: "(222:16) {:catch err}",
     		ctx
@@ -40634,9 +43507,10 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (207:16) {:then result}
-    function create_then_block$5(ctx) {
+    function create_then_block$4(ctx) {
     	let each_1_anchor;
     	let each_value = /*result*/ ctx[13].data.allProblems;
+    	validate_each_argument(each_value);
     	let each_blocks = [];
 
     	for (let i = 0; i < each_value.length; i += 1) {
@@ -40661,6 +43535,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		p: function update(ctx, dirty) {
     			if (dirty & /*$Problems, test, changeHandler*/ 37) {
     				each_value = /*result*/ ctx[13].data.allProblems;
+    				validate_each_argument(each_value);
     				let i;
 
     				for (i = 0; i < each_value.length; i += 1) {
@@ -40690,7 +43565,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_then_block$5.name,
+    		id: create_then_block$4.name,
     		type: "then",
     		source: "(207:16) {:then result}",
     		ctx
@@ -40723,11 +43598,11 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			input.__value = input_value_value = /*prob*/ ctx[15].id;
     			input.value = input.__value;
     			/*$$binding_groups*/ ctx[9][0].push(input);
-    			add_location(input, file$g, 211, 24, 7783);
-    			add_location(li, file$g, 209, 22, 7670);
-    			add_location(label, file$g, 208, 20, 7640);
+    			add_location(input, file$i, 211, 24, 7783);
+    			add_location(li, file$i, 209, 22, 7670);
+    			add_location(label, file$i, 208, 20, 7640);
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, label, anchor);
     			append_dev(label, li);
     			append_dev(li, input);
@@ -40735,6 +43610,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			append_dev(li, t0);
     			append_dev(li, t1);
     			append_dev(label, t2);
+    			if (remount) run_all(dispose);
 
     			dispose = [
     				listen_dev(input, "change", /*input_change_handler*/ ctx[12]),
@@ -40784,7 +43660,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (205:34)                    Loading...                 {:then result}
-    function create_pending_block$5(ctx) {
+    function create_pending_block$4(ctx) {
     	let t;
 
     	const block = {
@@ -40802,7 +43678,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_pending_block$5.name,
+    		id: create_pending_block$4.name,
     		type: "pending",
     		source: "(205:34)                    Loading...                 {:then result}",
     		ctx
@@ -40811,7 +43687,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function create_fragment$j(ctx) {
+    function create_fragment$m(ctx) {
     	let link;
     	let t0;
     	let body;
@@ -40880,6 +43756,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	let dispose;
     	const navbar = new Navbar({ $$inline: true });
     	let each_value_1 = /*ppp*/ ctx[1];
+    	validate_each_argument(each_value_1);
     	let each_blocks = [];
 
     	for (let i = 0; i < each_value_1.length; i += 1) {
@@ -40890,9 +43767,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		ctx,
     		current: null,
     		token: null,
-    		pending: create_pending_block$5,
-    		then: create_then_block$5,
-    		catch: create_catch_block$5,
+    		pending: create_pending_block$4,
+    		then: create_then_block$4,
+    		catch: create_catch_block$4,
     		value: 13,
     		error: 14
     	};
@@ -40981,111 +43858,111 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			button.textContent = "Save";
     			attr_dev(link, "href", "https://unpkg.com/tailwindcss@^1.0/dist/tailwind.min.css");
     			attr_dev(link, "rel", "stylesheet");
-    			add_location(link, file$g, 105, 0, 3723);
-    			add_location(strong, file$g, 113, 6, 3929);
+    			add_location(link, file$i, 105, 0, 3723);
+    			add_location(strong, file$i, 113, 6, 3929);
     			attr_dev(h1, "class", "heading svelte-1s852zo");
-    			add_location(h1, file$g, 112, 4, 3902);
+    			add_location(h1, file$i, 112, 4, 3902);
     			attr_dev(br0, "class", "my-24");
-    			add_location(br0, file$g, 122, 14, 4204);
+    			add_location(br0, file$i, 122, 14, 4204);
     			attr_dev(input0, "type", "text");
     			attr_dev(input0, "placeholder", "Enter Test Name...");
-    			add_location(input0, file$g, 127, 20, 4404);
+    			add_location(input0, file$i, 127, 20, 4404);
     			attr_dev(div0, "class", "font-bold text-3xl mb-2");
-    			add_location(div0, file$g, 126, 18, 4346);
+    			add_location(div0, file$i, 126, 18, 4346);
     			attr_dev(div1, "class", "flex-initial text-center px-4 py-2 m-2");
-    			add_location(div1, file$g, 125, 16, 4275);
+    			add_location(div1, file$i, 125, 16, 4275);
     			attr_dev(div2, "class", "flex");
-    			add_location(div2, file$g, 124, 14, 4240);
-    			add_location(br1, file$g, 134, 14, 4635);
+    			add_location(div2, file$i, 124, 14, 4240);
+    			add_location(br1, file$i, 134, 14, 4635);
     			attr_dev(label0, "class", "block text-gray-500 font-bold md:text-right\n                          mb-1 md:mb-0 pr-4");
     			attr_dev(label0, "for", "inline-username");
-    			add_location(label0, file$g, 140, 24, 4925);
+    			add_location(label0, file$i, 140, 24, 4925);
     			attr_dev(div3, "class", "md:w-2/3");
-    			add_location(div3, file$g, 139, 22, 4878);
+    			add_location(div3, file$i, 139, 22, 4878);
     			attr_dev(input1, "type", "radio");
     			attr_dev(input1, "class", "form-radio");
     			attr_dev(input1, "name", "difficultyType");
     			input1.__value = "easy";
     			input1.value = input1.__value;
     			/*$$binding_groups*/ ctx[9][1].push(input1);
-    			add_location(input1, file$g, 149, 26, 5335);
+    			add_location(input1, file$i, 149, 26, 5335);
     			attr_dev(span0, "class", "ml-2 text-gray-500");
-    			add_location(span0, file$g, 155, 26, 5612);
+    			add_location(span0, file$i, 155, 26, 5612);
     			attr_dev(label1, "class", "inline-flex items-center");
-    			add_location(label1, file$g, 148, 24, 5268);
+    			add_location(label1, file$i, 148, 24, 5268);
     			attr_dev(input2, "type", "radio");
     			attr_dev(input2, "class", "form-radio");
     			attr_dev(input2, "name", "difficultyType");
     			input2.__value = "medium";
     			input2.value = input2.__value;
     			/*$$binding_groups*/ ctx[9][1].push(input2);
-    			add_location(input2, file$g, 158, 26, 5786);
+    			add_location(input2, file$i, 158, 26, 5786);
     			attr_dev(span1, "class", "ml-2 text-gray-500");
-    			add_location(span1, file$g, 164, 26, 6065);
+    			add_location(span1, file$i, 164, 26, 6065);
     			attr_dev(label2, "class", "inline-flex items-center ml-6");
-    			add_location(label2, file$g, 157, 24, 5714);
+    			add_location(label2, file$i, 157, 24, 5714);
     			attr_dev(input3, "type", "radio");
     			attr_dev(input3, "class", "form-radio");
     			attr_dev(input3, "name", "difficultyType");
     			input3.__value = "hard";
     			input3.value = input3.__value;
     			/*$$binding_groups*/ ctx[9][1].push(input3);
-    			add_location(input3, file$g, 167, 26, 6241);
+    			add_location(input3, file$i, 167, 26, 6241);
     			attr_dev(span2, "class", "ml-2 text-gray-500");
-    			add_location(span2, file$g, 173, 26, 6518);
+    			add_location(span2, file$i, 173, 26, 6518);
     			attr_dev(label3, "class", "inline-flex items-center ml-6");
-    			add_location(label3, file$g, 166, 24, 6169);
+    			add_location(label3, file$i, 166, 24, 6169);
     			attr_dev(div4, "class", "");
-    			add_location(div4, file$g, 147, 22, 5229);
+    			add_location(div4, file$i, 147, 22, 5229);
     			attr_dev(div5, "class", " md:items-center mb-6");
-    			add_location(div5, file$g, 138, 20, 4820);
+    			add_location(div5, file$i, 138, 20, 4820);
     			attr_dev(div6, "class", "font-bold text-3xl mb-2");
-    			add_location(div6, file$g, 137, 18, 4762);
+    			add_location(div6, file$i, 137, 18, 4762);
     			attr_dev(div7, "class", "flex-initial text-center px-4 py-2 m-2");
-    			add_location(div7, file$g, 136, 16, 4691);
+    			add_location(div7, file$i, 136, 16, 4691);
     			attr_dev(div8, "class", "flex");
-    			add_location(div8, file$g, 135, 14, 4656);
-    			add_location(br2, file$g, 180, 14, 6735);
+    			add_location(div8, file$i, 135, 14, 4656);
+    			add_location(br2, file$i, 180, 14, 6735);
     			attr_dev(p, "class", "font-bold text-2xl mb-2");
-    			add_location(p, file$g, 181, 14, 6756);
+    			add_location(p, file$i, 181, 14, 6756);
     			attr_dev(ul, "class", "problist svelte-1s852zo");
-    			add_location(ul, file$g, 182, 14, 6825);
+    			add_location(ul, file$i, 182, 14, 6825);
     			attr_dev(div9, "class", "px-12 py-8");
-    			add_location(div9, file$g, 120, 12, 4164);
+    			add_location(div9, file$i, 120, 12, 4164);
     			attr_dev(div10, "class", "max-w-auto rounded overflow-hidden shadow-lg");
-    			add_location(div10, file$g, 119, 10, 4093);
+    			add_location(div10, file$i, 119, 10, 4093);
     			attr_dev(div11, "class", "p-8 mx-2 mt-5 items-center");
-    			add_location(div11, file$g, 118, 8, 4042);
+    			add_location(div11, file$i, 118, 8, 4042);
     			attr_dev(div12, "class", "w-1/2 h-12");
-    			add_location(div12, file$g, 116, 6, 4008);
+    			add_location(div12, file$i, 116, 6, 4008);
     			attr_dev(div13, "class", "font-bold text-3xl mb-2");
-    			add_location(div13, file$g, 200, 18, 7348);
+    			add_location(div13, file$i, 200, 18, 7348);
     			attr_dev(div14, "class", "flex-initial text-center px-4 py-2 m-2");
-    			add_location(div14, file$g, 199, 16, 7277);
+    			add_location(div14, file$i, 199, 16, 7277);
     			attr_dev(div15, "class", "flex");
-    			add_location(div15, file$g, 198, 14, 7242);
-    			add_location(ol, file$g, 203, 14, 7462);
+    			add_location(div15, file$i, 198, 14, 7242);
+    			add_location(ol, file$i, 203, 14, 7462);
     			attr_dev(div16, "class", "px-6 py-4");
-    			add_location(div16, file$g, 197, 12, 7204);
+    			add_location(div16, file$i, 197, 12, 7204);
     			attr_dev(div17, "class", "max-w-auto rounded overflow-hidden shadow-lg");
-    			add_location(div17, file$g, 196, 10, 7133);
+    			add_location(div17, file$i, 196, 10, 7133);
     			attr_dev(div18, "class", "p-8 mx-2 mt-5 items-center");
-    			add_location(div18, file$g, 195, 8, 7082);
+    			add_location(div18, file$i, 195, 8, 7082);
     			attr_dev(button, "class", "bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4\n            border border-blue-700 rounded submitbutton svelte-1s852zo");
-    			add_location(button, file$g, 229, 10, 8362);
+    			add_location(button, file$i, 229, 10, 8362);
     			attr_dev(div19, "class", "buttonbox svelte-1s852zo");
-    			add_location(div19, file$g, 228, 8, 8328);
+    			add_location(div19, file$i, 228, 8, 8328);
     			attr_dev(div20, "class", "w-1/2 h-12");
-    			add_location(div20, file$g, 194, 6, 7049);
+    			add_location(div20, file$i, 194, 6, 7049);
     			attr_dev(div21, "class", "flex mb-4 h-12");
-    			add_location(div21, file$g, 115, 4, 3973);
-    			add_location(div22, file$g, 109, 2, 3826);
-    			add_location(body, file$g, 108, 0, 3817);
+    			add_location(div21, file$i, 115, 4, 3973);
+    			add_location(div22, file$i, 109, 2, 3826);
+    			add_location(body, file$i, 108, 0, 3817);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, link, anchor);
     			insert_dev(target, t0, anchor);
     			insert_dev(target, body, anchor);
@@ -41163,6 +44040,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			append_dev(div20, div19);
     			append_dev(div19, button);
     			current = true;
+    			if (remount) run_all(dispose);
 
     			dispose = [
     				listen_dev(input0, "input", /*input0_input_handler*/ ctx[7]),
@@ -41193,6 +44071,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     			if (dirty & /*ppp*/ 2) {
     				each_value_1 = /*ppp*/ ctx[1];
+    				validate_each_argument(each_value_1);
     				let i;
 
     				for (i = 0; i < each_value_1.length; i += 1) {
@@ -41249,7 +44128,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$j.name,
+    		id: create_fragment$m.name,
     		type: "component",
     		source: "",
     		ctx
@@ -41258,7 +44137,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$i($$self, $$props, $$invalidate) {
+    function instance$m($$self, $$props, $$invalidate) {
     	let $Problems;
 
     	let test = {
@@ -41307,6 +44186,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		}
     	}
 
+    	const writable_props = [];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$a.warn(`<NewTest> was created with unknown prop '${key}'`);
+    	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("NewTest", $$slots, []);
     	const $$binding_groups = [[], []];
 
     	function input0_input_handler() {
@@ -41334,17 +44221,33 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		$$invalidate(0, test);
     	}
 
-    	$$self.$capture_state = () => {
-    		return {};
-    	};
+    	$$self.$capture_state = () => ({
+    		apolloClient,
+    		getClient,
+    		query,
+    		subscribe: subscribe$2,
+    		mutate,
+    		Navbar,
+    		test,
+    		client,
+    		Problems,
+    		clickHandler,
+    		changeHandler,
+    		ppp,
+    		$Problems
+    	});
 
     	$$self.$inject_state = $$props => {
     		if ("test" in $$props) $$invalidate(0, test = $$props.test);
     		if ("ppp" in $$props) $$invalidate(1, ppp = $$props.ppp);
-    		if ("$Problems" in $$props) Problems.set($Problems = $$props.$Problems);
     	};
 
     	let ppp;
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
+
     	 $$invalidate(1, ppp = []);
 
     	return [
@@ -41367,21 +44270,21 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class NewTest extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$i, create_fragment$j, safe_not_equal, {});
+    		init(this, options, instance$m, create_fragment$m, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "NewTest",
     			options,
-    			id: create_fragment$j.name
+    			id: create_fragment$m.name
     		});
     	}
     }
 
-    /* src/routes/editTest.svelte generated by Svelte v3.18.1 */
+    /* src/routes/editTest.svelte generated by Svelte v3.20.1 */
 
-    const { console: console_1$5 } = globals;
-    const file$h = "src/routes/editTest.svelte";
+    const { console: console_1$b } = globals;
+    const file$j = "src/routes/editTest.svelte";
 
     function get_each_context$5(ctx, list, i) {
     	const child_ctx = ctx.slice();
@@ -41406,7 +44309,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			li = element("li");
     			t = text(t_value);
     			attr_dev(li, "class", "text-xl mb-2");
-    			add_location(li, file$h, 205, 18, 7471);
+    			add_location(li, file$j, 205, 18, 7471);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, li, anchor);
@@ -41432,7 +44335,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (243:16) {:catch err}
-    function create_catch_block$6(ctx) {
+    function create_catch_block$5(ctx) {
     	let t0;
     	let t1_value = /*err*/ ctx[18] + "";
     	let t1;
@@ -41457,7 +44360,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_catch_block$6.name,
+    		id: create_catch_block$5.name,
     		type: "catch",
     		source: "(243:16) {:catch err}",
     		ctx
@@ -41467,9 +44370,10 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (228:16) {:then result}
-    function create_then_block$6(ctx) {
+    function create_then_block$5(ctx) {
     	let each_1_anchor;
     	let each_value = /*result*/ ctx[17].data.allProblems;
+    	validate_each_argument(each_value);
     	let each_blocks = [];
 
     	for (let i = 0; i < each_value.length; i += 1) {
@@ -41494,6 +44398,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		p: function update(ctx, dirty) {
     			if (dirty & /*$Problems, testInitial, changeHandler*/ 69) {
     				each_value = /*result*/ ctx[17].data.allProblems;
+    				validate_each_argument(each_value);
     				let i;
 
     				for (i = 0; i < each_value.length; i += 1) {
@@ -41523,7 +44428,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_then_block$6.name,
+    		id: create_then_block$5.name,
     		type: "then",
     		source: "(228:16) {:then result}",
     		ctx
@@ -41556,11 +44461,11 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			input.__value = input_value_value = /*prob*/ ctx[19].id;
     			input.value = input.__value;
     			/*$$binding_groups*/ ctx[13][0].push(input);
-    			add_location(input, file$h, 232, 24, 8356);
-    			add_location(li, file$h, 230, 22, 8243);
-    			add_location(label, file$h, 229, 20, 8213);
+    			add_location(input, file$j, 232, 24, 8356);
+    			add_location(li, file$j, 230, 22, 8243);
+    			add_location(label, file$j, 229, 20, 8213);
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, label, anchor);
     			append_dev(label, li);
     			append_dev(li, input);
@@ -41568,6 +44473,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			append_dev(li, t0);
     			append_dev(li, t1);
     			append_dev(label, t2);
+    			if (remount) run_all(dispose);
 
     			dispose = [
     				listen_dev(input, "change", /*input_change_handler*/ ctx[16]),
@@ -41617,7 +44523,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (226:34)                    Loading...                 {:then result}
-    function create_pending_block$6(ctx) {
+    function create_pending_block$5(ctx) {
     	let t;
 
     	const block = {
@@ -41635,7 +44541,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_pending_block$6.name,
+    		id: create_pending_block$5.name,
     		type: "pending",
     		source: "(226:34)                    Loading...                 {:then result}",
     		ctx
@@ -41644,7 +44550,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function create_fragment$k(ctx) {
+    function create_fragment$n(ctx) {
     	let link;
     	let t0;
     	let body;
@@ -41713,6 +44619,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	let dispose;
     	const navbar = new Navbar({ $$inline: true });
     	let each_value_1 = /*ppp*/ ctx[1];
+    	validate_each_argument(each_value_1);
     	let each_blocks = [];
 
     	for (let i = 0; i < each_value_1.length; i += 1) {
@@ -41723,9 +44630,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		ctx,
     		current: null,
     		token: null,
-    		pending: create_pending_block$6,
-    		then: create_then_block$6,
-    		catch: create_catch_block$6,
+    		pending: create_pending_block$5,
+    		then: create_then_block$5,
+    		catch: create_catch_block$5,
     		value: 17,
     		error: 18
     	};
@@ -41814,111 +44721,111 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			button.textContent = "Save";
     			attr_dev(link, "href", "https://unpkg.com/tailwindcss@^1.0/dist/tailwind.min.css");
     			attr_dev(link, "rel", "stylesheet");
-    			add_location(link, file$h, 126, 0, 4268);
-    			add_location(strong, file$h, 134, 6, 4474);
+    			add_location(link, file$j, 126, 0, 4268);
+    			add_location(strong, file$j, 134, 6, 4474);
     			attr_dev(h1, "class", "heading svelte-1thzmrb");
-    			add_location(h1, file$h, 133, 4, 4447);
+    			add_location(h1, file$j, 133, 4, 4447);
     			attr_dev(br0, "class", "my-24");
-    			add_location(br0, file$h, 143, 14, 4749);
+    			add_location(br0, file$j, 143, 14, 4749);
     			attr_dev(input0, "type", "text");
     			attr_dev(input0, "placeholder", "Enter Test Name...");
-    			add_location(input0, file$h, 148, 20, 4949);
+    			add_location(input0, file$j, 148, 20, 4949);
     			attr_dev(div0, "class", "font-bold text-3xl mb-2");
-    			add_location(div0, file$h, 147, 18, 4891);
+    			add_location(div0, file$j, 147, 18, 4891);
     			attr_dev(div1, "class", "flex-initial text-center px-4 py-2 m-2");
-    			add_location(div1, file$h, 146, 16, 4820);
+    			add_location(div1, file$j, 146, 16, 4820);
     			attr_dev(div2, "class", "flex");
-    			add_location(div2, file$h, 145, 14, 4785);
-    			add_location(br1, file$h, 155, 14, 5187);
+    			add_location(div2, file$j, 145, 14, 4785);
+    			add_location(br1, file$j, 155, 14, 5187);
     			attr_dev(label0, "class", "block text-gray-500 font-bold md:text-right\n                          mb-1 md:mb-0 pr-4");
     			attr_dev(label0, "for", "inline-username");
-    			add_location(label0, file$h, 161, 24, 5477);
+    			add_location(label0, file$j, 161, 24, 5477);
     			attr_dev(div3, "class", "md:w-2/3");
-    			add_location(div3, file$h, 160, 22, 5430);
+    			add_location(div3, file$j, 160, 22, 5430);
     			attr_dev(input1, "type", "radio");
     			attr_dev(input1, "class", "form-radio");
     			attr_dev(input1, "name", "difficultyType");
     			input1.__value = "easy";
     			input1.value = input1.__value;
     			/*$$binding_groups*/ ctx[13][1].push(input1);
-    			add_location(input1, file$h, 170, 26, 5887);
+    			add_location(input1, file$j, 170, 26, 5887);
     			attr_dev(span0, "class", "ml-2 text-gray-500");
-    			add_location(span0, file$h, 176, 26, 6171);
+    			add_location(span0, file$j, 176, 26, 6171);
     			attr_dev(label1, "class", "inline-flex items-center");
-    			add_location(label1, file$h, 169, 24, 5820);
+    			add_location(label1, file$j, 169, 24, 5820);
     			attr_dev(input2, "type", "radio");
     			attr_dev(input2, "class", "form-radio");
     			attr_dev(input2, "name", "difficultyType");
     			input2.__value = "medium";
     			input2.value = input2.__value;
     			/*$$binding_groups*/ ctx[13][1].push(input2);
-    			add_location(input2, file$h, 179, 26, 6345);
+    			add_location(input2, file$j, 179, 26, 6345);
     			attr_dev(span1, "class", "ml-2 text-gray-500");
-    			add_location(span1, file$h, 185, 26, 6631);
+    			add_location(span1, file$j, 185, 26, 6631);
     			attr_dev(label2, "class", "inline-flex items-center ml-6");
-    			add_location(label2, file$h, 178, 24, 6273);
+    			add_location(label2, file$j, 178, 24, 6273);
     			attr_dev(input3, "type", "radio");
     			attr_dev(input3, "class", "form-radio");
     			attr_dev(input3, "name", "difficultyType");
     			input3.__value = "hard";
     			input3.value = input3.__value;
     			/*$$binding_groups*/ ctx[13][1].push(input3);
-    			add_location(input3, file$h, 188, 26, 6807);
+    			add_location(input3, file$j, 188, 26, 6807);
     			attr_dev(span2, "class", "ml-2 text-gray-500");
-    			add_location(span2, file$h, 194, 26, 7091);
+    			add_location(span2, file$j, 194, 26, 7091);
     			attr_dev(label3, "class", "inline-flex items-center ml-6");
-    			add_location(label3, file$h, 187, 24, 6735);
+    			add_location(label3, file$j, 187, 24, 6735);
     			attr_dev(div4, "class", "");
-    			add_location(div4, file$h, 168, 22, 5781);
+    			add_location(div4, file$j, 168, 22, 5781);
     			attr_dev(div5, "class", " md:items-center mb-6");
-    			add_location(div5, file$h, 159, 20, 5372);
+    			add_location(div5, file$j, 159, 20, 5372);
     			attr_dev(div6, "class", "font-bold text-3xl mb-2");
-    			add_location(div6, file$h, 158, 18, 5314);
+    			add_location(div6, file$j, 158, 18, 5314);
     			attr_dev(div7, "class", "flex-initial text-center px-4 py-2 m-2");
-    			add_location(div7, file$h, 157, 16, 5243);
+    			add_location(div7, file$j, 157, 16, 5243);
     			attr_dev(div8, "class", "flex");
-    			add_location(div8, file$h, 156, 14, 5208);
-    			add_location(br2, file$h, 201, 14, 7308);
+    			add_location(div8, file$j, 156, 14, 5208);
+    			add_location(br2, file$j, 201, 14, 7308);
     			attr_dev(p, "class", "font-bold text-2xl mb-2");
-    			add_location(p, file$h, 202, 14, 7329);
+    			add_location(p, file$j, 202, 14, 7329);
     			attr_dev(ul, "class", "problist svelte-1thzmrb");
-    			add_location(ul, file$h, 203, 14, 7398);
+    			add_location(ul, file$j, 203, 14, 7398);
     			attr_dev(div9, "class", "px-12 py-8");
-    			add_location(div9, file$h, 141, 12, 4709);
+    			add_location(div9, file$j, 141, 12, 4709);
     			attr_dev(div10, "class", "max-w-auto rounded overflow-hidden shadow-lg");
-    			add_location(div10, file$h, 140, 10, 4638);
+    			add_location(div10, file$j, 140, 10, 4638);
     			attr_dev(div11, "class", "p-8 mx-2 mt-5 items-center");
-    			add_location(div11, file$h, 139, 8, 4587);
+    			add_location(div11, file$j, 139, 8, 4587);
     			attr_dev(div12, "class", "w-1/2 h-12");
-    			add_location(div12, file$h, 137, 6, 4553);
+    			add_location(div12, file$j, 137, 6, 4553);
     			attr_dev(div13, "class", "font-bold text-3xl mb-2");
-    			add_location(div13, file$h, 221, 18, 7921);
+    			add_location(div13, file$j, 221, 18, 7921);
     			attr_dev(div14, "class", "flex-initial text-center px-4 py-2 m-2");
-    			add_location(div14, file$h, 220, 16, 7850);
+    			add_location(div14, file$j, 220, 16, 7850);
     			attr_dev(div15, "class", "flex");
-    			add_location(div15, file$h, 219, 14, 7815);
-    			add_location(ol, file$h, 224, 14, 8035);
+    			add_location(div15, file$j, 219, 14, 7815);
+    			add_location(ol, file$j, 224, 14, 8035);
     			attr_dev(div16, "class", "px-6 py-4");
-    			add_location(div16, file$h, 218, 12, 7777);
+    			add_location(div16, file$j, 218, 12, 7777);
     			attr_dev(div17, "class", "max-w-auto rounded overflow-hidden shadow-lg");
-    			add_location(div17, file$h, 217, 10, 7706);
+    			add_location(div17, file$j, 217, 10, 7706);
     			attr_dev(div18, "class", "p-8 mx-2 mt-5 items-center");
-    			add_location(div18, file$h, 216, 8, 7655);
+    			add_location(div18, file$j, 216, 8, 7655);
     			attr_dev(button, "class", "bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4\n            border border-blue-700 rounded submitbutton svelte-1thzmrb");
-    			add_location(button, file$h, 250, 10, 8942);
+    			add_location(button, file$j, 250, 10, 8942);
     			attr_dev(div19, "class", "buttonbox svelte-1thzmrb");
-    			add_location(div19, file$h, 249, 8, 8908);
+    			add_location(div19, file$j, 249, 8, 8908);
     			attr_dev(div20, "class", "w-1/2 h-12");
-    			add_location(div20, file$h, 215, 6, 7622);
+    			add_location(div20, file$j, 215, 6, 7622);
     			attr_dev(div21, "class", "flex mb-4 h-12");
-    			add_location(div21, file$h, 136, 4, 4518);
-    			add_location(div22, file$h, 130, 2, 4371);
-    			add_location(body, file$h, 129, 0, 4362);
+    			add_location(div21, file$j, 136, 4, 4518);
+    			add_location(div22, file$j, 130, 2, 4371);
+    			add_location(body, file$j, 129, 0, 4362);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, link, anchor);
     			insert_dev(target, t0, anchor);
     			insert_dev(target, body, anchor);
@@ -41996,6 +44903,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			append_dev(div20, div19);
     			append_dev(div19, button);
     			current = true;
+    			if (remount) run_all(dispose);
 
     			dispose = [
     				listen_dev(input0, "input", /*input0_input_handler*/ ctx[11]),
@@ -42026,6 +44934,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     			if (dirty & /*ppp*/ 2) {
     				each_value_1 = /*ppp*/ ctx[1];
+    				validate_each_argument(each_value_1);
     				let i;
 
     				for (i = 0; i < each_value_1.length; i += 1) {
@@ -42082,7 +44991,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$k.name,
+    		id: create_fragment$n.name,
     		type: "component",
     		source: "",
     		ctx
@@ -42091,7 +45000,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$j($$self, $$props, $$invalidate) {
+    function instance$n($$self, $$props, $$invalidate) {
     	let $test;
     	let $Problems;
     	let { currentRoute } = $$props;
@@ -42173,9 +45082,11 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	const writable_props = ["currentRoute"];
 
     	Object.keys($$props).forEach(key => {
-    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$5.warn(`<EditTest> was created with unknown prop '${key}'`);
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$b.warn(`<EditTest> was created with unknown prop '${key}'`);
     	});
 
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("EditTest", $$slots, []);
     	const $$binding_groups = [[], []];
 
     	function input0_input_handler() {
@@ -42207,27 +45118,39 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		if ("currentRoute" in $$props) $$invalidate(7, currentRoute = $$props.currentRoute);
     	};
 
-    	$$self.$capture_state = () => {
-    		return {
-    			currentRoute,
-    			testInitial,
-    			test_id,
-    			ppp,
-    			$test,
-    			$Problems
-    		};
-    	};
+    	$$self.$capture_state = () => ({
+    		apolloClient,
+    		getClient,
+    		query,
+    		subscribe: subscribe$2,
+    		mutate,
+    		Navbar,
+    		currentRoute,
+    		testInitial,
+    		client,
+    		test,
+    		test_id,
+    		Problems,
+    		clickHandler,
+    		changeHandler,
+    		ppp,
+    		$test,
+    		$Problems
+    	});
 
     	$$self.$inject_state = $$props => {
     		if ("currentRoute" in $$props) $$invalidate(7, currentRoute = $$props.currentRoute);
     		if ("testInitial" in $$props) $$invalidate(0, testInitial = $$props.testInitial);
     		if ("test_id" in $$props) test_id = $$props.test_id;
     		if ("ppp" in $$props) $$invalidate(1, ppp = $$props.ppp);
-    		if ("$test" in $$props) test.set($test = $$props.$test);
-    		if ("$Problems" in $$props) Problems.set($Problems = $$props.$Problems);
     	};
 
     	let ppp;
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
+
     	 $$invalidate(1, ppp = []);
 
     	return [
@@ -42254,20 +45177,20 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class EditTest extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$j, create_fragment$k, safe_not_equal, { currentRoute: 7 });
+    		init(this, options, instance$n, create_fragment$n, safe_not_equal, { currentRoute: 7 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "EditTest",
     			options,
-    			id: create_fragment$k.name
+    			id: create_fragment$n.name
     		});
 
     		const { ctx } = this.$$;
     		const props = options.props || {};
 
     		if (/*currentRoute*/ ctx[7] === undefined && !("currentRoute" in props)) {
-    			console_1$5.warn("<EditTest> was created without expected prop 'currentRoute'");
+    			console_1$b.warn("<EditTest> was created without expected prop 'currentRoute'");
     		}
     	}
 
@@ -42280,9 +45203,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	}
     }
 
-    /* src/routes/problem/problem_navbar.svelte generated by Svelte v3.18.1 */
+    /* src/routes/problem/problem_navbar.svelte generated by Svelte v3.20.1 */
 
-    const file$i = "src/routes/problem/problem_navbar.svelte";
+    const file$k = "src/routes/problem/problem_navbar.svelte";
 
     function get_each_context$6(ctx, list, i) {
     	const child_ctx = ctx.slice();
@@ -42303,15 +45226,15 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			div1 = element("div");
     			div0 = element("div");
     			attr_dev(div0, "class", " text-xs leading-none py-1 text-center rounded ");
-    			add_location(div0, file$i, 25, 12, 1008);
+    			add_location(div0, file$k, 25, 12, 1008);
 
     			attr_dev(div1, "class", div1_class_value = /*index*/ ctx[4] < /*position*/ ctx[0]
     			? /*activeBar*/ ctx[3]
     			: "w-full text-grey-darkest  bg-light rounded items-center align-middle align-center flex-1");
 
-    			add_location(div1, file$i, 23, 10, 848);
+    			add_location(div1, file$k, 23, 10, 848);
     			attr_dev(div2, "class", "w-1/6 align-center items-center align-middle content-center\n          flex");
-    			add_location(div2, file$i, 20, 8, 739);
+    			add_location(div2, file$k, 20, 8, 739);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div2, anchor);
@@ -42363,15 +45286,15 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			if (if_block) if_block.c();
     			if_block_anchor = empty();
     			attr_dev(span, "class", "text-center w-full text-2xl");
-    			add_location(span, file$i, 16, 10, 609);
+    			add_location(span, file$k, 16, 10, 609);
 
     			attr_dev(div0, "class", div0_class_value = /*index*/ ctx[4] <= /*position*/ ctx[0]
     			? /*activeCircle*/ ctx[2]
     			: "w-16 h-16  bg-light text-white border-2 mx-auto rounded-full text-lg flex items-center");
 
-    			add_location(div0, file$i, 14, 8, 451);
+    			add_location(div0, file$k, 14, 8, 451);
     			attr_dev(div1, "class", "flex-1");
-    			add_location(div1, file$i, 13, 6, 422);
+    			add_location(div1, file$k, 13, 6, 422);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div1, anchor);
@@ -42410,7 +45333,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function create_fragment$l(ctx) {
+    function create_fragment$o(ctx) {
     	let div8;
     	let div2;
     	let div0;
@@ -42427,6 +45350,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	let t8;
     	let div6;
     	let each_value = /*content*/ ctx[1];
+    	validate_each_argument(each_value);
     	let each_blocks = [];
 
     	for (let i = 0; i < each_value.length; i += 1) {
@@ -42460,23 +45384,23 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			div6 = element("div");
     			div6.textContent = "Test Cases";
     			attr_dev(div0, "class", "flex-1");
-    			add_location(div0, file$i, 11, 4, 364);
+    			add_location(div0, file$k, 11, 4, 364);
     			attr_dev(div1, "class", "flex-1");
-    			add_location(div1, file$i, 31, 4, 1133);
+    			add_location(div1, file$k, 31, 4, 1133);
     			attr_dev(div2, "class", "flex pb-3");
-    			add_location(div2, file$i, 10, 2, 336);
+    			add_location(div2, file$k, 10, 2, 336);
     			attr_dev(div3, "class", "w-1/4 text-xl text-elight ");
-    			add_location(div3, file$i, 35, 4, 1226);
+    			add_location(div3, file$k, 35, 4, 1226);
     			attr_dev(div4, "class", "w-1/4 text-xl text-elight");
-    			add_location(div4, file$i, 37, 4, 1294);
+    			add_location(div4, file$k, 37, 4, 1294);
     			attr_dev(div5, "class", "w-1/4 text-xl text-elight");
-    			add_location(div5, file$i, 39, 4, 1362);
+    			add_location(div5, file$k, 39, 4, 1362);
     			attr_dev(div6, "class", "w-1/4 text-xl text-elight");
-    			add_location(div6, file$i, 41, 4, 1421);
+    			add_location(div6, file$k, 41, 4, 1421);
     			attr_dev(div7, "class", "flex text-xs content-center text-center");
-    			add_location(div7, file$i, 34, 2, 1168);
+    			add_location(div7, file$k, 34, 2, 1168);
     			attr_dev(div8, "class", "max-w-2xl mx-auto py-4 my-4 pb-4");
-    			add_location(div8, file$i, 9, 0, 287);
+    			add_location(div8, file$k, 9, 0, 287);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -42506,6 +45430,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		p: function update(ctx, [dirty]) {
     			if (dirty & /*content, position, activeBar, activeCircle*/ 15) {
     				each_value = /*content*/ ctx[1];
+    				validate_each_argument(each_value);
     				let i;
 
     				for (i = 0; i < each_value.length; i += 1) {
@@ -42537,7 +45462,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$l.name,
+    		id: create_fragment$o.name,
     		type: "component",
     		source: "",
     		ctx
@@ -42546,7 +45471,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$k($$self, $$props, $$invalidate) {
+    function instance$o($$self, $$props, $$invalidate) {
     	let { position = 1 } = $$props;
     	let content = [1, 2, 3, 4];
     	let activeCircle = "w-16 h-16 text-dark bg-elight  mx-auto rounded-full text-lg flex items-center";
@@ -42560,18 +45485,19 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<Problem_navbar> was created with unknown prop '${key}'`);
     	});
 
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Problem_navbar", $$slots, []);
+
     	$$self.$set = $$props => {
     		if ("position" in $$props) $$invalidate(0, position = $$props.position);
     	};
 
-    	$$self.$capture_state = () => {
-    		return {
-    			position,
-    			content,
-    			activeCircle,
-    			activeBar
-    		};
-    	};
+    	$$self.$capture_state = () => ({
+    		position,
+    		content,
+    		activeCircle,
+    		activeBar
+    	});
 
     	$$self.$inject_state = $$props => {
     		if ("position" in $$props) $$invalidate(0, position = $$props.position);
@@ -42580,19 +45506,23 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		if ("activeBar" in $$props) $$invalidate(3, activeBar = $$props.activeBar);
     	};
 
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
+
     	return [position, content, activeCircle, activeBar];
     }
 
     class Problem_navbar extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$k, create_fragment$l, safe_not_equal, { position: 0 });
+    		init(this, options, instance$o, create_fragment$o, safe_not_equal, { position: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Problem_navbar",
     			options,
-    			id: create_fragment$l.name
+    			id: create_fragment$o.name
     		});
     	}
 
@@ -42605,11 +45535,11 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	}
     }
 
-    /* src/routes/problem/loader.svelte generated by Svelte v3.18.1 */
+    /* src/routes/problem/loader.svelte generated by Svelte v3.20.1 */
 
-    const file$j = "src/routes/problem/loader.svelte";
+    const file$l = "src/routes/problem/loader.svelte";
 
-    function create_fragment$m(ctx) {
+    function create_fragment$p(ctx) {
     	let div3;
     	let div0;
     	let t0;
@@ -42626,13 +45556,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			t1 = space();
     			div2 = element("div");
     			attr_dev(div0, "class", "LoaderBalls__item svelte-5k6xhq");
-    			add_location(div0, file$j, 42, 2, 2497);
+    			add_location(div0, file$l, 42, 2, 2497);
     			attr_dev(div1, "class", "LoaderBalls__item svelte-5k6xhq");
-    			add_location(div1, file$j, 43, 2, 2533);
+    			add_location(div1, file$l, 43, 2, 2533);
     			attr_dev(div2, "class", "LoaderBalls__item svelte-5k6xhq");
-    			add_location(div2, file$j, 44, 2, 2569);
+    			add_location(div2, file$l, 44, 2, 2569);
     			attr_dev(div3, "class", "LoaderBalls svelte-5k6xhq");
-    			add_location(div3, file$j, 41, 0, 2469);
+    			add_location(div3, file$l, 41, 0, 2469);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -42655,7 +45585,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$m.name,
+    		id: create_fragment$p.name,
     		type: "component",
     		source: "",
     		ctx
@@ -42664,16 +45594,28 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
+    function instance$p($$self, $$props) {
+    	const writable_props = [];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<Loader> was created with unknown prop '${key}'`);
+    	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Loader", $$slots, []);
+    	return [];
+    }
+
     class Loader extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, null, create_fragment$m, safe_not_equal, {});
+    		init(this, options, instance$p, create_fragment$p, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Loader",
     			options,
-    			id: create_fragment$m.name
+    			id: create_fragment$p.name
     		});
     	}
     }
@@ -42689,8 +45631,10 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
       email: 'Sample@gmail.com',
     });
 
-    /* src/routes/problem/problem_initials.svelte generated by Svelte v3.18.1 */
-    const file$k = "src/routes/problem/problem_initials.svelte";
+    /* src/routes/problem/problem_initials.svelte generated by Svelte v3.20.1 */
+
+    const { console: console_1$c } = globals;
+    const file$m = "src/routes/problem/problem_initials.svelte";
 
     function get_each_context$7(ctx, list, i) {
     	const child_ctx = ctx.slice();
@@ -42746,7 +45690,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			i = element("i");
     			i.textContent = "";
     			attr_dev(i, "class", "material-icons status svelte-cftn61");
-    			add_location(i, file$k, 121, 12, 4019);
+    			add_location(i, file$m, 121, 12, 4019);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, i, anchor);
@@ -42776,7 +45720,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			span = element("span");
     			span.textContent = "clear";
     			attr_dev(span, "class", "status material-icons svelte-cftn61");
-    			add_location(span, file$k, 124, 12, 4132);
+    			add_location(span, file$m, 124, 12, 4132);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, span, anchor);
@@ -42815,7 +45759,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			attr_dev(option, "name", option_name_value = /*tag*/ ctx[14]);
     			option.__value = option_value_value = /*index*/ ctx[16];
     			option.value = option.__value;
-    			add_location(option, file$k, 166, 16, 5446);
+    			add_location(option, file$m, 166, 16, 5446);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, option, anchor);
@@ -42839,7 +45783,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function create_fragment$n(ctx) {
+    function create_fragment$q(ctx) {
     	let div14;
     	let div13;
     	let div5;
@@ -42889,6 +45833,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	let if_block1 = /*uniqueNameStatus*/ ctx[2] === 1 && create_if_block_1$3(ctx);
     	let if_block2 = /*uniqueNameStatus*/ ctx[2] === 3 && create_if_block$5(ctx);
     	let each_value = /*tagList*/ ctx[4];
+    	validate_each_argument(each_value);
     	let each_blocks = [];
 
     	for (let i = 0; i < each_value.length; i += 1) {
@@ -42957,68 +45902,68 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			t22 = space();
     			input3 = element("input");
     			attr_dev(label0, "class", "text-elight text-2xl my-3");
-    			add_location(label0, file$k, 97, 6, 3232);
+    			add_location(label0, file$m, 97, 6, 3232);
     			attr_dev(input0, "type", "search");
     			attr_dev(input0, "name", "serch");
     			attr_dev(input0, "placeholder", "Search");
     			attr_dev(input0, "class", "bg-elight h-10 px-5 pr-10 rounded-full w-full text-xl\n              tet-edark focus:outline-none");
-    			add_location(input0, file$k, 103, 12, 3432);
+    			add_location(input0, file$m, 103, 12, 3432);
     			attr_dev(div0, "class", "w-full");
-    			add_location(div0, file$k, 102, 10, 3399);
+    			add_location(div0, file$m, 102, 10, 3399);
     			attr_dev(p, "class", "text-white text-sm my-2");
-    			add_location(p, file$k, 113, 12, 3784);
-    			add_location(div1, file$k, 112, 10, 3766);
+    			add_location(p, file$m, 113, 12, 3784);
+    			add_location(div1, file$m, 112, 10, 3766);
     			attr_dev(div2, "class", " flex-col w-full");
-    			add_location(div2, file$k, 101, 8, 3358);
+    			add_location(div2, file$m, 101, 8, 3358);
     			attr_dev(div3, "class", "ml-3");
-    			add_location(div3, file$k, 116, 8, 3871);
+    			add_location(div3, file$m, 116, 8, 3871);
     			attr_dev(div4, "class", "flex");
-    			add_location(div4, file$k, 100, 6, 3331);
-    			add_location(div5, file$k, 96, 4, 3220);
+    			add_location(div4, file$m, 100, 6, 3331);
+    			add_location(div5, file$m, 96, 4, 3220);
     			attr_dev(h2, "class", "labels text-2xl svelte-cftn61");
-    			add_location(h2, file$k, 131, 8, 4318);
-    			add_location(div6, file$k, 130, 6, 4304);
+    			add_location(h2, file$m, 131, 8, 4318);
+    			add_location(div6, file$m, 130, 6, 4304);
     			attr_dev(label1, "class", "labels svelte-cftn61");
-    			add_location(label1, file$k, 135, 10, 4414);
+    			add_location(label1, file$m, 135, 10, 4414);
     			attr_dev(input1, "class", "unitinput svelte-cftn61");
     			attr_dev(input1, "type", "text");
     			attr_dev(input1, "placeholder", "in milli seconds");
-    			add_location(input1, file$k, 136, 10, 4471);
+    			add_location(input1, file$m, 136, 10, 4471);
     			attr_dev(span0, "class", "unit svelte-cftn61");
-    			add_location(span0, file$k, 141, 10, 4637);
-    			add_location(div7, file$k, 134, 8, 4398);
+    			add_location(span0, file$m, 141, 10, 4637);
+    			add_location(div7, file$m, 134, 8, 4398);
     			attr_dev(label2, "class", "labels svelte-cftn61");
-    			add_location(label2, file$k, 144, 10, 4705);
+    			add_location(label2, file$m, 144, 10, 4705);
     			attr_dev(input2, "class", "unitinput svelte-cftn61");
     			attr_dev(input2, "type", "text");
     			attr_dev(input2, "placeholder", "in Mbs");
-    			add_location(input2, file$k, 145, 10, 4764);
+    			add_location(input2, file$m, 145, 10, 4764);
     			attr_dev(span1, "class", "unit svelte-cftn61");
-    			add_location(span1, file$k, 150, 10, 4920);
-    			add_location(div8, file$k, 143, 8, 4689);
+    			add_location(span1, file$m, 150, 10, 4920);
+    			add_location(div8, file$m, 143, 8, 4689);
     			attr_dev(label3, "class", "labels svelte-cftn61");
-    			add_location(label3, file$k, 154, 10, 4989);
+    			add_location(label3, file$m, 154, 10, 4989);
     			attr_dev(select, "class", "unitinput outline-none w-64 svelte-cftn61");
-    			add_location(select, file$k, 156, 12, 5078);
+    			add_location(select, file$m, 156, 12, 5078);
     			attr_dev(input3, "type", "text");
     			attr_dev(input3, "class", "unitinput svelte-cftn61");
     			input3.readOnly = true;
-    			add_location(input3, file$k, 174, 12, 5672);
+    			add_location(input3, file$m, 174, 12, 5672);
     			attr_dev(div9, "class", "flex-col flex");
-    			add_location(div9, file$k, 155, 10, 5038);
-    			add_location(div10, file$k, 153, 8, 4973);
-    			add_location(div11, file$k, 133, 6, 4384);
+    			add_location(div9, file$m, 155, 10, 5038);
+    			add_location(div10, file$m, 153, 8, 4973);
+    			add_location(div11, file$m, 133, 6, 4384);
     			attr_dev(div12, "class", "border-solid border-2 mt-6 border-light p-4");
-    			add_location(div12, file$k, 129, 4, 4240);
+    			add_location(div12, file$m, 129, 4, 4240);
     			attr_dev(div13, "class", "text-edark mx-auto max-w-5xl w-full");
-    			add_location(div13, file$k, 95, 2, 3166);
+    			add_location(div13, file$m, 95, 2, 3166);
     			attr_dev(div14, "class", "mx-auto flex-col flex-grow");
-    			add_location(div14, file$k, 94, 0, 3123);
+    			add_location(div14, file$m, 94, 0, 3123);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, div14, anchor);
     			append_dev(div14, div13);
     			append_dev(div13, div5);
@@ -43075,6 +46020,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			append_dev(div9, input3);
     			set_input_value(input3, /*hastTagString*/ ctx[0]);
     			current = true;
+    			if (remount) run_all(dispose);
 
     			dispose = [
     				listen_dev(input0, "keydown", /*onInput*/ ctx[6], false, false, false),
@@ -43141,6 +46087,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     			if (dirty & /*tagList*/ 16) {
     				each_value = /*tagList*/ ctx[4];
+    				validate_each_argument(each_value);
     				let i;
 
     				for (i = 0; i < each_value.length; i += 1) {
@@ -43187,7 +46134,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$n.name,
+    		id: create_fragment$q.name,
     		type: "component",
     		source: "",
     		ctx
@@ -43196,7 +46143,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$l($$self, $$props, $$invalidate) {
+    function instance$q($$self, $$props, $$invalidate) {
     	let $problemStore;
     	validate_store(problemStore, "problemStore");
     	component_subscribe($$self, problemStore, $$value => $$invalidate(1, $problemStore = $$value));
@@ -43267,6 +46214,15 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		};
     	})();
 
+    	const writable_props = [];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$c.warn(`<Problem_initials> was created with unknown prop '${key}'`);
+    	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Problem_initials", $$slots, []);
+
     	function input0_input_handler() {
     		$problemStore.problemName = this.value;
     		problemStore.set($problemStore);
@@ -43297,19 +46253,38 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		$$invalidate(0, hastTagString);
     	}
 
-    	$$self.$capture_state = () => {
-    		return {};
-    	};
+    	$$self.$capture_state = () => ({
+    		apolloClient,
+    		Loader,
+    		getClient,
+    		query,
+    		subscribe: subscribe$2,
+    		mutate,
+    		problemStore,
+    		alert,
+    		tagList,
+    		client,
+    		selectedTags,
+    		hastTagString,
+    		changeHandler,
+    		onInput,
+    		$problemStore,
+    		uniqueNameStatus
+    	});
 
     	$$self.$inject_state = $$props => {
     		if ("alert" in $$props) $$invalidate(3, alert = $$props.alert);
     		if ("selectedTags" in $$props) selectedTags = $$props.selectedTags;
     		if ("hastTagString" in $$props) $$invalidate(0, hastTagString = $$props.hastTagString);
-    		if ("$problemStore" in $$props) problemStore.set($problemStore = $$props.$problemStore);
     		if ("uniqueNameStatus" in $$props) $$invalidate(2, uniqueNameStatus = $$props.uniqueNameStatus);
     	};
 
     	let uniqueNameStatus;
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
+
     	 $$invalidate(2, uniqueNameStatus = 0);
 
     	return [
@@ -43333,21 +46308,21 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Problem_initials extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$l, create_fragment$n, safe_not_equal, {});
+    		init(this, options, instance$q, create_fragment$q, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Problem_initials",
     			options,
-    			id: create_fragment$n.name
+    			id: create_fragment$q.name
     		});
     	}
     }
 
-    /* src/routes/problem/problem_statement.svelte generated by Svelte v3.18.1 */
-    const file$l = "src/routes/problem/problem_statement.svelte";
+    /* src/routes/problem/problem_statement.svelte generated by Svelte v3.20.1 */
+    const file$n = "src/routes/problem/problem_statement.svelte";
 
-    function create_fragment$o(ctx) {
+    function create_fragment$r(ctx) {
     	let div2;
     	let div1;
     	let div0;
@@ -43366,21 +46341,21 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			t1 = space();
     			textarea = element("textarea");
     			attr_dev(label, "class", " text-2xl text-elight mb-3 my-2");
-    			add_location(label, file$l, 13, 6, 622);
+    			add_location(label, file$n, 13, 6, 622);
     			attr_dev(textarea, "class", " h-full w-full bg-dark text-elight text-2xl border\n        border-gray-200 rounded py-3 px-4 mb-3 leading-tight focus:outline-none\n        focus:border-white h-48 resize-none");
     			attr_dev(textarea, "id", "message");
-    			add_location(textarea, file$l, 16, 6, 731);
+    			add_location(textarea, file$n, 16, 6, 731);
     			attr_dev(div0, "class", "w-full h-full px-3");
-    			add_location(div0, file$l, 12, 4, 583);
+    			add_location(div0, file$n, 12, 4, 583);
     			attr_dev(div1, "class", "flex-col mx-3 w-full mb-6");
-    			add_location(div1, file$l, 11, 2, 539);
+    			add_location(div1, file$n, 11, 2, 539);
     			attr_dev(div2, "class", "max-w-6xl mx-auto flex statement flex-grow  svelte-ah4uim");
-    			add_location(div2, file$l, 10, 0, 479);
+    			add_location(div2, file$n, 10, 0, 479);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, div2, anchor);
     			append_dev(div2, div1);
     			append_dev(div1, div0);
@@ -43388,6 +46363,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			append_dev(div0, t1);
     			append_dev(div0, textarea);
     			set_input_value(textarea, /*$problemStore*/ ctx[0].description);
+    			if (remount) dispose();
     			dispose = listen_dev(textarea, "input", /*textarea_input_handler*/ ctx[1]);
     		},
     		p: function update(ctx, [dirty]) {
@@ -43405,7 +46381,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$o.name,
+    		id: create_fragment$r.name,
     		type: "component",
     		source: "",
     		ctx
@@ -43414,45 +46390,48 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$m($$self, $$props, $$invalidate) {
+    function instance$r($$self, $$props, $$invalidate) {
     	let $problemStore;
     	validate_store(problemStore, "problemStore");
     	component_subscribe($$self, problemStore, $$value => $$invalidate(0, $problemStore = $$value));
+    	const writable_props = [];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<Problem_statement> was created with unknown prop '${key}'`);
+    	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Problem_statement", $$slots, []);
 
     	function textarea_input_handler() {
     		$problemStore.description = this.value;
     		problemStore.set($problemStore);
     	}
 
-    	$$self.$capture_state = () => {
-    		return {};
-    	};
-
-    	$$self.$inject_state = $$props => {
-    		if ("$problemStore" in $$props) problemStore.set($problemStore = $$props.$problemStore);
-    	};
-
+    	$$self.$capture_state = () => ({ problemStore, $problemStore });
     	return [$problemStore, textarea_input_handler];
     }
 
     class Problem_statement extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$m, create_fragment$o, safe_not_equal, {});
+    		init(this, options, instance$r, create_fragment$r, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Problem_statement",
     			options,
-    			id: create_fragment$o.name
+    			id: create_fragment$r.name
     		});
     	}
     }
 
-    /* src/routes/problem/testcase.svelte generated by Svelte v3.18.1 */
-    const file$m = "src/routes/problem/testcase.svelte";
+    /* src/routes/problem/testcase.svelte generated by Svelte v3.20.1 */
 
-    function create_fragment$p(ctx) {
+    const { console: console_1$d } = globals;
+    const file$o = "src/routes/problem/testcase.svelte";
+
+    function create_fragment$s(ctx) {
     	let div2;
     	let h1;
     	let t1;
@@ -43474,21 +46453,21 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			button = element("button");
     			button.textContent = "Submit";
     			attr_dev(h1, "class", "text-2xl text-elight mt-3 my-2 svelte-ashmvh");
-    			add_location(h1, file$m, 78, 2, 2812);
+    			add_location(h1, file$o, 78, 2, 2812);
     			attr_dev(div0, "id", "editor");
     			attr_dev(div0, "class", "editor mx-60 box-border flex-grow svelte-ashmvh");
-    			add_location(div0, file$m, 80, 2, 2879);
+    			add_location(div0, file$o, 80, 2, 2879);
     			attr_dev(button, "class", "bg-dark hover:bg-elight hover:text-edark outline-none text-white\n      font-bold py-4 px-4 text-xl rounded-full svelte-ashmvh");
-    			add_location(button, file$m, 85, 4, 3019);
+    			add_location(button, file$o, 85, 4, 3019);
     			attr_dev(div1, "class", "my-3 flex justify-center svelte-ashmvh");
-    			add_location(div1, file$m, 84, 2, 2976);
+    			add_location(div1, file$o, 84, 2, 2976);
     			attr_dev(div2, "class", "mx-64 flex-grow editor_window box-border svelte-ashmvh");
-    			add_location(div2, file$m, 77, 0, 2755);
+    			add_location(div2, file$o, 77, 0, 2755);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, div2, anchor);
     			append_dev(div2, h1);
     			append_dev(div2, t1);
@@ -43496,6 +46475,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			append_dev(div2, t2);
     			append_dev(div2, div1);
     			append_dev(div1, button);
+    			if (remount) run_all(dispose);
 
     			dispose = [
     				listen_dev(div0, "keydown", /*onInput*/ ctx[0], false, false, false),
@@ -43513,7 +46493,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$p.name,
+    		id: create_fragment$s.name,
     		type: "component",
     		source: "",
     		ctx
@@ -43522,7 +46502,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$n($$self, $$props, $$invalidate) {
+    function instance$s($$self, $$props, $$invalidate) {
     	let $problemStore;
     	validate_store(problemStore, "problemStore");
     	component_subscribe($$self, problemStore, $$value => $$invalidate(3, $problemStore = $$value));
@@ -43589,18 +46569,43 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		location.replace("http://localhost:5000/admin");
     	}
 
+    	const writable_props = [];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$d.warn(`<Testcase> was created with unknown prop '${key}'`);
+    	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Testcase", $$slots, []);
+
     	const click_handler = e => {
     		submitData();
     	};
 
-    	$$self.$capture_state = () => {
-    		return {};
-    	};
+    	$$self.$capture_state = () => ({
+    		onMount,
+    		afterUpdate,
+    		beforeUpdate,
+    		problemStore,
+    		apolloClient,
+    		getClient,
+    		query,
+    		subscribe: subscribe$2,
+    		mutate,
+    		client,
+    		editor,
+    		onInput,
+    		submitData,
+    		$problemStore
+    	});
 
     	$$self.$inject_state = $$props => {
     		if ("editor" in $$props) editor = $$props.editor;
-    		if ("$problemStore" in $$props) problemStore.set($problemStore = $$props.$problemStore);
     	};
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
 
     	return [onInput, submitData, editor, $problemStore, client, click_handler];
     }
@@ -43608,21 +46613,23 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Testcase extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$n, create_fragment$p, safe_not_equal, {});
+    		init(this, options, instance$s, create_fragment$s, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Testcase",
     			options,
-    			id: create_fragment$p.name
+    			id: create_fragment$s.name
     		});
     	}
     }
 
-    /* src/routes/problem/problem_solution.svelte generated by Svelte v3.18.1 */
-    const file$n = "src/routes/problem/problem_solution.svelte";
+    /* src/routes/problem/problem_solution.svelte generated by Svelte v3.20.1 */
 
-    function create_fragment$q(ctx) {
+    const { console: console_1$e } = globals;
+    const file$p = "src/routes/problem/problem_solution.svelte";
+
+    function create_fragment$t(ctx) {
     	let div8;
     	let h1;
     	let t1;
@@ -43672,42 +46679,42 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			button = element("button");
     			button.textContent = "Run";
     			attr_dev(h1, "class", "text-2xl text-elight mt-3 my-2 svelte-1da7xg3");
-    			add_location(h1, file$n, 82, 2, 2798);
+    			add_location(h1, file$p, 82, 2, 2798);
     			attr_dev(div0, "id", "editor");
     			attr_dev(div0, "class", "editor mx-60 box-border flex-grow svelte-1da7xg3");
-    			add_location(div0, file$n, 83, 2, 2863);
+    			add_location(div0, file$p, 83, 2, 2863);
     			attr_dev(h20, "class", "text-xl text-elight my-3 my-2 svelte-1da7xg3");
-    			add_location(h20, file$n, 90, 6, 3076);
+    			add_location(h20, file$p, 90, 6, 3076);
     			attr_dev(div1, "id", "inputeditor");
     			attr_dev(div1, "class", "inputeditor text-xl h-full box-border  svelte-1da7xg3");
-    			add_location(div1, file$n, 92, 8, 3183);
+    			add_location(div1, file$p, 92, 8, 3183);
     			attr_dev(div2, "class", "flex-grow h-48 box-border svelte-1da7xg3");
-    			add_location(div2, file$n, 91, 6, 3135);
+    			add_location(div2, file$p, 91, 6, 3135);
     			attr_dev(div3, "class", "flex-1 mr-4 box-border svelte-1da7xg3");
-    			add_location(div3, file$n, 89, 4, 3033);
+    			add_location(div3, file$p, 89, 4, 3033);
     			attr_dev(h21, "class", "text-xl text-elight my-3 my-2 box-border svelte-1da7xg3");
-    			add_location(h21, file$n, 99, 6, 3366);
+    			add_location(h21, file$p, 99, 6, 3366);
     			attr_dev(textarea, "class", " h-full w-full bg-dark text-elight text-xl box-border\n          border-none rounded py-3 px-4 mb-3 leading-tight focus:outline-none\n          resize-none svelte-1da7xg3");
     			attr_dev(textarea, "id", "message");
     			textarea.readOnly = true;
-    			add_location(textarea, file$n, 101, 8, 3474);
+    			add_location(textarea, file$p, 101, 8, 3474);
     			attr_dev(div4, "class", "flex-grow h-48 svelte-1da7xg3");
-    			add_location(div4, file$n, 100, 6, 3437);
+    			add_location(div4, file$p, 100, 6, 3437);
     			attr_dev(div5, "class", "flex-1 ml-4 svelte-1da7xg3");
-    			add_location(div5, file$n, 98, 4, 3334);
+    			add_location(div5, file$p, 98, 4, 3334);
     			attr_dev(div6, "class", "flex my-4 p-2 border-solid h-64 border-2 border-light svelte-1da7xg3");
-    			add_location(div6, file$n, 88, 2, 2961);
+    			add_location(div6, file$p, 88, 2, 2961);
     			attr_dev(button, "class", "bg-dark hover:bg-elight hover:text-edark outline-none text-white\n      float-right font-bold py-2 px-4 rounded-full svelte-1da7xg3");
-    			add_location(button, file$n, 112, 4, 3776);
+    			add_location(button, file$p, 112, 4, 3776);
     			attr_dev(div7, "class", "svelte-1da7xg3");
-    			add_location(div7, file$n, 111, 2, 3766);
+    			add_location(div7, file$p, 111, 2, 3766);
     			attr_dev(div8, "class", "mx-64 flex-grow editor_window box-border svelte-1da7xg3");
-    			add_location(div8, file$n, 81, 0, 2741);
+    			add_location(div8, file$p, 81, 0, 2741);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, div8, anchor);
     			append_dev(div8, h1);
     			append_dev(div8, t1);
@@ -43729,6 +46736,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			append_dev(div8, t8);
     			append_dev(div8, div7);
     			append_dev(div7, button);
+    			if (remount) run_all(dispose);
 
     			dispose = [
     				listen_dev(div0, "keydown", /*onInput*/ ctx[1], false, false, false),
@@ -43752,7 +46760,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$q.name,
+    		id: create_fragment$t.name,
     		type: "component",
     		source: "",
     		ctx
@@ -43761,7 +46769,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$o($$self, $$props, $$invalidate) {
+    function instance$t($$self, $$props, $$invalidate) {
     	let $problemStore;
     	validate_store(problemStore, "problemStore");
     	component_subscribe($$self, problemStore, $$value => $$invalidate(5, $problemStore = $$value));
@@ -43835,6 +46843,15 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		}
     	}
 
+    	const writable_props = [];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$e.warn(`<Problem_solution> was created with unknown prop '${key}'`);
+    	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Problem_solution", $$slots, []);
+
     	function textarea_input_handler() {
     		result = this.value;
     		$$invalidate(0, result);
@@ -43844,16 +46861,28 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		outputData();
     	};
 
-    	$$self.$capture_state = () => {
-    		return {};
-    	};
+    	$$self.$capture_state = () => ({
+    		onMount,
+    		afterUpdate,
+    		beforeUpdate,
+    		problemStore,
+    		editor,
+    		inputeditor,
+    		onInput,
+    		result,
+    		outputData,
+    		$problemStore
+    	});
 
     	$$self.$inject_state = $$props => {
     		if ("editor" in $$props) editor = $$props.editor;
     		if ("inputeditor" in $$props) inputeditor = $$props.inputeditor;
     		if ("result" in $$props) $$invalidate(0, result = $$props.result);
-    		if ("$problemStore" in $$props) problemStore.set($problemStore = $$props.$problemStore);
     	};
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
 
     	return [
     		result,
@@ -43870,19 +46899,19 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Problem_solution extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$o, create_fragment$q, safe_not_equal, {});
+    		init(this, options, instance$t, create_fragment$t, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Problem_solution",
     			options,
-    			id: create_fragment$q.name
+    			id: create_fragment$t.name
     		});
     	}
     }
 
-    /* src/routes/problem/select_page.svelte generated by Svelte v3.18.1 */
-    const file$o = "src/routes/problem/select_page.svelte";
+    /* src/routes/problem/select_page.svelte generated by Svelte v3.20.1 */
+    const file$q = "src/routes/problem/select_page.svelte";
 
     // (10:2) {#if pageNum === 1}
     function create_if_block_3(ctx) {
@@ -44036,7 +47065,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function create_fragment$r(ctx) {
+    function create_fragment$u(ctx) {
     	let div;
     	let t0;
     	let t1;
@@ -44057,7 +47086,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			if (if_block2) if_block2.c();
     			t2 = space();
     			if (if_block3) if_block3.c();
-    			add_location(div, file$o, 8, 0, 269);
+    			add_location(div, file$q, 8, 0, 269);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -44176,7 +47205,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$r.name,
+    		id: create_fragment$u.name,
     		type: "component",
     		source: "",
     		ctx
@@ -44185,7 +47214,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$p($$self, $$props, $$invalidate) {
+    function instance$u($$self, $$props, $$invalidate) {
     	let { pageNum = 1 } = $$props;
     	const writable_props = ["pageNum"];
 
@@ -44193,17 +47222,28 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<Select_page> was created with unknown prop '${key}'`);
     	});
 
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Select_page", $$slots, []);
+
     	$$self.$set = $$props => {
     		if ("pageNum" in $$props) $$invalidate(0, pageNum = $$props.pageNum);
     	};
 
-    	$$self.$capture_state = () => {
-    		return { pageNum };
-    	};
+    	$$self.$capture_state = () => ({
+    		pageNum,
+    		ProblemInitials: Problem_initials,
+    		ProblemStatement: Problem_statement,
+    		Testcase,
+    		ProblemSolution: Problem_solution
+    	});
 
     	$$self.$inject_state = $$props => {
     		if ("pageNum" in $$props) $$invalidate(0, pageNum = $$props.pageNum);
     	};
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
 
     	return [pageNum];
     }
@@ -44211,13 +47251,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Select_page extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$p, create_fragment$r, safe_not_equal, { pageNum: 0 });
+    		init(this, options, instance$u, create_fragment$u, safe_not_equal, { pageNum: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Select_page",
     			options,
-    			id: create_fragment$r.name
+    			id: create_fragment$u.name
     		});
     	}
 
@@ -44230,26 +47270,30 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	}
     }
 
-    /* src/routes/problem/add_problem.svelte generated by Svelte v3.18.1 */
-    const file$p = "src/routes/problem/add_problem.svelte";
+    /* src/routes/problem/add_problem.svelte generated by Svelte v3.20.1 */
 
-    function create_fragment$s(ctx) {
+    const { console: console_1$f } = globals;
+    const file$r = "src/routes/problem/add_problem.svelte";
+
+    function create_fragment$v(ctx) {
     	let div2;
     	let header;
     	let t0;
-    	let subheader;
     	let t1;
-    	let main;
+    	let subheader;
     	let t2;
+    	let main;
+    	let t3;
     	let footer;
     	let div0;
     	let button0;
-    	let t4;
+    	let t5;
     	let div1;
     	let button1;
     	let current;
     	let dispose;
     	const navbar = new Navbar({ $$inline: true });
+    	const sidebar = new Side({ $$inline: true });
 
     	const subnavbar = new Problem_navbar({
     			props: { position: /*pageNum*/ ctx[0] },
@@ -44270,62 +47314,67 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			header = element("header");
     			create_component(navbar.$$.fragment);
     			t0 = space();
+    			create_component(sidebar.$$.fragment);
+    			t1 = space();
     			subheader = element("subheader");
     			create_component(subnavbar.$$.fragment);
-    			t1 = space();
+    			t2 = space();
     			main = element("main");
     			create_component(selectpage.$$.fragment);
-    			t2 = space();
+    			t3 = space();
     			footer = element("footer");
     			div0 = element("div");
     			button0 = element("button");
     			button0.textContent = "Prev";
-    			t4 = space();
+    			t5 = space();
     			div1 = element("div");
     			button1 = element("button");
     			button1.textContent = "Next";
     			attr_dev(subheader, "class", "svelte-1cw36oz");
-    			add_location(subheader, file$p, 16, 4, 683);
+    			add_location(subheader, file$r, 18, 4, 753);
     			attr_dev(header, "class", "svelte-1cw36oz");
-    			add_location(header, file$p, 14, 2, 655);
+    			add_location(header, file$r, 15, 2, 709);
     			attr_dev(main, "class", " mx-auto w-full flex-grow overflow-auto svelte-1cw36oz");
-    			add_location(main, file$p, 20, 2, 765);
+    			add_location(main, file$r, 22, 2, 835);
     			attr_dev(button0, "id", "prevbutton");
     			attr_dev(button0, "class", "py-4 px-6 float-left shadow-md no-underline rounded-full bg-dark\n        text-white font-sans font-semibold text-sm border-white btn-primary\n        hover:text-white text-xl hover:bg-elight focus:outline-none\n        active:shadow-none mr-2 svelte-1cw36oz");
-    			add_location(button0, file$p, 25, 6, 966);
+    			add_location(button0, file$r, 27, 6, 1036);
     			attr_dev(div0, "class", "flex-1  svelte-1cw36oz");
-    			add_location(div0, file$p, 24, 4, 938);
+    			add_location(div0, file$r, 26, 4, 1008);
     			attr_dev(button1, "id", "nextbutton");
     			attr_dev(button1, "class", "py-4 px-6 shadow-md text-xl float-right no-underline rounded-full\n        bg-dark text-white font-sans font-semibold text-sm border-white\n        btn-primary hover:text-dark hover:bg-elight focus:outline-none\n        active:shadow-none mr-2 svelte-1cw36oz");
-    			add_location(button1, file$p, 42, 6, 1480);
+    			add_location(button1, file$r, 44, 6, 1550);
     			attr_dev(div1, "class", "flex-1 svelte-1cw36oz");
-    			add_location(div1, file$p, 41, 4, 1453);
+    			add_location(div1, file$r, 43, 4, 1523);
     			attr_dev(footer, "class", " footer my-8 w-full px-20 mx-auto sticky svelte-1cw36oz");
-    			add_location(footer, file$p, 23, 2, 876);
+    			add_location(footer, file$r, 25, 2, 946);
     			attr_dev(div2, "class", "w-screen bg-edark h-screen flex flex-col svelte-1cw36oz");
-    			add_location(div2, file$p, 13, 0, 598);
+    			add_location(div2, file$r, 14, 0, 652);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, div2, anchor);
     			append_dev(div2, header);
     			mount_component(navbar, header, null);
     			append_dev(header, t0);
+    			mount_component(sidebar, header, null);
+    			append_dev(header, t1);
     			append_dev(header, subheader);
     			mount_component(subnavbar, subheader, null);
-    			append_dev(div2, t1);
+    			append_dev(div2, t2);
     			append_dev(div2, main);
     			mount_component(selectpage, main, null);
-    			append_dev(div2, t2);
+    			append_dev(div2, t3);
     			append_dev(div2, footer);
     			append_dev(footer, div0);
     			append_dev(div0, button0);
-    			append_dev(footer, t4);
+    			append_dev(footer, t5);
     			append_dev(footer, div1);
     			append_dev(div1, button1);
     			current = true;
+    			if (remount) run_all(dispose);
 
     			dispose = [
     				listen_dev(button0, "click", /*click_handler*/ ctx[1], false, false, false),
@@ -44343,12 +47392,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		i: function intro(local) {
     			if (current) return;
     			transition_in(navbar.$$.fragment, local);
+    			transition_in(sidebar.$$.fragment, local);
     			transition_in(subnavbar.$$.fragment, local);
     			transition_in(selectpage.$$.fragment, local);
     			current = true;
     		},
     		o: function outro(local) {
     			transition_out(navbar.$$.fragment, local);
+    			transition_out(sidebar.$$.fragment, local);
     			transition_out(subnavbar.$$.fragment, local);
     			transition_out(selectpage.$$.fragment, local);
     			current = false;
@@ -44356,6 +47407,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		d: function destroy(detaching) {
     			if (detaching) detach_dev(div2);
     			destroy_component(navbar);
+    			destroy_component(sidebar);
     			destroy_component(subnavbar);
     			destroy_component(selectpage);
     			run_all(dispose);
@@ -44364,7 +47416,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$s.name,
+    		id: create_fragment$v.name,
     		type: "component",
     		source: "",
     		ctx
@@ -44373,7 +47425,16 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$q($$self, $$props, $$invalidate) {
+    function instance$v($$self, $$props, $$invalidate) {
+    	const writable_props = [];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$f.warn(`<Add_problem> was created with unknown prop '${key}'`);
+    	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Add_problem", $$slots, []);
+
     	const click_handler = () => {
     		if (pageNum === 1) {
     			return;
@@ -44392,15 +47453,24 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		console.log(pageNum);
     	};
 
-    	$$self.$capture_state = () => {
-    		return {};
-    	};
+    	$$self.$capture_state = () => ({
+    		Navbar,
+    		Sidebar: Side,
+    		SubNavbar: Problem_navbar,
+    		SelectPage: Select_page,
+    		pageNum
+    	});
 
     	$$self.$inject_state = $$props => {
     		if ("pageNum" in $$props) $$invalidate(0, pageNum = $$props.pageNum);
     	};
 
     	let pageNum;
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
+
     	 $$invalidate(0, pageNum = 1);
     	return [pageNum, click_handler, click_handler_1];
     }
@@ -44408,20 +47478,20 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Add_problem extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$q, create_fragment$s, safe_not_equal, {});
+    		init(this, options, instance$v, create_fragment$v, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Add_problem",
     			options,
-    			id: create_fragment$s.name
+    			id: create_fragment$v.name
     		});
     	}
     }
 
-    /* src/routes/update_problem/problem_navbar.svelte generated by Svelte v3.18.1 */
+    /* src/routes/update_problem/problem_navbar.svelte generated by Svelte v3.20.1 */
 
-    const file$q = "src/routes/update_problem/problem_navbar.svelte";
+    const file$s = "src/routes/update_problem/problem_navbar.svelte";
 
     function get_each_context$8(ctx, list, i) {
     	const child_ctx = ctx.slice();
@@ -44442,15 +47512,15 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			div1 = element("div");
     			div0 = element("div");
     			attr_dev(div0, "class", " text-xs leading-none py-1 text-center rounded ");
-    			add_location(div0, file$q, 25, 12, 1008);
+    			add_location(div0, file$s, 25, 12, 1008);
 
     			attr_dev(div1, "class", div1_class_value = /*index*/ ctx[4] < /*position*/ ctx[0]
     			? /*activeBar*/ ctx[3]
     			: "w-full text-grey-darkest  bg-light rounded items-center align-middle align-center flex-1");
 
-    			add_location(div1, file$q, 23, 10, 848);
+    			add_location(div1, file$s, 23, 10, 848);
     			attr_dev(div2, "class", "w-1/6 align-center items-center align-middle content-center\n          flex");
-    			add_location(div2, file$q, 20, 8, 739);
+    			add_location(div2, file$s, 20, 8, 739);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div2, anchor);
@@ -44502,15 +47572,15 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			if (if_block) if_block.c();
     			if_block_anchor = empty();
     			attr_dev(span, "class", "text-center w-full text-2xl");
-    			add_location(span, file$q, 16, 10, 609);
+    			add_location(span, file$s, 16, 10, 609);
 
     			attr_dev(div0, "class", div0_class_value = /*index*/ ctx[4] <= /*position*/ ctx[0]
     			? /*activeCircle*/ ctx[2]
     			: "w-16 h-16  bg-light text-white border-2 mx-auto rounded-full text-lg flex items-center");
 
-    			add_location(div0, file$q, 14, 8, 451);
+    			add_location(div0, file$s, 14, 8, 451);
     			attr_dev(div1, "class", "flex-1");
-    			add_location(div1, file$q, 13, 6, 422);
+    			add_location(div1, file$s, 13, 6, 422);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div1, anchor);
@@ -44549,7 +47619,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function create_fragment$t(ctx) {
+    function create_fragment$w(ctx) {
     	let div8;
     	let div2;
     	let div0;
@@ -44566,6 +47636,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	let t8;
     	let div6;
     	let each_value = /*content*/ ctx[1];
+    	validate_each_argument(each_value);
     	let each_blocks = [];
 
     	for (let i = 0; i < each_value.length; i += 1) {
@@ -44599,23 +47670,23 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			div6 = element("div");
     			div6.textContent = "Test Cases";
     			attr_dev(div0, "class", "flex-1");
-    			add_location(div0, file$q, 11, 4, 364);
+    			add_location(div0, file$s, 11, 4, 364);
     			attr_dev(div1, "class", "flex-1");
-    			add_location(div1, file$q, 31, 4, 1133);
+    			add_location(div1, file$s, 31, 4, 1133);
     			attr_dev(div2, "class", "flex pb-3");
-    			add_location(div2, file$q, 10, 2, 336);
+    			add_location(div2, file$s, 10, 2, 336);
     			attr_dev(div3, "class", "w-1/4 text-xl text-elight ");
-    			add_location(div3, file$q, 35, 4, 1226);
+    			add_location(div3, file$s, 35, 4, 1226);
     			attr_dev(div4, "class", "w-1/4 text-xl text-elight");
-    			add_location(div4, file$q, 37, 4, 1294);
+    			add_location(div4, file$s, 37, 4, 1294);
     			attr_dev(div5, "class", "w-1/4 text-xl text-elight");
-    			add_location(div5, file$q, 39, 4, 1362);
+    			add_location(div5, file$s, 39, 4, 1362);
     			attr_dev(div6, "class", "w-1/4 text-xl text-elight");
-    			add_location(div6, file$q, 41, 4, 1421);
+    			add_location(div6, file$s, 41, 4, 1421);
     			attr_dev(div7, "class", "flex text-xs content-center text-center");
-    			add_location(div7, file$q, 34, 2, 1168);
+    			add_location(div7, file$s, 34, 2, 1168);
     			attr_dev(div8, "class", "max-w-2xl mx-auto py-4 my-4 pb-4");
-    			add_location(div8, file$q, 9, 0, 287);
+    			add_location(div8, file$s, 9, 0, 287);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -44645,6 +47716,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		p: function update(ctx, [dirty]) {
     			if (dirty & /*content, position, activeBar, activeCircle*/ 15) {
     				each_value = /*content*/ ctx[1];
+    				validate_each_argument(each_value);
     				let i;
 
     				for (i = 0; i < each_value.length; i += 1) {
@@ -44676,7 +47748,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$t.name,
+    		id: create_fragment$w.name,
     		type: "component",
     		source: "",
     		ctx
@@ -44685,7 +47757,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$r($$self, $$props, $$invalidate) {
+    function instance$w($$self, $$props, $$invalidate) {
     	let { position = 1 } = $$props;
     	let content = [1, 2, 3, 4];
     	let activeCircle = "w-16 h-16 text-dark bg-elight  mx-auto rounded-full text-lg flex items-center";
@@ -44699,18 +47771,19 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<Problem_navbar> was created with unknown prop '${key}'`);
     	});
 
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Problem_navbar", $$slots, []);
+
     	$$self.$set = $$props => {
     		if ("position" in $$props) $$invalidate(0, position = $$props.position);
     	};
 
-    	$$self.$capture_state = () => {
-    		return {
-    			position,
-    			content,
-    			activeCircle,
-    			activeBar
-    		};
-    	};
+    	$$self.$capture_state = () => ({
+    		position,
+    		content,
+    		activeCircle,
+    		activeBar
+    	});
 
     	$$self.$inject_state = $$props => {
     		if ("position" in $$props) $$invalidate(0, position = $$props.position);
@@ -44719,19 +47792,23 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		if ("activeBar" in $$props) $$invalidate(3, activeBar = $$props.activeBar);
     	};
 
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
+
     	return [position, content, activeCircle, activeBar];
     }
 
     class Problem_navbar$1 extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$r, create_fragment$t, safe_not_equal, { position: 0 });
+    		init(this, options, instance$w, create_fragment$w, safe_not_equal, { position: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Problem_navbar",
     			options,
-    			id: create_fragment$t.name
+    			id: create_fragment$w.name
     		});
     	}
 
@@ -44744,11 +47821,11 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	}
     }
 
-    /* src/routes/update_problem/loader.svelte generated by Svelte v3.18.1 */
+    /* src/routes/update_problem/loader.svelte generated by Svelte v3.20.1 */
 
-    const file$r = "src/routes/update_problem/loader.svelte";
+    const file$t = "src/routes/update_problem/loader.svelte";
 
-    function create_fragment$u(ctx) {
+    function create_fragment$x(ctx) {
     	let div3;
     	let div0;
     	let t0;
@@ -44765,13 +47842,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			t1 = space();
     			div2 = element("div");
     			attr_dev(div0, "class", "LoaderBalls__item svelte-42m7bp");
-    			add_location(div0, file$r, 42, 2, 2513);
+    			add_location(div0, file$t, 42, 2, 2513);
     			attr_dev(div1, "class", "LoaderBalls__item svelte-42m7bp");
-    			add_location(div1, file$r, 43, 2, 2549);
+    			add_location(div1, file$t, 43, 2, 2549);
     			attr_dev(div2, "class", "LoaderBalls__item svelte-42m7bp");
-    			add_location(div2, file$r, 44, 2, 2585);
+    			add_location(div2, file$t, 44, 2, 2585);
     			attr_dev(div3, "class", "LoaderBalls svelte-42m7bp");
-    			add_location(div3, file$r, 41, 0, 2485);
+    			add_location(div3, file$t, 41, 0, 2485);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -44794,7 +47871,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$u.name,
+    		id: create_fragment$x.name,
     		type: "component",
     		source: "",
     		ctx
@@ -44803,16 +47880,28 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
+    function instance$x($$self, $$props) {
+    	const writable_props = [];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<Loader> was created with unknown prop '${key}'`);
+    	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Loader", $$slots, []);
+    	return [];
+    }
+
     class Loader$1 extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, null, create_fragment$u, safe_not_equal, {});
+    		init(this, options, instance$x, create_fragment$x, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Loader",
     			options,
-    			id: create_fragment$u.name
+    			id: create_fragment$x.name
     		});
     	}
     }
@@ -44828,8 +47917,10 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
       email: 'Sample@gmail.com',
     });
 
-    /* src/routes/update_problem/problem_initials.svelte generated by Svelte v3.18.1 */
-    const file$s = "src/routes/update_problem/problem_initials.svelte";
+    /* src/routes/update_problem/problem_initials.svelte generated by Svelte v3.20.1 */
+
+    const { console: console_1$g } = globals;
+    const file$u = "src/routes/update_problem/problem_initials.svelte";
 
     function get_each_context$9(ctx, list, i) {
     	const child_ctx = ctx.slice();
@@ -44885,7 +47976,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			i = element("i");
     			i.textContent = "";
     			attr_dev(i, "class", "material-icons status svelte-1nbk2ow");
-    			add_location(i, file$s, 131, 12, 4321);
+    			add_location(i, file$u, 131, 12, 4321);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, i, anchor);
@@ -44915,7 +48006,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			span = element("span");
     			span.textContent = "clear";
     			attr_dev(span, "class", "status material-icons svelte-1nbk2ow");
-    			add_location(span, file$s, 134, 12, 4434);
+    			add_location(span, file$u, 134, 12, 4434);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, span, anchor);
@@ -44954,7 +48045,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			attr_dev(option, "name", option_name_value = /*tag*/ ctx[15]);
     			option.__value = option_value_value = /*index*/ ctx[17];
     			option.value = option.__value;
-    			add_location(option, file$s, 176, 16, 5748);
+    			add_location(option, file$u, 176, 16, 5748);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, option, anchor);
@@ -44978,7 +48069,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function create_fragment$v(ctx) {
+    function create_fragment$y(ctx) {
     	let div14;
     	let div13;
     	let div5;
@@ -45028,6 +48119,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	let if_block1 = /*uniqueNameStatus*/ ctx[0] === 1 && create_if_block_1$5(ctx);
     	let if_block2 = /*uniqueNameStatus*/ ctx[0] === 3 && create_if_block$8(ctx);
     	let each_value = /*tagList*/ ctx[4];
+    	validate_each_argument(each_value);
     	let each_blocks = [];
 
     	for (let i = 0; i < each_value.length; i += 1) {
@@ -45096,69 +48188,69 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			t22 = space();
     			input3 = element("input");
     			attr_dev(label0, "class", "text-elight text-2xl my-3");
-    			add_location(label0, file$s, 106, 6, 3511);
+    			add_location(label0, file$u, 106, 6, 3511);
     			attr_dev(input0, "type", "search");
     			attr_dev(input0, "name", "serch");
     			attr_dev(input0, "placeholder", "Search");
     			attr_dev(input0, "class", "bg-elight h-10 px-5 pr-10 rounded-full w-full text-xl\n              tet-edark focus:outline-none");
     			input0.readOnly = true;
-    			add_location(input0, file$s, 112, 12, 3711);
+    			add_location(input0, file$u, 112, 12, 3711);
     			attr_dev(div0, "class", "w-full");
-    			add_location(div0, file$s, 111, 10, 3678);
+    			add_location(div0, file$u, 111, 10, 3678);
     			attr_dev(p, "class", "text-white text-sm my-2");
-    			add_location(p, file$s, 123, 12, 4086);
-    			add_location(div1, file$s, 122, 10, 4068);
+    			add_location(p, file$u, 123, 12, 4086);
+    			add_location(div1, file$u, 122, 10, 4068);
     			attr_dev(div2, "class", " flex-col w-full");
-    			add_location(div2, file$s, 110, 8, 3637);
+    			add_location(div2, file$u, 110, 8, 3637);
     			attr_dev(div3, "class", "ml-3");
-    			add_location(div3, file$s, 126, 8, 4173);
+    			add_location(div3, file$u, 126, 8, 4173);
     			attr_dev(div4, "class", "flex");
-    			add_location(div4, file$s, 109, 6, 3610);
-    			add_location(div5, file$s, 105, 4, 3499);
+    			add_location(div4, file$u, 109, 6, 3610);
+    			add_location(div5, file$u, 105, 4, 3499);
     			attr_dev(h2, "class", "labels text-2xl svelte-1nbk2ow");
-    			add_location(h2, file$s, 141, 8, 4620);
-    			add_location(div6, file$s, 140, 6, 4606);
+    			add_location(h2, file$u, 141, 8, 4620);
+    			add_location(div6, file$u, 140, 6, 4606);
     			attr_dev(label1, "class", "labels svelte-1nbk2ow");
-    			add_location(label1, file$s, 145, 10, 4716);
+    			add_location(label1, file$u, 145, 10, 4716);
     			attr_dev(input1, "class", "unitinput svelte-1nbk2ow");
     			attr_dev(input1, "type", "text");
     			attr_dev(input1, "placeholder", "in milli seconds");
-    			add_location(input1, file$s, 146, 10, 4773);
+    			add_location(input1, file$u, 146, 10, 4773);
     			attr_dev(span0, "class", "unit svelte-1nbk2ow");
-    			add_location(span0, file$s, 151, 10, 4939);
-    			add_location(div7, file$s, 144, 8, 4700);
+    			add_location(span0, file$u, 151, 10, 4939);
+    			add_location(div7, file$u, 144, 8, 4700);
     			attr_dev(label2, "class", "labels svelte-1nbk2ow");
-    			add_location(label2, file$s, 154, 10, 5007);
+    			add_location(label2, file$u, 154, 10, 5007);
     			attr_dev(input2, "class", "unitinput svelte-1nbk2ow");
     			attr_dev(input2, "type", "text");
     			attr_dev(input2, "placeholder", "in Mbs");
-    			add_location(input2, file$s, 155, 10, 5066);
+    			add_location(input2, file$u, 155, 10, 5066);
     			attr_dev(span1, "class", "unit svelte-1nbk2ow");
-    			add_location(span1, file$s, 160, 10, 5222);
-    			add_location(div8, file$s, 153, 8, 4991);
+    			add_location(span1, file$u, 160, 10, 5222);
+    			add_location(div8, file$u, 153, 8, 4991);
     			attr_dev(label3, "class", "labels svelte-1nbk2ow");
-    			add_location(label3, file$s, 164, 10, 5291);
+    			add_location(label3, file$u, 164, 10, 5291);
     			attr_dev(select, "class", "unitinput outline-none w-64 svelte-1nbk2ow");
-    			add_location(select, file$s, 166, 12, 5380);
+    			add_location(select, file$u, 166, 12, 5380);
     			attr_dev(input3, "type", "text");
     			attr_dev(input3, "class", "unitinput svelte-1nbk2ow");
     			input3.readOnly = true;
-    			add_location(input3, file$s, 184, 12, 5974);
+    			add_location(input3, file$u, 184, 12, 5974);
     			attr_dev(div9, "class", "flex-col flex");
-    			add_location(div9, file$s, 165, 10, 5340);
-    			add_location(div10, file$s, 163, 8, 5275);
-    			add_location(div11, file$s, 143, 6, 4686);
+    			add_location(div9, file$u, 165, 10, 5340);
+    			add_location(div10, file$u, 163, 8, 5275);
+    			add_location(div11, file$u, 143, 6, 4686);
     			attr_dev(div12, "class", "border-solid border-2 mt-6 border-light p-4");
-    			add_location(div12, file$s, 139, 4, 4542);
+    			add_location(div12, file$u, 139, 4, 4542);
     			attr_dev(div13, "class", "text-edark mx-auto max-w-5xl w-full");
-    			add_location(div13, file$s, 104, 2, 3445);
+    			add_location(div13, file$u, 104, 2, 3445);
     			attr_dev(div14, "class", "mx-auto flex-col flex-grow");
-    			add_location(div14, file$s, 103, 0, 3402);
+    			add_location(div14, file$u, 103, 0, 3402);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, div14, anchor);
     			append_dev(div14, div13);
     			append_dev(div13, div5);
@@ -45215,6 +48307,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			append_dev(div9, input3);
     			set_input_value(input3, /*hashTagString*/ ctx[1]);
     			current = true;
+    			if (remount) run_all(dispose);
 
     			dispose = [
     				listen_dev(input0, "keydown", /*onInput*/ ctx[6], false, false, false),
@@ -45281,6 +48374,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     			if (dirty & /*tagList*/ 16) {
     				each_value = /*tagList*/ ctx[4];
+    				validate_each_argument(each_value);
     				let i;
 
     				for (i = 0; i < each_value.length; i += 1) {
@@ -45327,7 +48421,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$v.name,
+    		id: create_fragment$y.name,
     		type: "component",
     		source: "",
     		ctx
@@ -45336,7 +48430,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$s($$self, $$props, $$invalidate) {
+    function instance$y($$self, $$props, $$invalidate) {
     	let $problemStore;
     	validate_store(problemStore$1, "problemStore");
     	component_subscribe($$self, problemStore$1, $$value => $$invalidate(2, $problemStore = $$value));
@@ -45418,6 +48512,15 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		};
     	})();
 
+    	const writable_props = [];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$g.warn(`<Problem_initials> was created with unknown prop '${key}'`);
+    	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Problem_initials", $$slots, []);
+
     	function input0_input_handler() {
     		$problemStore.problemName = this.value;
     		problemStore$1.set($problemStore);
@@ -45448,16 +48551,31 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		($$invalidate(1, hashTagString), $$invalidate(2, $problemStore));
     	}
 
-    	$$self.$capture_state = () => {
-    		return {};
-    	};
+    	$$self.$capture_state = () => ({
+    		apolloClient,
+    		Loader: Loader$1,
+    		getClient,
+    		query,
+    		subscribe: subscribe$2,
+    		mutate,
+    		problemStore: problemStore$1,
+    		alert,
+    		tagList,
+    		client,
+    		changeHandler,
+    		onInput,
+    		uniqueNameStatus,
+    		selectedTags,
+    		hashTagString,
+    		$problemStore,
+    		tagsName
+    	});
 
     	$$self.$inject_state = $$props => {
     		if ("alert" in $$props) $$invalidate(3, alert = $$props.alert);
     		if ("uniqueNameStatus" in $$props) $$invalidate(0, uniqueNameStatus = $$props.uniqueNameStatus);
     		if ("selectedTags" in $$props) selectedTags = $$props.selectedTags;
     		if ("hashTagString" in $$props) $$invalidate(1, hashTagString = $$props.hashTagString);
-    		if ("$problemStore" in $$props) problemStore$1.set($problemStore = $$props.$problemStore);
     		if ("tagsName" in $$props) tagsName = $$props.tagsName;
     	};
 
@@ -45465,6 +48583,10 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	let selectedTags;
     	let hashTagString;
     	let tagsName;
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
 
     	$$self.$$.update = () => {
     		if ($$self.$$.dirty & /*$problemStore*/ 4) {
@@ -45501,21 +48623,21 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Problem_initials$1 extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$s, create_fragment$v, safe_not_equal, {});
+    		init(this, options, instance$y, create_fragment$y, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Problem_initials",
     			options,
-    			id: create_fragment$v.name
+    			id: create_fragment$y.name
     		});
     	}
     }
 
-    /* src/routes/update_problem/problem_statement.svelte generated by Svelte v3.18.1 */
-    const file$t = "src/routes/update_problem/problem_statement.svelte";
+    /* src/routes/update_problem/problem_statement.svelte generated by Svelte v3.20.1 */
+    const file$v = "src/routes/update_problem/problem_statement.svelte";
 
-    function create_fragment$w(ctx) {
+    function create_fragment$z(ctx) {
     	let div2;
     	let div1;
     	let div0;
@@ -45534,21 +48656,21 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			t1 = space();
     			textarea = element("textarea");
     			attr_dev(label, "class", " text-2xl text-elight mb-3 my-2");
-    			add_location(label, file$t, 13, 6, 638);
+    			add_location(label, file$v, 13, 6, 638);
     			attr_dev(textarea, "class", " h-full w-full bg-dark text-elight text-2xl border\n        border-gray-200 rounded py-3 px-4 mb-3 leading-tight focus:outline-none\n        focus:border-white h-48 resize-none");
     			attr_dev(textarea, "id", "message");
-    			add_location(textarea, file$t, 16, 6, 747);
+    			add_location(textarea, file$v, 16, 6, 747);
     			attr_dev(div0, "class", "w-full h-full px-3");
-    			add_location(div0, file$t, 12, 4, 599);
+    			add_location(div0, file$v, 12, 4, 599);
     			attr_dev(div1, "class", "flex-col mx-3 w-full mb-6");
-    			add_location(div1, file$t, 11, 2, 555);
+    			add_location(div1, file$v, 11, 2, 555);
     			attr_dev(div2, "class", "max-w-6xl mx-auto flex statement flex-grow  svelte-i0x5sn");
-    			add_location(div2, file$t, 10, 0, 495);
+    			add_location(div2, file$v, 10, 0, 495);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, div2, anchor);
     			append_dev(div2, div1);
     			append_dev(div1, div0);
@@ -45556,6 +48678,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			append_dev(div0, t1);
     			append_dev(div0, textarea);
     			set_input_value(textarea, /*$problemStore*/ ctx[0].description);
+    			if (remount) dispose();
     			dispose = listen_dev(textarea, "input", /*textarea_input_handler*/ ctx[1]);
     		},
     		p: function update(ctx, [dirty]) {
@@ -45573,7 +48696,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$w.name,
+    		id: create_fragment$z.name,
     		type: "component",
     		source: "",
     		ctx
@@ -45582,47 +48705,48 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$t($$self, $$props, $$invalidate) {
+    function instance$z($$self, $$props, $$invalidate) {
     	let $problemStore;
     	validate_store(problemStore$1, "problemStore");
     	component_subscribe($$self, problemStore$1, $$value => $$invalidate(0, $problemStore = $$value));
+    	const writable_props = [];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<Problem_statement> was created with unknown prop '${key}'`);
+    	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Problem_statement", $$slots, []);
 
     	function textarea_input_handler() {
     		$problemStore.description = this.value;
     		problemStore$1.set($problemStore);
     	}
 
-    	$$self.$capture_state = () => {
-    		return {};
-    	};
-
-    	$$self.$inject_state = $$props => {
-    		if ("$problemStore" in $$props) problemStore$1.set($problemStore = $$props.$problemStore);
-    	};
-
+    	$$self.$capture_state = () => ({ problemStore: problemStore$1, $problemStore });
     	return [$problemStore, textarea_input_handler];
     }
 
     class Problem_statement$1 extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$t, create_fragment$w, safe_not_equal, {});
+    		init(this, options, instance$z, create_fragment$z, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Problem_statement",
     			options,
-    			id: create_fragment$w.name
+    			id: create_fragment$z.name
     		});
     	}
     }
 
-    /* src/routes/update_problem/testcase.svelte generated by Svelte v3.18.1 */
+    /* src/routes/update_problem/testcase.svelte generated by Svelte v3.20.1 */
 
-    const { console: console_1$6 } = globals;
-    const file$u = "src/routes/update_problem/testcase.svelte";
+    const { console: console_1$h } = globals;
+    const file$w = "src/routes/update_problem/testcase.svelte";
 
-    function create_fragment$x(ctx) {
+    function create_fragment$A(ctx) {
     	let div2;
     	let h1;
     	let t1;
@@ -45644,21 +48768,21 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			button = element("button");
     			button.textContent = "Submit";
     			attr_dev(h1, "class", "text-2xl text-elight mt-3 my-2 svelte-1hcojl0");
-    			add_location(h1, file$u, 80, 2, 2902);
+    			add_location(h1, file$w, 80, 2, 2902);
     			attr_dev(div0, "id", "editor");
     			attr_dev(div0, "class", "editor mx-60 box-border flex-grow svelte-1hcojl0");
-    			add_location(div0, file$u, 82, 2, 2969);
+    			add_location(div0, file$w, 82, 2, 2969);
     			attr_dev(button, "class", "bg-dark hover:bg-elight hover:text-edark outline-none text-white\n      font-bold py-4 px-4 text-xl rounded-full svelte-1hcojl0");
-    			add_location(button, file$u, 87, 4, 3109);
+    			add_location(button, file$w, 87, 4, 3109);
     			attr_dev(div1, "class", "my-3 flex justify-center svelte-1hcojl0");
-    			add_location(div1, file$u, 86, 2, 3066);
+    			add_location(div1, file$w, 86, 2, 3066);
     			attr_dev(div2, "class", "mx-64 flex-grow editor_window box-border svelte-1hcojl0");
-    			add_location(div2, file$u, 79, 0, 2845);
+    			add_location(div2, file$w, 79, 0, 2845);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, div2, anchor);
     			append_dev(div2, h1);
     			append_dev(div2, t1);
@@ -45666,6 +48790,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			append_dev(div2, t2);
     			append_dev(div2, div1);
     			append_dev(div1, button);
+    			if (remount) run_all(dispose);
 
     			dispose = [
     				listen_dev(div0, "keydown", /*onInput*/ ctx[0], false, false, false),
@@ -45683,7 +48808,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$x.name,
+    		id: create_fragment$A.name,
     		type: "component",
     		source: "",
     		ctx
@@ -45692,7 +48817,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$u($$self, $$props, $$invalidate) {
+    function instance$A($$self, $$props, $$invalidate) {
     	let $problemStore;
     	validate_store(problemStore$1, "problemStore");
     	component_subscribe($$self, problemStore$1, $$value => $$invalidate(4, $problemStore = $$value));
@@ -45764,8 +48889,11 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	const writable_props = ["currentRoute"];
 
     	Object.keys($$props).forEach(key => {
-    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$6.warn(`<Testcase> was created with unknown prop '${key}'`);
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$h.warn(`<Testcase> was created with unknown prop '${key}'`);
     	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Testcase", $$slots, []);
 
     	const click_handler = e => {
     		submitData();
@@ -45775,15 +48903,32 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		if ("currentRoute" in $$props) $$invalidate(2, currentRoute = $$props.currentRoute);
     	};
 
-    	$$self.$capture_state = () => {
-    		return { currentRoute, editor, $problemStore };
-    	};
+    	$$self.$capture_state = () => ({
+    		onMount,
+    		afterUpdate,
+    		beforeUpdate,
+    		problemStore: problemStore$1,
+    		apolloClient,
+    		getClient,
+    		query,
+    		subscribe: subscribe$2,
+    		mutate,
+    		currentRoute,
+    		client,
+    		editor,
+    		onInput,
+    		submitData,
+    		$problemStore
+    	});
 
     	$$self.$inject_state = $$props => {
     		if ("currentRoute" in $$props) $$invalidate(2, currentRoute = $$props.currentRoute);
     		if ("editor" in $$props) editor = $$props.editor;
-    		if ("$problemStore" in $$props) problemStore$1.set($problemStore = $$props.$problemStore);
     	};
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
 
     	return [
     		onInput,
@@ -45799,20 +48944,20 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Testcase$1 extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$u, create_fragment$x, safe_not_equal, { currentRoute: 2 });
+    		init(this, options, instance$A, create_fragment$A, safe_not_equal, { currentRoute: 2 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Testcase",
     			options,
-    			id: create_fragment$x.name
+    			id: create_fragment$A.name
     		});
 
     		const { ctx } = this.$$;
     		const props = options.props || {};
 
     		if (/*currentRoute*/ ctx[2] === undefined && !("currentRoute" in props)) {
-    			console_1$6.warn("<Testcase> was created without expected prop 'currentRoute'");
+    			console_1$h.warn("<Testcase> was created without expected prop 'currentRoute'");
     		}
     	}
 
@@ -45825,10 +48970,12 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	}
     }
 
-    /* src/routes/update_problem/problem_solution.svelte generated by Svelte v3.18.1 */
-    const file$v = "src/routes/update_problem/problem_solution.svelte";
+    /* src/routes/update_problem/problem_solution.svelte generated by Svelte v3.20.1 */
 
-    function create_fragment$y(ctx) {
+    const { console: console_1$i } = globals;
+    const file$x = "src/routes/update_problem/problem_solution.svelte";
+
+    function create_fragment$B(ctx) {
     	let div8;
     	let h1;
     	let t1;
@@ -45878,42 +49025,42 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			button = element("button");
     			button.textContent = "Run";
     			attr_dev(h1, "class", "text-2xl text-elight mt-3 my-2 svelte-4b5gef");
-    			add_location(h1, file$v, 81, 2, 2778);
+    			add_location(h1, file$x, 81, 2, 2778);
     			attr_dev(div0, "id", "editor");
     			attr_dev(div0, "class", "editor mx-60 box-border flex-grow svelte-4b5gef");
-    			add_location(div0, file$v, 82, 2, 2843);
+    			add_location(div0, file$x, 82, 2, 2843);
     			attr_dev(h20, "class", "text-xl text-elight my-3 my-2 svelte-4b5gef");
-    			add_location(h20, file$v, 89, 6, 3056);
+    			add_location(h20, file$x, 89, 6, 3056);
     			attr_dev(div1, "id", "inputeditor");
     			attr_dev(div1, "class", "inputeditor text-xl h-full box-border  svelte-4b5gef");
-    			add_location(div1, file$v, 91, 8, 3163);
+    			add_location(div1, file$x, 91, 8, 3163);
     			attr_dev(div2, "class", "flex-grow h-48 box-border svelte-4b5gef");
-    			add_location(div2, file$v, 90, 6, 3115);
+    			add_location(div2, file$x, 90, 6, 3115);
     			attr_dev(div3, "class", "flex-1 mr-4 box-border svelte-4b5gef");
-    			add_location(div3, file$v, 88, 4, 3013);
+    			add_location(div3, file$x, 88, 4, 3013);
     			attr_dev(h21, "class", "text-xl text-elight my-3 my-2 box-border svelte-4b5gef");
-    			add_location(h21, file$v, 98, 6, 3346);
+    			add_location(h21, file$x, 98, 6, 3346);
     			attr_dev(textarea, "class", " h-full w-full bg-dark text-elight text-xl box-border\n          border-none rounded py-3 px-4 mb-3 leading-tight focus:outline-none\n          resize-none svelte-4b5gef");
     			attr_dev(textarea, "id", "message");
     			textarea.readOnly = true;
-    			add_location(textarea, file$v, 100, 8, 3454);
+    			add_location(textarea, file$x, 100, 8, 3454);
     			attr_dev(div4, "class", "flex-grow h-48 svelte-4b5gef");
-    			add_location(div4, file$v, 99, 6, 3417);
+    			add_location(div4, file$x, 99, 6, 3417);
     			attr_dev(div5, "class", "flex-1 ml-4 svelte-4b5gef");
-    			add_location(div5, file$v, 97, 4, 3314);
+    			add_location(div5, file$x, 97, 4, 3314);
     			attr_dev(div6, "class", "flex my-4 p-2 border-solid h-64 border-2 border-light svelte-4b5gef");
-    			add_location(div6, file$v, 87, 2, 2941);
+    			add_location(div6, file$x, 87, 2, 2941);
     			attr_dev(button, "class", "bg-dark hover:bg-elight hover:text-edark outline-none text-white\n      float-right font-bold py-2 px-4 rounded-full svelte-4b5gef");
-    			add_location(button, file$v, 111, 4, 3756);
+    			add_location(button, file$x, 111, 4, 3756);
     			attr_dev(div7, "class", "svelte-4b5gef");
-    			add_location(div7, file$v, 110, 2, 3746);
+    			add_location(div7, file$x, 110, 2, 3746);
     			attr_dev(div8, "class", "mx-64 flex-grow editor_window box-border svelte-4b5gef");
-    			add_location(div8, file$v, 80, 0, 2721);
+    			add_location(div8, file$x, 80, 0, 2721);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, div8, anchor);
     			append_dev(div8, h1);
     			append_dev(div8, t1);
@@ -45935,6 +49082,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			append_dev(div8, t8);
     			append_dev(div8, div7);
     			append_dev(div7, button);
+    			if (remount) run_all(dispose);
 
     			dispose = [
     				listen_dev(div0, "keydown", /*onInput*/ ctx[1], false, false, false),
@@ -45958,7 +49106,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$y.name,
+    		id: create_fragment$B.name,
     		type: "component",
     		source: "",
     		ctx
@@ -45967,7 +49115,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$v($$self, $$props, $$invalidate) {
+    function instance$B($$self, $$props, $$invalidate) {
     	let $problemStore;
     	validate_store(problemStore$1, "problemStore");
     	component_subscribe($$self, problemStore$1, $$value => $$invalidate(5, $problemStore = $$value));
@@ -46040,6 +49188,15 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		}
     	}
 
+    	const writable_props = [];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$i.warn(`<Problem_solution> was created with unknown prop '${key}'`);
+    	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Problem_solution", $$slots, []);
+
     	function textarea_input_handler() {
     		result = this.value;
     		$$invalidate(0, result);
@@ -46049,16 +49206,28 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		outputData();
     	};
 
-    	$$self.$capture_state = () => {
-    		return {};
-    	};
+    	$$self.$capture_state = () => ({
+    		onMount,
+    		afterUpdate,
+    		beforeUpdate,
+    		problemStore: problemStore$1,
+    		editor,
+    		inputeditor,
+    		onInput,
+    		result,
+    		outputData,
+    		$problemStore
+    	});
 
     	$$self.$inject_state = $$props => {
     		if ("editor" in $$props) editor = $$props.editor;
     		if ("inputeditor" in $$props) inputeditor = $$props.inputeditor;
     		if ("result" in $$props) $$invalidate(0, result = $$props.result);
-    		if ("$problemStore" in $$props) problemStore$1.set($problemStore = $$props.$problemStore);
     	};
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
 
     	return [
     		result,
@@ -46075,19 +49244,19 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Problem_solution$1 extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$v, create_fragment$y, safe_not_equal, {});
+    		init(this, options, instance$B, create_fragment$B, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Problem_solution",
     			options,
-    			id: create_fragment$y.name
+    			id: create_fragment$B.name
     		});
     	}
     }
 
-    /* src/routes/update_problem/select_page.svelte generated by Svelte v3.18.1 */
-    const file$w = "src/routes/update_problem/select_page.svelte";
+    /* src/routes/update_problem/select_page.svelte generated by Svelte v3.20.1 */
+    const file$y = "src/routes/update_problem/select_page.svelte";
 
     // (12:2) {#if pageNum === 1}
     function create_if_block_3$1(ctx) {
@@ -46250,7 +49419,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function create_fragment$z(ctx) {
+    function create_fragment$C(ctx) {
     	let div;
     	let t0;
     	let t1;
@@ -46271,7 +49440,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			if (if_block2) if_block2.c();
     			t2 = space();
     			if (if_block3) if_block3.c();
-    			add_location(div, file$w, 10, 0, 297);
+    			add_location(div, file$y, 10, 0, 297);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -46391,7 +49560,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$z.name,
+    		id: create_fragment$C.name,
     		type: "component",
     		source: "",
     		ctx
@@ -46400,7 +49569,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$w($$self, $$props, $$invalidate) {
+    function instance$C($$self, $$props, $$invalidate) {
     	let { pageNum = 1 } = $$props;
     	let { currentRoute } = $$props;
     	const writable_props = ["pageNum", "currentRoute"];
@@ -46409,19 +49578,31 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<Select_page> was created with unknown prop '${key}'`);
     	});
 
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Select_page", $$slots, []);
+
     	$$self.$set = $$props => {
     		if ("pageNum" in $$props) $$invalidate(0, pageNum = $$props.pageNum);
     		if ("currentRoute" in $$props) $$invalidate(1, currentRoute = $$props.currentRoute);
     	};
 
-    	$$self.$capture_state = () => {
-    		return { pageNum, currentRoute };
-    	};
+    	$$self.$capture_state = () => ({
+    		pageNum,
+    		ProblemInitials: Problem_initials$1,
+    		ProblemStatement: Problem_statement$1,
+    		Testcase: Testcase$1,
+    		ProblemSolution: Problem_solution$1,
+    		currentRoute
+    	});
 
     	$$self.$inject_state = $$props => {
     		if ("pageNum" in $$props) $$invalidate(0, pageNum = $$props.pageNum);
     		if ("currentRoute" in $$props) $$invalidate(1, currentRoute = $$props.currentRoute);
     	};
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
 
     	return [pageNum, currentRoute];
     }
@@ -46429,13 +49610,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Select_page$1 extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$w, create_fragment$z, safe_not_equal, { pageNum: 0, currentRoute: 1 });
+    		init(this, options, instance$C, create_fragment$C, safe_not_equal, { pageNum: 0, currentRoute: 1 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Select_page",
     			options,
-    			id: create_fragment$z.name
+    			id: create_fragment$C.name
     		});
 
     		const { ctx } = this.$$;
@@ -46463,12 +49644,12 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	}
     }
 
-    /* src/routes/update_problem/edit_problem.svelte generated by Svelte v3.18.1 */
+    /* src/routes/update_problem/edit_problem.svelte generated by Svelte v3.20.1 */
 
-    const { console: console_1$7 } = globals;
-    const file$x = "src/routes/update_problem/edit_problem.svelte";
+    const { console: console_1$j } = globals;
+    const file$z = "src/routes/update_problem/edit_problem.svelte";
 
-    function create_fragment$A(ctx) {
+    function create_fragment$D(ctx) {
     	let div2;
     	let header;
     	let t0;
@@ -46521,30 +49702,30 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			button1 = element("button");
     			button1.textContent = "Next";
     			attr_dev(subheader, "class", "svelte-18fkda7");
-    			add_location(subheader, file$x, 37, 4, 1509);
+    			add_location(subheader, file$z, 37, 4, 1509);
     			attr_dev(header, "class", "svelte-18fkda7");
-    			add_location(header, file$x, 35, 2, 1481);
+    			add_location(header, file$z, 35, 2, 1481);
     			attr_dev(main, "class", " mx-auto w-full flex-grow overflow-auto svelte-18fkda7");
-    			add_location(main, file$x, 41, 2, 1591);
+    			add_location(main, file$z, 41, 2, 1591);
     			attr_dev(button0, "id", "prevbutton");
     			attr_dev(button0, "class", "py-4 px-6 float-left shadow-md no-underline rounded-full bg-dark\n        text-white font-sans font-semibold text-sm border-white btn-primary\n        hover:text-white text-xl hover:bg-elight focus:outline-none\n        active:shadow-none mr-2 svelte-18fkda7");
-    			add_location(button0, file$x, 46, 6, 1806);
+    			add_location(button0, file$z, 46, 6, 1806);
     			attr_dev(div0, "class", "flex-1  svelte-18fkda7");
-    			add_location(div0, file$x, 45, 4, 1778);
+    			add_location(div0, file$z, 45, 4, 1778);
     			attr_dev(button1, "id", "nextbutton");
     			attr_dev(button1, "class", "py-4 px-6 shadow-md text-xl float-right no-underline rounded-full\n        bg-dark text-white font-sans font-semibold text-sm border-white\n        btn-primary hover:text-dark hover:bg-elight focus:outline-none\n        active:shadow-none mr-2 svelte-18fkda7");
-    			add_location(button1, file$x, 63, 6, 2320);
+    			add_location(button1, file$z, 63, 6, 2320);
     			attr_dev(div1, "class", "flex-1 svelte-18fkda7");
-    			add_location(div1, file$x, 62, 4, 2293);
+    			add_location(div1, file$z, 62, 4, 2293);
     			attr_dev(footer, "class", " footer my-8 w-full px-20 mx-auto sticky svelte-18fkda7");
-    			add_location(footer, file$x, 44, 2, 1716);
+    			add_location(footer, file$z, 44, 2, 1716);
     			attr_dev(div2, "class", "w-screen bg-edark h-screen flex flex-col svelte-18fkda7");
-    			add_location(div2, file$x, 34, 0, 1424);
+    			add_location(div2, file$z, 34, 0, 1424);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, div2, anchor);
     			append_dev(div2, header);
     			mount_component(navbar, header, null);
@@ -46562,6 +49743,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			append_dev(footer, div1);
     			append_dev(div1, button1);
     			current = true;
+    			if (remount) run_all(dispose);
 
     			dispose = [
     				listen_dev(button0, "click", /*click_handler*/ ctx[6], false, false, false),
@@ -46601,7 +49783,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$A.name,
+    		id: create_fragment$D.name,
     		type: "component",
     		source: "",
     		ctx
@@ -46610,7 +49792,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$x($$self, $$props, $$invalidate) {
+    function instance$D($$self, $$props, $$invalidate) {
     	let $problem;
     	let $problemStore;
     	validate_store(problemStore$1, "problemStore");
@@ -46642,8 +49824,11 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	const writable_props = ["currentRoute"];
 
     	Object.keys($$props).forEach(key => {
-    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$7.warn(`<Edit_problem> was created with unknown prop '${key}'`);
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$j.warn(`<Edit_problem> was created with unknown prop '${key}'`);
     	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Edit_problem", $$slots, []);
 
     	const click_handler = () => {
     		if (pageNum === 1) {
@@ -46667,23 +49852,35 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		if ("currentRoute" in $$props) $$invalidate(0, currentRoute = $$props.currentRoute);
     	};
 
-    	$$self.$capture_state = () => {
-    		return {
-    			currentRoute,
-    			pageNum,
-    			$problem,
-    			$problemStore
-    		};
-    	};
+    	$$self.$capture_state = () => ({
+    		Navbar,
+    		SubNavbar: Problem_navbar$1,
+    		SelectPage: Select_page$1,
+    		apolloClient,
+    		getClient,
+    		query,
+    		mutate,
+    		subscribe: subscribe$2,
+    		problemStore: problemStore$1,
+    		currentRoute,
+    		client,
+    		problem,
+    		pageNum,
+    		$problem,
+    		$problemStore
+    	});
 
     	$$self.$inject_state = $$props => {
     		if ("currentRoute" in $$props) $$invalidate(0, currentRoute = $$props.currentRoute);
     		if ("pageNum" in $$props) $$invalidate(1, pageNum = $$props.pageNum);
-    		if ("$problem" in $$props) problem.set($problem = $$props.$problem);
-    		if ("$problemStore" in $$props) problemStore$1.set($problemStore = $$props.$problemStore);
     	};
 
     	let pageNum;
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
+
     	 $$invalidate(1, pageNum = 1);
 
     	return [
@@ -46701,20 +49898,20 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Edit_problem extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$x, create_fragment$A, safe_not_equal, { currentRoute: 0 });
+    		init(this, options, instance$D, create_fragment$D, safe_not_equal, { currentRoute: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Edit_problem",
     			options,
-    			id: create_fragment$A.name
+    			id: create_fragment$D.name
     		});
 
     		const { ctx } = this.$$;
     		const props = options.props || {};
 
     		if (/*currentRoute*/ ctx[0] === undefined && !("currentRoute" in props)) {
-    			console_1$7.warn("<Edit_problem> was created without expected prop 'currentRoute'");
+    			console_1$j.warn("<Edit_problem> was created without expected prop 'currentRoute'");
     		}
     	}
 
@@ -46727,11 +49924,11 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	}
     }
 
-    /* src/routes/thankyou.svelte generated by Svelte v3.18.1 */
+    /* src/routes/thankyou.svelte generated by Svelte v3.20.1 */
 
-    const file$y = "src/routes/thankyou.svelte";
+    const file$A = "src/routes/thankyou.svelte";
 
-    function create_fragment$B(ctx) {
+    function create_fragment$E(ctx) {
     	let h10;
     	let t1;
     	let h11;
@@ -46748,9 +49945,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			t3 = space();
     			h2 = element("h2");
     			h2.textContent = "We will get back to you";
-    			add_location(h10, file$y, 0, 0, 0);
-    			add_location(h11, file$y, 1, 0, 19);
-    			add_location(h2, file$y, 2, 0, 67);
+    			add_location(h10, file$A, 0, 0, 0);
+    			add_location(h11, file$A, 1, 0, 19);
+    			add_location(h2, file$A, 2, 0, 67);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -46776,7 +49973,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$B.name,
+    		id: create_fragment$E.name,
     		type: "component",
     		source: "",
     		ctx
@@ -46785,22 +49982,34 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
+    function instance$E($$self, $$props) {
+    	const writable_props = [];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<Thankyou> was created with unknown prop '${key}'`);
+    	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Thankyou", $$slots, []);
+    	return [];
+    }
+
     class Thankyou extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, null, create_fragment$B, safe_not_equal, {});
+    		init(this, options, instance$E, create_fragment$E, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Thankyou",
     			options,
-    			id: create_fragment$B.name
+    			id: create_fragment$E.name
     		});
     	}
     }
 
-    /* src/routes/pubnub.svelte generated by Svelte v3.18.1 */
-    const file$z = "src/routes/pubnub.svelte";
+    /* src/routes/pubnub.svelte generated by Svelte v3.20.1 */
+    const file$B = "src/routes/pubnub.svelte";
 
     function get_each_context$a(ctx, list, i) {
     	const child_ctx = ctx.slice();
@@ -46820,13 +50029,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			button = element("button");
     			button.textContent = "Helpdesk...";
     			attr_dev(button, "class", "bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4\n          rounded-full svelte-vqb2s2");
-    			add_location(button, file$z, 266, 8, 8882);
+    			add_location(button, file$B, 266, 8, 8882);
     			attr_dev(div, "class", "btm svelte-vqb2s2");
-    			add_location(div, file$z, 265, 6, 8856);
+    			add_location(div, file$B, 265, 6, 8856);
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, div, anchor);
     			append_dev(div, button);
+    			if (remount) dispose();
     			dispose = listen_dev(button, "click", /*joined*/ ctx[3], false, false, false);
     		},
     		p: noop,
@@ -46873,6 +50083,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	let ul;
     	let dispose;
     	let each_value = /*output*/ ctx[2];
+    	validate_each_argument(each_value);
     	let each_blocks = [];
 
     	for (let i = 0; i < each_value.length; i += 1) {
@@ -46912,41 +50123,41 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			}
 
     			attr_dev(button0, "class", "btm2 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2\n            px-4 rounded-full svelte-vqb2s2");
-    			add_location(button0, file$z, 231, 10, 7794);
+    			add_location(button0, file$B, 231, 10, 7794);
     			attr_dev(div0, "class", "header svelte-vqb2s2");
-    			add_location(div0, file$z, 230, 8, 7763);
+    			add_location(div0, file$B, 230, 8, 7763);
     			if (img.src !== (img_src_value = "https://d2c805weuec6z7.cloudfront.net/Powered_By_PubNub.png")) attr_dev(img, "src", img_src_value);
     			attr_dev(img, "alt", "Powered By PubNub");
     			attr_dev(img, "width", "150");
     			attr_dev(img, "class", "svelte-vqb2s2");
-    			add_location(img, file$z, 240, 12, 8093);
+    			add_location(img, file$B, 240, 12, 8093);
     			attr_dev(a, "href", "https://www.pubnub.com/?devrel_pbpn=javascript-chat");
     			attr_dev(a, "class", "svelte-vqb2s2");
-    			add_location(a, file$z, 239, 10, 8018);
+    			add_location(a, file$B, 239, 10, 8018);
     			attr_dev(p0, "class", "svelte-vqb2s2");
-    			add_location(p0, file$z, 238, 8, 8004);
+    			add_location(p0, file$B, 238, 8, 8004);
     			attr_dev(p1, "class", "svelte-vqb2s2");
-    			add_location(p1, file$z, 246, 8, 8281);
+    			add_location(p1, file$B, 246, 8, 8281);
     			attr_dev(p2, "class", "svelte-vqb2s2");
-    			add_location(p2, file$z, 247, 8, 8295);
+    			add_location(p2, file$B, 247, 8, 8295);
     			attr_dev(input, "placeholder", "Your Message Here");
     			attr_dev(input, "class", "svelte-vqb2s2");
-    			add_location(input, file$z, 250, 10, 8435);
+    			add_location(input, file$B, 250, 10, 8435);
     			attr_dev(button1, "type", "submit");
     			attr_dev(button1, "class", "svelte-vqb2s2");
-    			add_location(button1, file$z, 251, 10, 8511);
+    			add_location(button1, file$B, 251, 10, 8511);
     			attr_dev(form, "class", "svelte-vqb2s2");
-    			add_location(form, file$z, 248, 8, 8338);
+    			add_location(form, file$B, 248, 8, 8338);
     			attr_dev(p3, "class", "svelte-vqb2s2");
-    			add_location(p3, file$z, 253, 8, 8571);
+    			add_location(p3, file$B, 253, 8, 8571);
     			attr_dev(ul, "class", "messages svelte-vqb2s2");
-    			add_location(ul, file$z, 255, 10, 8636);
+    			add_location(ul, file$B, 255, 10, 8636);
     			attr_dev(div1, "class", "message-form svelte-vqb2s2");
-    			add_location(div1, file$z, 254, 8, 8599);
+    			add_location(div1, file$B, 254, 8, 8599);
     			attr_dev(div2, "class", "chat svelte-vqb2s2");
-    			add_location(div2, file$z, 229, 6, 7736);
+    			add_location(div2, file$B, 229, 6, 7736);
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, div2, anchor);
     			append_dev(div2, div0);
     			append_dev(div0, button0);
@@ -46974,6 +50185,8 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     				each_blocks[i].m(ul, null);
     			}
 
+    			if (remount) run_all(dispose);
+
     			dispose = [
     				listen_dev(button0, "click", /*close*/ ctx[4], false, false, false),
     				listen_dev(input, "input", /*input_input_handler*/ ctx[17]),
@@ -46998,6 +50211,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     			if (dirty & /*output*/ 4) {
     				each_value = /*output*/ ctx[2];
+    				validate_each_argument(each_value);
     				let i;
 
     				for (i = 0; i < each_value.length; i += 1) {
@@ -47052,9 +50266,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			t0 = text(t0_value);
     			t1 = space();
     			attr_dev(span, "class", "svelte-vqb2s2");
-    			add_location(span, file$z, 258, 16, 8731);
+    			add_location(span, file$B, 258, 16, 8731);
     			attr_dev(li, "class", "svelte-vqb2s2");
-    			add_location(li, file$z, 257, 14, 8710);
+    			add_location(li, file$B, 257, 14, 8710);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, li, anchor);
@@ -47081,7 +50295,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function create_fragment$C(ctx) {
+    function create_fragment$F(ctx) {
     	let link;
     	let t0;
     	let body;
@@ -47117,15 +50331,15 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			attr_dev(link, "href", "https://unpkg.com/tailwindcss@^1.0/dist/tailwind.min.css");
     			attr_dev(link, "rel", "stylesheet");
     			attr_dev(link, "class", "svelte-vqb2s2");
-    			add_location(link, file$z, 216, 0, 7531);
+    			add_location(link, file$B, 216, 0, 7531);
     			attr_dev(p, "class", "svelte-vqb2s2");
-    			add_location(p, file$z, 224, 4, 7659);
+    			add_location(p, file$B, 224, 4, 7659);
     			attr_dev(div0, "class", "svelte-vqb2s2");
-    			add_location(div0, file$z, 223, 2, 7649);
+    			add_location(div0, file$B, 223, 2, 7649);
     			attr_dev(div1, "class", "App svelte-vqb2s2");
-    			add_location(div1, file$z, 227, 2, 7688);
+    			add_location(div1, file$B, 227, 2, 7688);
     			attr_dev(body, "class", "svelte-vqb2s2");
-    			add_location(body, file$z, 219, 0, 7625);
+    			add_location(body, file$B, 219, 0, 7625);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -47176,7 +50390,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$C.name,
+    		id: create_fragment$F.name,
     		type: "component",
     		source: "",
     		ctx
@@ -47190,7 +50404,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	if (match) return match[2];
     }
 
-    function instance$y($$self, $$props, $$invalidate) {
+    function instance$F($$self, $$props, $$invalidate) {
     	const client = getClient();
     	const Test = query(client, { query: apolloClient.allTests });
     	const Problem = query(client, { query: apolloClient.getProblems });
@@ -47248,15 +50462,50 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	};
 
     	grantPermissions(user);
+    	const writable_props = [];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<Pubnub> was created with unknown prop '${key}'`);
+    	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Pubnub", $$slots, []);
 
     	function input_input_handler() {
     		newMessage = this.value;
     		$$invalidate(1, newMessage);
     	}
 
-    	$$self.$capture_state = () => {
-    		return {};
-    	};
+    	$$self.$capture_state = () => ({
+    		apolloClient,
+    		getClient,
+    		query,
+    		Modal,
+    		Content: ProblemModal,
+    		TestModal,
+    		Navbar,
+    		publish,
+    		grantPermissions,
+    		pubnub,
+    		client,
+    		Test,
+    		Problem,
+    		handleProblemAdd,
+    		handleTestAdd,
+    		hasJoinedChat,
+    		channel,
+    		username,
+    		newMessage,
+    		messages,
+    		output,
+    		joined,
+    		close,
+    		getCookie: getCookie$2,
+    		userEmail,
+    		sEmails,
+    		userName,
+    		user
+    	});
 
     	$$self.$inject_state = $$props => {
     		if ("hasJoinedChat" in $$props) $$invalidate(0, hasJoinedChat = $$props.hasJoinedChat);
@@ -47268,6 +50517,10 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		if ("sEmails" in $$props) sEmails = $$props.sEmails;
     		if ("userName" in $$props) $$invalidate(5, userName = $$props.userName);
     	};
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
 
     	return [
     		hasJoinedChat,
@@ -47294,74 +50547,1555 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Pubnub extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$y, create_fragment$C, safe_not_equal, {});
+    		init(this, options, instance$F, create_fragment$F, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Pubnub",
     			options,
-    			id: create_fragment$C.name
+    			id: create_fragment$F.name
     		});
     	}
     }
 
-    const routes = [
-      {
-        name: '/',
-        component: Login,
-      },
-      {
-        name: '/newtest',
-        component: NewTest,
-      },
-      {
-        name: '/newProblem',
-        component: Add_problem,
-      },
-      {
-        name: '/editProblem/:id',
-        component: Edit_problem,
-      },
-      {
-        name: '/editTest/:id',
-        component: EditTest,
-      },
-      {
-        name: '/admin',
-        component: Admin,
-      },
-      {
-        name: '/test/:id',
-        component: Tests,
-      },
-      {
-        name: '/problem/:id',
-        component: Problems,
-      },
-      {
-        name: '/sendtest/:id',
-        component: Send_test,
-      },
-      {
-        name: '/givetest/:token',
-        component: Home,
-      },
-      {
-        name: '/thankyou',
-        component: Thankyou,
-      },
-      {
-        name: '/pubnub',
-        component: Pubnub,
-      },
-      {
-        name: '/home',
-        component: Home,
-      },
-      {
-        name: '/sendtest/:id',
-        component: Send_test,
-      },
+    /* src/routes/AdminPanel.svelte generated by Svelte v3.20.1 */
+
+    const { console: console_1$k, document: document_1 } = globals;
+    const file$C = "src/routes/AdminPanel.svelte";
+
+    function get_each_context_2(ctx, list, i) {
+    	const child_ctx = ctx.slice();
+    	child_ctx[18] = list[i];
+    	return child_ctx;
+    }
+
+    function get_each_context_1$4(ctx, list, i) {
+    	const child_ctx = ctx.slice();
+    	child_ctx[15] = list[i];
+    	return child_ctx;
+    }
+
+    function get_each_context$b(ctx, list, i) {
+    	const child_ctx = ctx.slice();
+    	child_ctx[12] = list[i];
+    	return child_ctx;
+    }
+
+    // (166:55) 
+    function create_if_block_2$5(ctx) {
+    	let h1;
+    	let t1;
+    	let input;
+    	let t2;
+    	let table;
+    	let thead;
+    	let tr;
+    	let th0;
+    	let t4;
+    	let th1;
+    	let t6;
+    	let th2;
+    	let t8;
+    	let th3;
+    	let t10;
+    	let tbody;
+    	let promise;
+    	let dispose;
+
+    	let info = {
+    		ctx,
+    		current: null,
+    		token: null,
+    		pending: create_pending_block_2,
+    		then: create_then_block_2,
+    		catch: create_catch_block_2,
+    		value: 10,
+    		error: 11
+    	};
+
+    	handle_promise(promise = /*$Attempts*/ ctx[3], info);
+
+    	const block = {
+    		c: function create() {
+    			h1 = element("h1");
+    			h1.textContent = "Scoreboard:";
+    			t1 = space();
+    			input = element("input");
+    			t2 = space();
+    			table = element("table");
+    			thead = element("thead");
+    			tr = element("tr");
+    			th0 = element("th");
+    			th0.textContent = "User Name";
+    			t4 = space();
+    			th1 = element("th");
+    			th1.textContent = "College Name";
+    			t6 = space();
+    			th2 = element("th");
+    			th2.textContent = "Test Name";
+    			t8 = space();
+    			th3 = element("th");
+    			th3.textContent = "Score";
+    			t10 = space();
+    			tbody = element("tbody");
+    			info.block.c();
+    			attr_dev(h1, "class", "mb-8");
+    			add_location(h1, file$C, 167, 5, 7327);
+    			attr_dev(input, "type", "text");
+    			attr_dev(input, "id", "myInput");
+    			attr_dev(input, "placeholder", "Search for users..");
+    			attr_dev(input, "title", "Type in a name");
+    			set_style(input, "width", "100%");
+    			attr_dev(input, "class", "svelte-1jk77du");
+    			add_location(input, file$C, 168, 6, 7368);
+    			attr_dev(th0, "class", "p-4 w-1/4");
+    			add_location(th0, file$C, 172, 7, 7647);
+    			attr_dev(th1, "class", "p-4 w-1/4");
+    			add_location(th1, file$C, 173, 7, 7691);
+    			attr_dev(th2, "class", "p-4 w-1/4");
+    			add_location(th2, file$C, 174, 7, 7738);
+    			attr_dev(th3, "class", "p-4 w-1/4");
+    			add_location(th3, file$C, 175, 7, 7782);
+    			attr_dev(tr, "class", "flex w-full mb-4");
+    			add_location(tr, file$C, 171, 6, 7610);
+    			attr_dev(thead, "class", "bg-black flex text-white w-full");
+    			add_location(thead, file$C, 170, 5, 7556);
+    			attr_dev(tbody, "class", "bg-grey-light flex flex-col items-center justify-between overflow-y-scroll w-full");
+    			set_style(tbody, "height", "50vh");
+    			add_location(tbody, file$C, 178, 5, 7846);
+    			attr_dev(table, "id", "myTable");
+    			attr_dev(table, "class", "text-left w-full");
+    			add_location(table, file$C, 169, 5, 7504);
+    		},
+    		m: function mount(target, anchor, remount) {
+    			insert_dev(target, h1, anchor);
+    			insert_dev(target, t1, anchor);
+    			insert_dev(target, input, anchor);
+    			insert_dev(target, t2, anchor);
+    			insert_dev(target, table, anchor);
+    			append_dev(table, thead);
+    			append_dev(thead, tr);
+    			append_dev(tr, th0);
+    			append_dev(tr, t4);
+    			append_dev(tr, th1);
+    			append_dev(tr, t6);
+    			append_dev(tr, th2);
+    			append_dev(tr, t8);
+    			append_dev(tr, th3);
+    			append_dev(table, t10);
+    			append_dev(table, tbody);
+    			info.block.m(tbody, info.anchor = null);
+    			info.mount = () => tbody;
+    			info.anchor = null;
+    			if (remount) dispose();
+    			dispose = listen_dev(input, "keyup", myFunction$2, false, false, false);
+    		},
+    		p: function update(new_ctx, dirty) {
+    			ctx = new_ctx;
+    			info.ctx = ctx;
+
+    			if (dirty & /*$Attempts*/ 8 && promise !== (promise = /*$Attempts*/ ctx[3]) && handle_promise(promise, info)) ; else {
+    				const child_ctx = ctx.slice();
+    				child_ctx[10] = info.resolved;
+    				info.block.p(child_ctx, dirty);
+    			}
+    		},
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(h1);
+    			if (detaching) detach_dev(t1);
+    			if (detaching) detach_dev(input);
+    			if (detaching) detach_dev(t2);
+    			if (detaching) detach_dev(table);
+    			info.block.d();
+    			info.token = null;
+    			info = null;
+    			dispose();
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_if_block_2$5.name,
+    		type: "if",
+    		source: "(166:55) ",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (127:53) 
+    function create_if_block_1$7(ctx) {
+    	let h1;
+    	let t1;
+    	let div;
+    	let input;
+    	let t2;
+    	let a;
+    	let t4;
+    	let table;
+    	let thead;
+    	let tr;
+    	let th0;
+    	let t6;
+    	let th1;
+    	let t8;
+    	let th2;
+    	let t10;
+    	let tbody;
+    	let promise;
+    	let dispose;
+
+    	let info = {
+    		ctx,
+    		current: null,
+    		token: null,
+    		pending: create_pending_block_1$1,
+    		then: create_then_block_1$1,
+    		catch: create_catch_block_1$1,
+    		value: 10,
+    		error: 11
+    	};
+
+    	handle_promise(promise = /*$Test*/ ctx[2], info);
+
+    	const block = {
+    		c: function create() {
+    			h1 = element("h1");
+    			h1.textContent = "All Tests:";
+    			t1 = space();
+    			div = element("div");
+    			input = element("input");
+    			t2 = space();
+    			a = element("a");
+    			a.textContent = "Add Test";
+    			t4 = space();
+    			table = element("table");
+    			thead = element("thead");
+    			tr = element("tr");
+    			th0 = element("th");
+    			th0.textContent = "Test Name";
+    			t6 = space();
+    			th1 = element("th");
+    			th1.textContent = "Difficulty";
+    			t8 = space();
+    			th2 = element("th");
+    			th2.textContent = "CreatedAt";
+    			t10 = space();
+    			tbody = element("tbody");
+    			info.block.c();
+    			attr_dev(h1, "class", "mb-8");
+    			add_location(h1, file$C, 127, 5, 5769);
+    			attr_dev(input, "type", "text");
+    			attr_dev(input, "id", "myInput");
+    			attr_dev(input, "placeholder", "Search for Tests..");
+    			attr_dev(input, "title", "Type in a name");
+    			set_style(input, "width", "90%");
+    			attr_dev(input, "class", "svelte-1jk77du");
+    			add_location(input, file$C, 129, 6, 5820);
+    			attr_dev(a, "href", "/newtest");
+    			attr_dev(a, "class", "add-btn svelte-1jk77du");
+    			add_location(a, file$C, 130, 6, 5956);
+    			add_location(div, file$C, 128, 5, 5808);
+    			attr_dev(th0, "class", "p-4 w-1/3");
+    			add_location(th0, file$C, 135, 7, 6167);
+    			attr_dev(th1, "class", "p-4 w-1/3");
+    			add_location(th1, file$C, 136, 7, 6211);
+    			attr_dev(th2, "class", "p-4 w-1/3");
+    			add_location(th2, file$C, 137, 7, 6256);
+    			attr_dev(tr, "class", "flex w-full mb-4");
+    			add_location(tr, file$C, 134, 6, 6130);
+    			attr_dev(thead, "class", "bg-black flex text-white w-full");
+    			add_location(thead, file$C, 133, 5, 6076);
+    			attr_dev(tbody, "class", "bg-grey-light flex flex-col items-center justify-between overflow-y-scroll w-full");
+    			set_style(tbody, "height", "50vh");
+    			add_location(tbody, file$C, 140, 5, 6324);
+    			attr_dev(table, "id", "myTable");
+    			attr_dev(table, "class", "text-left w-full");
+    			add_location(table, file$C, 132, 5, 6024);
+    		},
+    		m: function mount(target, anchor, remount) {
+    			insert_dev(target, h1, anchor);
+    			insert_dev(target, t1, anchor);
+    			insert_dev(target, div, anchor);
+    			append_dev(div, input);
+    			append_dev(div, t2);
+    			append_dev(div, a);
+    			insert_dev(target, t4, anchor);
+    			insert_dev(target, table, anchor);
+    			append_dev(table, thead);
+    			append_dev(thead, tr);
+    			append_dev(tr, th0);
+    			append_dev(tr, t6);
+    			append_dev(tr, th1);
+    			append_dev(tr, t8);
+    			append_dev(tr, th2);
+    			append_dev(table, t10);
+    			append_dev(table, tbody);
+    			info.block.m(tbody, info.anchor = null);
+    			info.mount = () => tbody;
+    			info.anchor = null;
+    			if (remount) dispose();
+    			dispose = listen_dev(input, "keyup", myFunction$2, false, false, false);
+    		},
+    		p: function update(new_ctx, dirty) {
+    			ctx = new_ctx;
+    			info.ctx = ctx;
+
+    			if (dirty & /*$Test*/ 4 && promise !== (promise = /*$Test*/ ctx[2]) && handle_promise(promise, info)) ; else {
+    				const child_ctx = ctx.slice();
+    				child_ctx[10] = info.resolved;
+    				info.block.p(child_ctx, dirty);
+    			}
+    		},
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(h1);
+    			if (detaching) detach_dev(t1);
+    			if (detaching) detach_dev(div);
+    			if (detaching) detach_dev(t4);
+    			if (detaching) detach_dev(table);
+    			info.block.d();
+    			info.token = null;
+    			info = null;
+    			dispose();
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_if_block_1$7.name,
+    		type: "if",
+    		source: "(127:53) ",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (89:7) {#if currentRoute.name ==="/showproblems"}
+    function create_if_block$b(ctx) {
+    	let h1;
+    	let t1;
+    	let div;
+    	let input;
+    	let t2;
+    	let a;
+    	let t4;
+    	let table;
+    	let thead;
+    	let tr;
+    	let th0;
+    	let t6;
+    	let th1;
+    	let t8;
+    	let th2;
+    	let t10;
+    	let th3;
+    	let t12;
+    	let tbody;
+    	let promise;
+    	let dispose;
+
+    	let info = {
+    		ctx,
+    		current: null,
+    		token: null,
+    		pending: create_pending_block$6,
+    		then: create_then_block$6,
+    		catch: create_catch_block$6,
+    		value: 10,
+    		error: 11
+    	};
+
+    	handle_promise(promise = /*$Problem*/ ctx[1], info);
+
+    	const block = {
+    		c: function create() {
+    			h1 = element("h1");
+    			h1.textContent = "All Problems:";
+    			t1 = space();
+    			div = element("div");
+    			input = element("input");
+    			t2 = space();
+    			a = element("a");
+    			a.textContent = "Add Problem";
+    			t4 = space();
+    			table = element("table");
+    			thead = element("thead");
+    			tr = element("tr");
+    			th0 = element("th");
+    			th0.textContent = "Problem Name";
+    			t6 = space();
+    			th1 = element("th");
+    			th1.textContent = "Tag";
+    			t8 = space();
+    			th2 = element("th");
+    			th2.textContent = "Time Limit";
+    			t10 = space();
+    			th3 = element("th");
+    			th3.textContent = "CreatedAt";
+    			t12 = space();
+    			tbody = element("tbody");
+    			info.block.c();
+    			attr_dev(h1, "class", "mb-8");
+    			add_location(h1, file$C, 89, 4, 4197);
+    			attr_dev(input, "type", "text");
+    			attr_dev(input, "id", "myInput");
+    			attr_dev(input, "placeholder", "Search for Problems..");
+    			attr_dev(input, "title", "Type in a name");
+    			set_style(input, "width", "90%");
+    			attr_dev(input, "class", "svelte-1jk77du");
+    			add_location(input, file$C, 91, 5, 4249);
+    			attr_dev(a, "href", "/newProblem");
+    			attr_dev(a, "class", "add-btn svelte-1jk77du");
+    			add_location(a, file$C, 92, 5, 4387);
+    			add_location(div, file$C, 90, 4, 4238);
+    			attr_dev(th0, "class", "p-4 w-1/4");
+    			add_location(th0, file$C, 97, 6, 4602);
+    			attr_dev(th1, "class", "p-4 w-1/4");
+    			add_location(th1, file$C, 98, 6, 4648);
+    			attr_dev(th2, "class", "p-4 w-1/4");
+    			add_location(th2, file$C, 99, 6, 4685);
+    			attr_dev(th3, "class", "p-4 w-1/4");
+    			add_location(th3, file$C, 100, 6, 4729);
+    			attr_dev(tr, "class", "flex w-full mb-4");
+    			add_location(tr, file$C, 96, 5, 4566);
+    			attr_dev(thead, "class", "bg-black flex text-white w-full");
+    			add_location(thead, file$C, 95, 4, 4513);
+    			attr_dev(tbody, "class", "bg-grey-light flex flex-col items-center justify-between overflow-y-scroll w-full");
+    			set_style(tbody, "height", "50vh");
+    			add_location(tbody, file$C, 103, 4, 4794);
+    			attr_dev(table, "id", "myTable");
+    			attr_dev(table, "class", "text-left w-full");
+    			add_location(table, file$C, 94, 7, 4462);
+    		},
+    		m: function mount(target, anchor, remount) {
+    			insert_dev(target, h1, anchor);
+    			insert_dev(target, t1, anchor);
+    			insert_dev(target, div, anchor);
+    			append_dev(div, input);
+    			append_dev(div, t2);
+    			append_dev(div, a);
+    			insert_dev(target, t4, anchor);
+    			insert_dev(target, table, anchor);
+    			append_dev(table, thead);
+    			append_dev(thead, tr);
+    			append_dev(tr, th0);
+    			append_dev(tr, t6);
+    			append_dev(tr, th1);
+    			append_dev(tr, t8);
+    			append_dev(tr, th2);
+    			append_dev(tr, t10);
+    			append_dev(tr, th3);
+    			append_dev(table, t12);
+    			append_dev(table, tbody);
+    			info.block.m(tbody, info.anchor = null);
+    			info.mount = () => tbody;
+    			info.anchor = null;
+    			if (remount) dispose();
+    			dispose = listen_dev(input, "keyup", myFunction$2, false, false, false);
+    		},
+    		p: function update(new_ctx, dirty) {
+    			ctx = new_ctx;
+    			info.ctx = ctx;
+
+    			if (dirty & /*$Problem*/ 2 && promise !== (promise = /*$Problem*/ ctx[1]) && handle_promise(promise, info)) ; else {
+    				const child_ctx = ctx.slice();
+    				child_ctx[10] = info.resolved;
+    				info.block.p(child_ctx, dirty);
+    			}
+    		},
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(h1);
+    			if (detaching) detach_dev(t1);
+    			if (detaching) detach_dev(div);
+    			if (detaching) detach_dev(t4);
+    			if (detaching) detach_dev(table);
+    			info.block.d();
+    			info.token = null;
+    			info = null;
+    			dispose();
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_if_block$b.name,
+    		type: "if",
+    		source: "(89:7) {#if currentRoute.name ===\\\"/showproblems\\\"}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (197:7) {:catch err}
+    function create_catch_block_2(ctx) {
+    	let td;
+
+    	const block = {
+    		c: function create() {
+    			td = element("td");
+    			td.textContent = "Server Not responding..";
+    			attr_dev(td, "class", "p-4 w-1/4");
+    			add_location(td, file$C, 197, 8, 8629);
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, td, anchor);
+    		},
+    		p: noop,
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(td);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_catch_block_2.name,
+    		type: "catch",
+    		source: "(197:7) {:catch err}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (188:7) {:then result}
+    function create_then_block_2(ctx) {
+    	let each_1_anchor;
+    	let each_value_2 = /*result*/ ctx[10].data.getAllAttempt;
+    	validate_each_argument(each_value_2);
+    	let each_blocks = [];
+
+    	for (let i = 0; i < each_value_2.length; i += 1) {
+    		each_blocks[i] = create_each_block_2(get_each_context_2(ctx, each_value_2, i));
+    	}
+
+    	const block = {
+    		c: function create() {
+    			for (let i = 0; i < each_blocks.length; i += 1) {
+    				each_blocks[i].c();
+    			}
+
+    			each_1_anchor = empty();
+    		},
+    		m: function mount(target, anchor) {
+    			for (let i = 0; i < each_blocks.length; i += 1) {
+    				each_blocks[i].m(target, anchor);
+    			}
+
+    			insert_dev(target, each_1_anchor, anchor);
+    		},
+    		p: function update(ctx, dirty) {
+    			if (dirty & /*$Attempts*/ 8) {
+    				each_value_2 = /*result*/ ctx[10].data.getAllAttempt;
+    				validate_each_argument(each_value_2);
+    				let i;
+
+    				for (i = 0; i < each_value_2.length; i += 1) {
+    					const child_ctx = get_each_context_2(ctx, each_value_2, i);
+
+    					if (each_blocks[i]) {
+    						each_blocks[i].p(child_ctx, dirty);
+    					} else {
+    						each_blocks[i] = create_each_block_2(child_ctx);
+    						each_blocks[i].c();
+    						each_blocks[i].m(each_1_anchor.parentNode, each_1_anchor);
+    					}
+    				}
+
+    				for (; i < each_blocks.length; i += 1) {
+    					each_blocks[i].d(1);
+    				}
+
+    				each_blocks.length = each_value_2.length;
+    			}
+    		},
+    		d: function destroy(detaching) {
+    			destroy_each(each_blocks, detaching);
+    			if (detaching) detach_dev(each_1_anchor);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_then_block_2.name,
+    		type: "then",
+    		source: "(188:7) {:then result}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (189:7) {#each result.data.getAllAttempt as attempt}
+    function create_each_block_2(ctx) {
+    	let tr;
+    	let td0;
+    	let t0_value = /*attempt*/ ctx[18].user.name + "";
+    	let t0;
+    	let t1;
+    	let td1;
+    	let t2_value = /*attempt*/ ctx[18].user.collegeName + "";
+    	let t2;
+    	let t3;
+    	let td2;
+    	let t4_value = /*attempt*/ ctx[18].test.testName + "";
+    	let t4;
+    	let t5;
+    	let td3;
+    	let t6_value = /*attempt*/ ctx[18].score + "";
+    	let t6;
+    	let t7;
+
+    	const block = {
+    		c: function create() {
+    			tr = element("tr");
+    			td0 = element("td");
+    			t0 = text(t0_value);
+    			t1 = space();
+    			td1 = element("td");
+    			t2 = text(t2_value);
+    			t3 = space();
+    			td2 = element("td");
+    			t4 = text(t4_value);
+    			t5 = space();
+    			td3 = element("td");
+    			t6 = text(t6_value);
+    			t7 = space();
+    			attr_dev(td0, "class", "p-4 w-1/4");
+    			add_location(td0, file$C, 190, 9, 8350);
+    			attr_dev(td1, "class", "p-4 w-1/4");
+    			add_location(td1, file$C, 191, 9, 8406);
+    			attr_dev(td2, "class", "p-4 w-1/4");
+    			add_location(td2, file$C, 192, 9, 8469);
+    			attr_dev(td3, "class", "p-4 w-1/4");
+    			add_location(td3, file$C, 193, 9, 8529);
+    			attr_dev(tr, "class", "flex w-full mb-4 svelte-1jk77du");
+    			attr_dev(tr, "id", "pp");
+    			add_location(tr, file$C, 189, 8, 8302);
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, tr, anchor);
+    			append_dev(tr, td0);
+    			append_dev(td0, t0);
+    			append_dev(tr, t1);
+    			append_dev(tr, td1);
+    			append_dev(td1, t2);
+    			append_dev(tr, t3);
+    			append_dev(tr, td2);
+    			append_dev(td2, t4);
+    			append_dev(tr, t5);
+    			append_dev(tr, td3);
+    			append_dev(td3, t6);
+    			append_dev(tr, t7);
+    		},
+    		p: function update(ctx, dirty) {
+    			if (dirty & /*$Attempts*/ 8 && t0_value !== (t0_value = /*attempt*/ ctx[18].user.name + "")) set_data_dev(t0, t0_value);
+    			if (dirty & /*$Attempts*/ 8 && t2_value !== (t2_value = /*attempt*/ ctx[18].user.collegeName + "")) set_data_dev(t2, t2_value);
+    			if (dirty & /*$Attempts*/ 8 && t4_value !== (t4_value = /*attempt*/ ctx[18].test.testName + "")) set_data_dev(t4, t4_value);
+    			if (dirty & /*$Attempts*/ 8 && t6_value !== (t6_value = /*attempt*/ ctx[18].score + "")) set_data_dev(t6, t6_value);
+    		},
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(tr);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_each_block_2.name,
+    		type: "each",
+    		source: "(189:7) {#each result.data.getAllAttempt as attempt}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (180:24)         <tr class="flex w-full mb-4">         <td class="p-4 w-1/4">loading..</td>         <td class="p-4 w-1/4">loading..</td>         <td class="p-4 w-1/4">loading..</td>         <td class="p-4 w-1/4">loading..</td>       </tr>        {:then result}
+    function create_pending_block_2(ctx) {
+    	let tr;
+    	let td0;
+    	let t1;
+    	let td1;
+    	let t3;
+    	let td2;
+    	let t5;
+    	let td3;
+
+    	const block = {
+    		c: function create() {
+    			tr = element("tr");
+    			td0 = element("td");
+    			td0.textContent = "loading..";
+    			t1 = space();
+    			td1 = element("td");
+    			td1.textContent = "loading..";
+    			t3 = space();
+    			td2 = element("td");
+    			td2.textContent = "loading..";
+    			t5 = space();
+    			td3 = element("td");
+    			td3.textContent = "loading..";
+    			attr_dev(td0, "class", "p-4 w-1/4");
+    			add_location(td0, file$C, 182, 8, 8036);
+    			attr_dev(td1, "class", "p-4 w-1/4");
+    			add_location(td1, file$C, 183, 8, 8081);
+    			attr_dev(td2, "class", "p-4 w-1/4");
+    			add_location(td2, file$C, 184, 8, 8126);
+    			attr_dev(td3, "class", "p-4 w-1/4");
+    			add_location(td3, file$C, 185, 8, 8171);
+    			attr_dev(tr, "class", "flex w-full mb-4");
+    			add_location(tr, file$C, 181, 6, 7998);
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, tr, anchor);
+    			append_dev(tr, td0);
+    			append_dev(tr, t1);
+    			append_dev(tr, td1);
+    			append_dev(tr, t3);
+    			append_dev(tr, td2);
+    			append_dev(tr, t5);
+    			append_dev(tr, td3);
+    		},
+    		p: noop,
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(tr);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_pending_block_2.name,
+    		type: "pending",
+    		source: "(180:24)         <tr class=\\\"flex w-full mb-4\\\">         <td class=\\\"p-4 w-1/4\\\">loading..</td>         <td class=\\\"p-4 w-1/4\\\">loading..</td>         <td class=\\\"p-4 w-1/4\\\">loading..</td>         <td class=\\\"p-4 w-1/4\\\">loading..</td>       </tr>        {:then result}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (156:7) {:catch err}
+    function create_catch_block_1$1(ctx) {
+    	let td0;
+    	let t1;
+    	let td1;
+    	let t3;
+    	let td2;
+
+    	const block = {
+    		c: function create() {
+    			td0 = element("td");
+    			td0.textContent = "Server Not responding..";
+    			t1 = space();
+    			td1 = element("td");
+    			td1.textContent = "Server Not responding..";
+    			t3 = space();
+    			td2 = element("td");
+    			td2.textContent = "Server Not responding..";
+    			attr_dev(td0, "class", "p-4 w-1/3");
+    			add_location(td0, file$C, 156, 8, 7049);
+    			attr_dev(td1, "class", "p-4 w-1/3");
+    			add_location(td1, file$C, 157, 8, 7108);
+    			attr_dev(td2, "class", "p-4 w-1/3");
+    			add_location(td2, file$C, 158, 8, 7167);
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, td0, anchor);
+    			insert_dev(target, t1, anchor);
+    			insert_dev(target, td1, anchor);
+    			insert_dev(target, t3, anchor);
+    			insert_dev(target, td2, anchor);
+    		},
+    		p: noop,
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(td0);
+    			if (detaching) detach_dev(t1);
+    			if (detaching) detach_dev(td1);
+    			if (detaching) detach_dev(t3);
+    			if (detaching) detach_dev(td2);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_catch_block_1$1.name,
+    		type: "catch",
+    		source: "(156:7) {:catch err}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (148:7) {:then result}
+    function create_then_block_1$1(ctx) {
+    	let each_1_anchor;
+    	let each_value_1 = /*result*/ ctx[10].data.allTests;
+    	validate_each_argument(each_value_1);
+    	let each_blocks = [];
+
+    	for (let i = 0; i < each_value_1.length; i += 1) {
+    		each_blocks[i] = create_each_block_1$4(get_each_context_1$4(ctx, each_value_1, i));
+    	}
+
+    	const block = {
+    		c: function create() {
+    			for (let i = 0; i < each_blocks.length; i += 1) {
+    				each_blocks[i].c();
+    			}
+
+    			each_1_anchor = empty();
+    		},
+    		m: function mount(target, anchor) {
+    			for (let i = 0; i < each_blocks.length; i += 1) {
+    				each_blocks[i].m(target, anchor);
+    			}
+
+    			insert_dev(target, each_1_anchor, anchor);
+    		},
+    		p: function update(ctx, dirty) {
+    			if (dirty & /*window, $Test, Date*/ 4) {
+    				each_value_1 = /*result*/ ctx[10].data.allTests;
+    				validate_each_argument(each_value_1);
+    				let i;
+
+    				for (i = 0; i < each_value_1.length; i += 1) {
+    					const child_ctx = get_each_context_1$4(ctx, each_value_1, i);
+
+    					if (each_blocks[i]) {
+    						each_blocks[i].p(child_ctx, dirty);
+    					} else {
+    						each_blocks[i] = create_each_block_1$4(child_ctx);
+    						each_blocks[i].c();
+    						each_blocks[i].m(each_1_anchor.parentNode, each_1_anchor);
+    					}
+    				}
+
+    				for (; i < each_blocks.length; i += 1) {
+    					each_blocks[i].d(1);
+    				}
+
+    				each_blocks.length = each_value_1.length;
+    			}
+    		},
+    		d: function destroy(detaching) {
+    			destroy_each(each_blocks, detaching);
+    			if (detaching) detach_dev(each_1_anchor);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_then_block_1$1.name,
+    		type: "then",
+    		source: "(148:7) {:then result}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (149:7) {#each result.data.allTests as tes}
+    function create_each_block_1$4(ctx) {
+    	let tr;
+    	let td0;
+    	let t0_value = /*tes*/ ctx[15].testName + "";
+    	let t0;
+    	let t1;
+    	let td1;
+    	let t2_value = /*tes*/ ctx[15].difficultyLevel + "";
+    	let t2;
+    	let t3;
+    	let td2;
+    	let t4_value = new Date(/*tes*/ ctx[15].createdAt * 1000) + "";
+    	let t4;
+    	let t5;
+    	let dispose;
+
+    	function click_handler_1(...args) {
+    		return /*click_handler_1*/ ctx[9](/*tes*/ ctx[15], ...args);
+    	}
+
+    	const block = {
+    		c: function create() {
+    			tr = element("tr");
+    			td0 = element("td");
+    			t0 = text(t0_value);
+    			t1 = space();
+    			td1 = element("td");
+    			t2 = text(t2_value);
+    			t3 = space();
+    			td2 = element("td");
+    			t4 = text(t4_value);
+    			t5 = space();
+    			attr_dev(td0, "class", "p-4 w-1/3");
+    			add_location(td0, file$C, 150, 9, 6824);
+    			attr_dev(td1, "class", "p-4 w-1/3");
+    			add_location(td1, file$C, 151, 9, 6875);
+    			attr_dev(td2, "class", "p-4 w-1/3");
+    			add_location(td2, file$C, 152, 9, 6933);
+    			attr_dev(tr, "class", "flex w-full mb-4 svelte-1jk77du");
+    			attr_dev(tr, "id", "pp");
+    			add_location(tr, file$C, 149, 8, 6721);
+    		},
+    		m: function mount(target, anchor, remount) {
+    			insert_dev(target, tr, anchor);
+    			append_dev(tr, td0);
+    			append_dev(td0, t0);
+    			append_dev(tr, t1);
+    			append_dev(tr, td1);
+    			append_dev(td1, t2);
+    			append_dev(tr, t3);
+    			append_dev(tr, td2);
+    			append_dev(td2, t4);
+    			append_dev(tr, t5);
+    			if (remount) dispose();
+    			dispose = listen_dev(tr, "click", click_handler_1, false, false, false);
+    		},
+    		p: function update(new_ctx, dirty) {
+    			ctx = new_ctx;
+    			if (dirty & /*$Test*/ 4 && t0_value !== (t0_value = /*tes*/ ctx[15].testName + "")) set_data_dev(t0, t0_value);
+    			if (dirty & /*$Test*/ 4 && t2_value !== (t2_value = /*tes*/ ctx[15].difficultyLevel + "")) set_data_dev(t2, t2_value);
+    			if (dirty & /*$Test*/ 4 && t4_value !== (t4_value = new Date(/*tes*/ ctx[15].createdAt * 1000) + "")) set_data_dev(t4, t4_value);
+    		},
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(tr);
+    			dispose();
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_each_block_1$4.name,
+    		type: "each",
+    		source: "(149:7) {#each result.data.allTests as tes}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (142:20)        <tr class="flex w-full mb-4">         <td class="p-4 w-1/3">loading..</td>         <td class="p-4 w-1/3">loading..</td>         <td class="p-4 w-1/3">loading..</td>       </tr>        {:then result}
+    function create_pending_block_1$1(ctx) {
+    	let tr;
+    	let td0;
+    	let t1;
+    	let td1;
+    	let t3;
+    	let td2;
+
+    	const block = {
+    		c: function create() {
+    			tr = element("tr");
+    			td0 = element("td");
+    			td0.textContent = "loading..";
+    			t1 = space();
+    			td1 = element("td");
+    			td1.textContent = "loading..";
+    			t3 = space();
+    			td2 = element("td");
+    			td2.textContent = "loading..";
+    			attr_dev(td0, "class", "p-4 w-1/3");
+    			add_location(td0, file$C, 143, 8, 6509);
+    			attr_dev(td1, "class", "p-4 w-1/3");
+    			add_location(td1, file$C, 144, 8, 6554);
+    			attr_dev(td2, "class", "p-4 w-1/3");
+    			add_location(td2, file$C, 145, 8, 6599);
+    			attr_dev(tr, "class", "flex w-full mb-4");
+    			add_location(tr, file$C, 142, 6, 6471);
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, tr, anchor);
+    			append_dev(tr, td0);
+    			append_dev(tr, t1);
+    			append_dev(tr, td1);
+    			append_dev(tr, t3);
+    			append_dev(tr, td2);
+    		},
+    		p: noop,
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(tr);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_pending_block_1$1.name,
+    		type: "pending",
+    		source: "(142:20)        <tr class=\\\"flex w-full mb-4\\\">         <td class=\\\"p-4 w-1/3\\\">loading..</td>         <td class=\\\"p-4 w-1/3\\\">loading..</td>         <td class=\\\"p-4 w-1/3\\\">loading..</td>       </tr>        {:then result}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (121:6) {:catch err}
+    function create_catch_block$6(ctx) {
+    	let td;
+
+    	const block = {
+    		c: function create() {
+    			td = element("td");
+    			td.textContent = "Server Not responding..";
+    			attr_dev(td, "class", "p-4 w-1/4");
+    			add_location(td, file$C, 121, 7, 5604);
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, td, anchor);
+    		},
+    		p: noop,
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(td);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_catch_block$6.name,
+    		type: "catch",
+    		source: "(121:6) {:catch err}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (112:6) {:then result}
+    function create_then_block$6(ctx) {
+    	let each_1_anchor;
+    	let each_value = /*result*/ ctx[10].data.allProblems;
+    	validate_each_argument(each_value);
+    	let each_blocks = [];
+
+    	for (let i = 0; i < each_value.length; i += 1) {
+    		each_blocks[i] = create_each_block$b(get_each_context$b(ctx, each_value, i));
+    	}
+
+    	const block = {
+    		c: function create() {
+    			for (let i = 0; i < each_blocks.length; i += 1) {
+    				each_blocks[i].c();
+    			}
+
+    			each_1_anchor = empty();
+    		},
+    		m: function mount(target, anchor) {
+    			for (let i = 0; i < each_blocks.length; i += 1) {
+    				each_blocks[i].m(target, anchor);
+    			}
+
+    			insert_dev(target, each_1_anchor, anchor);
+    		},
+    		p: function update(ctx, dirty) {
+    			if (dirty & /*window, $Problem, Date*/ 2) {
+    				each_value = /*result*/ ctx[10].data.allProblems;
+    				validate_each_argument(each_value);
+    				let i;
+
+    				for (i = 0; i < each_value.length; i += 1) {
+    					const child_ctx = get_each_context$b(ctx, each_value, i);
+
+    					if (each_blocks[i]) {
+    						each_blocks[i].p(child_ctx, dirty);
+    					} else {
+    						each_blocks[i] = create_each_block$b(child_ctx);
+    						each_blocks[i].c();
+    						each_blocks[i].m(each_1_anchor.parentNode, each_1_anchor);
+    					}
+    				}
+
+    				for (; i < each_blocks.length; i += 1) {
+    					each_blocks[i].d(1);
+    				}
+
+    				each_blocks.length = each_value.length;
+    			}
+    		},
+    		d: function destroy(detaching) {
+    			destroy_each(each_blocks, detaching);
+    			if (detaching) detach_dev(each_1_anchor);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_then_block$6.name,
+    		type: "then",
+    		source: "(112:6) {:then result}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (113:6) {#each result.data.allProblems as prob}
+    function create_each_block$b(ctx) {
+    	let tr;
+    	let td0;
+    	let t0_value = /*prob*/ ctx[12].problemName + "";
+    	let t0;
+    	let t1;
+    	let td1;
+    	let t2_value = /*prob*/ ctx[12].tags + "";
+    	let t2;
+    	let t3;
+    	let td2;
+    	let t4_value = /*prob*/ ctx[12].timelimit + "";
+    	let t4;
+    	let t5;
+    	let td3;
+    	let t6_value = new Date(/*prob*/ ctx[12].createdAt * 1000) + "";
+    	let t6;
+    	let t7;
+    	let dispose;
+
+    	function click_handler(...args) {
+    		return /*click_handler*/ ctx[8](/*prob*/ ctx[12], ...args);
+    	}
+
+    	const block = {
+    		c: function create() {
+    			tr = element("tr");
+    			td0 = element("td");
+    			t0 = text(t0_value);
+    			t1 = space();
+    			td1 = element("td");
+    			t2 = text(t2_value);
+    			t3 = space();
+    			td2 = element("td");
+    			t4 = text(t4_value);
+    			t5 = space();
+    			td3 = element("td");
+    			t6 = text(t6_value);
+    			t7 = space();
+    			attr_dev(td0, "class", "p-4 w-1/4");
+    			add_location(td0, file$C, 114, 8, 5338);
+    			attr_dev(td1, "class", "p-4 w-1/4");
+    			add_location(td1, file$C, 115, 8, 5392);
+    			attr_dev(td2, "class", "p-4 w-1/4");
+    			add_location(td2, file$C, 116, 8, 5439);
+    			attr_dev(td3, "class", "p-4 w-1/4");
+    			add_location(td3, file$C, 117, 8, 5491);
+    			attr_dev(tr, "class", "flex w-full mb-4 svelte-1jk77du");
+    			attr_dev(tr, "id", "pp");
+    			add_location(tr, file$C, 113, 7, 5233);
+    		},
+    		m: function mount(target, anchor, remount) {
+    			insert_dev(target, tr, anchor);
+    			append_dev(tr, td0);
+    			append_dev(td0, t0);
+    			append_dev(tr, t1);
+    			append_dev(tr, td1);
+    			append_dev(td1, t2);
+    			append_dev(tr, t3);
+    			append_dev(tr, td2);
+    			append_dev(td2, t4);
+    			append_dev(tr, t5);
+    			append_dev(tr, td3);
+    			append_dev(td3, t6);
+    			append_dev(tr, t7);
+    			if (remount) dispose();
+    			dispose = listen_dev(tr, "click", click_handler, false, false, false);
+    		},
+    		p: function update(new_ctx, dirty) {
+    			ctx = new_ctx;
+    			if (dirty & /*$Problem*/ 2 && t0_value !== (t0_value = /*prob*/ ctx[12].problemName + "")) set_data_dev(t0, t0_value);
+    			if (dirty & /*$Problem*/ 2 && t2_value !== (t2_value = /*prob*/ ctx[12].tags + "")) set_data_dev(t2, t2_value);
+    			if (dirty & /*$Problem*/ 2 && t4_value !== (t4_value = /*prob*/ ctx[12].timelimit + "")) set_data_dev(t4, t4_value);
+    			if (dirty & /*$Problem*/ 2 && t6_value !== (t6_value = new Date(/*prob*/ ctx[12].createdAt * 1000) + "")) set_data_dev(t6, t6_value);
+    		},
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(tr);
+    			dispose();
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_each_block$b.name,
+    		type: "each",
+    		source: "(113:6) {#each result.data.allProblems as prob}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (105:22)       <tr class="flex w-full mb-4">        <td class="p-4 w-1/4">loading..</td>        <td class="p-4 w-1/4">loading..</td>        <td class="p-4 w-1/4">loading..</td>        <td class="p-4 w-1/4">loading..</td>      </tr>       {:then result}
+    function create_pending_block$6(ctx) {
+    	let tr;
+    	let td0;
+    	let t1;
+    	let td1;
+    	let t3;
+    	let td2;
+    	let t5;
+    	let td3;
+
+    	const block = {
+    		c: function create() {
+    			tr = element("tr");
+    			td0 = element("td");
+    			td0.textContent = "loading..";
+    			t1 = space();
+    			td1 = element("td");
+    			td1.textContent = "loading..";
+    			t3 = space();
+    			td2 = element("td");
+    			td2.textContent = "loading..";
+    			t5 = space();
+    			td3 = element("td");
+    			td3.textContent = "loading..";
+    			attr_dev(td0, "class", "p-4 w-1/4");
+    			add_location(td0, file$C, 106, 7, 4979);
+    			attr_dev(td1, "class", "p-4 w-1/4");
+    			add_location(td1, file$C, 107, 7, 5023);
+    			attr_dev(td2, "class", "p-4 w-1/4");
+    			add_location(td2, file$C, 108, 7, 5067);
+    			attr_dev(td3, "class", "p-4 w-1/4");
+    			add_location(td3, file$C, 109, 7, 5111);
+    			attr_dev(tr, "class", "flex w-full mb-4");
+    			add_location(tr, file$C, 105, 5, 4942);
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, tr, anchor);
+    			append_dev(tr, td0);
+    			append_dev(tr, t1);
+    			append_dev(tr, td1);
+    			append_dev(tr, t3);
+    			append_dev(tr, td2);
+    			append_dev(tr, t5);
+    			append_dev(tr, td3);
+    		},
+    		p: noop,
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(tr);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_pending_block$6.name,
+    		type: "pending",
+    		source: "(105:22)       <tr class=\\\"flex w-full mb-4\\\">        <td class=\\\"p-4 w-1/4\\\">loading..</td>        <td class=\\\"p-4 w-1/4\\\">loading..</td>        <td class=\\\"p-4 w-1/4\\\">loading..</td>        <td class=\\\"p-4 w-1/4\\\">loading..</td>      </tr>       {:then result}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    function create_fragment$G(ctx) {
+    	let script;
+    	let script_src_value;
+    	let t1;
+    	let body;
+    	let header;
+    	let t2;
+    	let t3;
+    	let div;
+    	let current;
+    	const navbar = new Navbar({ $$inline: true });
+    	const sidebar = new Side({ $$inline: true });
+
+    	function select_block_type(ctx, dirty) {
+    		if (/*currentRoute*/ ctx[0].name === "/showproblems") return create_if_block$b;
+    		if (/*currentRoute*/ ctx[0].name === "/showtests") return create_if_block_1$7;
+    		if (/*currentRoute*/ ctx[0].name === "/showresults") return create_if_block_2$5;
+    	}
+
+    	let current_block_type = select_block_type(ctx);
+    	let if_block = current_block_type && current_block_type(ctx);
+
+    	const block = {
+    		c: function create() {
+    			script = element("script");
+    			script.textContent = "import { currentRoute } from \"./Problems.svelte\";";
+    			t1 = space();
+    			body = element("body");
+    			header = element("header");
+    			create_component(navbar.$$.fragment);
+    			t2 = space();
+    			create_component(sidebar.$$.fragment);
+    			t3 = space();
+    			div = element("div");
+    			if (if_block) if_block.c();
+    			if (script.src !== (script_src_value = "https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.22.2/moment.min.js")) attr_dev(script, "src", script_src_value);
+    			add_location(script, file$C, 1, 1, 15);
+    			add_location(header, file$C, 83, 2, 4071);
+    			attr_dev(div, "class", "container svelte-1jk77du");
+    			add_location(div, file$C, 87, 1, 4119);
+    			add_location(body, file$C, 82, 0, 4062);
+    		},
+    		l: function claim(nodes) {
+    			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
+    		},
+    		m: function mount(target, anchor) {
+    			append_dev(document_1.head, script);
+    			insert_dev(target, t1, anchor);
+    			insert_dev(target, body, anchor);
+    			append_dev(body, header);
+    			mount_component(navbar, header, null);
+    			append_dev(header, t2);
+    			mount_component(sidebar, header, null);
+    			append_dev(body, t3);
+    			append_dev(body, div);
+    			if (if_block) if_block.m(div, null);
+    			current = true;
+    		},
+    		p: function update(ctx, [dirty]) {
+    			if (current_block_type === (current_block_type = select_block_type(ctx)) && if_block) {
+    				if_block.p(ctx, dirty);
+    			} else {
+    				if (if_block) if_block.d(1);
+    				if_block = current_block_type && current_block_type(ctx);
+
+    				if (if_block) {
+    					if_block.c();
+    					if_block.m(div, null);
+    				}
+    			}
+    		},
+    		i: function intro(local) {
+    			if (current) return;
+    			transition_in(navbar.$$.fragment, local);
+    			transition_in(sidebar.$$.fragment, local);
+    			current = true;
+    		},
+    		o: function outro(local) {
+    			transition_out(navbar.$$.fragment, local);
+    			transition_out(sidebar.$$.fragment, local);
+    			current = false;
+    		},
+    		d: function destroy(detaching) {
+    			detach_dev(script);
+    			if (detaching) detach_dev(t1);
+    			if (detaching) detach_dev(body);
+    			destroy_component(navbar);
+    			destroy_component(sidebar);
+
+    			if (if_block) {
+    				if_block.d();
+    			}
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_fragment$G.name,
+    		type: "component",
+    		source: "",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    function myFunction$2() {
+    	//console.log("key");
+    	var input, filter, table, tr, td, i, txtValue;
+
+    	input = document.getElementById("myInput");
+    	filter = input.value.toUpperCase();
+
+    	//console.log(filter);
+    	table = document.getElementById("myTable");
+
+    	tr = table.getElementsByTagName("tr");
+
+    	for (i = 0; i < tr.length; i++) {
+    		//tr[i].style.display = "none";
+    		td = tr[i].getElementsByTagName("td")[0];
+
+    		if (td) {
+    			//console.log(td.textContent);
+    			txtValue = td.textContent || td.innerText;
+
+    			if (txtValue.toUpperCase().indexOf(filter) > -1) {
+    				console.log("true", txtValue);
+    				tr[i].style.display = "";
+    			} else {
+    				tr[i].style.display = "none";
+    				console.log("false", txtValue);
+    			}
+    		}
+    	}
+    }
+
+    function instance$G($$self, $$props, $$invalidate) {
+    	let $Problem;
+    	let $Test;
+    	let $Attempts;
+    	const client = getClient();
+    	const Attempts = query(client, { query: apolloClient.getAllAttempts });
+    	validate_store(Attempts, "Attempts");
+    	component_subscribe($$self, Attempts, value => $$invalidate(3, $Attempts = value));
+    	const Test = query(client, { query: apolloClient.allTests });
+    	validate_store(Test, "Test");
+    	component_subscribe($$self, Test, value => $$invalidate(2, $Test = value));
+    	const Problem = query(client, { query: apolloClient.getProblems });
+    	validate_store(Problem, "Problem");
+    	component_subscribe($$self, Problem, value => $$invalidate(1, $Problem = value));
+    	let { currentRoute } = $$props;
+    	console.log(currentRoute, "ddddddcdcdcd");
+    	const writable_props = ["currentRoute"];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$k.warn(`<AdminPanel> was created with unknown prop '${key}'`);
+    	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("AdminPanel", $$slots, []);
+
+    	const click_handler = prob => {
+    		window.location = `/problem/${prob.id}`;
+    	};
+
+    	const click_handler_1 = tes => {
+    		window.location = `/test/${tes.id}`;
+    	};
+
+    	$$self.$set = $$props => {
+    		if ("currentRoute" in $$props) $$invalidate(0, currentRoute = $$props.currentRoute);
+    	};
+
+    	$$self.$capture_state = () => ({
+    		Sidebar: Side,
+    		Navbar,
+    		onMount,
+    		apolloClient,
+    		getClient,
+    		query,
+    		client,
+    		Attempts,
+    		Test,
+    		Problem,
+    		currentRoute,
+    		myFunction: myFunction$2,
+    		$Problem,
+    		$Test,
+    		$Attempts
+    	});
+
+    	$$self.$inject_state = $$props => {
+    		if ("currentRoute" in $$props) $$invalidate(0, currentRoute = $$props.currentRoute);
+    	};
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
+
+    	return [
+    		currentRoute,
+    		$Problem,
+    		$Test,
+    		$Attempts,
+    		Attempts,
+    		Test,
+    		Problem,
+    		client,
+    		click_handler,
+    		click_handler_1
+    	];
+    }
+
+    class AdminPanel extends SvelteComponentDev {
+    	constructor(options) {
+    		super(options);
+    		init(this, options, instance$G, create_fragment$G, safe_not_equal, { currentRoute: 0 });
+
+    		dispatch_dev("SvelteRegisterComponent", {
+    			component: this,
+    			tagName: "AdminPanel",
+    			options,
+    			id: create_fragment$G.name
+    		});
+
+    		const { ctx } = this.$$;
+    		const props = options.props || {};
+
+    		if (/*currentRoute*/ ctx[0] === undefined && !("currentRoute" in props)) {
+    			console_1$k.warn("<AdminPanel> was created without expected prop 'currentRoute'");
+    		}
+    	}
+
+    	get currentRoute() {
+    		throw new Error("<AdminPanel>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	set currentRoute(value) {
+    		throw new Error("<AdminPanel>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+    }
+
+    const routes = [{
+            name: '/',
+            component: Login,
+        },
+        {
+            name: '/newtest',
+            component: NewTest,
+        },
+        {
+            name: '/newProblem',
+            component: Add_problem,
+        },
+        {
+            name: '/editProblem/:id',
+            component: Edit_problem,
+        },
+        {
+            name: '/editTest/:id',
+            component: EditTest,
+        },
+        {
+            name: '/admin',
+            component: Admin,
+        },
+        {
+            name: '/test/:id',
+            component: Tests,
+        },
+        {
+            name: '/problem/:id',
+            component: Problems,
+        },
+        {
+            name: '/sendtest/:id',
+            component: Send_test,
+        },
+        {
+            name: '/givetest/:token',
+            component: Home,
+        },
+        {
+            name: '/thankyou',
+            component: Thankyou,
+        },
+        {
+            name: '/pubnub',
+            component: Pubnub,
+        },
+        {
+            name: '/home',
+            component: Home,
+        },
+        {
+            name: '/sendtest/:id',
+            component: Send_test,
+        },
+        {
+            name: '/showproblems',
+            component: AdminPanel,
+        },
+        {
+            name: '/showtests',
+            component: AdminPanel,
+        },
+        {
+            name: '/showresults',
+            component: AdminPanel,
+        },
     ];
 
     var Observable_1 = createCommonjsModule(function (module, exports) {
@@ -47989,6 +52723,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     var zenObservable = Observable_1.Observable;
 
     var Observable = zenObservable;
+    //# sourceMappingURL=bundle.esm.js.map
 
     function validateOperation(operation) {
         var OPERATION_FIELDS = [
@@ -48143,6 +52878,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     function execute(link, operation) {
         return (link.request(createOperation(operation.context, transformOperation(validateOperation(operation)))) || Observable.of());
     }
+    //# sourceMappingURL=bundle.esm.js.map
 
     function symbolObservablePonyfill(root) {
     	var result;
@@ -50277,6 +55013,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
         };
         return ApolloClient;
     }());
+    //# sourceMappingURL=bundle.esm.js.map
 
     function queryFromPojo(obj) {
         var op = {
@@ -50444,6 +55181,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
         };
         return ApolloCache;
     }());
+    //# sourceMappingURL=bundle.esm.js.map
 
     // This currentContext variable will only be used if the makeSlotClass
     // function is called, which happens only if this is the first copy of the
@@ -50583,6 +55321,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }();
 
     var bind$1 = Slot.bind, noContext = Slot.noContext;
+    //# sourceMappingURL=context.esm.js.map
 
     function defaultDispose() { }
     var Cache = /** @class */ (function () {
@@ -51057,6 +55796,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
         };
         return optimistic;
     }
+    //# sourceMappingURL=bundle.esm.js.map
 
     var haveWarned = false;
     function shouldWarn() {
@@ -51985,6 +56725,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
         };
         return InMemoryCache;
     }(ApolloCache));
+    //# sourceMappingURL=bundle.esm.js.map
 
     /**
      * Converts an AST into a string, using one set of reasonable
@@ -52403,6 +57144,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
             return fallbackURI || '/graphql';
         }
     };
+    //# sourceMappingURL=bundle.esm.js.map
 
     var createHttpLink = function (linkOptions) {
         if (linkOptions === void 0) { linkOptions = {}; }
@@ -52542,6 +57284,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
         }
         return HttpLink;
     }(ApolloLink));
+    //# sourceMappingURL=bundle.esm.js.map
 
     function onError(errorHandler) {
         return new ApolloLink(function (operation, forward) {
@@ -52621,6 +57364,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
         };
         return ErrorLink;
     }(ApolloLink));
+    //# sourceMappingURL=bundle.esm.js.map
 
     var PRESET_CONFIG_KEYS = [
         'request',
@@ -52731,10 +57475,74 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
         }
         return DefaultClient;
     }(ApolloClient));
+    //# sourceMappingURL=bundle.esm.js.map
 
-    /* src/App.svelte generated by Svelte v3.18.1 */
+    /* src/theme_change.svelte generated by Svelte v3.20.1 */
 
-    function create_fragment$D(ctx) {
+    function create_fragment$H(ctx) {
+    	const block = {
+    		c: noop,
+    		l: function claim(nodes) {
+    			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
+    		},
+    		m: noop,
+    		p: noop,
+    		i: noop,
+    		o: noop,
+    		d: noop
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_fragment$H.name,
+    		type: "component",
+    		source: "",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    function instance$H($$self, $$props, $$invalidate) {
+    	let themes = [["#1d3e53", "#254b62", "#476d7c", "#77abb7"]];
+    	const writable_props = [];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<Theme_change> was created with unknown prop '${key}'`);
+    	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Theme_change", $$slots, []);
+    	$$self.$capture_state = () => ({ themes });
+
+    	$$self.$inject_state = $$props => {
+    		if ("themes" in $$props) themes = $$props.themes;
+    	};
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
+
+    	return [];
+    }
+
+    class Theme_change extends SvelteComponentDev {
+    	constructor(options) {
+    		super(options);
+    		init(this, options, instance$H, create_fragment$H, safe_not_equal, {});
+
+    		dispatch_dev("SvelteRegisterComponent", {
+    			component: this,
+    			tagName: "Theme_change",
+    			options,
+    			id: create_fragment$H.name
+    		});
+    	}
+    }
+
+    /* src/App.svelte generated by Svelte v3.20.1 */
+
+    function create_fragment$I(ctx) {
     	let current;
 
     	const router = new src_6({
@@ -52777,7 +57585,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$D.name,
+    		id: create_fragment$I.name,
     		type: "component",
     		source: "",
     		ctx
@@ -52786,7 +57594,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$z($$self, $$props, $$invalidate) {
+    function instance$I($$self, $$props, $$invalidate) {
     	const client = new DefaultClient({ uri: "http://localhost:3000/graphql" });
     	setClient(client);
     	let { currentRoute } = $$props;
@@ -52796,13 +57604,28 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<App> was created with unknown prop '${key}'`);
     	});
 
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("App", $$slots, []);
+
     	$$self.$set = $$props => {
     		if ("currentRoute" in $$props) $$invalidate(0, currentRoute = $$props.currentRoute);
     	};
 
-    	$$self.$capture_state = () => {
-    		return { currentRoute, num };
-    	};
+    	$$self.$capture_state = () => ({
+    		Router: src_6,
+    		routes,
+    		onMount,
+    		apolloClient,
+    		getClient,
+    		query,
+    		ApolloClient: DefaultClient,
+    		setClient,
+    		gql: src$1,
+    		Theme: Theme_change,
+    		client,
+    		currentRoute,
+    		num
+    	});
 
     	$$self.$inject_state = $$props => {
     		if ("currentRoute" in $$props) $$invalidate(0, currentRoute = $$props.currentRoute);
@@ -52810,6 +57633,11 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	};
 
     	let num;
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
+
     	 num = 0;
     	return [currentRoute];
     }
@@ -52817,13 +57645,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class App extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$z, create_fragment$D, safe_not_equal, { currentRoute: 0 });
+    		init(this, options, instance$I, create_fragment$I, safe_not_equal, { currentRoute: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "App",
     			options,
-    			id: create_fragment$D.name
+    			id: create_fragment$I.name
     		});
 
     		const { ctx } = this.$$;

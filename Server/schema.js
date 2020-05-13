@@ -1,6 +1,6 @@
 const { gql } = require('apollo-server');
 const { ApolloServer } = require('apollo-server');
-const typeDefs = gql`
+const typeDefs = gql `
   scalar JSON
   scalar JSONObject
 
@@ -38,7 +38,7 @@ const typeDefs = gql`
   type Attempt {
     id: ID!
     user: User
-    t_id: ID!
+    test: Test
     solutions: JSON
     attemptTime: String
     score: String
@@ -53,6 +53,7 @@ const typeDefs = gql`
     problemsByAuthor(email: String): [Problem]
     testByToken(token: String): Test
     getAttempt(id: ID): [Attempt]
+    getAllAttempt: [Attempt]
   }
   type Mutation {
     checkProblemIfExists(problemName: String): checkProblemIfExistsOutput

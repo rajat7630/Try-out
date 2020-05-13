@@ -2,16 +2,15 @@
   import { apolloClient } from "../apolloClient.js";
   import { getClient, query, mutate } from "svelte-apollo";
   import Navbar from "../components/navbar.svelte";
+  import Sidebar from "../components/Side.svelte";
   import InputWindow from "../inputTest.svelte";
   export let currentRoute;
   console.log(currentRoute);
-
   const client = getClient();
   const problem = query(client, {
     query: apolloClient.getProblemById,
     variables: { id: parseInt(currentRoute.namedParams.id) }
   });
-
   async function deleteProblemHandler() {
     try {
       console.log("ddd");
@@ -40,6 +39,7 @@
 <div class="bg-edark h-full flex flex-col box-border">
   <header>
     <Navbar />
+    <Sidebar />
   </header>
   <div class="bg-edark flex flex-col overflow-auto">
     {#await $problem}
@@ -98,7 +98,8 @@
       <div class="max-w-6xl my-4 mb-32 flex flex-col mx-auto">
         <div class="float-right ">
           <button
-            on:click={() => {
+            on:c
+lick={() => {
               location.replace(`http://localhost:5000/editProblem/${currentRoute.namedParams.id}`);
             }}
             class="savebutton hover:bg-white hover:text-edark font-bold py-2
@@ -118,3 +119,4 @@
     {/await}
   </div>
 </div>
+

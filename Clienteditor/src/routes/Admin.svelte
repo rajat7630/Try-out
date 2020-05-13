@@ -5,14 +5,13 @@
   import Content from "../Modals/problemModal.svelte";
   import TestModal from "../Modals/testModal.svelte";
   import Navbar from "../components/navbar.svelte";
+  import Sidebar from "../components/Side.svelte";
   import { publish, grantPermissions } from "../../pubnubClient.js";
   import pubnub from "../../pubnubinit.js";
-
   import { cookieHandler } from "../helperFunctions/cookie_handler.js";
   const client = getClient();
   const tokens = cookieHandler.getCookie("access_token").split(".");
   console.log(atob(tokens[1]));
-
   const Test = query(client, { query: apolloClient.allTests });
   const Problem = query(client, { query: apolloClient.getProblems });
   const handleProblemAdd = () => {
@@ -27,7 +26,6 @@
   let newMessage = "";
   let messages = "";
   let output = [""];
-
   function joined() {
     hasJoinedChat = true;
   }
@@ -39,10 +37,8 @@
     if (match) return match[2];
   }
   const userEmail = getCookie("access_email");
-
   let sEmails = userEmail.split("%");
   let userName = sEmails[0];
-
   const user = {
     id: Math.floor(Math.random() * 10) + 1,
     email: userName,
@@ -51,7 +47,6 @@
     ttl: 1440,
     profileUrl: null
   };
-
   let channelName = "channel." + userName;
   console.log(channelName);
   pubnub.addListener({
@@ -76,9 +71,7 @@
       }
     }
   });
-
   grantPermissions(user);
-
   //subscribe("newUserr.com");
   const changeChannel = m => {
     channelName = m.channel;
@@ -91,7 +84,6 @@
     margin-bottom: 20px;
     padding: 10px;
   }
-
   .btm {
     position: absolute;
     right: 60px;
@@ -102,7 +94,6 @@
     right: 0px;
     bottom: 359px;
   }
-
   .header {
     border-bottom: 1px solid #dcc;
     padding: 20px;
@@ -112,7 +103,6 @@
     flex-grow: 1;
     list-style: none;
   }
-
   #blk {
     margin-top: 6%;
     margin-left: 10%;
@@ -123,13 +113,11 @@
     margin-bottom: 20px;
     padding: 10px;
   }
-
   .btm {
     position: fixed;
     right: 3%;
     bottom: 5%;
   }
-
   .chat {
     position: fixed;
     background-color: #fff;
@@ -141,7 +129,6 @@
     width: 600px;
     border: 1px solid #dcc;
   }
-
   /* chit chat */
   .chat-notification {
     display: flex;
@@ -182,67 +169,12 @@
 <link
   href="https://unpkg.com/tailwindcss@^1.0/dist/tailwind.min.css"
   rel="stylesheet" />
+
 <body>
-
-  <Navbar />
-
-  <div id="blk" class="flex mb-4">
-    <div class="w-1/2 h-12">
-      <div class="max-w-lg rounded overflow-hidden shadow-lg">
-        <div class="px-6 py-4">
-          <div class="font-bold text-xl mb-2">Your Tests</div>
-          <ol>
-            {#await $Test}
-              Loading...
-            {:then result}
-              {#each result.data.allTests as test}
-                <li class="prob">
-                  <a href="http://localhost:5000/test/{test.id}">
-                    {test.testName}
-                  </a>
-                </li>
-              {/each}
-            {:catch err}
-              Error: {err}
-            {/await}
-          </ol>
-        </div>
-        <div class="px-6 py-4" style="margin-right:5%;">
-          <Modal>
-            <TestModal changeCheck={handleTestAdd} />
-          </Modal>
-        </div>
-      </div>
-    </div>
-    <div class="w-1/2 h-12">
-      <div class="max-w-lg rounded overflow-hidden shadow-lg">
-        <div class="px-6 py-4">
-          <div class="font-bold text-xl mb-2">Your Problems</div>
-          <ol>
-            {#await $Problem}
-              Loading...
-            {:then result}
-              {#each result.data.allProblems as prob}
-                <li class="prob">
-                  <a href="http://localhost:5000/problem/{prob.id}">
-                    {prob.problemName}
-                  </a>
-                </li>
-              {/each}
-            {:catch err}
-              Error: {err}
-            {/await}
-          </ol>
-        </div>
-        <div class="px-6 py-4" style="margin-right:10%;">
-          <Modal>
-            <Content changeCheck={handleProblemAdd} />
-          </Modal>
-        </div>
-      </div>
-    </div>
-  </div>
-
+<header>
+ <Navbar/>
+ <Sidebar/>
+</header>
   <div class="container">
     {#if hasJoinedChat}
       <div class="chat flex flex-row shadow-xl rounded-lg">
