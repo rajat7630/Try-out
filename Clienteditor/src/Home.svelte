@@ -31,29 +31,46 @@
   });
 
   let hasJoinedChat = false;
+  let is_joined = false;
   let channel = "";
   let username = "";
   let newMessage = "";
   let messages = "";
-  let output = [""];
+  let output = [];
+  let comment;
 
   function updateStore(result) {
     console.log(result);
   }
   function joined() {
     hasJoinedChat = true;
-    pubbie();
+    if (is_joined === false) {
+      pubbie();
+    }
+    is_joined = true;
   }
   function close() {
     hasJoinedChat = false;
   }
   pubnub.addListener({
     message: function(m) {
-      output = [...output, m.message];
+      output = [...output, m];
       newMessage = "";
-      // console.log(m);
+      console.log(output);
     }
   });
+
+  pubnub.addListener({
+    presence: function(p) {
+      console.log(p);
+      if (p.occupancy >= 1) {
+        comment = "Online";
+      } else {
+        comment = "Offline";
+      }
+    }
+  });
+
   let userName = "kumar.adarshluv99";
   async function email() {
     function getCookie(name) {
@@ -72,6 +89,7 @@
   async function pubbie() {
     // cookieHandler.setCookie("username",userName);
     const usern = await email();
+    console.log(usern);
 
     const users = {
       id: Math.floor(Math.random() * 10) + 1,
@@ -89,49 +107,18 @@
 </script>
 
 <style>
-  .App {
-    background-color: #fff;
-  }
-  html {
-    box-sizing: border-box;
-  }
-  *,
-  *::before,
-  *::after {
-    box-sizing: inherit;
-    margin: 0;
-    padding: 0;
-  }
-  .login-form {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    border: 1px solid #ddd;
-    padding: 20px;
-  }
-  .login-form h2 {
-    margin-bottom: 20px;
-  }
-
   input {
     width: 100%;
     margin-bottom: 20px;
     padding: 10px;
   }
-  label {
-    margin-bottom: 20px;
-  }
+
   .btm {
     position: fixed;
     right: 3%;
     bottom: 5%;
   }
-  .btm2 {
-    position: absolute;
-    right: 0px;
-    bottom: 359px;
-  }
+
   .chat {
     position: fixed;
     background-color: #fff;
@@ -142,60 +129,6 @@
     flex-direction: column;
     width: 300px;
     border: 1px solid #dcc;
-  }
-  .header {
-    border-bottom: 1px solid #dcc;
-    padding: 20px;
-  }
-  .messages {
-    padding: 10px;
-    flex-grow: 1;
-    list-style: none;
-  }
-  .message {
-    display: block;
-    text-align: left;
-    margin-bottom: 20px;
-  }
-  .message span {
-    border-radius: 5px;
-    color: #333;
-    background-color: #dcc;
-    display: inline-block;
-    padding: 10px;
-  }
-  .message.current-user {
-    text-align: right;
-  }
-  .message.current-user span {
-    color: #fff;
-    background-color: #1e87f0;
-  }
-  .message-form {
-    border-top: 1px solid #dcc;
-  }
-  .message-form input {
-    border: none;
-  }
-  .btn {
-    @apply font-bold py-2 px-4 rounded;
-  }
-  .btn-blue {
-    @apply bg-blue-500 text-white;
-  }
-  .btn-blue:hover {
-    @apply bg-blue-700;
-  }
-  button {
-    margin-left: 92%;
-  }
-  #blk {
-    margin-top: 6%;
-    margin-left: 10%;
-    margin-right: 6%;
-  }
-  #btn {
-    float: right;
   }
 
   /* chit chat */
@@ -302,7 +235,7 @@
             <div class="flex items-bottom justify-between">
               <p class="text-grey-darkest">Helpdesk</p>
             </div>
-            <p class="text-grey-dark mt-1 text-sm">User Assitant</p>
+            <p class="text-grey-dark mt-1 text-sm">{comment}</p>
           </div>
         </div>
 
@@ -312,23 +245,25 @@
           style=" bottom: 120px; right: 55px; height: 280px; width: 295px;">
           <div class="message-form">
             <div class="flex-1 overflow-auto">
-              <div class="ml-4 flex-1 border-b border-grey-lighter py-4">
-                <div class="flex items-bottom justify-between">
-                  <p class="text-grey-darkest">Admin</p>
 
-                </div>
-                <p class="text-grey-dark mt-1 text-sm">
-                  Hey! if you need any help,Please message me
-                </p>
-              </div>
-              {#each output as message}
-                <div class="flex justify-end mb-2">
-                  <div
-                    class="rounded py-2 px-3"
-                    style="background-color: #E2F7CB">
-                    <p class="text-sm mt-1">{message}</p>
+              {#each output as temp}
+                {#if temp.publisher == userName}
+                  <div class="flex justify-end mb-2">
+                    <div
+                      class="rounded py-2 px-3"
+                      style="background-color: #E2F7CB">
+                      <p class="text-sm mt-1">{temp.message}</p>
+                    </div>
                   </div>
-                </div>
+                {:else}
+                  <div class="ml-4 flex-1 rounded py-4">
+                    <div class="flex items-bottom justify-between">
+                      <p class="text-grey-darkest">Admin</p>
+
+                    </div>
+                    <p class="text-grey-dark mt-1 text-sm">{temp.message}</p>
+                  </div>
+                {/if}
               {/each}
             </div>
           </div>
