@@ -7,6 +7,10 @@ const getProblems = gql`
       problemName
       description
       problemTests
+      tags
+      timelimit
+      datalimit
+      solution
     }
   }
 `;
@@ -135,8 +139,7 @@ const updateProblem = gql`
     $solution: String
     $timelimit: String
     $datalimit: String
-    $tags:String
-
+    $tags: String
   ) {
     updateProblem(
       id: $id
@@ -144,10 +147,10 @@ const updateProblem = gql`
         problemName: $problemName
         description: $description
         problemTests: $problemTests
-        solution:$solution
-        datalimit:$datalimit
-        timelimit:$timelimit
-        tags:$tags
+        solution: $solution
+        datalimit: $datalimit
+        timelimit: $timelimit
+        tags: $tags
       }
     ) {
       success
@@ -161,13 +164,17 @@ const addTest = gql`
     $testName: String
     $difficultyLevel: String
     $email: String
-    $problems: [ID]
+    $problems: JSON
+    $tags: String
+    $timelimit: String
   ) {
     addTest(
       data: {
         testName: $testName
         difficultyLevel: $difficultyLevel
         email: $email
+        tags: $tags
+        timelimit: $timelimit
         problems: $problems
       }
     ) {
@@ -277,7 +284,6 @@ const getTestById = gql`
         problemName
         problemTests
         description
-        difficultyLevel
         email
       }
     }
@@ -326,7 +332,16 @@ const checkIfAvailable = gql`
     }
   }
 `;
+const checkTestIfAvailable = gql`
+  mutation checkTestIfAvailable($testName: String) {
+    checkTestIfExists(testName: $testName) {
+      success
+      message
+    }
+  }
+`;
 export const apolloClient = {
+  checkTestIfAvailable,
   checkIfAvailable,
   getAttempts,
   updateAttempt,

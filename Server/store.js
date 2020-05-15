@@ -72,10 +72,17 @@ async function addNewTest(test) {
     testName: test.testName,
     difficultyLevel: test.difficultyLevel,
     email: test.email,
+    tags: test.tags,
+    timelimit: parseInt(test.timelimit),
   });
   console.log(res.id);
-  test.problems.forEach((ele) => {
-    addTestProblem({ t_id: res.id, p_id: parseInt(ele) });
+
+  JSON.parse(test.problems).forEach((ele) => {
+    addTestProblem({
+      t_id: res.id,
+      p_id: parseInt(ele.problem.id),
+      score: parseInt(ele.score),
+    });
   });
 
   return {
@@ -125,6 +132,7 @@ async function addTestProblem(testProblem) {
   const res = await TestProblem.query().insert({
     t_id: testProblem.t_id,
     p_id: testProblem.p_id,
+    score: testProblem.score,
   });
   const test = getTestById(testProblem.t_id);
   return {
@@ -318,7 +326,23 @@ async function checkProblemIfExists(problemName) {
     message: 'Problem Name exist',
   };
 }
+async function checkTestIfExists(testName) {
+  console.log(testName);
+  const res = await Test.query().where('testName', testName);
+  console.log(res);
+  if (res.length === 0) {
+    return {
+      success: false,
+      message: 'Test Name do not exist',
+    };
+  }
+  return {
+    success: true,
+    message: 'Test Name exist',
+  };
+}
 module.exports = {
+  checkTestIfExists,
   checkProblemIfExists,
   getAttempt,
   updateAttempt,

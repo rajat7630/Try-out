@@ -34,7 +34,10 @@ module.exports = {
     },
   },
   Mutation: {
-    checkProblemIfExists: (_, {problemName})=>{
+    checkTestIfExists: (_, { testName }) => {
+      return store.checkTestIfExists(testName);
+    },
+    checkProblemIfExists: (_, { problemName }) => {
       return store.checkProblemIfExists(problemName);
     },
     addAttempt: (_, { data }) => {
@@ -54,7 +57,7 @@ module.exports = {
       return store.updateProblem(id, data);
     },
     addTest: (parent, { data }, ctx, info) => {
-      console.log(data);
+      console.log('data', data);
       return store.addNewTest(data);
     },
     deleteTest: (parent, { id }, ctx, info) => {

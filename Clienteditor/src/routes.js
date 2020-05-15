@@ -4,7 +4,7 @@ import Login from './routes/Login.svelte';
 import Problems from './routes/Problems.svelte';
 import Tests from './routes/Tests.svelte';
 import SendTest from './routes/send_test.svelte';
-import NewTest from './routes/newTest.svelte';
+import NewTest from './routes/test/add_test.svelte';
 import EditTest from './routes/editTest.svelte';
 import NewProblem from './routes/problem/add_problem.svelte';
 import EditProblem from './routes/update_problem/edit_problem.svelte';

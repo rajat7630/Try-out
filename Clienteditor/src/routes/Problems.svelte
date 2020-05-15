@@ -28,6 +28,9 @@
 </script>
 
 <style>
+  ::-webkit-scrollbar {
+    width: 0px;
+  }
   .savebutton {
     @apply text-white ml-4 outline-none px-4;
   }
@@ -41,7 +44,7 @@
   <header>
     <Navbar />
   </header>
-  <div class="bg-edark flex flex-col overflow-auto">
+  <div class="bg-edark flex flex-col max-w-full overflow-auto">
     {#await $problem}
       Loading...
     {:then result}

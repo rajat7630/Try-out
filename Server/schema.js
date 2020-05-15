@@ -20,14 +20,19 @@ const typeDefs = gql`
   type Payload {
     token: String!
   }
-
+  type ProblemScore {
+    problem: Problem
+    score: Int
+  }
   type Test {
     id: ID!
     testName: String
-    difficultyLevel: String
     email: String
     createdAt: String
-    problems: [Problem]
+    problems: [ProblemScore]
+    tags: String
+    difficultyLevel: String
+    timelimit: String
   }
   type User {
     id: ID!
@@ -56,12 +61,13 @@ const typeDefs = gql`
   }
   type Mutation {
     checkProblemIfExists(problemName: String): checkProblemIfExistsOutput
+    checkTestIfExists(testName: String): checkTestIfExistsOutput
     addProblem(data: addProblemInputs): addProblemOutput!
     deleteProblem(id: ID): [Problem]
     addAttempt(data: addAttemptInput): addAttemptOutput
     updateProblem(id: ID!, data: updateProblemInputs): updateProblemOutput!
     addTest(data: addTestInputs): addTestOutput!
-    deleteTest(id: ID): [Test]
+    deleteTest(id: ID): Test
     updateTest(id: ID, data: updateTestInputs): updateTestOutput!
     addUser(data: addUserInputs): userDetail
     sendMail(mailBody: String, email: String): mailSent
@@ -74,6 +80,10 @@ const typeDefs = gql`
     solutions: JSON
   }
   type checkProblemIfExistsOutput {
+    success: Boolean
+    message: String
+  }
+  type checkTestIfExistsOutput {
     success: Boolean
     message: String
   }
@@ -95,7 +105,9 @@ const typeDefs = gql`
     testName: String
     difficultyLevel: String
     email: String
-    problems: [ID]
+    tags: String
+    timelimit: String
+    problems: JSON
   }
   input addAttemptInput {
     u_id: ID

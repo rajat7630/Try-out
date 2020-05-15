@@ -7,7 +7,7 @@
   const client = getClient();
   const test = query(client, {
     query: apolloClient.getTestById,
-    variables: { id: currentRoute.namedParams.id }
+    variables: { id: parseInt(currentRoute.namedParams.id) }
   });
   const attempt = query(client, {
     query: apolloClient.getAttempts,
