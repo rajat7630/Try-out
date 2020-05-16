@@ -44,9 +44,9 @@ const allTests = gql`
       difficultyLevel
       email
       createdAt
-      problems {
-        id
-      }
+      problems
+      tags
+      timelimit
     }
   }
 `;
@@ -195,7 +195,6 @@ const deleteTest = gql`
         problemName
         problemTests
         description
-        difficultyLevel
         email
       }
     }
@@ -249,7 +248,6 @@ const addTestProblem = gql`
           problemName
           problemTests
           description
-          difficultyLevel
           email
         }
       }
@@ -300,6 +298,47 @@ const getAttempts = gql`
         name
         collegeName
       }
+      test {
+        id
+        testName
+        difficultyLevel
+        problems {
+          id
+          problemName
+          problemTests
+          description
+          email
+        }
+      }
+      solutions
+      attemptTime
+      score
+    }
+  }
+`;
+
+const getAllAttempts = gql`
+  query getAllAttempts {
+    getAllAttempt {
+      id
+      user {
+        id
+        email
+        name
+        collegeName
+      }
+      test {
+        id
+        testName
+        difficultyLevel
+        problems {
+          id
+          problemName
+          problemTests
+          description
+          email
+        }
+      }
       solutions
       attemptTime
       score
@@ -344,6 +383,7 @@ export const apolloClient = {
   checkTestIfAvailable,
   checkIfAvailable,
   getAttempts,
+  getAllAttempts,
   updateAttempt,
   addAttempt,
   sendMail,

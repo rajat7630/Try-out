@@ -141,6 +141,7 @@ async function addTestProblem(testProblem) {
     test: test,
   };
 }
+
 function problemReducer(prob) {
   return {
     id: prob.id,
@@ -156,20 +157,15 @@ function problemReducer(prob) {
   };
 }
 async function testReducer(test) {
-  const problem = await Problem.query().where(
-    'id',
-    'IN',
-    TestProblem.query().select('p_id').where('t_id', test.id)
-  );
   return {
     id: test.id,
     testName: test.testName,
     difficultyLevel: test.difficultyLevel,
     email: test.email,
     createdAt: test.createdAt,
-    problems: problem.map((prob) => {
-      return problemReducer(prob);
-    }),
+    problems: test.problems,
+    tags: test.tags,
+    timelimit: test.timelimit,
   };
 }
 
@@ -188,6 +184,7 @@ async function getProblemById(id) {
 
 async function getAllTests() {
   const res = await Test.query();
+  console.log(res);
   return res.map((test) => {
     return testReducer(test);
   });
@@ -293,18 +290,35 @@ async function updateAttempt(data) {
 }
 
 async function attemptReducer(attempt) {
-  const res = await User.query().where('id', parseInt(attempt.u_id));
-  console.log(res);
+  const user = await User.query().where('id', parseInt(attempt.u_id));
+  const test = await Test.query().where('id', parseInt(attempt.t_id));
+  console.log(user[0].id);
+  console.log(test);
   return {
-    ...attempt,
     id: attempt.id,
-    user: { ...res[0] },
+    user: {
+      id: user[0].id,
+      email: user[0].email,
+      name: user[0].name,
+      collegeName: user[0].collegeName,
+    },
+    test: testReducer(test[0]),
+    solutions: attempt.solutions,
+    attemptTime: attempt.attemptTime,
     score: attempt.Score,
   };
 }
 
 async function getAttempt(id) {
   const res = await Attempt.query().where('t_id', parseInt(id));
+  console.log(res);
+  return res.map((attempt) => {
+    return attemptReducer(attempt);
+  });
+}
+
+async function getAllAttempt() {
+  const res = await Attempt.query();
   console.log(res);
   return res.map((attempt) => {
     return attemptReducer(attempt);

@@ -1,32 +1,32 @@
 const store = require('./store.js');
 module.exports = {
-  Query: {
-    getToken: (_, { id }) => {
-      return store.getToken(id);
-    },
+    Query: {
+        getToken: (_, { id }) => {
+            return store.getToken(id);
+        },
 
-    allProblems: () => {
-      return store.getAllProblems();
-    },
-    problemById: (_, { id }) => {
-      return store.getProblemById(id);
-    },
-    allTests: () => {
-      return store.getAllTests();
-    },
-    testByToken: (_, { token }) => {
-      return store.getTestByToken(token);
-    },
-    testById: (_, { id }) => {
-      return store.getTestById(id);
-    },
+        allProblems: () => {
+            return store.getAllProblems();
+        },
+        problemById: (_, { id }) => {
+            return store.getProblemById(id);
+        },
+        allTests: () => {
+            return store.getAllTests();
+        },
+        testByToken: (_, { token }) => {
+            return store.getTestByToken(token);
+        },
+        testById: (_, { id }) => {
+            return store.getTestById(id);
+        },
 
-    testsByAuthor: (_, { email }) => {
-      return store.getTestsByAuthor(email);
-    },
-    problemsByAuthor: (_, { email }) => {
-      return store.getProblemsByAuthor(email);
-    },
+        testsByAuthor: (_, { email }) => {
+            return store.getTestsByAuthor(email);
+        },
+        problemsByAuthor: (_, { email }) => {
+            return store.getProblemsByAuthor(email);
+        },
 
     getAttempt: (_, { id }) => {
       console.log(id);
@@ -73,17 +73,17 @@ module.exports = {
       return store.addNewUser(data);
     },
 
-    addTestProblem: (parent, { data }, ctx, info) => {
-      console.log(data);
-      return store.addTestProblem(data);
-    },
+        addTestProblem: (parent, { data }, ctx, info) => {
+            console.log(data);
+            return store.addTestProblem(data);
+        },
 
-    sendMail: (_, mailDetails) => {
-      return store.sendMail(mailDetails);
-    },
+        sendMail: (_, mailDetails) => {
+            return store.sendMail(mailDetails);
+        },
 
-    updateAttempt: (_, { data }) => {
-      return store.updateAttempt(data);
+        updateAttempt: (_, { data }) => {
+            return store.updateAttempt(data);
+        },
     },
-  },
 };

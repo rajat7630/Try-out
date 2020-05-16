@@ -80,6 +80,13 @@ var app = (function () {
         }
         return $$scope.dirty;
     }
+    function exclude_internal_props(props) {
+        const result = {};
+        for (const k in props)
+            if (k[0] !== '$')
+                result[k] = props[k];
+        return result;
+    }
     function set_store_value(store, ret, value = ret) {
         store.set(value);
         return ret;
@@ -194,6 +201,31 @@ var app = (function () {
         e.initCustomEvent(type, false, false, detail);
         return e;
     }
+    class HtmlTag {
+        constructor(html, anchor = null) {
+            this.e = element('div');
+            this.a = anchor;
+            this.u(html);
+        }
+        m(target, anchor = null) {
+            for (let i = 0; i < this.n.length; i += 1) {
+                insert(target, this.n[i], anchor);
+            }
+            this.t = target;
+        }
+        u(html) {
+            this.e.innerHTML = html;
+            this.n = Array.from(this.e.childNodes);
+        }
+        p(html) {
+            this.d();
+            this.u(html);
+            this.m(this.t, this.a);
+        }
+        d() {
+            this.n.forEach(detach);
+        }
+    }
 
     let stylesheet;
     let active = 0;
@@ -271,6 +303,15 @@ var app = (function () {
     }
     function getContext(key) {
         return get_current_component().$$.context.get(key);
+    }
+    // TODO figure out if we still want to support
+    // shorthand events, or if we want to implement
+    // a real bubbling mechanism
+    function bubble(component, event) {
+        const callbacks = component.$$.callbacks[event.type];
+        if (callbacks) {
+            callbacks.slice().forEach(fn => fn(event));
+        }
     }
 
     const dirty_components = [];
@@ -877,6 +918,8 @@ var app = (function () {
         writable: writable,
         get: get_store_value
     });
+
+    var commonjsGlobal = typeof globalThis !== 'undefined' ? globalThis : typeof window !== 'undefined' ? window : typeof global !== 'undefined' ? global : typeof self !== 'undefined' ? self : {};
 
     function unwrapExports (x) {
     	return x && x.__esModule && Object.prototype.hasOwnProperty.call(x, 'default') ? x['default'] : x;
@@ -30887,9 +30930,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
       difficultyLevel
       email
       createdAt
-      problems {
-        id
-      }
+      problems
+      tags
+      timelimit
     }
   }
 `;
@@ -31038,7 +31081,6 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
         problemName
         problemTests
         description
-        difficultyLevel
         email
       }
     }
@@ -31092,7 +31134,6 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
           problemName
           problemTests
           description
-          difficultyLevel
           email
         }
       }
@@ -31143,6 +31184,47 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
         name
         collegeName
       }
+      test {
+        id
+        testName
+        difficultyLevel
+        problems {
+          id
+          problemName
+          problemTests
+          description
+          email
+        }
+      }
+      solutions
+      attemptTime
+      score
+    }
+  }
+`;
+
+    const getAllAttempts = src$1`
+  query getAllAttempts {
+    getAllAttempt {
+      id
+      user {
+        id
+        email
+        name
+        collegeName
+      }
+      test {
+        id
+        testName
+        difficultyLevel
+        problems {
+          id
+          problemName
+          problemTests
+          description
+          email
+        }
+      }
       solutions
       attemptTime
       score
@@ -31187,6 +31269,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
       checkTestIfAvailable,
       checkIfAvailable,
       getAttempts,
+      getAllAttempts,
       updateAttempt,
       addAttempt,
       sendMail,
@@ -35936,12 +36019,12 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     function get_each_context$1(ctx, list, i) {
     	const child_ctx = ctx.slice();
-    	child_ctx[17] = list[i];
+    	child_ctx[19] = list[i];
     	return child_ctx;
     }
 
-    // (307:2) {#if cookieHandler.getCookie('loggedIn') !== 'true'}
-    function create_if_block_1$2(ctx) {
+    // (206:2) {#if cookieHandler.getCookie('loggedIn') !== 'true'}
+    function create_if_block_2$1(ctx) {
     	let div;
     	let current;
 
@@ -35957,8 +36040,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		c: function create() {
     			div = element("div");
     			create_component(modal.$$.fragment);
-    			attr_dev(div, "class", "svelte-kdwmpr");
-    			add_location(div, file$7, 307, 4, 11195);
+    			add_location(div, file$7, 206, 4, 7006);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div, anchor);
@@ -35982,16 +36064,16 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_if_block_1$2.name,
+    		id: create_if_block_2$1.name,
     		type: "if",
-    		source: "(307:2) {#if cookieHandler.getCookie('loggedIn') !== 'true'}",
+    		source: "(206:2) {#if cookieHandler.getCookie('loggedIn') !== 'true'}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (309:6) <Modal>
+    // (208:6) <Modal>
     function create_default_slot(ctx) {
     	let current;
 
@@ -36027,14 +36109,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_default_slot.name,
     		type: "slot",
-    		source: "(309:6) <Modal>",
+    		source: "(208:6) <Modal>",
     		ctx
     	});
 
     	return block;
     }
 
-    // (324:2) {:catch err}
+    // (223:2) {:catch err}
     function create_catch_block(ctx) {
     	let h1;
 
@@ -36042,8 +36124,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		c: function create() {
     			h1 = element("h1");
     			h1.textContent = "Error :- Contact Admin";
-    			attr_dev(h1, "class", "svelte-kdwmpr");
-    			add_location(h1, file$7, 324, 4, 11537);
+    			add_location(h1, file$7, 223, 4, 7348);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, h1, anchor);
@@ -36060,14 +36141,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_catch_block.name,
     		type: "catch",
-    		source: "(324:2) {:catch err}",
+    		source: "(223:2) {:catch err}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (318:2) {:then result}
+    // (217:2) {:then result}
     function create_then_block(ctx) {
     	let div;
     	let t0;
@@ -36076,7 +36157,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	const timer = new Timer({
     			props: {
-    				expireTime: JSON.parse(atob(/*tokens*/ ctx[6][1])).exp
+    				expireTime: JSON.parse(atob(/*tokens*/ ctx[7][1])).exp
     			},
     			$$inline: true
     		});
@@ -36092,8 +36173,8 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			create_component(tabs.$$.fragment);
     			t1 = space();
     			create_component(editorarea.$$.fragment);
-    			attr_dev(div, "class", "flex flex-col w-full svelte-kdwmpr");
-    			add_location(div, file$7, 318, 4, 11377);
+    			attr_dev(div, "class", "flex flex-col w-full");
+    			add_location(div, file$7, 217, 4, 7188);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div, anchor);
@@ -36131,16 +36212,16 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_then_block.name,
     		type: "then",
-    		source: "(318:2) {:then result}",
+    		source: "(217:2) {:then result}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (315:20)      {pubbie()}
+    // (214:20)      {pubbie()}
     function create_pending_block(ctx) {
-    	let t0_value = /*pubbie*/ ctx[9]() + "";
+    	let t0_value = /*pubbie*/ ctx[10]() + "";
     	let t0;
     	let t1;
     	let h1;
@@ -36151,8 +36232,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			t1 = space();
     			h1 = element("h1");
     			h1.textContent = "Test is being loaded...";
-    			attr_dev(h1, "class", "svelte-kdwmpr");
-    			add_location(h1, file$7, 316, 4, 11323);
+    			add_location(h1, file$7, 215, 4, 7134);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, t0, anchor);
@@ -36173,15 +36253,15 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_pending_block.name,
     		type: "pending",
-    		source: "(315:20)      {pubbie()}",
+    		source: "(214:20)      {pubbie()}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (414:4) {:else}
-    function create_else_block(ctx) {
+    // (315:4) {:else}
+    function create_else_block_1(ctx) {
     	let div3;
     	let div2;
     	let div0;
@@ -36202,20 +36282,20 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			div1 = element("div");
     			h4 = element("h4");
     			h4.textContent = "Helpdesk";
-    			attr_dev(img, "class", "chat-notification-logo svelte-kdwmpr");
+    			attr_dev(img, "class", "chat-notification-logo svelte-1ijc3hc");
     			if (img.src !== (img_src_value = "https://img.icons8.com/cotton/50/000000/filled-chat.png")) attr_dev(img, "src", img_src_value);
     			attr_dev(img, "alt", "ChitChat Logo");
-    			add_location(img, file$7, 417, 12, 14629);
-    			attr_dev(div0, "class", "chat-notification-logo-wrapper svelte-kdwmpr");
-    			add_location(div0, file$7, 416, 10, 14572);
-    			attr_dev(h4, "class", "chat-notification-title svelte-kdwmpr");
-    			add_location(h4, file$7, 423, 12, 14871);
-    			attr_dev(div1, "class", "chat-notification-content svelte-kdwmpr");
-    			add_location(div1, file$7, 422, 10, 14819);
-    			attr_dev(div2, "class", "chat-notification svelte-kdwmpr");
-    			add_location(div2, file$7, 415, 8, 14530);
-    			attr_dev(div3, "class", "btm svelte-kdwmpr");
-    			add_location(div3, file$7, 414, 6, 14486);
+    			add_location(img, file$7, 318, 12, 10486);
+    			attr_dev(div0, "class", "chat-notification-logo-wrapper svelte-1ijc3hc");
+    			add_location(div0, file$7, 317, 10, 10429);
+    			attr_dev(h4, "class", "chat-notification-title svelte-1ijc3hc");
+    			add_location(h4, file$7, 324, 12, 10728);
+    			attr_dev(div1, "class", "chat-notification-content svelte-1ijc3hc");
+    			add_location(div1, file$7, 323, 10, 10676);
+    			attr_dev(div2, "class", "chat-notification svelte-1ijc3hc");
+    			add_location(div2, file$7, 316, 8, 10387);
+    			attr_dev(div3, "class", "btm svelte-1ijc3hc");
+    			add_location(div3, file$7, 315, 6, 10343);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div3, anchor);
@@ -36225,7 +36305,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			append_dev(div2, t0);
     			append_dev(div2, div1);
     			append_dev(div1, h4);
-    			dispose = listen_dev(div3, "click", /*joined*/ ctx[7], false, false, false);
+    			dispose = listen_dev(div3, "click", /*joined*/ ctx[8], false, false, false);
     		},
     		p: noop,
     		d: function destroy(detaching) {
@@ -36236,18 +36316,18 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_else_block.name,
+    		id: create_else_block_1.name,
     		type: "else",
-    		source: "(414:4) {:else}",
+    		source: "(315:4) {:else}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (329:4) {#if hasJoinedChat}
+    // (228:4) {#if hasJoinedChat}
     function create_if_block$2(ctx) {
-    	let div11;
+    	let div9;
     	let div3;
     	let div0;
     	let img0;
@@ -36258,25 +36338,20 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	let p0;
     	let t2;
     	let p1;
+    	let t3;
     	let t4;
-    	let div8;
-    	let div7;
     	let div6;
     	let div5;
     	let div4;
-    	let p2;
-    	let t6;
-    	let p3;
-    	let t8;
-    	let t9;
-    	let div10;
-    	let div9;
+    	let t5;
+    	let div8;
+    	let div7;
     	let form;
     	let input;
-    	let t10;
-    	let div14;
-    	let div13;
+    	let t6;
     	let div12;
+    	let div11;
+    	let div10;
     	let img1;
     	let img1_src_value;
     	let dispose;
@@ -36289,7 +36364,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	const block = {
     		c: function create() {
-    			div11 = element("div");
+    			div9 = element("div");
     			div3 = element("div");
     			div0 = element("div");
     			img0 = element("img");
@@ -36300,97 +36375,79 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			p0.textContent = "Helpdesk";
     			t2 = space();
     			p1 = element("p");
-    			p1.textContent = "User Assitant";
+    			t3 = text(/*comment*/ ctx[3]);
     			t4 = space();
-    			div8 = element("div");
-    			div7 = element("div");
     			div6 = element("div");
     			div5 = element("div");
     			div4 = element("div");
-    			p2 = element("p");
-    			p2.textContent = "Admin";
-    			t6 = space();
-    			p3 = element("p");
-    			p3.textContent = "Hey! if you need any help,Please message me";
-    			t8 = space();
 
     			for (let i = 0; i < each_blocks.length; i += 1) {
     				each_blocks[i].c();
     			}
 
-    			t9 = space();
-    			div10 = element("div");
-    			div9 = element("div");
+    			t5 = space();
+    			div8 = element("div");
+    			div7 = element("div");
     			form = element("form");
     			input = element("input");
-    			t10 = space();
-    			div14 = element("div");
-    			div13 = element("div");
+    			t6 = space();
     			div12 = element("div");
+    			div11 = element("div");
+    			div10 = element("div");
     			img1 = element("img");
     			attr_dev(img0, "alt", "admin photo");
-    			attr_dev(img0, "class", "h-12 w-12 rounded-full svelte-kdwmpr");
+    			attr_dev(img0, "class", "h-12 w-12 rounded-full");
     			if (img0.src !== (img0_src_value = "https://darrenjameseeley.files.wordpress.com/2014/09/expendables3.jpeg")) attr_dev(img0, "src", img0_src_value);
-    			add_location(img0, file$7, 335, 12, 11827);
-    			attr_dev(div0, "class", "svelte-kdwmpr");
-    			add_location(div0, file$7, 334, 10, 11809);
-    			attr_dev(p0, "class", "text-grey-darkest svelte-kdwmpr");
-    			add_location(p0, file$7, 342, 14, 12164);
-    			attr_dev(div1, "class", "flex items-bottom justify-between svelte-kdwmpr");
-    			add_location(div1, file$7, 341, 12, 12102);
-    			attr_dev(p1, "class", "text-grey-dark mt-1 text-sm svelte-kdwmpr");
-    			add_location(p1, file$7, 344, 12, 12237);
-    			attr_dev(div2, "class", "ml-4 flex-1 border-b border-grey-lighter py-4 svelte-kdwmpr");
-    			add_location(div2, file$7, 340, 10, 12030);
-    			attr_dev(div3, "class", "px-3 flex items-center bg-grey-light cursor-pointer rounded-lg svelte-kdwmpr");
-    			add_location(div3, file$7, 332, 8, 11712);
-    			attr_dev(p2, "class", "text-grey-darkest svelte-kdwmpr");
-    			add_location(p2, file$7, 356, 18, 12755);
-    			attr_dev(div4, "class", "flex items-bottom justify-between svelte-kdwmpr");
-    			add_location(div4, file$7, 355, 16, 12689);
-    			attr_dev(p3, "class", "text-grey-dark mt-1 text-sm svelte-kdwmpr");
-    			add_location(p3, file$7, 359, 16, 12834);
-    			attr_dev(div5, "class", "ml-4 flex-1 border-b border-grey-lighter py-4 svelte-kdwmpr");
-    			add_location(div5, file$7, 354, 14, 12613);
-    			attr_dev(div6, "class", "flex-1 overflow-auto svelte-kdwmpr");
-    			add_location(div6, file$7, 353, 12, 12564);
-    			attr_dev(div7, "class", "message-form svelte-kdwmpr");
-    			add_location(div7, file$7, 352, 10, 12525);
-    			attr_dev(div8, "class", "container mx-auto overflow-auto margin-bottom:10%; svelte-kdwmpr");
-    			set_style(div8, "bottom", "120px");
-    			set_style(div8, "right", "55px");
-    			set_style(div8, "height", "280px");
-    			set_style(div8, "width", "295px");
-    			add_location(div8, file$7, 349, 8, 12364);
+    			add_location(img0, file$7, 234, 12, 7638);
+    			add_location(div0, file$7, 233, 10, 7620);
+    			attr_dev(p0, "class", "text-grey-darkest");
+    			add_location(p0, file$7, 241, 14, 7975);
+    			attr_dev(div1, "class", "flex items-bottom justify-between");
+    			add_location(div1, file$7, 240, 12, 7913);
+    			attr_dev(p1, "class", "text-grey-dark mt-1 text-sm");
+    			add_location(p1, file$7, 243, 12, 8048);
+    			attr_dev(div2, "class", "ml-4 flex-1 border-b border-grey-lighter py-4");
+    			add_location(div2, file$7, 239, 10, 7841);
+    			attr_dev(div3, "class", "px-3 flex items-center bg-grey-light cursor-pointer rounded-lg");
+    			add_location(div3, file$7, 231, 8, 7523);
+    			attr_dev(div4, "class", "flex-1 overflow-auto");
+    			add_location(div4, file$7, 252, 12, 8371);
+    			attr_dev(div5, "class", "message-form");
+    			add_location(div5, file$7, 251, 10, 8332);
+    			attr_dev(div6, "class", "container mx-auto overflow-auto margin-bottom:10%;");
+    			set_style(div6, "bottom", "120px");
+    			set_style(div6, "right", "55px");
+    			set_style(div6, "height", "280px");
+    			set_style(div6, "width", "295px");
+    			add_location(div6, file$7, 248, 8, 8171);
     			attr_dev(input, "type", "search");
     			attr_dev(input, "name", "serch");
     			attr_dev(input, "placeholder", "Type Message and Press Enter");
-    			attr_dev(input, "class", "bg-white h-10 px-5 pr-10 rounded-full text-sm\n                focus:outline-none svelte-kdwmpr");
-    			add_location(input, file$7, 383, 14, 13684);
-    			attr_dev(form, "class", "svelte-kdwmpr");
-    			add_location(form, file$7, 381, 12, 13579);
-    			attr_dev(div9, "class", "relative text-gray-600 svelte-kdwmpr");
-    			add_location(div9, file$7, 380, 10, 13530);
-    			attr_dev(div10, "class", "container block svelte-kdwmpr");
-    			set_style(div10, "position", "absolute");
-    			set_style(div10, "bottom", "0");
-    			add_location(div10, file$7, 379, 8, 13450);
-    			attr_dev(div11, "class", "chat shadow-xl rounded-lg svelte-kdwmpr");
-    			add_location(div11, file$7, 329, 6, 11637);
-    			attr_dev(img1, "class", "chat-notification-logo svelte-kdwmpr");
+    			attr_dev(input, "class", "bg-white h-10 px-5 pr-10 rounded-full text-sm\n                focus:outline-none svelte-1ijc3hc");
+    			add_location(input, file$7, 284, 14, 9541);
+    			add_location(form, file$7, 282, 12, 9436);
+    			attr_dev(div7, "class", "relative text-gray-600");
+    			add_location(div7, file$7, 281, 10, 9387);
+    			attr_dev(div8, "class", "container block");
+    			set_style(div8, "position", "absolute");
+    			set_style(div8, "bottom", "0");
+    			add_location(div8, file$7, 280, 8, 9307);
+    			attr_dev(div9, "class", "chat shadow-xl rounded-lg svelte-1ijc3hc");
+    			add_location(div9, file$7, 228, 6, 7448);
+    			attr_dev(img1, "class", "chat-notification-logo svelte-1ijc3hc");
     			if (img1.src !== (img1_src_value = "https://img.icons8.com/cute-clipart/50/000000/close-window.png")) attr_dev(img1, "src", img1_src_value);
     			attr_dev(img1, "alt", "ChitChat Logo");
-    			add_location(img1, file$7, 406, 12, 14253);
-    			attr_dev(div12, "class", "chat-notification-logo-wrapper svelte-kdwmpr");
-    			add_location(div12, file$7, 405, 10, 14196);
-    			attr_dev(div13, "class", "chat-notification svelte-kdwmpr");
-    			add_location(div13, file$7, 404, 8, 14154);
-    			attr_dev(div14, "class", "btm svelte-kdwmpr");
-    			add_location(div14, file$7, 403, 6, 14111);
+    			add_location(img1, file$7, 307, 12, 10110);
+    			attr_dev(div10, "class", "chat-notification-logo-wrapper svelte-1ijc3hc");
+    			add_location(div10, file$7, 306, 10, 10053);
+    			attr_dev(div11, "class", "chat-notification svelte-1ijc3hc");
+    			add_location(div11, file$7, 305, 8, 10011);
+    			attr_dev(div12, "class", "btm svelte-1ijc3hc");
+    			add_location(div12, file$7, 304, 6, 9968);
     		},
     		m: function mount(target, anchor) {
-    			insert_dev(target, div11, anchor);
-    			append_dev(div11, div3);
+    			insert_dev(target, div9, anchor);
+    			append_dev(div9, div3);
     			append_dev(div3, div0);
     			append_dev(div0, img0);
     			append_dev(div3, t0);
@@ -36399,52 +36456,48 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			append_dev(div1, p0);
     			append_dev(div2, t2);
     			append_dev(div2, p1);
-    			append_dev(div11, t4);
-    			append_dev(div11, div8);
-    			append_dev(div8, div7);
-    			append_dev(div7, div6);
+    			append_dev(p1, t3);
+    			append_dev(div9, t4);
+    			append_dev(div9, div6);
     			append_dev(div6, div5);
     			append_dev(div5, div4);
-    			append_dev(div4, p2);
-    			append_dev(div5, t6);
-    			append_dev(div5, p3);
-    			append_dev(div6, t8);
 
     			for (let i = 0; i < each_blocks.length; i += 1) {
-    				each_blocks[i].m(div6, null);
+    				each_blocks[i].m(div4, null);
     			}
 
-    			append_dev(div11, t9);
-    			append_dev(div11, div10);
-    			append_dev(div10, div9);
-    			append_dev(div9, form);
+    			append_dev(div9, t5);
+    			append_dev(div9, div8);
+    			append_dev(div8, div7);
+    			append_dev(div7, form);
     			append_dev(form, input);
     			set_input_value(input, /*newMessage*/ ctx[1]);
-    			insert_dev(target, t10, anchor);
-    			insert_dev(target, div14, anchor);
-    			append_dev(div14, div13);
-    			append_dev(div13, div12);
-    			append_dev(div12, img1);
+    			insert_dev(target, t6, anchor);
+    			insert_dev(target, div12, anchor);
+    			append_dev(div12, div11);
+    			append_dev(div11, div10);
+    			append_dev(div10, img1);
 
     			dispose = [
-    				listen_dev(input, "input", /*input_input_handler*/ ctx[16]),
+    				listen_dev(input, "input", /*input_input_handler*/ ctx[18]),
     				listen_dev(
     					form,
     					"submit",
     					prevent_default(function () {
-    						if (is_function(publish(/*newMessage*/ ctx[1], "channel." + /*userName*/ ctx[3]))) publish(/*newMessage*/ ctx[1], "channel." + /*userName*/ ctx[3]).apply(this, arguments);
+    						if (is_function(publish(/*newMessage*/ ctx[1], "channel." + /*userName*/ ctx[4]))) publish(/*newMessage*/ ctx[1], "channel." + /*userName*/ ctx[4]).apply(this, arguments);
     					}),
     					false,
     					true,
     					false
     				),
-    				listen_dev(div14, "click", /*close*/ ctx[8], false, false, false)
+    				listen_dev(div12, "click", /*close*/ ctx[9], false, false, false)
     			];
     		},
     		p: function update(new_ctx, dirty) {
     			ctx = new_ctx;
+    			if (dirty & /*comment*/ 8) set_data_dev(t3, /*comment*/ ctx[3]);
 
-    			if (dirty & /*output*/ 4) {
+    			if (dirty & /*output, userName*/ 20) {
     				each_value = /*output*/ ctx[2];
     				let i;
 
@@ -36456,7 +36509,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     					} else {
     						each_blocks[i] = create_each_block$1(child_ctx);
     						each_blocks[i].c();
-    						each_blocks[i].m(div6, null);
+    						each_blocks[i].m(div4, null);
     					}
     				}
 
@@ -36472,10 +36525,10 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			}
     		},
     		d: function destroy(detaching) {
-    			if (detaching) detach_dev(div11);
+    			if (detaching) detach_dev(div9);
     			destroy_each(each_blocks, detaching);
-    			if (detaching) detach_dev(t10);
-    			if (detaching) detach_dev(div14);
+    			if (detaching) detach_dev(t6);
+    			if (detaching) detach_dev(div12);
     			run_all(dispose);
     		}
     	};
@@ -36484,19 +36537,77 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_if_block$2.name,
     		type: "if",
-    		source: "(329:4) {#if hasJoinedChat}",
+    		source: "(228:4) {#if hasJoinedChat}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (364:14) {#each output as message}
-    function create_each_block$1(ctx) {
+    // (264:16) {:else}
+    function create_else_block(ctx) {
+    	let div1;
+    	let div0;
+    	let p0;
+    	let t1;
+    	let p1;
+    	let t2_value = /*temp*/ ctx[19].message + "";
+    	let t2;
+    	let t3;
+
+    	const block = {
+    		c: function create() {
+    			div1 = element("div");
+    			div0 = element("div");
+    			p0 = element("p");
+    			p0.textContent = "Admin";
+    			t1 = space();
+    			p1 = element("p");
+    			t2 = text(t2_value);
+    			t3 = space();
+    			attr_dev(p0, "class", "text-grey-darkest");
+    			add_location(p0, file$7, 266, 22, 8965);
+    			attr_dev(div0, "class", "flex items-bottom justify-between");
+    			add_location(div0, file$7, 265, 20, 8895);
+    			attr_dev(p1, "class", "text-grey-dark mt-1 text-sm");
+    			add_location(p1, file$7, 269, 20, 9052);
+    			attr_dev(div1, "class", "ml-4 flex-1 rounded py-4");
+    			add_location(div1, file$7, 264, 18, 8836);
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, div1, anchor);
+    			append_dev(div1, div0);
+    			append_dev(div0, p0);
+    			append_dev(div1, t1);
+    			append_dev(div1, p1);
+    			append_dev(p1, t2);
+    			append_dev(div1, t3);
+    		},
+    		p: function update(ctx, dirty) {
+    			if (dirty & /*output*/ 4 && t2_value !== (t2_value = /*temp*/ ctx[19].message + "")) set_data_dev(t2, t2_value);
+    		},
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(div1);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_else_block.name,
+    		type: "else",
+    		source: "(264:16) {:else}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (256:16) {#if temp.publisher == userName}
+    function create_if_block_1$2(ctx) {
     	let div1;
     	let div0;
     	let p;
-    	let t0_value = /*message*/ ctx[17] + "";
+    	let t0_value = /*temp*/ ctx[19].message + "";
     	let t0;
     	let t1;
 
@@ -36507,13 +36618,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			p = element("p");
     			t0 = text(t0_value);
     			t1 = space();
-    			attr_dev(p, "class", "text-sm mt-1 svelte-kdwmpr");
-    			add_location(p, file$7, 368, 20, 13214);
-    			attr_dev(div0, "class", "rounded py-2 px-3 svelte-kdwmpr");
+    			attr_dev(p, "class", "text-sm mt-1");
+    			add_location(p, file$7, 260, 22, 8699);
+    			attr_dev(div0, "class", "rounded py-2 px-3");
     			set_style(div0, "background-color", "#E2F7CB");
-    			add_location(div0, file$7, 365, 18, 13088);
-    			attr_dev(div1, "class", "flex justify-end mb-2 svelte-kdwmpr");
-    			add_location(div1, file$7, 364, 16, 13034);
+    			add_location(div0, file$7, 257, 20, 8567);
+    			attr_dev(div1, "class", "flex justify-end mb-2");
+    			add_location(div1, file$7, 256, 18, 8511);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div1, anchor);
@@ -36523,7 +36634,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			append_dev(div1, t1);
     		},
     		p: function update(ctx, dirty) {
-    			if (dirty & /*output*/ 4 && t0_value !== (t0_value = /*message*/ ctx[17] + "")) set_data_dev(t0, t0_value);
+    			if (dirty & /*output*/ 4 && t0_value !== (t0_value = /*temp*/ ctx[19].message + "")) set_data_dev(t0, t0_value);
     		},
     		d: function destroy(detaching) {
     			if (detaching) detach_dev(div1);
@@ -36532,9 +36643,60 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
+    		id: create_if_block_1$2.name,
+    		type: "if",
+    		source: "(256:16) {#if temp.publisher == userName}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (255:14) {#each output as temp}
+    function create_each_block$1(ctx) {
+    	let if_block_anchor;
+
+    	function select_block_type_1(ctx, dirty) {
+    		if (/*temp*/ ctx[19].publisher == /*userName*/ ctx[4]) return create_if_block_1$2;
+    		return create_else_block;
+    	}
+
+    	let current_block_type = select_block_type_1(ctx);
+    	let if_block = current_block_type(ctx);
+
+    	const block = {
+    		c: function create() {
+    			if_block.c();
+    			if_block_anchor = empty();
+    		},
+    		m: function mount(target, anchor) {
+    			if_block.m(target, anchor);
+    			insert_dev(target, if_block_anchor, anchor);
+    		},
+    		p: function update(ctx, dirty) {
+    			if (current_block_type === (current_block_type = select_block_type_1(ctx)) && if_block) {
+    				if_block.p(ctx, dirty);
+    			} else {
+    				if_block.d(1);
+    				if_block = current_block_type(ctx);
+
+    				if (if_block) {
+    					if_block.c();
+    					if_block.m(if_block_anchor.parentNode, if_block_anchor);
+    				}
+    			}
+    		},
+    		d: function destroy(detaching) {
+    			if_block.d(detaching);
+    			if (detaching) detach_dev(if_block_anchor);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
     		id: create_each_block$1.name,
     		type: "each",
-    		source: "(364:14) {#each output as message}",
+    		source: "(255:14) {#each output as temp}",
     		ctx
     	});
 
@@ -36549,7 +36711,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	let t1;
     	let div;
     	let current;
-    	let if_block0 = show_if && create_if_block_1$2(ctx);
+    	let if_block0 = show_if && create_if_block_2$1(ctx);
 
     	let info = {
     		ctx,
@@ -36558,16 +36720,16 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		pending: create_pending_block,
     		then: create_then_block,
     		catch: create_catch_block,
-    		value: 20,
-    		error: 21,
+    		value: 22,
+    		error: 23,
     		blocks: [,,,]
     	};
 
-    	handle_promise(promise = /*$problems*/ ctx[4], info);
+    	handle_promise(promise = /*$problems*/ ctx[5], info);
 
     	function select_block_type(ctx, dirty) {
     		if (/*hasJoinedChat*/ ctx[0]) return create_if_block$2;
-    		return create_else_block;
+    		return create_else_block_1;
     	}
 
     	let current_block_type = select_block_type(ctx);
@@ -36582,10 +36744,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			t1 = space();
     			div = element("div");
     			if_block1.c();
-    			attr_dev(div, "class", "container svelte-kdwmpr");
-    			add_location(div, file$7, 327, 2, 11583);
-    			attr_dev(body, "class", "svelte-kdwmpr");
-    			add_location(body, file$7, 305, 0, 11129);
+    			attr_dev(div, "class", "container");
+    			add_location(div, file$7, 226, 2, 7394);
+    			add_location(body, file$7, 204, 0, 6940);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -36606,9 +36767,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			ctx = new_ctx;
     			info.ctx = ctx;
 
-    			if (dirty & /*$problems*/ 16 && promise !== (promise = /*$problems*/ ctx[4]) && handle_promise(promise, info)) ; else {
+    			if (dirty & /*$problems*/ 32 && promise !== (promise = /*$problems*/ ctx[5]) && handle_promise(promise, info)) ; else {
     				const child_ctx = ctx.slice();
-    				child_ctx[20] = info.resolved;
+    				child_ctx[22] = info.resolved;
     				info.block.p(child_ctx, dirty);
     			}
 
@@ -36673,7 +36834,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	});
 
     	validate_store(problems, "problems");
-    	component_subscribe($$self, problems, value => $$invalidate(4, $problems = value));
+    	component_subscribe($$self, problems, value => $$invalidate(5, $problems = value));
     	var tokens = currentRoute.namedParams.token.split(".");
     	console.log(JSON.parse(atob(tokens[1])));
     	cookieHandler.setCookie("attemptId", JSON.parse(atob(tokens[1])).attemptId);
@@ -36684,15 +36845,22 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	});
 
     	let hasJoinedChat = false;
+    	let is_joined = false;
     	let channel = "";
     	let username = "";
     	let newMessage = "";
     	let messages = "";
-    	let output = [""];
+    	let output = [];
+    	let comment;
 
     	function joined() {
     		$$invalidate(0, hasJoinedChat = true);
-    		pubbie();
+
+    		if (is_joined === false) {
+    			pubbie();
+    		}
+
+    		is_joined = true;
     	}
 
     	function close() {
@@ -36701,10 +36869,22 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	pubnub.addListener({
     		message(m) {
-    			$$invalidate(2, output = [...output, m.message]); // console.log(m);
+    			$$invalidate(2, output = [...output, m]);
     			$$invalidate(1, newMessage = "");
-    		}, // console.log(m);
-    		
+    			console.log(output);
+    		}
+    	});
+
+    	pubnub.addListener({
+    		presence(p) {
+    			console.log(p);
+
+    			if (p.occupancy >= 1) {
+    				$$invalidate(3, comment = "Online");
+    			} else {
+    				$$invalidate(3, comment = "Offline");
+    			}
+    		}
     	});
 
     	let userName = "kumar.adarshluv99";
@@ -36718,13 +36898,15 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		const userEmail = getCookie("access_email");
     		console.log(userEmail);
     		let sEmails = userEmail.split("@");
-    		$$invalidate(3, userName = sEmails[0]);
+    		$$invalidate(4, userName = sEmails[0]);
     		return userName;
     	}
 
     	async function pubbie() {
     		// cookieHandler.setCookie("username",userName);
     		const usern = await email();
+
+    		console.log(usern);
 
     		const users = {
     			id: Math.floor(Math.random() * 10) + 1,
@@ -36750,7 +36932,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	}
 
     	$$self.$set = $$props => {
-    		if ("currentRoute" in $$props) $$invalidate(10, currentRoute = $$props.currentRoute);
+    		if ("currentRoute" in $$props) $$invalidate(11, currentRoute = $$props.currentRoute);
     	};
 
     	$$self.$capture_state = () => {
@@ -36758,26 +36940,30 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			currentRoute,
     			tokens,
     			hasJoinedChat,
+    			is_joined,
     			channel,
     			username,
     			newMessage,
     			messages,
     			output,
+    			comment,
     			userName,
     			$problems
     		};
     	};
 
     	$$self.$inject_state = $$props => {
-    		if ("currentRoute" in $$props) $$invalidate(10, currentRoute = $$props.currentRoute);
-    		if ("tokens" in $$props) $$invalidate(6, tokens = $$props.tokens);
+    		if ("currentRoute" in $$props) $$invalidate(11, currentRoute = $$props.currentRoute);
+    		if ("tokens" in $$props) $$invalidate(7, tokens = $$props.tokens);
     		if ("hasJoinedChat" in $$props) $$invalidate(0, hasJoinedChat = $$props.hasJoinedChat);
+    		if ("is_joined" in $$props) is_joined = $$props.is_joined;
     		if ("channel" in $$props) channel = $$props.channel;
     		if ("username" in $$props) username = $$props.username;
     		if ("newMessage" in $$props) $$invalidate(1, newMessage = $$props.newMessage);
     		if ("messages" in $$props) messages = $$props.messages;
     		if ("output" in $$props) $$invalidate(2, output = $$props.output);
-    		if ("userName" in $$props) $$invalidate(3, userName = $$props.userName);
+    		if ("comment" in $$props) $$invalidate(3, comment = $$props.comment);
+    		if ("userName" in $$props) $$invalidate(4, userName = $$props.userName);
     		if ("$problems" in $$props) problems.set($problems = $$props.$problems);
     	};
 
@@ -36785,6 +36971,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		hasJoinedChat,
     		newMessage,
     		output,
+    		comment,
     		userName,
     		$problems,
     		problems,
@@ -36793,6 +36980,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		close,
     		pubbie,
     		currentRoute,
+    		is_joined,
     		client,
     		channel,
     		username,
@@ -36805,7 +36993,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Home extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$a, create_fragment$a, safe_not_equal, { currentRoute: 10 });
+    		init(this, options, instance$a, create_fragment$a, safe_not_equal, { currentRoute: 11 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
@@ -36817,7 +37005,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		const { ctx } = this.$$;
     		const props = options.props || {};
 
-    		if (/*currentRoute*/ ctx[10] === undefined && !("currentRoute" in props)) {
+    		if (/*currentRoute*/ ctx[11] === undefined && !("currentRoute" in props)) {
     			console_1$1.warn("<Home> was created without expected prop 'currentRoute'");
     		}
     	}
@@ -36831,188 +37019,10 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	}
     }
 
-    /* src/Modals/problemModal.svelte generated by Svelte v3.18.1 */
-    const file$8 = "src/Modals/problemModal.svelte";
+    /* src/components/navbar.svelte generated by Svelte v3.18.1 */
+    const file$8 = "src/components/navbar.svelte";
 
     function create_fragment$b(ctx) {
-    	let p;
-    	let button;
-    	let dispose;
-
-    	const block = {
-    		c: function create() {
-    			p = element("p");
-    			button = element("button");
-    			button.textContent = "Add Problems";
-    			attr_dev(button, "class", "bg-transparent border border-gray-500 hover:border-indigo-500\n    text-gray-500 hover:text-indigo-500 font-bold py-2 px-4 rounded-full");
-    			add_location(button, file$8, 8, 2, 159);
-    			add_location(p, file$8, 7, 0, 153);
-    		},
-    		l: function claim(nodes) {
-    			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
-    		},
-    		m: function mount(target, anchor) {
-    			insert_dev(target, p, anchor);
-    			append_dev(p, button);
-    			dispose = listen_dev(button, "click", /*showSurprise*/ ctx[0], false, false, false);
-    		},
-    		p: noop,
-    		i: noop,
-    		o: noop,
-    		d: function destroy(detaching) {
-    			if (detaching) detach_dev(p);
-    			dispose();
-    		}
-    	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_fragment$b.name,
-    		type: "component",
-    		source: "",
-    		ctx
-    	});
-
-    	return block;
-    }
-
-    function instance$b($$self) {
-    	const showSurprise = () => {
-    		location.replace("http://localhost:5000/newProblem");
-    	};
-
-    	$$self.$capture_state = () => {
-    		return {};
-    	};
-
-    	$$self.$inject_state = $$props => {
-    		
-    	};
-
-    	return [showSurprise];
-    }
-
-    class ProblemModal extends SvelteComponentDev {
-    	constructor(options) {
-    		super(options);
-    		init(this, options, instance$b, create_fragment$b, safe_not_equal, {});
-
-    		dispatch_dev("SvelteRegisterComponent", {
-    			component: this,
-    			tagName: "ProblemModal",
-    			options,
-    			id: create_fragment$b.name
-    		});
-    	}
-    }
-
-    /* src/Modals/testModal.svelte generated by Svelte v3.18.1 */
-
-    const file$9 = "src/Modals/testModal.svelte";
-
-    function create_fragment$c(ctx) {
-    	let p;
-    	let button;
-    	let dispose;
-
-    	const block = {
-    		c: function create() {
-    			p = element("p");
-    			button = element("button");
-    			button.textContent = "Add Test";
-    			attr_dev(button, "class", "bg-transparent border border-gray-500 hover:border-indigo-500\n    text-gray-500 hover:text-indigo-500 font-bold py-2 px-4 rounded-full");
-    			add_location(button, file$9, 12, 2, 195);
-    			add_location(p, file$9, 11, 0, 189);
-    		},
-    		l: function claim(nodes) {
-    			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
-    		},
-    		m: function mount(target, anchor) {
-    			insert_dev(target, p, anchor);
-    			append_dev(p, button);
-    			dispose = listen_dev(button, "click", /*showSurprise*/ ctx[0], false, false, false);
-    		},
-    		p: noop,
-    		i: noop,
-    		o: noop,
-    		d: function destroy(detaching) {
-    			if (detaching) detach_dev(p);
-    			dispose();
-    		}
-    	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_fragment$c.name,
-    		type: "component",
-    		source: "",
-    		ctx
-    	});
-
-    	return block;
-    }
-
-    function instance$c($$self, $$props, $$invalidate) {
-    	let { changeCheck } = $$props;
-
-    	const showSurprise = () => {
-    		location.replace("http://localhost:5000/newtest");
-    	};
-
-    	const writable_props = ["changeCheck"];
-
-    	Object.keys($$props).forEach(key => {
-    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<TestModal> was created with unknown prop '${key}'`);
-    	});
-
-    	$$self.$set = $$props => {
-    		if ("changeCheck" in $$props) $$invalidate(1, changeCheck = $$props.changeCheck);
-    	};
-
-    	$$self.$capture_state = () => {
-    		return { changeCheck };
-    	};
-
-    	$$self.$inject_state = $$props => {
-    		if ("changeCheck" in $$props) $$invalidate(1, changeCheck = $$props.changeCheck);
-    	};
-
-    	return [showSurprise, changeCheck];
-    }
-
-    class TestModal extends SvelteComponentDev {
-    	constructor(options) {
-    		super(options);
-    		init(this, options, instance$c, create_fragment$c, safe_not_equal, { changeCheck: 1 });
-
-    		dispatch_dev("SvelteRegisterComponent", {
-    			component: this,
-    			tagName: "TestModal",
-    			options,
-    			id: create_fragment$c.name
-    		});
-
-    		const { ctx } = this.$$;
-    		const props = options.props || {};
-
-    		if (/*changeCheck*/ ctx[1] === undefined && !("changeCheck" in props)) {
-    			console.warn("<TestModal> was created without expected prop 'changeCheck'");
-    		}
-    	}
-
-    	get changeCheck() {
-    		throw new Error("<TestModal>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
-    	}
-
-    	set changeCheck(value) {
-    		throw new Error("<TestModal>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
-    	}
-    }
-
-    /* src/components/navbar.svelte generated by Svelte v3.18.1 */
-    const file$a = "src/components/navbar.svelte";
-
-    function create_fragment$d(ctx) {
     	let link;
     	let t0;
     	let nav;
@@ -37076,51 +37086,51 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			attr_dev(link, "href", "https://fonts.googleapis.com/css2?family=Jost&display=swap");
     			attr_dev(link, "rel", "stylesheet");
     			attr_dev(link, "class", "svelte-1thwvf9");
-    			add_location(link, file$a, 61, 0, 2567);
+    			add_location(link, file$8, 61, 0, 2567);
     			attr_dev(h1, "class", "welcome text-primary svelte-1thwvf9");
-    			add_location(h1, file$a, 69, 4, 2814);
+    			add_location(h1, file$8, 69, 4, 2814);
     			attr_dev(img0, "alt", "admin");
     			attr_dev(img0, "width", "25");
     			attr_dev(img0, "height", "25");
     			if (img0.src !== (img0_src_value = "https://img.icons8.com/carbon-copy/64/000000/user.png")) attr_dev(img0, "src", img0_src_value);
     			attr_dev(img0, "class", "svelte-1thwvf9");
-    			add_location(img0, file$a, 77, 10, 3195);
+    			add_location(img0, file$8, 77, 10, 3195);
     			set_style(p0, "font-family", "'Jost', sans-serif");
     			attr_dev(p0, "class", "svelte-1thwvf9");
-    			add_location(p0, file$a, 82, 10, 3356);
+    			add_location(p0, file$8, 82, 10, 3356);
     			attr_dev(button, "class", "container bg-white mx-3 flex flex-row hover:bg-light text-dark\n          font-semibold hover:text-white py-4 px-6 border border-white-500\n          rounded hover:border-white hover:border-transparent rounded-full svelte-1thwvf9");
-    			add_location(button, file$a, 73, 8, 2945);
+    			add_location(button, file$8, 73, 8, 2945);
     			attr_dev(img1, "alt", "Theme");
     			attr_dev(img1, "width", "25");
     			attr_dev(img1, "height", "25");
     			if (img1.src !== (img1_src_value = "https://img.icons8.com/material-rounded/24/000000/change.png")) attr_dev(img1, "src", img1_src_value);
     			attr_dev(img1, "class", "svelte-1thwvf9");
-    			add_location(img1, file$a, 95, 12, 3878);
+    			add_location(img1, file$8, 95, 12, 3878);
     			attr_dev(p1, "class", "svelte-1thwvf9");
-    			add_location(p1, file$a, 100, 12, 4056);
+    			add_location(p1, file$8, 100, 12, 4056);
     			attr_dev(li0, "class", "rounded-t flex flex-row bg-gray-200 hover:bg-gray-400 py-2\n            px-4 block whitespace-no-wrap svelte-1thwvf9");
-    			add_location(li0, file$a, 87, 10, 3579);
+    			add_location(li0, file$8, 87, 10, 3579);
     			attr_dev(img2, "alt", "logout");
     			attr_dev(img2, "width", "25");
     			attr_dev(img2, "height", "25");
     			if (img2.src !== (img2_src_value = "https://img.icons8.com/pastel-glyph/64/000000/logout-rounded-down.png")) attr_dev(img2, "src", img2_src_value);
     			attr_dev(img2, "class", "svelte-1thwvf9");
-    			add_location(img2, file$a, 107, 12, 4270);
+    			add_location(img2, file$8, 107, 12, 4270);
     			attr_dev(p2, "class", "svelte-1thwvf9");
-    			add_location(p2, file$a, 112, 12, 4458);
+    			add_location(p2, file$8, 112, 12, 4458);
     			attr_dev(li1, "class", "bg-gray-200 flex flex-row hover:bg-gray-400 py-2 px-4 block\n            whitespace-no-wrap svelte-1thwvf9");
-    			add_location(li1, file$a, 102, 10, 4107);
+    			add_location(li1, file$8, 102, 10, 4107);
     			attr_dev(ul, "class", "ml-3 dropdown-content container text-gray-700 pt-1 svelte-1thwvf9");
-    			add_location(ul, file$a, 86, 8, 3505);
+    			add_location(ul, file$8, 86, 8, 3505);
     			attr_dev(div0, "class", "dropdown svelte-1thwvf9");
-    			add_location(div0, file$a, 72, 6, 2914);
+    			add_location(div0, file$8, 72, 6, 2914);
     			attr_dev(div1, "id", "btn");
     			attr_dev(div1, "class", "flex flex-row svelte-1thwvf9");
-    			add_location(div1, file$a, 70, 4, 2870);
+    			add_location(div1, file$8, 70, 4, 2870);
     			attr_dev(div2, "class", "w-full block flex-grow lg:items-right svelte-1thwvf9");
-    			add_location(div2, file$a, 68, 2, 2758);
+    			add_location(div2, file$8, 68, 2, 2758);
     			attr_dev(nav, "class", "flex shadow-2xl items-center justify-between flex-wrap bg-dark sticky\n  p-6 svelte-1thwvf9");
-    			add_location(nav, file$a, 64, 0, 2663);
+    			add_location(nav, file$8, 64, 0, 2663);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -37168,7 +37178,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$d.name,
+    		id: create_fragment$b.name,
     		type: "component",
     		source: "",
     		ctx
@@ -37181,7 +37191,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	location.replace("http://localhost:3000/logout");
     }
 
-    function instance$d($$self, $$props, $$invalidate) {
+    function instance$b($$self, $$props, $$invalidate) {
     	const tokens = cookieHandler.getCookie("access_token").split(".");
     	console.log(atob(tokens[1]));
 
@@ -37228,487 +37238,2728 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Navbar extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$d, create_fragment$d, safe_not_equal, {});
+    		init(this, options, instance$b, create_fragment$b, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Navbar",
+    			options,
+    			id: create_fragment$b.name
+    		});
+    	}
+    }
+
+    var feather = createCommonjsModule(function (module, exports) {
+    (function webpackUniversalModuleDefinition(root, factory) {
+    	module.exports = factory();
+    })(typeof self !== 'undefined' ? self : commonjsGlobal, function() {
+    return /******/ (function(modules) { // webpackBootstrap
+    /******/ 	// The module cache
+    /******/ 	var installedModules = {};
+    /******/
+    /******/ 	// The require function
+    /******/ 	function __webpack_require__(moduleId) {
+    /******/
+    /******/ 		// Check if module is in cache
+    /******/ 		if(installedModules[moduleId]) {
+    /******/ 			return installedModules[moduleId].exports;
+    /******/ 		}
+    /******/ 		// Create a new module (and put it into the cache)
+    /******/ 		var module = installedModules[moduleId] = {
+    /******/ 			i: moduleId,
+    /******/ 			l: false,
+    /******/ 			exports: {}
+    /******/ 		};
+    /******/
+    /******/ 		// Execute the module function
+    /******/ 		modules[moduleId].call(module.exports, module, module.exports, __webpack_require__);
+    /******/
+    /******/ 		// Flag the module as loaded
+    /******/ 		module.l = true;
+    /******/
+    /******/ 		// Return the exports of the module
+    /******/ 		return module.exports;
+    /******/ 	}
+    /******/
+    /******/
+    /******/ 	// expose the modules object (__webpack_modules__)
+    /******/ 	__webpack_require__.m = modules;
+    /******/
+    /******/ 	// expose the module cache
+    /******/ 	__webpack_require__.c = installedModules;
+    /******/
+    /******/ 	// define getter function for harmony exports
+    /******/ 	__webpack_require__.d = function(exports, name, getter) {
+    /******/ 		if(!__webpack_require__.o(exports, name)) {
+    /******/ 			Object.defineProperty(exports, name, {
+    /******/ 				configurable: false,
+    /******/ 				enumerable: true,
+    /******/ 				get: getter
+    /******/ 			});
+    /******/ 		}
+    /******/ 	};
+    /******/
+    /******/ 	// define __esModule on exports
+    /******/ 	__webpack_require__.r = function(exports) {
+    /******/ 		Object.defineProperty(exports, '__esModule', { value: true });
+    /******/ 	};
+    /******/
+    /******/ 	// getDefaultExport function for compatibility with non-harmony modules
+    /******/ 	__webpack_require__.n = function(module) {
+    /******/ 		var getter = module && module.__esModule ?
+    /******/ 			function getDefault() { return module['default']; } :
+    /******/ 			function getModuleExports() { return module; };
+    /******/ 		__webpack_require__.d(getter, 'a', getter);
+    /******/ 		return getter;
+    /******/ 	};
+    /******/
+    /******/ 	// Object.prototype.hasOwnProperty.call
+    /******/ 	__webpack_require__.o = function(object, property) { return Object.prototype.hasOwnProperty.call(object, property); };
+    /******/
+    /******/ 	// __webpack_public_path__
+    /******/ 	__webpack_require__.p = "";
+    /******/
+    /******/
+    /******/ 	// Load entry module and return exports
+    /******/ 	return __webpack_require__(__webpack_require__.s = 0);
+    /******/ })
+    /************************************************************************/
+    /******/ ({
+
+    /***/ "./dist/icons.json":
+    /*!*************************!*\
+      !*** ./dist/icons.json ***!
+      \*************************/
+    /*! exports provided: activity, airplay, alert-circle, alert-octagon, alert-triangle, align-center, align-justify, align-left, align-right, anchor, aperture, archive, arrow-down-circle, arrow-down-left, arrow-down-right, arrow-down, arrow-left-circle, arrow-left, arrow-right-circle, arrow-right, arrow-up-circle, arrow-up-left, arrow-up-right, arrow-up, at-sign, award, bar-chart-2, bar-chart, battery-charging, battery, bell-off, bell, bluetooth, bold, book-open, book, bookmark, box, briefcase, calendar, camera-off, camera, cast, check-circle, check-square, check, chevron-down, chevron-left, chevron-right, chevron-up, chevrons-down, chevrons-left, chevrons-right, chevrons-up, chrome, circle, clipboard, clock, cloud-drizzle, cloud-lightning, cloud-off, cloud-rain, cloud-snow, cloud, code, codepen, codesandbox, coffee, columns, command, compass, copy, corner-down-left, corner-down-right, corner-left-down, corner-left-up, corner-right-down, corner-right-up, corner-up-left, corner-up-right, cpu, credit-card, crop, crosshair, database, delete, disc, divide-circle, divide-square, divide, dollar-sign, download-cloud, download, dribbble, droplet, edit-2, edit-3, edit, external-link, eye-off, eye, facebook, fast-forward, feather, figma, file-minus, file-plus, file-text, file, film, filter, flag, folder-minus, folder-plus, folder, framer, frown, gift, git-branch, git-commit, git-merge, git-pull-request, github, gitlab, globe, grid, hard-drive, hash, headphones, heart, help-circle, hexagon, home, image, inbox, info, instagram, italic, key, layers, layout, life-buoy, link-2, link, linkedin, list, loader, lock, log-in, log-out, mail, map-pin, map, maximize-2, maximize, meh, menu, message-circle, message-square, mic-off, mic, minimize-2, minimize, minus-circle, minus-square, minus, monitor, moon, more-horizontal, more-vertical, mouse-pointer, move, music, navigation-2, navigation, octagon, package, paperclip, pause-circle, pause, pen-tool, percent, phone-call, phone-forwarded, phone-incoming, phone-missed, phone-off, phone-outgoing, phone, pie-chart, play-circle, play, plus-circle, plus-square, plus, pocket, power, printer, radio, refresh-ccw, refresh-cw, repeat, rewind, rotate-ccw, rotate-cw, rss, save, scissors, search, send, server, settings, share-2, share, shield-off, shield, shopping-bag, shopping-cart, shuffle, sidebar, skip-back, skip-forward, slack, slash, sliders, smartphone, smile, speaker, square, star, stop-circle, sun, sunrise, sunset, tablet, tag, target, terminal, thermometer, thumbs-down, thumbs-up, toggle-left, toggle-right, tool, trash-2, trash, trello, trending-down, trending-up, triangle, truck, tv, twitch, twitter, type, umbrella, underline, unlock, upload-cloud, upload, user-check, user-minus, user-plus, user-x, user, users, video-off, video, voicemail, volume-1, volume-2, volume-x, volume, watch, wifi-off, wifi, wind, x-circle, x-octagon, x-square, x, youtube, zap-off, zap, zoom-in, zoom-out, default */
+    /***/ (function(module) {
+
+    module.exports = {"activity":"<polyline points=\"22 12 18 12 15 21 9 3 6 12 2 12\"></polyline>","airplay":"<path d=\"M5 17H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-1\"></path><polygon points=\"12 15 17 21 7 21 12 15\"></polygon>","alert-circle":"<circle cx=\"12\" cy=\"12\" r=\"10\"></circle><line x1=\"12\" y1=\"8\" x2=\"12\" y2=\"12\"></line><line x1=\"12\" y1=\"16\" x2=\"12.01\" y2=\"16\"></line>","alert-octagon":"<polygon points=\"7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2\"></polygon><line x1=\"12\" y1=\"8\" x2=\"12\" y2=\"12\"></line><line x1=\"12\" y1=\"16\" x2=\"12.01\" y2=\"16\"></line>","alert-triangle":"<path d=\"M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z\"></path><line x1=\"12\" y1=\"9\" x2=\"12\" y2=\"13\"></line><line x1=\"12\" y1=\"17\" x2=\"12.01\" y2=\"17\"></line>","align-center":"<line x1=\"18\" y1=\"10\" x2=\"6\" y2=\"10\"></line><line x1=\"21\" y1=\"6\" x2=\"3\" y2=\"6\"></line><line x1=\"21\" y1=\"14\" x2=\"3\" y2=\"14\"></line><line x1=\"18\" y1=\"18\" x2=\"6\" y2=\"18\"></line>","align-justify":"<line x1=\"21\" y1=\"10\" x2=\"3\" y2=\"10\"></line><line x1=\"21\" y1=\"6\" x2=\"3\" y2=\"6\"></line><line x1=\"21\" y1=\"14\" x2=\"3\" y2=\"14\"></line><line x1=\"21\" y1=\"18\" x2=\"3\" y2=\"18\"></line>","align-left":"<line x1=\"17\" y1=\"10\" x2=\"3\" y2=\"10\"></line><line x1=\"21\" y1=\"6\" x2=\"3\" y2=\"6\"></line><line x1=\"21\" y1=\"14\" x2=\"3\" y2=\"14\"></line><line x1=\"17\" y1=\"18\" x2=\"3\" y2=\"18\"></line>","align-right":"<line x1=\"21\" y1=\"10\" x2=\"7\" y2=\"10\"></line><line x1=\"21\" y1=\"6\" x2=\"3\" y2=\"6\"></line><line x1=\"21\" y1=\"14\" x2=\"3\" y2=\"14\"></line><line x1=\"21\" y1=\"18\" x2=\"7\" y2=\"18\"></line>","anchor":"<circle cx=\"12\" cy=\"5\" r=\"3\"></circle><line x1=\"12\" y1=\"22\" x2=\"12\" y2=\"8\"></line><path d=\"M5 12H2a10 10 0 0 0 20 0h-3\"></path>","aperture":"<circle cx=\"12\" cy=\"12\" r=\"10\"></circle><line x1=\"14.31\" y1=\"8\" x2=\"20.05\" y2=\"17.94\"></line><line x1=\"9.69\" y1=\"8\" x2=\"21.17\" y2=\"8\"></line><line x1=\"7.38\" y1=\"12\" x2=\"13.12\" y2=\"2.06\"></line><line x1=\"9.69\" y1=\"16\" x2=\"3.95\" y2=\"6.06\"></line><line x1=\"14.31\" y1=\"16\" x2=\"2.83\" y2=\"16\"></line><line x1=\"16.62\" y1=\"12\" x2=\"10.88\" y2=\"21.94\"></line>","archive":"<polyline points=\"21 8 21 21 3 21 3 8\"></polyline><rect x=\"1\" y=\"3\" width=\"22\" height=\"5\"></rect><line x1=\"10\" y1=\"12\" x2=\"14\" y2=\"12\"></line>","arrow-down-circle":"<circle cx=\"12\" cy=\"12\" r=\"10\"></circle><polyline points=\"8 12 12 16 16 12\"></polyline><line x1=\"12\" y1=\"8\" x2=\"12\" y2=\"16\"></line>","arrow-down-left":"<line x1=\"17\" y1=\"7\" x2=\"7\" y2=\"17\"></line><polyline points=\"17 17 7 17 7 7\"></polyline>","arrow-down-right":"<line x1=\"7\" y1=\"7\" x2=\"17\" y2=\"17\"></line><polyline points=\"17 7 17 17 7 17\"></polyline>","arrow-down":"<line x1=\"12\" y1=\"5\" x2=\"12\" y2=\"19\"></line><polyline points=\"19 12 12 19 5 12\"></polyline>","arrow-left-circle":"<circle cx=\"12\" cy=\"12\" r=\"10\"></circle><polyline points=\"12 8 8 12 12 16\"></polyline><line x1=\"16\" y1=\"12\" x2=\"8\" y2=\"12\"></line>","arrow-left":"<line x1=\"19\" y1=\"12\" x2=\"5\" y2=\"12\"></line><polyline points=\"12 19 5 12 12 5\"></polyline>","arrow-right-circle":"<circle cx=\"12\" cy=\"12\" r=\"10\"></circle><polyline points=\"12 16 16 12 12 8\"></polyline><line x1=\"8\" y1=\"12\" x2=\"16\" y2=\"12\"></line>","arrow-right":"<line x1=\"5\" y1=\"12\" x2=\"19\" y2=\"12\"></line><polyline points=\"12 5 19 12 12 19\"></polyline>","arrow-up-circle":"<circle cx=\"12\" cy=\"12\" r=\"10\"></circle><polyline points=\"16 12 12 8 8 12\"></polyline><line x1=\"12\" y1=\"16\" x2=\"12\" y2=\"8\"></line>","arrow-up-left":"<line x1=\"17\" y1=\"17\" x2=\"7\" y2=\"7\"></line><polyline points=\"7 17 7 7 17 7\"></polyline>","arrow-up-right":"<line x1=\"7\" y1=\"17\" x2=\"17\" y2=\"7\"></line><polyline points=\"7 7 17 7 17 17\"></polyline>","arrow-up":"<line x1=\"12\" y1=\"19\" x2=\"12\" y2=\"5\"></line><polyline points=\"5 12 12 5 19 12\"></polyline>","at-sign":"<circle cx=\"12\" cy=\"12\" r=\"4\"></circle><path d=\"M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-3.92 7.94\"></path>","award":"<circle cx=\"12\" cy=\"8\" r=\"7\"></circle><polyline points=\"8.21 13.89 7 23 12 20 17 23 15.79 13.88\"></polyline>","bar-chart-2":"<line x1=\"18\" y1=\"20\" x2=\"18\" y2=\"10\"></line><line x1=\"12\" y1=\"20\" x2=\"12\" y2=\"4\"></line><line x1=\"6\" y1=\"20\" x2=\"6\" y2=\"14\"></line>","bar-chart":"<line x1=\"12\" y1=\"20\" x2=\"12\" y2=\"10\"></line><line x1=\"18\" y1=\"20\" x2=\"18\" y2=\"4\"></line><line x1=\"6\" y1=\"20\" x2=\"6\" y2=\"16\"></line>","battery-charging":"<path d=\"M5 18H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h3.19M15 6h2a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-3.19\"></path><line x1=\"23\" y1=\"13\" x2=\"23\" y2=\"11\"></line><polyline points=\"11 6 7 12 13 12 9 18\"></polyline>","battery":"<rect x=\"1\" y=\"6\" width=\"18\" height=\"12\" rx=\"2\" ry=\"2\"></rect><line x1=\"23\" y1=\"13\" x2=\"23\" y2=\"11\"></line>","bell-off":"<path d=\"M13.73 21a2 2 0 0 1-3.46 0\"></path><path d=\"M18.63 13A17.89 17.89 0 0 1 18 8\"></path><path d=\"M6.26 6.26A5.86 5.86 0 0 0 6 8c0 7-3 9-3 9h14\"></path><path d=\"M18 8a6 6 0 0 0-9.33-5\"></path><line x1=\"1\" y1=\"1\" x2=\"23\" y2=\"23\"></line>","bell":"<path d=\"M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9\"></path><path d=\"M13.73 21a2 2 0 0 1-3.46 0\"></path>","bluetooth":"<polyline points=\"6.5 6.5 17.5 17.5 12 23 12 1 17.5 6.5 6.5 17.5\"></polyline>","bold":"<path d=\"M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z\"></path><path d=\"M6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z\"></path>","book-open":"<path d=\"M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z\"></path><path d=\"M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z\"></path>","book":"<path d=\"M4 19.5A2.5 2.5 0 0 1 6.5 17H20\"></path><path d=\"M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z\"></path>","bookmark":"<path d=\"M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z\"></path>","box":"<path d=\"M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z\"></path><polyline points=\"3.27 6.96 12 12.01 20.73 6.96\"></polyline><line x1=\"12\" y1=\"22.08\" x2=\"12\" y2=\"12\"></line>","briefcase":"<rect x=\"2\" y=\"7\" width=\"20\" height=\"14\" rx=\"2\" ry=\"2\"></rect><path d=\"M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16\"></path>","calendar":"<rect x=\"3\" y=\"4\" width=\"18\" height=\"18\" rx=\"2\" ry=\"2\"></rect><line x1=\"16\" y1=\"2\" x2=\"16\" y2=\"6\"></line><line x1=\"8\" y1=\"2\" x2=\"8\" y2=\"6\"></line><line x1=\"3\" y1=\"10\" x2=\"21\" y2=\"10\"></line>","camera-off":"<line x1=\"1\" y1=\"1\" x2=\"23\" y2=\"23\"></line><path d=\"M21 21H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h3m3-3h6l2 3h4a2 2 0 0 1 2 2v9.34m-7.72-2.06a4 4 0 1 1-5.56-5.56\"></path>","camera":"<path d=\"M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z\"></path><circle cx=\"12\" cy=\"13\" r=\"4\"></circle>","cast":"<path d=\"M2 16.1A5 5 0 0 1 5.9 20M2 12.05A9 9 0 0 1 9.95 20M2 8V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-6\"></path><line x1=\"2\" y1=\"20\" x2=\"2.01\" y2=\"20\"></line>","check-circle":"<path d=\"M22 11.08V12a10 10 0 1 1-5.93-9.14\"></path><polyline points=\"22 4 12 14.01 9 11.01\"></polyline>","check-square":"<polyline points=\"9 11 12 14 22 4\"></polyline><path d=\"M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11\"></path>","check":"<polyline points=\"20 6 9 17 4 12\"></polyline>","chevron-down":"<polyline points=\"6 9 12 15 18 9\"></polyline>","chevron-left":"<polyline points=\"15 18 9 12 15 6\"></polyline>","chevron-right":"<polyline points=\"9 18 15 12 9 6\"></polyline>","chevron-up":"<polyline points=\"18 15 12 9 6 15\"></polyline>","chevrons-down":"<polyline points=\"7 13 12 18 17 13\"></polyline><polyline points=\"7 6 12 11 17 6\"></polyline>","chevrons-left":"<polyline points=\"11 17 6 12 11 7\"></polyline><polyline points=\"18 17 13 12 18 7\"></polyline>","chevrons-right":"<polyline points=\"13 17 18 12 13 7\"></polyline><polyline points=\"6 17 11 12 6 7\"></polyline>","chevrons-up":"<polyline points=\"17 11 12 6 7 11\"></polyline><polyline points=\"17 18 12 13 7 18\"></polyline>","chrome":"<circle cx=\"12\" cy=\"12\" r=\"10\"></circle><circle cx=\"12\" cy=\"12\" r=\"4\"></circle><line x1=\"21.17\" y1=\"8\" x2=\"12\" y2=\"8\"></line><line x1=\"3.95\" y1=\"6.06\" x2=\"8.54\" y2=\"14\"></line><line x1=\"10.88\" y1=\"21.94\" x2=\"15.46\" y2=\"14\"></line>","circle":"<circle cx=\"12\" cy=\"12\" r=\"10\"></circle>","clipboard":"<path d=\"M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2\"></path><rect x=\"8\" y=\"2\" width=\"8\" height=\"4\" rx=\"1\" ry=\"1\"></rect>","clock":"<circle cx=\"12\" cy=\"12\" r=\"10\"></circle><polyline points=\"12 6 12 12 16 14\"></polyline>","cloud-drizzle":"<line x1=\"8\" y1=\"19\" x2=\"8\" y2=\"21\"></line><line x1=\"8\" y1=\"13\" x2=\"8\" y2=\"15\"></line><line x1=\"16\" y1=\"19\" x2=\"16\" y2=\"21\"></line><line x1=\"16\" y1=\"13\" x2=\"16\" y2=\"15\"></line><line x1=\"12\" y1=\"21\" x2=\"12\" y2=\"23\"></line><line x1=\"12\" y1=\"15\" x2=\"12\" y2=\"17\"></line><path d=\"M20 16.58A5 5 0 0 0 18 7h-1.26A8 8 0 1 0 4 15.25\"></path>","cloud-lightning":"<path d=\"M19 16.9A5 5 0 0 0 18 7h-1.26a8 8 0 1 0-11.62 9\"></path><polyline points=\"13 11 9 17 15 17 11 23\"></polyline>","cloud-off":"<path d=\"M22.61 16.95A5 5 0 0 0 18 10h-1.26a8 8 0 0 0-7.05-6M5 5a8 8 0 0 0 4 15h9a5 5 0 0 0 1.7-.3\"></path><line x1=\"1\" y1=\"1\" x2=\"23\" y2=\"23\"></line>","cloud-rain":"<line x1=\"16\" y1=\"13\" x2=\"16\" y2=\"21\"></line><line x1=\"8\" y1=\"13\" x2=\"8\" y2=\"21\"></line><line x1=\"12\" y1=\"15\" x2=\"12\" y2=\"23\"></line><path d=\"M20 16.58A5 5 0 0 0 18 7h-1.26A8 8 0 1 0 4 15.25\"></path>","cloud-snow":"<path d=\"M20 17.58A5 5 0 0 0 18 8h-1.26A8 8 0 1 0 4 16.25\"></path><line x1=\"8\" y1=\"16\" x2=\"8.01\" y2=\"16\"></line><line x1=\"8\" y1=\"20\" x2=\"8.01\" y2=\"20\"></line><line x1=\"12\" y1=\"18\" x2=\"12.01\" y2=\"18\"></line><line x1=\"12\" y1=\"22\" x2=\"12.01\" y2=\"22\"></line><line x1=\"16\" y1=\"16\" x2=\"16.01\" y2=\"16\"></line><line x1=\"16\" y1=\"20\" x2=\"16.01\" y2=\"20\"></line>","cloud":"<path d=\"M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z\"></path>","code":"<polyline points=\"16 18 22 12 16 6\"></polyline><polyline points=\"8 6 2 12 8 18\"></polyline>","codepen":"<polygon points=\"12 2 22 8.5 22 15.5 12 22 2 15.5 2 8.5 12 2\"></polygon><line x1=\"12\" y1=\"22\" x2=\"12\" y2=\"15.5\"></line><polyline points=\"22 8.5 12 15.5 2 8.5\"></polyline><polyline points=\"2 15.5 12 8.5 22 15.5\"></polyline><line x1=\"12\" y1=\"2\" x2=\"12\" y2=\"8.5\"></line>","codesandbox":"<path d=\"M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z\"></path><polyline points=\"7.5 4.21 12 6.81 16.5 4.21\"></polyline><polyline points=\"7.5 19.79 7.5 14.6 3 12\"></polyline><polyline points=\"21 12 16.5 14.6 16.5 19.79\"></polyline><polyline points=\"3.27 6.96 12 12.01 20.73 6.96\"></polyline><line x1=\"12\" y1=\"22.08\" x2=\"12\" y2=\"12\"></line>","coffee":"<path d=\"M18 8h1a4 4 0 0 1 0 8h-1\"></path><path d=\"M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z\"></path><line x1=\"6\" y1=\"1\" x2=\"6\" y2=\"4\"></line><line x1=\"10\" y1=\"1\" x2=\"10\" y2=\"4\"></line><line x1=\"14\" y1=\"1\" x2=\"14\" y2=\"4\"></line>","columns":"<path d=\"M12 3h7a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-7m0-18H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h7m0-18v18\"></path>","command":"<path d=\"M18 3a3 3 0 0 0-3 3v12a3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3H6a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3V6a3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3h12a3 3 0 0 0 3-3 3 3 0 0 0-3-3z\"></path>","compass":"<circle cx=\"12\" cy=\"12\" r=\"10\"></circle><polygon points=\"16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76\"></polygon>","copy":"<rect x=\"9\" y=\"9\" width=\"13\" height=\"13\" rx=\"2\" ry=\"2\"></rect><path d=\"M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1\"></path>","corner-down-left":"<polyline points=\"9 10 4 15 9 20\"></polyline><path d=\"M20 4v7a4 4 0 0 1-4 4H4\"></path>","corner-down-right":"<polyline points=\"15 10 20 15 15 20\"></polyline><path d=\"M4 4v7a4 4 0 0 0 4 4h12\"></path>","corner-left-down":"<polyline points=\"14 15 9 20 4 15\"></polyline><path d=\"M20 4h-7a4 4 0 0 0-4 4v12\"></path>","corner-left-up":"<polyline points=\"14 9 9 4 4 9\"></polyline><path d=\"M20 20h-7a4 4 0 0 1-4-4V4\"></path>","corner-right-down":"<polyline points=\"10 15 15 20 20 15\"></polyline><path d=\"M4 4h7a4 4 0 0 1 4 4v12\"></path>","corner-right-up":"<polyline points=\"10 9 15 4 20 9\"></polyline><path d=\"M4 20h7a4 4 0 0 0 4-4V4\"></path>","corner-up-left":"<polyline points=\"9 14 4 9 9 4\"></polyline><path d=\"M20 20v-7a4 4 0 0 0-4-4H4\"></path>","corner-up-right":"<polyline points=\"15 14 20 9 15 4\"></polyline><path d=\"M4 20v-7a4 4 0 0 1 4-4h12\"></path>","cpu":"<rect x=\"4\" y=\"4\" width=\"16\" height=\"16\" rx=\"2\" ry=\"2\"></rect><rect x=\"9\" y=\"9\" width=\"6\" height=\"6\"></rect><line x1=\"9\" y1=\"1\" x2=\"9\" y2=\"4\"></line><line x1=\"15\" y1=\"1\" x2=\"15\" y2=\"4\"></line><line x1=\"9\" y1=\"20\" x2=\"9\" y2=\"23\"></line><line x1=\"15\" y1=\"20\" x2=\"15\" y2=\"23\"></line><line x1=\"20\" y1=\"9\" x2=\"23\" y2=\"9\"></line><line x1=\"20\" y1=\"14\" x2=\"23\" y2=\"14\"></line><line x1=\"1\" y1=\"9\" x2=\"4\" y2=\"9\"></line><line x1=\"1\" y1=\"14\" x2=\"4\" y2=\"14\"></line>","credit-card":"<rect x=\"1\" y=\"4\" width=\"22\" height=\"16\" rx=\"2\" ry=\"2\"></rect><line x1=\"1\" y1=\"10\" x2=\"23\" y2=\"10\"></line>","crop":"<path d=\"M6.13 1L6 16a2 2 0 0 0 2 2h15\"></path><path d=\"M1 6.13L16 6a2 2 0 0 1 2 2v15\"></path>","crosshair":"<circle cx=\"12\" cy=\"12\" r=\"10\"></circle><line x1=\"22\" y1=\"12\" x2=\"18\" y2=\"12\"></line><line x1=\"6\" y1=\"12\" x2=\"2\" y2=\"12\"></line><line x1=\"12\" y1=\"6\" x2=\"12\" y2=\"2\"></line><line x1=\"12\" y1=\"22\" x2=\"12\" y2=\"18\"></line>","database":"<ellipse cx=\"12\" cy=\"5\" rx=\"9\" ry=\"3\"></ellipse><path d=\"M21 12c0 1.66-4 3-9 3s-9-1.34-9-3\"></path><path d=\"M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5\"></path>","delete":"<path d=\"M21 4H8l-7 8 7 8h13a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z\"></path><line x1=\"18\" y1=\"9\" x2=\"12\" y2=\"15\"></line><line x1=\"12\" y1=\"9\" x2=\"18\" y2=\"15\"></line>","disc":"<circle cx=\"12\" cy=\"12\" r=\"10\"></circle><circle cx=\"12\" cy=\"12\" r=\"3\"></circle>","divide-circle":"<line x1=\"8\" y1=\"12\" x2=\"16\" y2=\"12\"></line><line x1=\"12\" y1=\"16\" x2=\"12\" y2=\"16\"></line><line x1=\"12\" y1=\"8\" x2=\"12\" y2=\"8\"></line><circle cx=\"12\" cy=\"12\" r=\"10\"></circle>","divide-square":"<rect x=\"3\" y=\"3\" width=\"18\" height=\"18\" rx=\"2\" ry=\"2\"></rect><line x1=\"8\" y1=\"12\" x2=\"16\" y2=\"12\"></line><line x1=\"12\" y1=\"16\" x2=\"12\" y2=\"16\"></line><line x1=\"12\" y1=\"8\" x2=\"12\" y2=\"8\"></line>","divide":"<circle cx=\"12\" cy=\"6\" r=\"2\"></circle><line x1=\"5\" y1=\"12\" x2=\"19\" y2=\"12\"></line><circle cx=\"12\" cy=\"18\" r=\"2\"></circle>","dollar-sign":"<line x1=\"12\" y1=\"1\" x2=\"12\" y2=\"23\"></line><path d=\"M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6\"></path>","download-cloud":"<polyline points=\"8 17 12 21 16 17\"></polyline><line x1=\"12\" y1=\"12\" x2=\"12\" y2=\"21\"></line><path d=\"M20.88 18.09A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.29\"></path>","download":"<path d=\"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4\"></path><polyline points=\"7 10 12 15 17 10\"></polyline><line x1=\"12\" y1=\"15\" x2=\"12\" y2=\"3\"></line>","dribbble":"<circle cx=\"12\" cy=\"12\" r=\"10\"></circle><path d=\"M8.56 2.75c4.37 6.03 6.02 9.42 8.03 17.72m2.54-15.38c-3.72 4.35-8.94 5.66-16.88 5.85m19.5 1.9c-3.5-.93-6.63-.82-8.94 0-2.58.92-5.01 2.86-7.44 6.32\"></path>","droplet":"<path d=\"M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z\"></path>","edit-2":"<path d=\"M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z\"></path>","edit-3":"<path d=\"M12 20h9\"></path><path d=\"M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z\"></path>","edit":"<path d=\"M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7\"></path><path d=\"M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z\"></path>","external-link":"<path d=\"M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6\"></path><polyline points=\"15 3 21 3 21 9\"></polyline><line x1=\"10\" y1=\"14\" x2=\"21\" y2=\"3\"></line>","eye-off":"<path d=\"M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24\"></path><line x1=\"1\" y1=\"1\" x2=\"23\" y2=\"23\"></line>","eye":"<path d=\"M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z\"></path><circle cx=\"12\" cy=\"12\" r=\"3\"></circle>","facebook":"<path d=\"M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z\"></path>","fast-forward":"<polygon points=\"13 19 22 12 13 5 13 19\"></polygon><polygon points=\"2 19 11 12 2 5 2 19\"></polygon>","feather":"<path d=\"M20.24 12.24a6 6 0 0 0-8.49-8.49L5 10.5V19h8.5z\"></path><line x1=\"16\" y1=\"8\" x2=\"2\" y2=\"22\"></line><line x1=\"17.5\" y1=\"15\" x2=\"9\" y2=\"15\"></line>","figma":"<path d=\"M5 5.5A3.5 3.5 0 0 1 8.5 2H12v7H8.5A3.5 3.5 0 0 1 5 5.5z\"></path><path d=\"M12 2h3.5a3.5 3.5 0 1 1 0 7H12V2z\"></path><path d=\"M12 12.5a3.5 3.5 0 1 1 7 0 3.5 3.5 0 1 1-7 0z\"></path><path d=\"M5 19.5A3.5 3.5 0 0 1 8.5 16H12v3.5a3.5 3.5 0 1 1-7 0z\"></path><path d=\"M5 12.5A3.5 3.5 0 0 1 8.5 9H12v7H8.5A3.5 3.5 0 0 1 5 12.5z\"></path>","file-minus":"<path d=\"M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z\"></path><polyline points=\"14 2 14 8 20 8\"></polyline><line x1=\"9\" y1=\"15\" x2=\"15\" y2=\"15\"></line>","file-plus":"<path d=\"M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z\"></path><polyline points=\"14 2 14 8 20 8\"></polyline><line x1=\"12\" y1=\"18\" x2=\"12\" y2=\"12\"></line><line x1=\"9\" y1=\"15\" x2=\"15\" y2=\"15\"></line>","file-text":"<path d=\"M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z\"></path><polyline points=\"14 2 14 8 20 8\"></polyline><line x1=\"16\" y1=\"13\" x2=\"8\" y2=\"13\"></line><line x1=\"16\" y1=\"17\" x2=\"8\" y2=\"17\"></line><polyline points=\"10 9 9 9 8 9\"></polyline>","file":"<path d=\"M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z\"></path><polyline points=\"13 2 13 9 20 9\"></polyline>","film":"<rect x=\"2\" y=\"2\" width=\"20\" height=\"20\" rx=\"2.18\" ry=\"2.18\"></rect><line x1=\"7\" y1=\"2\" x2=\"7\" y2=\"22\"></line><line x1=\"17\" y1=\"2\" x2=\"17\" y2=\"22\"></line><line x1=\"2\" y1=\"12\" x2=\"22\" y2=\"12\"></line><line x1=\"2\" y1=\"7\" x2=\"7\" y2=\"7\"></line><line x1=\"2\" y1=\"17\" x2=\"7\" y2=\"17\"></line><line x1=\"17\" y1=\"17\" x2=\"22\" y2=\"17\"></line><line x1=\"17\" y1=\"7\" x2=\"22\" y2=\"7\"></line>","filter":"<polygon points=\"22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3\"></polygon>","flag":"<path d=\"M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z\"></path><line x1=\"4\" y1=\"22\" x2=\"4\" y2=\"15\"></line>","folder-minus":"<path d=\"M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z\"></path><line x1=\"9\" y1=\"14\" x2=\"15\" y2=\"14\"></line>","folder-plus":"<path d=\"M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z\"></path><line x1=\"12\" y1=\"11\" x2=\"12\" y2=\"17\"></line><line x1=\"9\" y1=\"14\" x2=\"15\" y2=\"14\"></line>","folder":"<path d=\"M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z\"></path>","framer":"<path d=\"M5 16V9h14V2H5l14 14h-7m-7 0l7 7v-7m-7 0h7\"></path>","frown":"<circle cx=\"12\" cy=\"12\" r=\"10\"></circle><path d=\"M16 16s-1.5-2-4-2-4 2-4 2\"></path><line x1=\"9\" y1=\"9\" x2=\"9.01\" y2=\"9\"></line><line x1=\"15\" y1=\"9\" x2=\"15.01\" y2=\"9\"></line>","gift":"<polyline points=\"20 12 20 22 4 22 4 12\"></polyline><rect x=\"2\" y=\"7\" width=\"20\" height=\"5\"></rect><line x1=\"12\" y1=\"22\" x2=\"12\" y2=\"7\"></line><path d=\"M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z\"></path><path d=\"M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z\"></path>","git-branch":"<line x1=\"6\" y1=\"3\" x2=\"6\" y2=\"15\"></line><circle cx=\"18\" cy=\"6\" r=\"3\"></circle><circle cx=\"6\" cy=\"18\" r=\"3\"></circle><path d=\"M18 9a9 9 0 0 1-9 9\"></path>","git-commit":"<circle cx=\"12\" cy=\"12\" r=\"4\"></circle><line x1=\"1.05\" y1=\"12\" x2=\"7\" y2=\"12\"></line><line x1=\"17.01\" y1=\"12\" x2=\"22.96\" y2=\"12\"></line>","git-merge":"<circle cx=\"18\" cy=\"18\" r=\"3\"></circle><circle cx=\"6\" cy=\"6\" r=\"3\"></circle><path d=\"M6 21V9a9 9 0 0 0 9 9\"></path>","git-pull-request":"<circle cx=\"18\" cy=\"18\" r=\"3\"></circle><circle cx=\"6\" cy=\"6\" r=\"3\"></circle><path d=\"M13 6h3a2 2 0 0 1 2 2v7\"></path><line x1=\"6\" y1=\"9\" x2=\"6\" y2=\"21\"></line>","github":"<path d=\"M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22\"></path>","gitlab":"<path d=\"M22.65 14.39L12 22.13 1.35 14.39a.84.84 0 0 1-.3-.94l1.22-3.78 2.44-7.51A.42.42 0 0 1 4.82 2a.43.43 0 0 1 .58 0 .42.42 0 0 1 .11.18l2.44 7.49h8.1l2.44-7.51A.42.42 0 0 1 18.6 2a.43.43 0 0 1 .58 0 .42.42 0 0 1 .11.18l2.44 7.51L23 13.45a.84.84 0 0 1-.35.94z\"></path>","globe":"<circle cx=\"12\" cy=\"12\" r=\"10\"></circle><line x1=\"2\" y1=\"12\" x2=\"22\" y2=\"12\"></line><path d=\"M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z\"></path>","grid":"<rect x=\"3\" y=\"3\" width=\"7\" height=\"7\"></rect><rect x=\"14\" y=\"3\" width=\"7\" height=\"7\"></rect><rect x=\"14\" y=\"14\" width=\"7\" height=\"7\"></rect><rect x=\"3\" y=\"14\" width=\"7\" height=\"7\"></rect>","hard-drive":"<line x1=\"22\" y1=\"12\" x2=\"2\" y2=\"12\"></line><path d=\"M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z\"></path><line x1=\"6\" y1=\"16\" x2=\"6.01\" y2=\"16\"></line><line x1=\"10\" y1=\"16\" x2=\"10.01\" y2=\"16\"></line>","hash":"<line x1=\"4\" y1=\"9\" x2=\"20\" y2=\"9\"></line><line x1=\"4\" y1=\"15\" x2=\"20\" y2=\"15\"></line><line x1=\"10\" y1=\"3\" x2=\"8\" y2=\"21\"></line><line x1=\"16\" y1=\"3\" x2=\"14\" y2=\"21\"></line>","headphones":"<path d=\"M3 18v-6a9 9 0 0 1 18 0v6\"></path><path d=\"M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z\"></path>","heart":"<path d=\"M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z\"></path>","help-circle":"<circle cx=\"12\" cy=\"12\" r=\"10\"></circle><path d=\"M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3\"></path><line x1=\"12\" y1=\"17\" x2=\"12.01\" y2=\"17\"></line>","hexagon":"<path d=\"M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z\"></path>","home":"<path d=\"M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z\"></path><polyline points=\"9 22 9 12 15 12 15 22\"></polyline>","image":"<rect x=\"3\" y=\"3\" width=\"18\" height=\"18\" rx=\"2\" ry=\"2\"></rect><circle cx=\"8.5\" cy=\"8.5\" r=\"1.5\"></circle><polyline points=\"21 15 16 10 5 21\"></polyline>","inbox":"<polyline points=\"22 12 16 12 14 15 10 15 8 12 2 12\"></polyline><path d=\"M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z\"></path>","info":"<circle cx=\"12\" cy=\"12\" r=\"10\"></circle><line x1=\"12\" y1=\"16\" x2=\"12\" y2=\"12\"></line><line x1=\"12\" y1=\"8\" x2=\"12.01\" y2=\"8\"></line>","instagram":"<rect x=\"2\" y=\"2\" width=\"20\" height=\"20\" rx=\"5\" ry=\"5\"></rect><path d=\"M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z\"></path><line x1=\"17.5\" y1=\"6.5\" x2=\"17.51\" y2=\"6.5\"></line>","italic":"<line x1=\"19\" y1=\"4\" x2=\"10\" y2=\"4\"></line><line x1=\"14\" y1=\"20\" x2=\"5\" y2=\"20\"></line><line x1=\"15\" y1=\"4\" x2=\"9\" y2=\"20\"></line>","key":"<path d=\"M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4\"></path>","layers":"<polygon points=\"12 2 2 7 12 12 22 7 12 2\"></polygon><polyline points=\"2 17 12 22 22 17\"></polyline><polyline points=\"2 12 12 17 22 12\"></polyline>","layout":"<rect x=\"3\" y=\"3\" width=\"18\" height=\"18\" rx=\"2\" ry=\"2\"></rect><line x1=\"3\" y1=\"9\" x2=\"21\" y2=\"9\"></line><line x1=\"9\" y1=\"21\" x2=\"9\" y2=\"9\"></line>","life-buoy":"<circle cx=\"12\" cy=\"12\" r=\"10\"></circle><circle cx=\"12\" cy=\"12\" r=\"4\"></circle><line x1=\"4.93\" y1=\"4.93\" x2=\"9.17\" y2=\"9.17\"></line><line x1=\"14.83\" y1=\"14.83\" x2=\"19.07\" y2=\"19.07\"></line><line x1=\"14.83\" y1=\"9.17\" x2=\"19.07\" y2=\"4.93\"></line><line x1=\"14.83\" y1=\"9.17\" x2=\"18.36\" y2=\"5.64\"></line><line x1=\"4.93\" y1=\"19.07\" x2=\"9.17\" y2=\"14.83\"></line>","link-2":"<path d=\"M15 7h3a5 5 0 0 1 5 5 5 5 0 0 1-5 5h-3m-6 0H6a5 5 0 0 1-5-5 5 5 0 0 1 5-5h3\"></path><line x1=\"8\" y1=\"12\" x2=\"16\" y2=\"12\"></line>","link":"<path d=\"M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71\"></path><path d=\"M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71\"></path>","linkedin":"<path d=\"M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z\"></path><rect x=\"2\" y=\"9\" width=\"4\" height=\"12\"></rect><circle cx=\"4\" cy=\"4\" r=\"2\"></circle>","list":"<line x1=\"8\" y1=\"6\" x2=\"21\" y2=\"6\"></line><line x1=\"8\" y1=\"12\" x2=\"21\" y2=\"12\"></line><line x1=\"8\" y1=\"18\" x2=\"21\" y2=\"18\"></line><line x1=\"3\" y1=\"6\" x2=\"3.01\" y2=\"6\"></line><line x1=\"3\" y1=\"12\" x2=\"3.01\" y2=\"12\"></line><line x1=\"3\" y1=\"18\" x2=\"3.01\" y2=\"18\"></line>","loader":"<line x1=\"12\" y1=\"2\" x2=\"12\" y2=\"6\"></line><line x1=\"12\" y1=\"18\" x2=\"12\" y2=\"22\"></line><line x1=\"4.93\" y1=\"4.93\" x2=\"7.76\" y2=\"7.76\"></line><line x1=\"16.24\" y1=\"16.24\" x2=\"19.07\" y2=\"19.07\"></line><line x1=\"2\" y1=\"12\" x2=\"6\" y2=\"12\"></line><line x1=\"18\" y1=\"12\" x2=\"22\" y2=\"12\"></line><line x1=\"4.93\" y1=\"19.07\" x2=\"7.76\" y2=\"16.24\"></line><line x1=\"16.24\" y1=\"7.76\" x2=\"19.07\" y2=\"4.93\"></line>","lock":"<rect x=\"3\" y=\"11\" width=\"18\" height=\"11\" rx=\"2\" ry=\"2\"></rect><path d=\"M7 11V7a5 5 0 0 1 10 0v4\"></path>","log-in":"<path d=\"M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4\"></path><polyline points=\"10 17 15 12 10 7\"></polyline><line x1=\"15\" y1=\"12\" x2=\"3\" y2=\"12\"></line>","log-out":"<path d=\"M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4\"></path><polyline points=\"16 17 21 12 16 7\"></polyline><line x1=\"21\" y1=\"12\" x2=\"9\" y2=\"12\"></line>","mail":"<path d=\"M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z\"></path><polyline points=\"22,6 12,13 2,6\"></polyline>","map-pin":"<path d=\"M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z\"></path><circle cx=\"12\" cy=\"10\" r=\"3\"></circle>","map":"<polygon points=\"1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6\"></polygon><line x1=\"8\" y1=\"2\" x2=\"8\" y2=\"18\"></line><line x1=\"16\" y1=\"6\" x2=\"16\" y2=\"22\"></line>","maximize-2":"<polyline points=\"15 3 21 3 21 9\"></polyline><polyline points=\"9 21 3 21 3 15\"></polyline><line x1=\"21\" y1=\"3\" x2=\"14\" y2=\"10\"></line><line x1=\"3\" y1=\"21\" x2=\"10\" y2=\"14\"></line>","maximize":"<path d=\"M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3\"></path>","meh":"<circle cx=\"12\" cy=\"12\" r=\"10\"></circle><line x1=\"8\" y1=\"15\" x2=\"16\" y2=\"15\"></line><line x1=\"9\" y1=\"9\" x2=\"9.01\" y2=\"9\"></line><line x1=\"15\" y1=\"9\" x2=\"15.01\" y2=\"9\"></line>","menu":"<line x1=\"3\" y1=\"12\" x2=\"21\" y2=\"12\"></line><line x1=\"3\" y1=\"6\" x2=\"21\" y2=\"6\"></line><line x1=\"3\" y1=\"18\" x2=\"21\" y2=\"18\"></line>","message-circle":"<path d=\"M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z\"></path>","message-square":"<path d=\"M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z\"></path>","mic-off":"<line x1=\"1\" y1=\"1\" x2=\"23\" y2=\"23\"></line><path d=\"M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6\"></path><path d=\"M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23\"></path><line x1=\"12\" y1=\"19\" x2=\"12\" y2=\"23\"></line><line x1=\"8\" y1=\"23\" x2=\"16\" y2=\"23\"></line>","mic":"<path d=\"M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z\"></path><path d=\"M19 10v2a7 7 0 0 1-14 0v-2\"></path><line x1=\"12\" y1=\"19\" x2=\"12\" y2=\"23\"></line><line x1=\"8\" y1=\"23\" x2=\"16\" y2=\"23\"></line>","minimize-2":"<polyline points=\"4 14 10 14 10 20\"></polyline><polyline points=\"20 10 14 10 14 4\"></polyline><line x1=\"14\" y1=\"10\" x2=\"21\" y2=\"3\"></line><line x1=\"3\" y1=\"21\" x2=\"10\" y2=\"14\"></line>","minimize":"<path d=\"M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3\"></path>","minus-circle":"<circle cx=\"12\" cy=\"12\" r=\"10\"></circle><line x1=\"8\" y1=\"12\" x2=\"16\" y2=\"12\"></line>","minus-square":"<rect x=\"3\" y=\"3\" width=\"18\" height=\"18\" rx=\"2\" ry=\"2\"></rect><line x1=\"8\" y1=\"12\" x2=\"16\" y2=\"12\"></line>","minus":"<line x1=\"5\" y1=\"12\" x2=\"19\" y2=\"12\"></line>","monitor":"<rect x=\"2\" y=\"3\" width=\"20\" height=\"14\" rx=\"2\" ry=\"2\"></rect><line x1=\"8\" y1=\"21\" x2=\"16\" y2=\"21\"></line><line x1=\"12\" y1=\"17\" x2=\"12\" y2=\"21\"></line>","moon":"<path d=\"M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z\"></path>","more-horizontal":"<circle cx=\"12\" cy=\"12\" r=\"1\"></circle><circle cx=\"19\" cy=\"12\" r=\"1\"></circle><circle cx=\"5\" cy=\"12\" r=\"1\"></circle>","more-vertical":"<circle cx=\"12\" cy=\"12\" r=\"1\"></circle><circle cx=\"12\" cy=\"5\" r=\"1\"></circle><circle cx=\"12\" cy=\"19\" r=\"1\"></circle>","mouse-pointer":"<path d=\"M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z\"></path><path d=\"M13 13l6 6\"></path>","move":"<polyline points=\"5 9 2 12 5 15\"></polyline><polyline points=\"9 5 12 2 15 5\"></polyline><polyline points=\"15 19 12 22 9 19\"></polyline><polyline points=\"19 9 22 12 19 15\"></polyline><line x1=\"2\" y1=\"12\" x2=\"22\" y2=\"12\"></line><line x1=\"12\" y1=\"2\" x2=\"12\" y2=\"22\"></line>","music":"<path d=\"M9 18V5l12-2v13\"></path><circle cx=\"6\" cy=\"18\" r=\"3\"></circle><circle cx=\"18\" cy=\"16\" r=\"3\"></circle>","navigation-2":"<polygon points=\"12 2 19 21 12 17 5 21 12 2\"></polygon>","navigation":"<polygon points=\"3 11 22 2 13 21 11 13 3 11\"></polygon>","octagon":"<polygon points=\"7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2\"></polygon>","package":"<line x1=\"16.5\" y1=\"9.4\" x2=\"7.5\" y2=\"4.21\"></line><path d=\"M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z\"></path><polyline points=\"3.27 6.96 12 12.01 20.73 6.96\"></polyline><line x1=\"12\" y1=\"22.08\" x2=\"12\" y2=\"12\"></line>","paperclip":"<path d=\"M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48\"></path>","pause-circle":"<circle cx=\"12\" cy=\"12\" r=\"10\"></circle><line x1=\"10\" y1=\"15\" x2=\"10\" y2=\"9\"></line><line x1=\"14\" y1=\"15\" x2=\"14\" y2=\"9\"></line>","pause":"<rect x=\"6\" y=\"4\" width=\"4\" height=\"16\"></rect><rect x=\"14\" y=\"4\" width=\"4\" height=\"16\"></rect>","pen-tool":"<path d=\"M12 19l7-7 3 3-7 7-3-3z\"></path><path d=\"M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z\"></path><path d=\"M2 2l7.586 7.586\"></path><circle cx=\"11\" cy=\"11\" r=\"2\"></circle>","percent":"<line x1=\"19\" y1=\"5\" x2=\"5\" y2=\"19\"></line><circle cx=\"6.5\" cy=\"6.5\" r=\"2.5\"></circle><circle cx=\"17.5\" cy=\"17.5\" r=\"2.5\"></circle>","phone-call":"<path d=\"M15.05 5A5 5 0 0 1 19 8.95M15.05 1A9 9 0 0 1 23 8.94m-1 7.98v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z\"></path>","phone-forwarded":"<polyline points=\"19 1 23 5 19 9\"></polyline><line x1=\"15\" y1=\"5\" x2=\"23\" y2=\"5\"></line><path d=\"M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z\"></path>","phone-incoming":"<polyline points=\"16 2 16 8 22 8\"></polyline><line x1=\"23\" y1=\"1\" x2=\"16\" y2=\"8\"></line><path d=\"M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z\"></path>","phone-missed":"<line x1=\"23\" y1=\"1\" x2=\"17\" y2=\"7\"></line><line x1=\"17\" y1=\"1\" x2=\"23\" y2=\"7\"></line><path d=\"M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z\"></path>","phone-off":"<path d=\"M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7 2 2 0 0 1 1.72 2v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.42 19.42 0 0 1-3.33-2.67m-2.67-3.34a19.79 19.79 0 0 1-3.07-8.63A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91\"></path><line x1=\"23\" y1=\"1\" x2=\"1\" y2=\"23\"></line>","phone-outgoing":"<polyline points=\"23 7 23 1 17 1\"></polyline><line x1=\"16\" y1=\"8\" x2=\"23\" y2=\"1\"></line><path d=\"M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z\"></path>","phone":"<path d=\"M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z\"></path>","pie-chart":"<path d=\"M21.21 15.89A10 10 0 1 1 8 2.83\"></path><path d=\"M22 12A10 10 0 0 0 12 2v10z\"></path>","play-circle":"<circle cx=\"12\" cy=\"12\" r=\"10\"></circle><polygon points=\"10 8 16 12 10 16 10 8\"></polygon>","play":"<polygon points=\"5 3 19 12 5 21 5 3\"></polygon>","plus-circle":"<circle cx=\"12\" cy=\"12\" r=\"10\"></circle><line x1=\"12\" y1=\"8\" x2=\"12\" y2=\"16\"></line><line x1=\"8\" y1=\"12\" x2=\"16\" y2=\"12\"></line>","plus-square":"<rect x=\"3\" y=\"3\" width=\"18\" height=\"18\" rx=\"2\" ry=\"2\"></rect><line x1=\"12\" y1=\"8\" x2=\"12\" y2=\"16\"></line><line x1=\"8\" y1=\"12\" x2=\"16\" y2=\"12\"></line>","plus":"<line x1=\"12\" y1=\"5\" x2=\"12\" y2=\"19\"></line><line x1=\"5\" y1=\"12\" x2=\"19\" y2=\"12\"></line>","pocket":"<path d=\"M4 3h16a2 2 0 0 1 2 2v6a10 10 0 0 1-10 10A10 10 0 0 1 2 11V5a2 2 0 0 1 2-2z\"></path><polyline points=\"8 10 12 14 16 10\"></polyline>","power":"<path d=\"M18.36 6.64a9 9 0 1 1-12.73 0\"></path><line x1=\"12\" y1=\"2\" x2=\"12\" y2=\"12\"></line>","printer":"<polyline points=\"6 9 6 2 18 2 18 9\"></polyline><path d=\"M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2\"></path><rect x=\"6\" y=\"14\" width=\"12\" height=\"8\"></rect>","radio":"<circle cx=\"12\" cy=\"12\" r=\"2\"></circle><path d=\"M16.24 7.76a6 6 0 0 1 0 8.49m-8.48-.01a6 6 0 0 1 0-8.49m11.31-2.82a10 10 0 0 1 0 14.14m-14.14 0a10 10 0 0 1 0-14.14\"></path>","refresh-ccw":"<polyline points=\"1 4 1 10 7 10\"></polyline><polyline points=\"23 20 23 14 17 14\"></polyline><path d=\"M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15\"></path>","refresh-cw":"<polyline points=\"23 4 23 10 17 10\"></polyline><polyline points=\"1 20 1 14 7 14\"></polyline><path d=\"M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15\"></path>","repeat":"<polyline points=\"17 1 21 5 17 9\"></polyline><path d=\"M3 11V9a4 4 0 0 1 4-4h14\"></path><polyline points=\"7 23 3 19 7 15\"></polyline><path d=\"M21 13v2a4 4 0 0 1-4 4H3\"></path>","rewind":"<polygon points=\"11 19 2 12 11 5 11 19\"></polygon><polygon points=\"22 19 13 12 22 5 22 19\"></polygon>","rotate-ccw":"<polyline points=\"1 4 1 10 7 10\"></polyline><path d=\"M3.51 15a9 9 0 1 0 2.13-9.36L1 10\"></path>","rotate-cw":"<polyline points=\"23 4 23 10 17 10\"></polyline><path d=\"M20.49 15a9 9 0 1 1-2.12-9.36L23 10\"></path>","rss":"<path d=\"M4 11a9 9 0 0 1 9 9\"></path><path d=\"M4 4a16 16 0 0 1 16 16\"></path><circle cx=\"5\" cy=\"19\" r=\"1\"></circle>","save":"<path d=\"M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z\"></path><polyline points=\"17 21 17 13 7 13 7 21\"></polyline><polyline points=\"7 3 7 8 15 8\"></polyline>","scissors":"<circle cx=\"6\" cy=\"6\" r=\"3\"></circle><circle cx=\"6\" cy=\"18\" r=\"3\"></circle><line x1=\"20\" y1=\"4\" x2=\"8.12\" y2=\"15.88\"></line><line x1=\"14.47\" y1=\"14.48\" x2=\"20\" y2=\"20\"></line><line x1=\"8.12\" y1=\"8.12\" x2=\"12\" y2=\"12\"></line>","search":"<circle cx=\"11\" cy=\"11\" r=\"8\"></circle><line x1=\"21\" y1=\"21\" x2=\"16.65\" y2=\"16.65\"></line>","send":"<line x1=\"22\" y1=\"2\" x2=\"11\" y2=\"13\"></line><polygon points=\"22 2 15 22 11 13 2 9 22 2\"></polygon>","server":"<rect x=\"2\" y=\"2\" width=\"20\" height=\"8\" rx=\"2\" ry=\"2\"></rect><rect x=\"2\" y=\"14\" width=\"20\" height=\"8\" rx=\"2\" ry=\"2\"></rect><line x1=\"6\" y1=\"6\" x2=\"6.01\" y2=\"6\"></line><line x1=\"6\" y1=\"18\" x2=\"6.01\" y2=\"18\"></line>","settings":"<circle cx=\"12\" cy=\"12\" r=\"3\"></circle><path d=\"M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z\"></path>","share-2":"<circle cx=\"18\" cy=\"5\" r=\"3\"></circle><circle cx=\"6\" cy=\"12\" r=\"3\"></circle><circle cx=\"18\" cy=\"19\" r=\"3\"></circle><line x1=\"8.59\" y1=\"13.51\" x2=\"15.42\" y2=\"17.49\"></line><line x1=\"15.41\" y1=\"6.51\" x2=\"8.59\" y2=\"10.49\"></line>","share":"<path d=\"M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8\"></path><polyline points=\"16 6 12 2 8 6\"></polyline><line x1=\"12\" y1=\"2\" x2=\"12\" y2=\"15\"></line>","shield-off":"<path d=\"M19.69 14a6.9 6.9 0 0 0 .31-2V5l-8-3-3.16 1.18\"></path><path d=\"M4.73 4.73L4 5v7c0 6 8 10 8 10a20.29 20.29 0 0 0 5.62-4.38\"></path><line x1=\"1\" y1=\"1\" x2=\"23\" y2=\"23\"></line>","shield":"<path d=\"M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z\"></path>","shopping-bag":"<path d=\"M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z\"></path><line x1=\"3\" y1=\"6\" x2=\"21\" y2=\"6\"></line><path d=\"M16 10a4 4 0 0 1-8 0\"></path>","shopping-cart":"<circle cx=\"9\" cy=\"21\" r=\"1\"></circle><circle cx=\"20\" cy=\"21\" r=\"1\"></circle><path d=\"M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6\"></path>","shuffle":"<polyline points=\"16 3 21 3 21 8\"></polyline><line x1=\"4\" y1=\"20\" x2=\"21\" y2=\"3\"></line><polyline points=\"21 16 21 21 16 21\"></polyline><line x1=\"15\" y1=\"15\" x2=\"21\" y2=\"21\"></line><line x1=\"4\" y1=\"4\" x2=\"9\" y2=\"9\"></line>","sidebar":"<rect x=\"3\" y=\"3\" width=\"18\" height=\"18\" rx=\"2\" ry=\"2\"></rect><line x1=\"9\" y1=\"3\" x2=\"9\" y2=\"21\"></line>","skip-back":"<polygon points=\"19 20 9 12 19 4 19 20\"></polygon><line x1=\"5\" y1=\"19\" x2=\"5\" y2=\"5\"></line>","skip-forward":"<polygon points=\"5 4 15 12 5 20 5 4\"></polygon><line x1=\"19\" y1=\"5\" x2=\"19\" y2=\"19\"></line>","slack":"<path d=\"M14.5 10c-.83 0-1.5-.67-1.5-1.5v-5c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5v5c0 .83-.67 1.5-1.5 1.5z\"></path><path d=\"M20.5 10H19V8.5c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z\"></path><path d=\"M9.5 14c.83 0 1.5.67 1.5 1.5v5c0 .83-.67 1.5-1.5 1.5S8 21.33 8 20.5v-5c0-.83.67-1.5 1.5-1.5z\"></path><path d=\"M3.5 14H5v1.5c0 .83-.67 1.5-1.5 1.5S2 16.33 2 15.5 2.67 14 3.5 14z\"></path><path d=\"M14 14.5c0-.83.67-1.5 1.5-1.5h5c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5h-5c-.83 0-1.5-.67-1.5-1.5z\"></path><path d=\"M15.5 19H14v1.5c0 .83.67 1.5 1.5 1.5s1.5-.67 1.5-1.5-.67-1.5-1.5-1.5z\"></path><path d=\"M10 9.5C10 8.67 9.33 8 8.5 8h-5C2.67 8 2 8.67 2 9.5S2.67 11 3.5 11h5c.83 0 1.5-.67 1.5-1.5z\"></path><path d=\"M8.5 5H10V3.5C10 2.67 9.33 2 8.5 2S7 2.67 7 3.5 7.67 5 8.5 5z\"></path>","slash":"<circle cx=\"12\" cy=\"12\" r=\"10\"></circle><line x1=\"4.93\" y1=\"4.93\" x2=\"19.07\" y2=\"19.07\"></line>","sliders":"<line x1=\"4\" y1=\"21\" x2=\"4\" y2=\"14\"></line><line x1=\"4\" y1=\"10\" x2=\"4\" y2=\"3\"></line><line x1=\"12\" y1=\"21\" x2=\"12\" y2=\"12\"></line><line x1=\"12\" y1=\"8\" x2=\"12\" y2=\"3\"></line><line x1=\"20\" y1=\"21\" x2=\"20\" y2=\"16\"></line><line x1=\"20\" y1=\"12\" x2=\"20\" y2=\"3\"></line><line x1=\"1\" y1=\"14\" x2=\"7\" y2=\"14\"></line><line x1=\"9\" y1=\"8\" x2=\"15\" y2=\"8\"></line><line x1=\"17\" y1=\"16\" x2=\"23\" y2=\"16\"></line>","smartphone":"<rect x=\"5\" y=\"2\" width=\"14\" height=\"20\" rx=\"2\" ry=\"2\"></rect><line x1=\"12\" y1=\"18\" x2=\"12.01\" y2=\"18\"></line>","smile":"<circle cx=\"12\" cy=\"12\" r=\"10\"></circle><path d=\"M8 14s1.5 2 4 2 4-2 4-2\"></path><line x1=\"9\" y1=\"9\" x2=\"9.01\" y2=\"9\"></line><line x1=\"15\" y1=\"9\" x2=\"15.01\" y2=\"9\"></line>","speaker":"<rect x=\"4\" y=\"2\" width=\"16\" height=\"20\" rx=\"2\" ry=\"2\"></rect><circle cx=\"12\" cy=\"14\" r=\"4\"></circle><line x1=\"12\" y1=\"6\" x2=\"12.01\" y2=\"6\"></line>","square":"<rect x=\"3\" y=\"3\" width=\"18\" height=\"18\" rx=\"2\" ry=\"2\"></rect>","star":"<polygon points=\"12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2\"></polygon>","stop-circle":"<circle cx=\"12\" cy=\"12\" r=\"10\"></circle><rect x=\"9\" y=\"9\" width=\"6\" height=\"6\"></rect>","sun":"<circle cx=\"12\" cy=\"12\" r=\"5\"></circle><line x1=\"12\" y1=\"1\" x2=\"12\" y2=\"3\"></line><line x1=\"12\" y1=\"21\" x2=\"12\" y2=\"23\"></line><line x1=\"4.22\" y1=\"4.22\" x2=\"5.64\" y2=\"5.64\"></line><line x1=\"18.36\" y1=\"18.36\" x2=\"19.78\" y2=\"19.78\"></line><line x1=\"1\" y1=\"12\" x2=\"3\" y2=\"12\"></line><line x1=\"21\" y1=\"12\" x2=\"23\" y2=\"12\"></line><line x1=\"4.22\" y1=\"19.78\" x2=\"5.64\" y2=\"18.36\"></line><line x1=\"18.36\" y1=\"5.64\" x2=\"19.78\" y2=\"4.22\"></line>","sunrise":"<path d=\"M17 18a5 5 0 0 0-10 0\"></path><line x1=\"12\" y1=\"2\" x2=\"12\" y2=\"9\"></line><line x1=\"4.22\" y1=\"10.22\" x2=\"5.64\" y2=\"11.64\"></line><line x1=\"1\" y1=\"18\" x2=\"3\" y2=\"18\"></line><line x1=\"21\" y1=\"18\" x2=\"23\" y2=\"18\"></line><line x1=\"18.36\" y1=\"11.64\" x2=\"19.78\" y2=\"10.22\"></line><line x1=\"23\" y1=\"22\" x2=\"1\" y2=\"22\"></line><polyline points=\"8 6 12 2 16 6\"></polyline>","sunset":"<path d=\"M17 18a5 5 0 0 0-10 0\"></path><line x1=\"12\" y1=\"9\" x2=\"12\" y2=\"2\"></line><line x1=\"4.22\" y1=\"10.22\" x2=\"5.64\" y2=\"11.64\"></line><line x1=\"1\" y1=\"18\" x2=\"3\" y2=\"18\"></line><line x1=\"21\" y1=\"18\" x2=\"23\" y2=\"18\"></line><line x1=\"18.36\" y1=\"11.64\" x2=\"19.78\" y2=\"10.22\"></line><line x1=\"23\" y1=\"22\" x2=\"1\" y2=\"22\"></line><polyline points=\"16 5 12 9 8 5\"></polyline>","tablet":"<rect x=\"4\" y=\"2\" width=\"16\" height=\"20\" rx=\"2\" ry=\"2\"></rect><line x1=\"12\" y1=\"18\" x2=\"12.01\" y2=\"18\"></line>","tag":"<path d=\"M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z\"></path><line x1=\"7\" y1=\"7\" x2=\"7.01\" y2=\"7\"></line>","target":"<circle cx=\"12\" cy=\"12\" r=\"10\"></circle><circle cx=\"12\" cy=\"12\" r=\"6\"></circle><circle cx=\"12\" cy=\"12\" r=\"2\"></circle>","terminal":"<polyline points=\"4 17 10 11 4 5\"></polyline><line x1=\"12\" y1=\"19\" x2=\"20\" y2=\"19\"></line>","thermometer":"<path d=\"M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z\"></path>","thumbs-down":"<path d=\"M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17\"></path>","thumbs-up":"<path d=\"M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3\"></path>","toggle-left":"<rect x=\"1\" y=\"5\" width=\"22\" height=\"14\" rx=\"7\" ry=\"7\"></rect><circle cx=\"8\" cy=\"12\" r=\"3\"></circle>","toggle-right":"<rect x=\"1\" y=\"5\" width=\"22\" height=\"14\" rx=\"7\" ry=\"7\"></rect><circle cx=\"16\" cy=\"12\" r=\"3\"></circle>","tool":"<path d=\"M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z\"></path>","trash-2":"<polyline points=\"3 6 5 6 21 6\"></polyline><path d=\"M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2\"></path><line x1=\"10\" y1=\"11\" x2=\"10\" y2=\"17\"></line><line x1=\"14\" y1=\"11\" x2=\"14\" y2=\"17\"></line>","trash":"<polyline points=\"3 6 5 6 21 6\"></polyline><path d=\"M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2\"></path>","trello":"<rect x=\"3\" y=\"3\" width=\"18\" height=\"18\" rx=\"2\" ry=\"2\"></rect><rect x=\"7\" y=\"7\" width=\"3\" height=\"9\"></rect><rect x=\"14\" y=\"7\" width=\"3\" height=\"5\"></rect>","trending-down":"<polyline points=\"23 18 13.5 8.5 8.5 13.5 1 6\"></polyline><polyline points=\"17 18 23 18 23 12\"></polyline>","trending-up":"<polyline points=\"23 6 13.5 15.5 8.5 10.5 1 18\"></polyline><polyline points=\"17 6 23 6 23 12\"></polyline>","triangle":"<path d=\"M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z\"></path>","truck":"<rect x=\"1\" y=\"3\" width=\"15\" height=\"13\"></rect><polygon points=\"16 8 20 8 23 11 23 16 16 16 16 8\"></polygon><circle cx=\"5.5\" cy=\"18.5\" r=\"2.5\"></circle><circle cx=\"18.5\" cy=\"18.5\" r=\"2.5\"></circle>","tv":"<rect x=\"2\" y=\"7\" width=\"20\" height=\"15\" rx=\"2\" ry=\"2\"></rect><polyline points=\"17 2 12 7 7 2\"></polyline>","twitch":"<path d=\"M21 2H3v16h5v4l4-4h5l4-4V2zm-10 9V7m5 4V7\"></path>","twitter":"<path d=\"M23 3a10.9 10.9 0 0 1-3.14 1.53 4.48 4.48 0 0 0-7.86 3v1A10.66 10.66 0 0 1 3 4s-4 9 5 13a11.64 11.64 0 0 1-7 2c9 5 20 0 20-11.5a4.5 4.5 0 0 0-.08-.83A7.72 7.72 0 0 0 23 3z\"></path>","type":"<polyline points=\"4 7 4 4 20 4 20 7\"></polyline><line x1=\"9\" y1=\"20\" x2=\"15\" y2=\"20\"></line><line x1=\"12\" y1=\"4\" x2=\"12\" y2=\"20\"></line>","umbrella":"<path d=\"M23 12a11.05 11.05 0 0 0-22 0zm-5 7a3 3 0 0 1-6 0v-7\"></path>","underline":"<path d=\"M6 3v7a6 6 0 0 0 6 6 6 6 0 0 0 6-6V3\"></path><line x1=\"4\" y1=\"21\" x2=\"20\" y2=\"21\"></line>","unlock":"<rect x=\"3\" y=\"11\" width=\"18\" height=\"11\" rx=\"2\" ry=\"2\"></rect><path d=\"M7 11V7a5 5 0 0 1 9.9-1\"></path>","upload-cloud":"<polyline points=\"16 16 12 12 8 16\"></polyline><line x1=\"12\" y1=\"12\" x2=\"12\" y2=\"21\"></line><path d=\"M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3\"></path><polyline points=\"16 16 12 12 8 16\"></polyline>","upload":"<path d=\"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4\"></path><polyline points=\"17 8 12 3 7 8\"></polyline><line x1=\"12\" y1=\"3\" x2=\"12\" y2=\"15\"></line>","user-check":"<path d=\"M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2\"></path><circle cx=\"8.5\" cy=\"7\" r=\"4\"></circle><polyline points=\"17 11 19 13 23 9\"></polyline>","user-minus":"<path d=\"M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2\"></path><circle cx=\"8.5\" cy=\"7\" r=\"4\"></circle><line x1=\"23\" y1=\"11\" x2=\"17\" y2=\"11\"></line>","user-plus":"<path d=\"M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2\"></path><circle cx=\"8.5\" cy=\"7\" r=\"4\"></circle><line x1=\"20\" y1=\"8\" x2=\"20\" y2=\"14\"></line><line x1=\"23\" y1=\"11\" x2=\"17\" y2=\"11\"></line>","user-x":"<path d=\"M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2\"></path><circle cx=\"8.5\" cy=\"7\" r=\"4\"></circle><line x1=\"18\" y1=\"8\" x2=\"23\" y2=\"13\"></line><line x1=\"23\" y1=\"8\" x2=\"18\" y2=\"13\"></line>","user":"<path d=\"M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2\"></path><circle cx=\"12\" cy=\"7\" r=\"4\"></circle>","users":"<path d=\"M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2\"></path><circle cx=\"9\" cy=\"7\" r=\"4\"></circle><path d=\"M23 21v-2a4 4 0 0 0-3-3.87\"></path><path d=\"M16 3.13a4 4 0 0 1 0 7.75\"></path>","video-off":"<path d=\"M16 16v1a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2m5.66 0H14a2 2 0 0 1 2 2v3.34l1 1L23 7v10\"></path><line x1=\"1\" y1=\"1\" x2=\"23\" y2=\"23\"></line>","video":"<polygon points=\"23 7 16 12 23 17 23 7\"></polygon><rect x=\"1\" y=\"5\" width=\"15\" height=\"14\" rx=\"2\" ry=\"2\"></rect>","voicemail":"<circle cx=\"5.5\" cy=\"11.5\" r=\"4.5\"></circle><circle cx=\"18.5\" cy=\"11.5\" r=\"4.5\"></circle><line x1=\"5.5\" y1=\"16\" x2=\"18.5\" y2=\"16\"></line>","volume-1":"<polygon points=\"11 5 6 9 2 9 2 15 6 15 11 19 11 5\"></polygon><path d=\"M15.54 8.46a5 5 0 0 1 0 7.07\"></path>","volume-2":"<polygon points=\"11 5 6 9 2 9 2 15 6 15 11 19 11 5\"></polygon><path d=\"M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07\"></path>","volume-x":"<polygon points=\"11 5 6 9 2 9 2 15 6 15 11 19 11 5\"></polygon><line x1=\"23\" y1=\"9\" x2=\"17\" y2=\"15\"></line><line x1=\"17\" y1=\"9\" x2=\"23\" y2=\"15\"></line>","volume":"<polygon points=\"11 5 6 9 2 9 2 15 6 15 11 19 11 5\"></polygon>","watch":"<circle cx=\"12\" cy=\"12\" r=\"7\"></circle><polyline points=\"12 9 12 12 13.5 13.5\"></polyline><path d=\"M16.51 17.35l-.35 3.83a2 2 0 0 1-2 1.82H9.83a2 2 0 0 1-2-1.82l-.35-3.83m.01-10.7l.35-3.83A2 2 0 0 1 9.83 1h4.35a2 2 0 0 1 2 1.82l.35 3.83\"></path>","wifi-off":"<line x1=\"1\" y1=\"1\" x2=\"23\" y2=\"23\"></line><path d=\"M16.72 11.06A10.94 10.94 0 0 1 19 12.55\"></path><path d=\"M5 12.55a10.94 10.94 0 0 1 5.17-2.39\"></path><path d=\"M10.71 5.05A16 16 0 0 1 22.58 9\"></path><path d=\"M1.42 9a15.91 15.91 0 0 1 4.7-2.88\"></path><path d=\"M8.53 16.11a6 6 0 0 1 6.95 0\"></path><line x1=\"12\" y1=\"20\" x2=\"12.01\" y2=\"20\"></line>","wifi":"<path d=\"M5 12.55a11 11 0 0 1 14.08 0\"></path><path d=\"M1.42 9a16 16 0 0 1 21.16 0\"></path><path d=\"M8.53 16.11a6 6 0 0 1 6.95 0\"></path><line x1=\"12\" y1=\"20\" x2=\"12.01\" y2=\"20\"></line>","wind":"<path d=\"M9.59 4.59A2 2 0 1 1 11 8H2m10.59 11.41A2 2 0 1 0 14 16H2m15.73-8.27A2.5 2.5 0 1 1 19.5 12H2\"></path>","x-circle":"<circle cx=\"12\" cy=\"12\" r=\"10\"></circle><line x1=\"15\" y1=\"9\" x2=\"9\" y2=\"15\"></line><line x1=\"9\" y1=\"9\" x2=\"15\" y2=\"15\"></line>","x-octagon":"<polygon points=\"7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2\"></polygon><line x1=\"15\" y1=\"9\" x2=\"9\" y2=\"15\"></line><line x1=\"9\" y1=\"9\" x2=\"15\" y2=\"15\"></line>","x-square":"<rect x=\"3\" y=\"3\" width=\"18\" height=\"18\" rx=\"2\" ry=\"2\"></rect><line x1=\"9\" y1=\"9\" x2=\"15\" y2=\"15\"></line><line x1=\"15\" y1=\"9\" x2=\"9\" y2=\"15\"></line>","x":"<line x1=\"18\" y1=\"6\" x2=\"6\" y2=\"18\"></line><line x1=\"6\" y1=\"6\" x2=\"18\" y2=\"18\"></line>","youtube":"<path d=\"M22.54 6.42a2.78 2.78 0 0 0-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 0 0-1.94 2A29 29 0 0 0 1 11.75a29 29 0 0 0 .46 5.33A2.78 2.78 0 0 0 3.4 19c1.72.46 8.6.46 8.6.46s6.88 0 8.6-.46a2.78 2.78 0 0 0 1.94-2 29 29 0 0 0 .46-5.25 29 29 0 0 0-.46-5.33z\"></path><polygon points=\"9.75 15.02 15.5 11.75 9.75 8.48 9.75 15.02\"></polygon>","zap-off":"<polyline points=\"12.41 6.75 13 2 10.57 4.92\"></polyline><polyline points=\"18.57 12.91 21 10 15.66 10\"></polyline><polyline points=\"8 8 3 14 12 14 11 22 16 16\"></polyline><line x1=\"1\" y1=\"1\" x2=\"23\" y2=\"23\"></line>","zap":"<polygon points=\"13 2 3 14 12 14 11 22 21 10 12 10 13 2\"></polygon>","zoom-in":"<circle cx=\"11\" cy=\"11\" r=\"8\"></circle><line x1=\"21\" y1=\"21\" x2=\"16.65\" y2=\"16.65\"></line><line x1=\"11\" y1=\"8\" x2=\"11\" y2=\"14\"></line><line x1=\"8\" y1=\"11\" x2=\"14\" y2=\"11\"></line>","zoom-out":"<circle cx=\"11\" cy=\"11\" r=\"8\"></circle><line x1=\"21\" y1=\"21\" x2=\"16.65\" y2=\"16.65\"></line><line x1=\"8\" y1=\"11\" x2=\"14\" y2=\"11\"></line>"};
+
+    /***/ }),
+
+    /***/ "./node_modules/classnames/dedupe.js":
+    /*!*******************************************!*\
+      !*** ./node_modules/classnames/dedupe.js ***!
+      \*******************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var __WEBPACK_AMD_DEFINE_ARRAY__, __WEBPACK_AMD_DEFINE_RESULT__;/*!
+      Copyright (c) 2016 Jed Watson.
+      Licensed under the MIT License (MIT), see
+      http://jedwatson.github.io/classnames
+    */
+    /* global define */
+
+    (function () {
+
+    	var classNames = (function () {
+    		// don't inherit from Object so we can skip hasOwnProperty check later
+    		// http://stackoverflow.com/questions/15518328/creating-js-object-with-object-createnull#answer-21079232
+    		function StorageObject() {}
+    		StorageObject.prototype = Object.create(null);
+
+    		function _parseArray (resultSet, array) {
+    			var length = array.length;
+
+    			for (var i = 0; i < length; ++i) {
+    				_parse(resultSet, array[i]);
+    			}
+    		}
+
+    		var hasOwn = {}.hasOwnProperty;
+
+    		function _parseNumber (resultSet, num) {
+    			resultSet[num] = true;
+    		}
+
+    		function _parseObject (resultSet, object) {
+    			for (var k in object) {
+    				if (hasOwn.call(object, k)) {
+    					// set value to false instead of deleting it to avoid changing object structure
+    					// https://www.smashingmagazine.com/2012/11/writing-fast-memory-efficient-javascript/#de-referencing-misconceptions
+    					resultSet[k] = !!object[k];
+    				}
+    			}
+    		}
+
+    		var SPACE = /\s+/;
+    		function _parseString (resultSet, str) {
+    			var array = str.split(SPACE);
+    			var length = array.length;
+
+    			for (var i = 0; i < length; ++i) {
+    				resultSet[array[i]] = true;
+    			}
+    		}
+
+    		function _parse (resultSet, arg) {
+    			if (!arg) return;
+    			var argType = typeof arg;
+
+    			// 'foo bar'
+    			if (argType === 'string') {
+    				_parseString(resultSet, arg);
+
+    			// ['foo', 'bar', ...]
+    			} else if (Array.isArray(arg)) {
+    				_parseArray(resultSet, arg);
+
+    			// { 'foo': true, ... }
+    			} else if (argType === 'object') {
+    				_parseObject(resultSet, arg);
+
+    			// '130'
+    			} else if (argType === 'number') {
+    				_parseNumber(resultSet, arg);
+    			}
+    		}
+
+    		function _classNames () {
+    			// don't leak arguments
+    			// https://github.com/petkaantonov/bluebird/wiki/Optimization-killers#32-leaking-arguments
+    			var len = arguments.length;
+    			var args = Array(len);
+    			for (var i = 0; i < len; i++) {
+    				args[i] = arguments[i];
+    			}
+
+    			var classSet = new StorageObject();
+    			_parseArray(classSet, args);
+
+    			var list = [];
+
+    			for (var k in classSet) {
+    				if (classSet[k]) {
+    					list.push(k);
+    				}
+    			}
+
+    			return list.join(' ');
+    		}
+
+    		return _classNames;
+    	})();
+
+    	if (typeof module !== 'undefined' && module.exports) {
+    		module.exports = classNames;
+    	} else {
+    		// register as 'classnames', consistent with npm package name
+    		!(__WEBPACK_AMD_DEFINE_ARRAY__ = [], __WEBPACK_AMD_DEFINE_RESULT__ = (function () {
+    			return classNames;
+    		}).apply(exports, __WEBPACK_AMD_DEFINE_ARRAY__),
+    				__WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
+    	}
+    }());
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/es/array/from.js":
+    /*!***********************************************!*\
+      !*** ./node_modules/core-js/es/array/from.js ***!
+      \***********************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    __webpack_require__(/*! ../../modules/es.string.iterator */ "./node_modules/core-js/modules/es.string.iterator.js");
+    __webpack_require__(/*! ../../modules/es.array.from */ "./node_modules/core-js/modules/es.array.from.js");
+    var path = __webpack_require__(/*! ../../internals/path */ "./node_modules/core-js/internals/path.js");
+
+    module.exports = path.Array.from;
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/a-function.js":
+    /*!******************************************************!*\
+      !*** ./node_modules/core-js/internals/a-function.js ***!
+      \******************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports) {
+
+    module.exports = function (it) {
+      if (typeof it != 'function') {
+        throw TypeError(String(it) + ' is not a function');
+      } return it;
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/an-object.js":
+    /*!*****************************************************!*\
+      !*** ./node_modules/core-js/internals/an-object.js ***!
+      \*****************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var isObject = __webpack_require__(/*! ../internals/is-object */ "./node_modules/core-js/internals/is-object.js");
+
+    module.exports = function (it) {
+      if (!isObject(it)) {
+        throw TypeError(String(it) + ' is not an object');
+      } return it;
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/array-from.js":
+    /*!******************************************************!*\
+      !*** ./node_modules/core-js/internals/array-from.js ***!
+      \******************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var bind = __webpack_require__(/*! ../internals/bind-context */ "./node_modules/core-js/internals/bind-context.js");
+    var toObject = __webpack_require__(/*! ../internals/to-object */ "./node_modules/core-js/internals/to-object.js");
+    var callWithSafeIterationClosing = __webpack_require__(/*! ../internals/call-with-safe-iteration-closing */ "./node_modules/core-js/internals/call-with-safe-iteration-closing.js");
+    var isArrayIteratorMethod = __webpack_require__(/*! ../internals/is-array-iterator-method */ "./node_modules/core-js/internals/is-array-iterator-method.js");
+    var toLength = __webpack_require__(/*! ../internals/to-length */ "./node_modules/core-js/internals/to-length.js");
+    var createProperty = __webpack_require__(/*! ../internals/create-property */ "./node_modules/core-js/internals/create-property.js");
+    var getIteratorMethod = __webpack_require__(/*! ../internals/get-iterator-method */ "./node_modules/core-js/internals/get-iterator-method.js");
+
+    // `Array.from` method
+    // https://tc39.github.io/ecma262/#sec-array.from
+    module.exports = function from(arrayLike /* , mapfn = undefined, thisArg = undefined */) {
+      var O = toObject(arrayLike);
+      var C = typeof this == 'function' ? this : Array;
+      var argumentsLength = arguments.length;
+      var mapfn = argumentsLength > 1 ? arguments[1] : undefined;
+      var mapping = mapfn !== undefined;
+      var index = 0;
+      var iteratorMethod = getIteratorMethod(O);
+      var length, result, step, iterator;
+      if (mapping) mapfn = bind(mapfn, argumentsLength > 2 ? arguments[2] : undefined, 2);
+      // if the target is not iterable or it's an array with the default iterator - use a simple case
+      if (iteratorMethod != undefined && !(C == Array && isArrayIteratorMethod(iteratorMethod))) {
+        iterator = iteratorMethod.call(O);
+        result = new C();
+        for (;!(step = iterator.next()).done; index++) {
+          createProperty(result, index, mapping
+            ? callWithSafeIterationClosing(iterator, mapfn, [step.value, index], true)
+            : step.value
+          );
+        }
+      } else {
+        length = toLength(O.length);
+        result = new C(length);
+        for (;length > index; index++) {
+          createProperty(result, index, mapping ? mapfn(O[index], index) : O[index]);
+        }
+      }
+      result.length = index;
+      return result;
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/array-includes.js":
+    /*!**********************************************************!*\
+      !*** ./node_modules/core-js/internals/array-includes.js ***!
+      \**********************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var toIndexedObject = __webpack_require__(/*! ../internals/to-indexed-object */ "./node_modules/core-js/internals/to-indexed-object.js");
+    var toLength = __webpack_require__(/*! ../internals/to-length */ "./node_modules/core-js/internals/to-length.js");
+    var toAbsoluteIndex = __webpack_require__(/*! ../internals/to-absolute-index */ "./node_modules/core-js/internals/to-absolute-index.js");
+
+    // `Array.prototype.{ indexOf, includes }` methods implementation
+    // false -> Array#indexOf
+    // https://tc39.github.io/ecma262/#sec-array.prototype.indexof
+    // true  -> Array#includes
+    // https://tc39.github.io/ecma262/#sec-array.prototype.includes
+    module.exports = function (IS_INCLUDES) {
+      return function ($this, el, fromIndex) {
+        var O = toIndexedObject($this);
+        var length = toLength(O.length);
+        var index = toAbsoluteIndex(fromIndex, length);
+        var value;
+        // Array#includes uses SameValueZero equality algorithm
+        // eslint-disable-next-line no-self-compare
+        if (IS_INCLUDES && el != el) while (length > index) {
+          value = O[index++];
+          // eslint-disable-next-line no-self-compare
+          if (value != value) return true;
+        // Array#indexOf ignores holes, Array#includes - not
+        } else for (;length > index; index++) if (IS_INCLUDES || index in O) {
+          if (O[index] === el) return IS_INCLUDES || index || 0;
+        } return !IS_INCLUDES && -1;
+      };
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/bind-context.js":
+    /*!********************************************************!*\
+      !*** ./node_modules/core-js/internals/bind-context.js ***!
+      \********************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var aFunction = __webpack_require__(/*! ../internals/a-function */ "./node_modules/core-js/internals/a-function.js");
+
+    // optional / simple context binding
+    module.exports = function (fn, that, length) {
+      aFunction(fn);
+      if (that === undefined) return fn;
+      switch (length) {
+        case 0: return function () {
+          return fn.call(that);
+        };
+        case 1: return function (a) {
+          return fn.call(that, a);
+        };
+        case 2: return function (a, b) {
+          return fn.call(that, a, b);
+        };
+        case 3: return function (a, b, c) {
+          return fn.call(that, a, b, c);
+        };
+      }
+      return function (/* ...args */) {
+        return fn.apply(that, arguments);
+      };
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/call-with-safe-iteration-closing.js":
+    /*!****************************************************************************!*\
+      !*** ./node_modules/core-js/internals/call-with-safe-iteration-closing.js ***!
+      \****************************************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var anObject = __webpack_require__(/*! ../internals/an-object */ "./node_modules/core-js/internals/an-object.js");
+
+    // call something on iterator step with safe closing on error
+    module.exports = function (iterator, fn, value, ENTRIES) {
+      try {
+        return ENTRIES ? fn(anObject(value)[0], value[1]) : fn(value);
+      // 7.4.6 IteratorClose(iterator, completion)
+      } catch (error) {
+        var returnMethod = iterator['return'];
+        if (returnMethod !== undefined) anObject(returnMethod.call(iterator));
+        throw error;
+      }
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/check-correctness-of-iteration.js":
+    /*!**************************************************************************!*\
+      !*** ./node_modules/core-js/internals/check-correctness-of-iteration.js ***!
+      \**************************************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var wellKnownSymbol = __webpack_require__(/*! ../internals/well-known-symbol */ "./node_modules/core-js/internals/well-known-symbol.js");
+
+    var ITERATOR = wellKnownSymbol('iterator');
+    var SAFE_CLOSING = false;
+
+    try {
+      var called = 0;
+      var iteratorWithReturn = {
+        next: function () {
+          return { done: !!called++ };
+        },
+        'return': function () {
+          SAFE_CLOSING = true;
+        }
+      };
+      iteratorWithReturn[ITERATOR] = function () {
+        return this;
+      };
+      // eslint-disable-next-line no-throw-literal
+      Array.from(iteratorWithReturn, function () { throw 2; });
+    } catch (error) { /* empty */ }
+
+    module.exports = function (exec, SKIP_CLOSING) {
+      if (!SKIP_CLOSING && !SAFE_CLOSING) return false;
+      var ITERATION_SUPPORT = false;
+      try {
+        var object = {};
+        object[ITERATOR] = function () {
+          return {
+            next: function () {
+              return { done: ITERATION_SUPPORT = true };
+            }
+          };
+        };
+        exec(object);
+      } catch (error) { /* empty */ }
+      return ITERATION_SUPPORT;
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/classof-raw.js":
+    /*!*******************************************************!*\
+      !*** ./node_modules/core-js/internals/classof-raw.js ***!
+      \*******************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports) {
+
+    var toString = {}.toString;
+
+    module.exports = function (it) {
+      return toString.call(it).slice(8, -1);
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/classof.js":
+    /*!***************************************************!*\
+      !*** ./node_modules/core-js/internals/classof.js ***!
+      \***************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var classofRaw = __webpack_require__(/*! ../internals/classof-raw */ "./node_modules/core-js/internals/classof-raw.js");
+    var wellKnownSymbol = __webpack_require__(/*! ../internals/well-known-symbol */ "./node_modules/core-js/internals/well-known-symbol.js");
+
+    var TO_STRING_TAG = wellKnownSymbol('toStringTag');
+    // ES3 wrong here
+    var CORRECT_ARGUMENTS = classofRaw(function () { return arguments; }()) == 'Arguments';
+
+    // fallback for IE11 Script Access Denied error
+    var tryGet = function (it, key) {
+      try {
+        return it[key];
+      } catch (error) { /* empty */ }
+    };
+
+    // getting tag from ES6+ `Object.prototype.toString`
+    module.exports = function (it) {
+      var O, tag, result;
+      return it === undefined ? 'Undefined' : it === null ? 'Null'
+        // @@toStringTag case
+        : typeof (tag = tryGet(O = Object(it), TO_STRING_TAG)) == 'string' ? tag
+        // builtinTag case
+        : CORRECT_ARGUMENTS ? classofRaw(O)
+        // ES3 arguments fallback
+        : (result = classofRaw(O)) == 'Object' && typeof O.callee == 'function' ? 'Arguments' : result;
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/copy-constructor-properties.js":
+    /*!***********************************************************************!*\
+      !*** ./node_modules/core-js/internals/copy-constructor-properties.js ***!
+      \***********************************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var has = __webpack_require__(/*! ../internals/has */ "./node_modules/core-js/internals/has.js");
+    var ownKeys = __webpack_require__(/*! ../internals/own-keys */ "./node_modules/core-js/internals/own-keys.js");
+    var getOwnPropertyDescriptorModule = __webpack_require__(/*! ../internals/object-get-own-property-descriptor */ "./node_modules/core-js/internals/object-get-own-property-descriptor.js");
+    var definePropertyModule = __webpack_require__(/*! ../internals/object-define-property */ "./node_modules/core-js/internals/object-define-property.js");
+
+    module.exports = function (target, source) {
+      var keys = ownKeys(source);
+      var defineProperty = definePropertyModule.f;
+      var getOwnPropertyDescriptor = getOwnPropertyDescriptorModule.f;
+      for (var i = 0; i < keys.length; i++) {
+        var key = keys[i];
+        if (!has(target, key)) defineProperty(target, key, getOwnPropertyDescriptor(source, key));
+      }
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/correct-prototype-getter.js":
+    /*!********************************************************************!*\
+      !*** ./node_modules/core-js/internals/correct-prototype-getter.js ***!
+      \********************************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var fails = __webpack_require__(/*! ../internals/fails */ "./node_modules/core-js/internals/fails.js");
+
+    module.exports = !fails(function () {
+      function F() { /* empty */ }
+      F.prototype.constructor = null;
+      return Object.getPrototypeOf(new F()) !== F.prototype;
+    });
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/create-iterator-constructor.js":
+    /*!***********************************************************************!*\
+      !*** ./node_modules/core-js/internals/create-iterator-constructor.js ***!
+      \***********************************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var IteratorPrototype = __webpack_require__(/*! ../internals/iterators-core */ "./node_modules/core-js/internals/iterators-core.js").IteratorPrototype;
+    var create = __webpack_require__(/*! ../internals/object-create */ "./node_modules/core-js/internals/object-create.js");
+    var createPropertyDescriptor = __webpack_require__(/*! ../internals/create-property-descriptor */ "./node_modules/core-js/internals/create-property-descriptor.js");
+    var setToStringTag = __webpack_require__(/*! ../internals/set-to-string-tag */ "./node_modules/core-js/internals/set-to-string-tag.js");
+    var Iterators = __webpack_require__(/*! ../internals/iterators */ "./node_modules/core-js/internals/iterators.js");
+
+    var returnThis = function () { return this; };
+
+    module.exports = function (IteratorConstructor, NAME, next) {
+      var TO_STRING_TAG = NAME + ' Iterator';
+      IteratorConstructor.prototype = create(IteratorPrototype, { next: createPropertyDescriptor(1, next) });
+      setToStringTag(IteratorConstructor, TO_STRING_TAG, false, true);
+      Iterators[TO_STRING_TAG] = returnThis;
+      return IteratorConstructor;
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/create-property-descriptor.js":
+    /*!**********************************************************************!*\
+      !*** ./node_modules/core-js/internals/create-property-descriptor.js ***!
+      \**********************************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports) {
+
+    module.exports = function (bitmap, value) {
+      return {
+        enumerable: !(bitmap & 1),
+        configurable: !(bitmap & 2),
+        writable: !(bitmap & 4),
+        value: value
+      };
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/create-property.js":
+    /*!***********************************************************!*\
+      !*** ./node_modules/core-js/internals/create-property.js ***!
+      \***********************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var toPrimitive = __webpack_require__(/*! ../internals/to-primitive */ "./node_modules/core-js/internals/to-primitive.js");
+    var definePropertyModule = __webpack_require__(/*! ../internals/object-define-property */ "./node_modules/core-js/internals/object-define-property.js");
+    var createPropertyDescriptor = __webpack_require__(/*! ../internals/create-property-descriptor */ "./node_modules/core-js/internals/create-property-descriptor.js");
+
+    module.exports = function (object, key, value) {
+      var propertyKey = toPrimitive(key);
+      if (propertyKey in object) definePropertyModule.f(object, propertyKey, createPropertyDescriptor(0, value));
+      else object[propertyKey] = value;
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/define-iterator.js":
+    /*!***********************************************************!*\
+      !*** ./node_modules/core-js/internals/define-iterator.js ***!
+      \***********************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var $ = __webpack_require__(/*! ../internals/export */ "./node_modules/core-js/internals/export.js");
+    var createIteratorConstructor = __webpack_require__(/*! ../internals/create-iterator-constructor */ "./node_modules/core-js/internals/create-iterator-constructor.js");
+    var getPrototypeOf = __webpack_require__(/*! ../internals/object-get-prototype-of */ "./node_modules/core-js/internals/object-get-prototype-of.js");
+    var setPrototypeOf = __webpack_require__(/*! ../internals/object-set-prototype-of */ "./node_modules/core-js/internals/object-set-prototype-of.js");
+    var setToStringTag = __webpack_require__(/*! ../internals/set-to-string-tag */ "./node_modules/core-js/internals/set-to-string-tag.js");
+    var hide = __webpack_require__(/*! ../internals/hide */ "./node_modules/core-js/internals/hide.js");
+    var redefine = __webpack_require__(/*! ../internals/redefine */ "./node_modules/core-js/internals/redefine.js");
+    var wellKnownSymbol = __webpack_require__(/*! ../internals/well-known-symbol */ "./node_modules/core-js/internals/well-known-symbol.js");
+    var IS_PURE = __webpack_require__(/*! ../internals/is-pure */ "./node_modules/core-js/internals/is-pure.js");
+    var Iterators = __webpack_require__(/*! ../internals/iterators */ "./node_modules/core-js/internals/iterators.js");
+    var IteratorsCore = __webpack_require__(/*! ../internals/iterators-core */ "./node_modules/core-js/internals/iterators-core.js");
+
+    var IteratorPrototype = IteratorsCore.IteratorPrototype;
+    var BUGGY_SAFARI_ITERATORS = IteratorsCore.BUGGY_SAFARI_ITERATORS;
+    var ITERATOR = wellKnownSymbol('iterator');
+    var KEYS = 'keys';
+    var VALUES = 'values';
+    var ENTRIES = 'entries';
+
+    var returnThis = function () { return this; };
+
+    module.exports = function (Iterable, NAME, IteratorConstructor, next, DEFAULT, IS_SET, FORCED) {
+      createIteratorConstructor(IteratorConstructor, NAME, next);
+
+      var getIterationMethod = function (KIND) {
+        if (KIND === DEFAULT && defaultIterator) return defaultIterator;
+        if (!BUGGY_SAFARI_ITERATORS && KIND in IterablePrototype) return IterablePrototype[KIND];
+        switch (KIND) {
+          case KEYS: return function keys() { return new IteratorConstructor(this, KIND); };
+          case VALUES: return function values() { return new IteratorConstructor(this, KIND); };
+          case ENTRIES: return function entries() { return new IteratorConstructor(this, KIND); };
+        } return function () { return new IteratorConstructor(this); };
+      };
+
+      var TO_STRING_TAG = NAME + ' Iterator';
+      var INCORRECT_VALUES_NAME = false;
+      var IterablePrototype = Iterable.prototype;
+      var nativeIterator = IterablePrototype[ITERATOR]
+        || IterablePrototype['@@iterator']
+        || DEFAULT && IterablePrototype[DEFAULT];
+      var defaultIterator = !BUGGY_SAFARI_ITERATORS && nativeIterator || getIterationMethod(DEFAULT);
+      var anyNativeIterator = NAME == 'Array' ? IterablePrototype.entries || nativeIterator : nativeIterator;
+      var CurrentIteratorPrototype, methods, KEY;
+
+      // fix native
+      if (anyNativeIterator) {
+        CurrentIteratorPrototype = getPrototypeOf(anyNativeIterator.call(new Iterable()));
+        if (IteratorPrototype !== Object.prototype && CurrentIteratorPrototype.next) {
+          if (!IS_PURE && getPrototypeOf(CurrentIteratorPrototype) !== IteratorPrototype) {
+            if (setPrototypeOf) {
+              setPrototypeOf(CurrentIteratorPrototype, IteratorPrototype);
+            } else if (typeof CurrentIteratorPrototype[ITERATOR] != 'function') {
+              hide(CurrentIteratorPrototype, ITERATOR, returnThis);
+            }
+          }
+          // Set @@toStringTag to native iterators
+          setToStringTag(CurrentIteratorPrototype, TO_STRING_TAG, true, true);
+          if (IS_PURE) Iterators[TO_STRING_TAG] = returnThis;
+        }
+      }
+
+      // fix Array#{values, @@iterator}.name in V8 / FF
+      if (DEFAULT == VALUES && nativeIterator && nativeIterator.name !== VALUES) {
+        INCORRECT_VALUES_NAME = true;
+        defaultIterator = function values() { return nativeIterator.call(this); };
+      }
+
+      // define iterator
+      if ((!IS_PURE || FORCED) && IterablePrototype[ITERATOR] !== defaultIterator) {
+        hide(IterablePrototype, ITERATOR, defaultIterator);
+      }
+      Iterators[NAME] = defaultIterator;
+
+      // export additional methods
+      if (DEFAULT) {
+        methods = {
+          values: getIterationMethod(VALUES),
+          keys: IS_SET ? defaultIterator : getIterationMethod(KEYS),
+          entries: getIterationMethod(ENTRIES)
+        };
+        if (FORCED) for (KEY in methods) {
+          if (BUGGY_SAFARI_ITERATORS || INCORRECT_VALUES_NAME || !(KEY in IterablePrototype)) {
+            redefine(IterablePrototype, KEY, methods[KEY]);
+          }
+        } else $({ target: NAME, proto: true, forced: BUGGY_SAFARI_ITERATORS || INCORRECT_VALUES_NAME }, methods);
+      }
+
+      return methods;
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/descriptors.js":
+    /*!*******************************************************!*\
+      !*** ./node_modules/core-js/internals/descriptors.js ***!
+      \*******************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var fails = __webpack_require__(/*! ../internals/fails */ "./node_modules/core-js/internals/fails.js");
+
+    // Thank's IE8 for his funny defineProperty
+    module.exports = !fails(function () {
+      return Object.defineProperty({}, 'a', { get: function () { return 7; } }).a != 7;
+    });
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/document-create-element.js":
+    /*!*******************************************************************!*\
+      !*** ./node_modules/core-js/internals/document-create-element.js ***!
+      \*******************************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var global = __webpack_require__(/*! ../internals/global */ "./node_modules/core-js/internals/global.js");
+    var isObject = __webpack_require__(/*! ../internals/is-object */ "./node_modules/core-js/internals/is-object.js");
+
+    var document = global.document;
+    // typeof document.createElement is 'object' in old IE
+    var exist = isObject(document) && isObject(document.createElement);
+
+    module.exports = function (it) {
+      return exist ? document.createElement(it) : {};
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/enum-bug-keys.js":
+    /*!*********************************************************!*\
+      !*** ./node_modules/core-js/internals/enum-bug-keys.js ***!
+      \*********************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports) {
+
+    // IE8- don't enum bug keys
+    module.exports = [
+      'constructor',
+      'hasOwnProperty',
+      'isPrototypeOf',
+      'propertyIsEnumerable',
+      'toLocaleString',
+      'toString',
+      'valueOf'
+    ];
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/export.js":
+    /*!**************************************************!*\
+      !*** ./node_modules/core-js/internals/export.js ***!
+      \**************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var global = __webpack_require__(/*! ../internals/global */ "./node_modules/core-js/internals/global.js");
+    var getOwnPropertyDescriptor = __webpack_require__(/*! ../internals/object-get-own-property-descriptor */ "./node_modules/core-js/internals/object-get-own-property-descriptor.js").f;
+    var hide = __webpack_require__(/*! ../internals/hide */ "./node_modules/core-js/internals/hide.js");
+    var redefine = __webpack_require__(/*! ../internals/redefine */ "./node_modules/core-js/internals/redefine.js");
+    var setGlobal = __webpack_require__(/*! ../internals/set-global */ "./node_modules/core-js/internals/set-global.js");
+    var copyConstructorProperties = __webpack_require__(/*! ../internals/copy-constructor-properties */ "./node_modules/core-js/internals/copy-constructor-properties.js");
+    var isForced = __webpack_require__(/*! ../internals/is-forced */ "./node_modules/core-js/internals/is-forced.js");
+
+    /*
+      options.target      - name of the target object
+      options.global      - target is the global object
+      options.stat        - export as static methods of target
+      options.proto       - export as prototype methods of target
+      options.real        - real prototype method for the `pure` version
+      options.forced      - export even if the native feature is available
+      options.bind        - bind methods to the target, required for the `pure` version
+      options.wrap        - wrap constructors to preventing global pollution, required for the `pure` version
+      options.unsafe      - use the simple assignment of property instead of delete + defineProperty
+      options.sham        - add a flag to not completely full polyfills
+      options.enumerable  - export as enumerable property
+      options.noTargetGet - prevent calling a getter on target
+    */
+    module.exports = function (options, source) {
+      var TARGET = options.target;
+      var GLOBAL = options.global;
+      var STATIC = options.stat;
+      var FORCED, target, key, targetProperty, sourceProperty, descriptor;
+      if (GLOBAL) {
+        target = global;
+      } else if (STATIC) {
+        target = global[TARGET] || setGlobal(TARGET, {});
+      } else {
+        target = (global[TARGET] || {}).prototype;
+      }
+      if (target) for (key in source) {
+        sourceProperty = source[key];
+        if (options.noTargetGet) {
+          descriptor = getOwnPropertyDescriptor(target, key);
+          targetProperty = descriptor && descriptor.value;
+        } else targetProperty = target[key];
+        FORCED = isForced(GLOBAL ? key : TARGET + (STATIC ? '.' : '#') + key, options.forced);
+        // contained in target
+        if (!FORCED && targetProperty !== undefined) {
+          if (typeof sourceProperty === typeof targetProperty) continue;
+          copyConstructorProperties(sourceProperty, targetProperty);
+        }
+        // add a flag to not completely full polyfills
+        if (options.sham || (targetProperty && targetProperty.sham)) {
+          hide(sourceProperty, 'sham', true);
+        }
+        // extend global
+        redefine(target, key, sourceProperty, options);
+      }
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/fails.js":
+    /*!*************************************************!*\
+      !*** ./node_modules/core-js/internals/fails.js ***!
+      \*************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports) {
+
+    module.exports = function (exec) {
+      try {
+        return !!exec();
+      } catch (error) {
+        return true;
+      }
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/function-to-string.js":
+    /*!**************************************************************!*\
+      !*** ./node_modules/core-js/internals/function-to-string.js ***!
+      \**************************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var shared = __webpack_require__(/*! ../internals/shared */ "./node_modules/core-js/internals/shared.js");
+
+    module.exports = shared('native-function-to-string', Function.toString);
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/get-iterator-method.js":
+    /*!***************************************************************!*\
+      !*** ./node_modules/core-js/internals/get-iterator-method.js ***!
+      \***************************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var classof = __webpack_require__(/*! ../internals/classof */ "./node_modules/core-js/internals/classof.js");
+    var Iterators = __webpack_require__(/*! ../internals/iterators */ "./node_modules/core-js/internals/iterators.js");
+    var wellKnownSymbol = __webpack_require__(/*! ../internals/well-known-symbol */ "./node_modules/core-js/internals/well-known-symbol.js");
+
+    var ITERATOR = wellKnownSymbol('iterator');
+
+    module.exports = function (it) {
+      if (it != undefined) return it[ITERATOR]
+        || it['@@iterator']
+        || Iterators[classof(it)];
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/global.js":
+    /*!**************************************************!*\
+      !*** ./node_modules/core-js/internals/global.js ***!
+      \**************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    /* WEBPACK VAR INJECTION */(function(global) {var O = 'object';
+    var check = function (it) {
+      return it && it.Math == Math && it;
+    };
+
+    // https://github.com/zloirock/core-js/issues/86#issuecomment-115759028
+    module.exports =
+      // eslint-disable-next-line no-undef
+      check(typeof globalThis == O && globalThis) ||
+      check(typeof window == O && window) ||
+      check(typeof self == O && self) ||
+      check(typeof global == O && global) ||
+      // eslint-disable-next-line no-new-func
+      Function('return this')();
+
+    /* WEBPACK VAR INJECTION */}.call(this, __webpack_require__(/*! ./../../webpack/buildin/global.js */ "./node_modules/webpack/buildin/global.js")));
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/has.js":
+    /*!***********************************************!*\
+      !*** ./node_modules/core-js/internals/has.js ***!
+      \***********************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports) {
+
+    var hasOwnProperty = {}.hasOwnProperty;
+
+    module.exports = function (it, key) {
+      return hasOwnProperty.call(it, key);
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/hidden-keys.js":
+    /*!*******************************************************!*\
+      !*** ./node_modules/core-js/internals/hidden-keys.js ***!
+      \*******************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports) {
+
+    module.exports = {};
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/hide.js":
+    /*!************************************************!*\
+      !*** ./node_modules/core-js/internals/hide.js ***!
+      \************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var DESCRIPTORS = __webpack_require__(/*! ../internals/descriptors */ "./node_modules/core-js/internals/descriptors.js");
+    var definePropertyModule = __webpack_require__(/*! ../internals/object-define-property */ "./node_modules/core-js/internals/object-define-property.js");
+    var createPropertyDescriptor = __webpack_require__(/*! ../internals/create-property-descriptor */ "./node_modules/core-js/internals/create-property-descriptor.js");
+
+    module.exports = DESCRIPTORS ? function (object, key, value) {
+      return definePropertyModule.f(object, key, createPropertyDescriptor(1, value));
+    } : function (object, key, value) {
+      object[key] = value;
+      return object;
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/html.js":
+    /*!************************************************!*\
+      !*** ./node_modules/core-js/internals/html.js ***!
+      \************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var global = __webpack_require__(/*! ../internals/global */ "./node_modules/core-js/internals/global.js");
+
+    var document = global.document;
+
+    module.exports = document && document.documentElement;
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/ie8-dom-define.js":
+    /*!**********************************************************!*\
+      !*** ./node_modules/core-js/internals/ie8-dom-define.js ***!
+      \**********************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var DESCRIPTORS = __webpack_require__(/*! ../internals/descriptors */ "./node_modules/core-js/internals/descriptors.js");
+    var fails = __webpack_require__(/*! ../internals/fails */ "./node_modules/core-js/internals/fails.js");
+    var createElement = __webpack_require__(/*! ../internals/document-create-element */ "./node_modules/core-js/internals/document-create-element.js");
+
+    // Thank's IE8 for his funny defineProperty
+    module.exports = !DESCRIPTORS && !fails(function () {
+      return Object.defineProperty(createElement('div'), 'a', {
+        get: function () { return 7; }
+      }).a != 7;
+    });
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/indexed-object.js":
+    /*!**********************************************************!*\
+      !*** ./node_modules/core-js/internals/indexed-object.js ***!
+      \**********************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    // fallback for non-array-like ES3 and non-enumerable old V8 strings
+    var fails = __webpack_require__(/*! ../internals/fails */ "./node_modules/core-js/internals/fails.js");
+    var classof = __webpack_require__(/*! ../internals/classof-raw */ "./node_modules/core-js/internals/classof-raw.js");
+
+    var split = ''.split;
+
+    module.exports = fails(function () {
+      // throws an error in rhino, see https://github.com/mozilla/rhino/issues/346
+      // eslint-disable-next-line no-prototype-builtins
+      return !Object('z').propertyIsEnumerable(0);
+    }) ? function (it) {
+      return classof(it) == 'String' ? split.call(it, '') : Object(it);
+    } : Object;
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/internal-state.js":
+    /*!**********************************************************!*\
+      !*** ./node_modules/core-js/internals/internal-state.js ***!
+      \**********************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var NATIVE_WEAK_MAP = __webpack_require__(/*! ../internals/native-weak-map */ "./node_modules/core-js/internals/native-weak-map.js");
+    var global = __webpack_require__(/*! ../internals/global */ "./node_modules/core-js/internals/global.js");
+    var isObject = __webpack_require__(/*! ../internals/is-object */ "./node_modules/core-js/internals/is-object.js");
+    var hide = __webpack_require__(/*! ../internals/hide */ "./node_modules/core-js/internals/hide.js");
+    var objectHas = __webpack_require__(/*! ../internals/has */ "./node_modules/core-js/internals/has.js");
+    var sharedKey = __webpack_require__(/*! ../internals/shared-key */ "./node_modules/core-js/internals/shared-key.js");
+    var hiddenKeys = __webpack_require__(/*! ../internals/hidden-keys */ "./node_modules/core-js/internals/hidden-keys.js");
+
+    var WeakMap = global.WeakMap;
+    var set, get, has;
+
+    var enforce = function (it) {
+      return has(it) ? get(it) : set(it, {});
+    };
+
+    var getterFor = function (TYPE) {
+      return function (it) {
+        var state;
+        if (!isObject(it) || (state = get(it)).type !== TYPE) {
+          throw TypeError('Incompatible receiver, ' + TYPE + ' required');
+        } return state;
+      };
+    };
+
+    if (NATIVE_WEAK_MAP) {
+      var store = new WeakMap();
+      var wmget = store.get;
+      var wmhas = store.has;
+      var wmset = store.set;
+      set = function (it, metadata) {
+        wmset.call(store, it, metadata);
+        return metadata;
+      };
+      get = function (it) {
+        return wmget.call(store, it) || {};
+      };
+      has = function (it) {
+        return wmhas.call(store, it);
+      };
+    } else {
+      var STATE = sharedKey('state');
+      hiddenKeys[STATE] = true;
+      set = function (it, metadata) {
+        hide(it, STATE, metadata);
+        return metadata;
+      };
+      get = function (it) {
+        return objectHas(it, STATE) ? it[STATE] : {};
+      };
+      has = function (it) {
+        return objectHas(it, STATE);
+      };
+    }
+
+    module.exports = {
+      set: set,
+      get: get,
+      has: has,
+      enforce: enforce,
+      getterFor: getterFor
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/is-array-iterator-method.js":
+    /*!********************************************************************!*\
+      !*** ./node_modules/core-js/internals/is-array-iterator-method.js ***!
+      \********************************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var wellKnownSymbol = __webpack_require__(/*! ../internals/well-known-symbol */ "./node_modules/core-js/internals/well-known-symbol.js");
+    var Iterators = __webpack_require__(/*! ../internals/iterators */ "./node_modules/core-js/internals/iterators.js");
+
+    var ITERATOR = wellKnownSymbol('iterator');
+    var ArrayPrototype = Array.prototype;
+
+    // check on default Array iterator
+    module.exports = function (it) {
+      return it !== undefined && (Iterators.Array === it || ArrayPrototype[ITERATOR] === it);
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/is-forced.js":
+    /*!*****************************************************!*\
+      !*** ./node_modules/core-js/internals/is-forced.js ***!
+      \*****************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var fails = __webpack_require__(/*! ../internals/fails */ "./node_modules/core-js/internals/fails.js");
+
+    var replacement = /#|\.prototype\./;
+
+    var isForced = function (feature, detection) {
+      var value = data[normalize(feature)];
+      return value == POLYFILL ? true
+        : value == NATIVE ? false
+        : typeof detection == 'function' ? fails(detection)
+        : !!detection;
+    };
+
+    var normalize = isForced.normalize = function (string) {
+      return String(string).replace(replacement, '.').toLowerCase();
+    };
+
+    var data = isForced.data = {};
+    var NATIVE = isForced.NATIVE = 'N';
+    var POLYFILL = isForced.POLYFILL = 'P';
+
+    module.exports = isForced;
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/is-object.js":
+    /*!*****************************************************!*\
+      !*** ./node_modules/core-js/internals/is-object.js ***!
+      \*****************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports) {
+
+    module.exports = function (it) {
+      return typeof it === 'object' ? it !== null : typeof it === 'function';
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/is-pure.js":
+    /*!***************************************************!*\
+      !*** ./node_modules/core-js/internals/is-pure.js ***!
+      \***************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports) {
+
+    module.exports = false;
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/iterators-core.js":
+    /*!**********************************************************!*\
+      !*** ./node_modules/core-js/internals/iterators-core.js ***!
+      \**********************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var getPrototypeOf = __webpack_require__(/*! ../internals/object-get-prototype-of */ "./node_modules/core-js/internals/object-get-prototype-of.js");
+    var hide = __webpack_require__(/*! ../internals/hide */ "./node_modules/core-js/internals/hide.js");
+    var has = __webpack_require__(/*! ../internals/has */ "./node_modules/core-js/internals/has.js");
+    var wellKnownSymbol = __webpack_require__(/*! ../internals/well-known-symbol */ "./node_modules/core-js/internals/well-known-symbol.js");
+    var IS_PURE = __webpack_require__(/*! ../internals/is-pure */ "./node_modules/core-js/internals/is-pure.js");
+
+    var ITERATOR = wellKnownSymbol('iterator');
+    var BUGGY_SAFARI_ITERATORS = false;
+
+    var returnThis = function () { return this; };
+
+    // `%IteratorPrototype%` object
+    // https://tc39.github.io/ecma262/#sec-%iteratorprototype%-object
+    var IteratorPrototype, PrototypeOfArrayIteratorPrototype, arrayIterator;
+
+    if ([].keys) {
+      arrayIterator = [].keys();
+      // Safari 8 has buggy iterators w/o `next`
+      if (!('next' in arrayIterator)) BUGGY_SAFARI_ITERATORS = true;
+      else {
+        PrototypeOfArrayIteratorPrototype = getPrototypeOf(getPrototypeOf(arrayIterator));
+        if (PrototypeOfArrayIteratorPrototype !== Object.prototype) IteratorPrototype = PrototypeOfArrayIteratorPrototype;
+      }
+    }
+
+    if (IteratorPrototype == undefined) IteratorPrototype = {};
+
+    // 25.1.2.1.1 %IteratorPrototype%[@@iterator]()
+    if (!IS_PURE && !has(IteratorPrototype, ITERATOR)) hide(IteratorPrototype, ITERATOR, returnThis);
+
+    module.exports = {
+      IteratorPrototype: IteratorPrototype,
+      BUGGY_SAFARI_ITERATORS: BUGGY_SAFARI_ITERATORS
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/iterators.js":
+    /*!*****************************************************!*\
+      !*** ./node_modules/core-js/internals/iterators.js ***!
+      \*****************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports) {
+
+    module.exports = {};
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/native-symbol.js":
+    /*!*********************************************************!*\
+      !*** ./node_modules/core-js/internals/native-symbol.js ***!
+      \*********************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var fails = __webpack_require__(/*! ../internals/fails */ "./node_modules/core-js/internals/fails.js");
+
+    module.exports = !!Object.getOwnPropertySymbols && !fails(function () {
+      // Chrome 38 Symbol has incorrect toString conversion
+      // eslint-disable-next-line no-undef
+      return !String(Symbol());
+    });
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/native-weak-map.js":
+    /*!***********************************************************!*\
+      !*** ./node_modules/core-js/internals/native-weak-map.js ***!
+      \***********************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var global = __webpack_require__(/*! ../internals/global */ "./node_modules/core-js/internals/global.js");
+    var nativeFunctionToString = __webpack_require__(/*! ../internals/function-to-string */ "./node_modules/core-js/internals/function-to-string.js");
+
+    var WeakMap = global.WeakMap;
+
+    module.exports = typeof WeakMap === 'function' && /native code/.test(nativeFunctionToString.call(WeakMap));
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/object-create.js":
+    /*!*********************************************************!*\
+      !*** ./node_modules/core-js/internals/object-create.js ***!
+      \*********************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var anObject = __webpack_require__(/*! ../internals/an-object */ "./node_modules/core-js/internals/an-object.js");
+    var defineProperties = __webpack_require__(/*! ../internals/object-define-properties */ "./node_modules/core-js/internals/object-define-properties.js");
+    var enumBugKeys = __webpack_require__(/*! ../internals/enum-bug-keys */ "./node_modules/core-js/internals/enum-bug-keys.js");
+    var hiddenKeys = __webpack_require__(/*! ../internals/hidden-keys */ "./node_modules/core-js/internals/hidden-keys.js");
+    var html = __webpack_require__(/*! ../internals/html */ "./node_modules/core-js/internals/html.js");
+    var documentCreateElement = __webpack_require__(/*! ../internals/document-create-element */ "./node_modules/core-js/internals/document-create-element.js");
+    var sharedKey = __webpack_require__(/*! ../internals/shared-key */ "./node_modules/core-js/internals/shared-key.js");
+    var IE_PROTO = sharedKey('IE_PROTO');
+
+    var PROTOTYPE = 'prototype';
+    var Empty = function () { /* empty */ };
+
+    // Create object with fake `null` prototype: use iframe Object with cleared prototype
+    var createDict = function () {
+      // Thrash, waste and sodomy: IE GC bug
+      var iframe = documentCreateElement('iframe');
+      var length = enumBugKeys.length;
+      var lt = '<';
+      var script = 'script';
+      var gt = '>';
+      var js = 'java' + script + ':';
+      var iframeDocument;
+      iframe.style.display = 'none';
+      html.appendChild(iframe);
+      iframe.src = String(js);
+      iframeDocument = iframe.contentWindow.document;
+      iframeDocument.open();
+      iframeDocument.write(lt + script + gt + 'document.F=Object' + lt + '/' + script + gt);
+      iframeDocument.close();
+      createDict = iframeDocument.F;
+      while (length--) delete createDict[PROTOTYPE][enumBugKeys[length]];
+      return createDict();
+    };
+
+    // 19.1.2.2 / 15.2.3.5 Object.create(O [, Properties])
+    module.exports = Object.create || function create(O, Properties) {
+      var result;
+      if (O !== null) {
+        Empty[PROTOTYPE] = anObject(O);
+        result = new Empty();
+        Empty[PROTOTYPE] = null;
+        // add "__proto__" for Object.getPrototypeOf polyfill
+        result[IE_PROTO] = O;
+      } else result = createDict();
+      return Properties === undefined ? result : defineProperties(result, Properties);
+    };
+
+    hiddenKeys[IE_PROTO] = true;
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/object-define-properties.js":
+    /*!********************************************************************!*\
+      !*** ./node_modules/core-js/internals/object-define-properties.js ***!
+      \********************************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var DESCRIPTORS = __webpack_require__(/*! ../internals/descriptors */ "./node_modules/core-js/internals/descriptors.js");
+    var definePropertyModule = __webpack_require__(/*! ../internals/object-define-property */ "./node_modules/core-js/internals/object-define-property.js");
+    var anObject = __webpack_require__(/*! ../internals/an-object */ "./node_modules/core-js/internals/an-object.js");
+    var objectKeys = __webpack_require__(/*! ../internals/object-keys */ "./node_modules/core-js/internals/object-keys.js");
+
+    module.exports = DESCRIPTORS ? Object.defineProperties : function defineProperties(O, Properties) {
+      anObject(O);
+      var keys = objectKeys(Properties);
+      var length = keys.length;
+      var i = 0;
+      var key;
+      while (length > i) definePropertyModule.f(O, key = keys[i++], Properties[key]);
+      return O;
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/object-define-property.js":
+    /*!******************************************************************!*\
+      !*** ./node_modules/core-js/internals/object-define-property.js ***!
+      \******************************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var DESCRIPTORS = __webpack_require__(/*! ../internals/descriptors */ "./node_modules/core-js/internals/descriptors.js");
+    var IE8_DOM_DEFINE = __webpack_require__(/*! ../internals/ie8-dom-define */ "./node_modules/core-js/internals/ie8-dom-define.js");
+    var anObject = __webpack_require__(/*! ../internals/an-object */ "./node_modules/core-js/internals/an-object.js");
+    var toPrimitive = __webpack_require__(/*! ../internals/to-primitive */ "./node_modules/core-js/internals/to-primitive.js");
+
+    var nativeDefineProperty = Object.defineProperty;
+
+    exports.f = DESCRIPTORS ? nativeDefineProperty : function defineProperty(O, P, Attributes) {
+      anObject(O);
+      P = toPrimitive(P, true);
+      anObject(Attributes);
+      if (IE8_DOM_DEFINE) try {
+        return nativeDefineProperty(O, P, Attributes);
+      } catch (error) { /* empty */ }
+      if ('get' in Attributes || 'set' in Attributes) throw TypeError('Accessors not supported');
+      if ('value' in Attributes) O[P] = Attributes.value;
+      return O;
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/object-get-own-property-descriptor.js":
+    /*!******************************************************************************!*\
+      !*** ./node_modules/core-js/internals/object-get-own-property-descriptor.js ***!
+      \******************************************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var DESCRIPTORS = __webpack_require__(/*! ../internals/descriptors */ "./node_modules/core-js/internals/descriptors.js");
+    var propertyIsEnumerableModule = __webpack_require__(/*! ../internals/object-property-is-enumerable */ "./node_modules/core-js/internals/object-property-is-enumerable.js");
+    var createPropertyDescriptor = __webpack_require__(/*! ../internals/create-property-descriptor */ "./node_modules/core-js/internals/create-property-descriptor.js");
+    var toIndexedObject = __webpack_require__(/*! ../internals/to-indexed-object */ "./node_modules/core-js/internals/to-indexed-object.js");
+    var toPrimitive = __webpack_require__(/*! ../internals/to-primitive */ "./node_modules/core-js/internals/to-primitive.js");
+    var has = __webpack_require__(/*! ../internals/has */ "./node_modules/core-js/internals/has.js");
+    var IE8_DOM_DEFINE = __webpack_require__(/*! ../internals/ie8-dom-define */ "./node_modules/core-js/internals/ie8-dom-define.js");
+
+    var nativeGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+
+    exports.f = DESCRIPTORS ? nativeGetOwnPropertyDescriptor : function getOwnPropertyDescriptor(O, P) {
+      O = toIndexedObject(O);
+      P = toPrimitive(P, true);
+      if (IE8_DOM_DEFINE) try {
+        return nativeGetOwnPropertyDescriptor(O, P);
+      } catch (error) { /* empty */ }
+      if (has(O, P)) return createPropertyDescriptor(!propertyIsEnumerableModule.f.call(O, P), O[P]);
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/object-get-own-property-names.js":
+    /*!*************************************************************************!*\
+      !*** ./node_modules/core-js/internals/object-get-own-property-names.js ***!
+      \*************************************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    // 19.1.2.7 / 15.2.3.4 Object.getOwnPropertyNames(O)
+    var internalObjectKeys = __webpack_require__(/*! ../internals/object-keys-internal */ "./node_modules/core-js/internals/object-keys-internal.js");
+    var enumBugKeys = __webpack_require__(/*! ../internals/enum-bug-keys */ "./node_modules/core-js/internals/enum-bug-keys.js");
+
+    var hiddenKeys = enumBugKeys.concat('length', 'prototype');
+
+    exports.f = Object.getOwnPropertyNames || function getOwnPropertyNames(O) {
+      return internalObjectKeys(O, hiddenKeys);
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/object-get-own-property-symbols.js":
+    /*!***************************************************************************!*\
+      !*** ./node_modules/core-js/internals/object-get-own-property-symbols.js ***!
+      \***************************************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports) {
+
+    exports.f = Object.getOwnPropertySymbols;
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/object-get-prototype-of.js":
+    /*!*******************************************************************!*\
+      !*** ./node_modules/core-js/internals/object-get-prototype-of.js ***!
+      \*******************************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var has = __webpack_require__(/*! ../internals/has */ "./node_modules/core-js/internals/has.js");
+    var toObject = __webpack_require__(/*! ../internals/to-object */ "./node_modules/core-js/internals/to-object.js");
+    var sharedKey = __webpack_require__(/*! ../internals/shared-key */ "./node_modules/core-js/internals/shared-key.js");
+    var CORRECT_PROTOTYPE_GETTER = __webpack_require__(/*! ../internals/correct-prototype-getter */ "./node_modules/core-js/internals/correct-prototype-getter.js");
+
+    var IE_PROTO = sharedKey('IE_PROTO');
+    var ObjectPrototype = Object.prototype;
+
+    // 19.1.2.9 / 15.2.3.2 Object.getPrototypeOf(O)
+    module.exports = CORRECT_PROTOTYPE_GETTER ? Object.getPrototypeOf : function (O) {
+      O = toObject(O);
+      if (has(O, IE_PROTO)) return O[IE_PROTO];
+      if (typeof O.constructor == 'function' && O instanceof O.constructor) {
+        return O.constructor.prototype;
+      } return O instanceof Object ? ObjectPrototype : null;
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/object-keys-internal.js":
+    /*!****************************************************************!*\
+      !*** ./node_modules/core-js/internals/object-keys-internal.js ***!
+      \****************************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var has = __webpack_require__(/*! ../internals/has */ "./node_modules/core-js/internals/has.js");
+    var toIndexedObject = __webpack_require__(/*! ../internals/to-indexed-object */ "./node_modules/core-js/internals/to-indexed-object.js");
+    var arrayIncludes = __webpack_require__(/*! ../internals/array-includes */ "./node_modules/core-js/internals/array-includes.js");
+    var hiddenKeys = __webpack_require__(/*! ../internals/hidden-keys */ "./node_modules/core-js/internals/hidden-keys.js");
+
+    var arrayIndexOf = arrayIncludes(false);
+
+    module.exports = function (object, names) {
+      var O = toIndexedObject(object);
+      var i = 0;
+      var result = [];
+      var key;
+      for (key in O) !has(hiddenKeys, key) && has(O, key) && result.push(key);
+      // Don't enum bug & hidden keys
+      while (names.length > i) if (has(O, key = names[i++])) {
+        ~arrayIndexOf(result, key) || result.push(key);
+      }
+      return result;
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/object-keys.js":
+    /*!*******************************************************!*\
+      !*** ./node_modules/core-js/internals/object-keys.js ***!
+      \*******************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var internalObjectKeys = __webpack_require__(/*! ../internals/object-keys-internal */ "./node_modules/core-js/internals/object-keys-internal.js");
+    var enumBugKeys = __webpack_require__(/*! ../internals/enum-bug-keys */ "./node_modules/core-js/internals/enum-bug-keys.js");
+
+    // 19.1.2.14 / 15.2.3.14 Object.keys(O)
+    module.exports = Object.keys || function keys(O) {
+      return internalObjectKeys(O, enumBugKeys);
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/object-property-is-enumerable.js":
+    /*!*************************************************************************!*\
+      !*** ./node_modules/core-js/internals/object-property-is-enumerable.js ***!
+      \*************************************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var nativePropertyIsEnumerable = {}.propertyIsEnumerable;
+    var getOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+
+    // Nashorn ~ JDK8 bug
+    var NASHORN_BUG = getOwnPropertyDescriptor && !nativePropertyIsEnumerable.call({ 1: 2 }, 1);
+
+    exports.f = NASHORN_BUG ? function propertyIsEnumerable(V) {
+      var descriptor = getOwnPropertyDescriptor(this, V);
+      return !!descriptor && descriptor.enumerable;
+    } : nativePropertyIsEnumerable;
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/object-set-prototype-of.js":
+    /*!*******************************************************************!*\
+      !*** ./node_modules/core-js/internals/object-set-prototype-of.js ***!
+      \*******************************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var validateSetPrototypeOfArguments = __webpack_require__(/*! ../internals/validate-set-prototype-of-arguments */ "./node_modules/core-js/internals/validate-set-prototype-of-arguments.js");
+
+    // Works with __proto__ only. Old v8 can't work with null proto objects.
+    /* eslint-disable no-proto */
+    module.exports = Object.setPrototypeOf || ('__proto__' in {} ? function () {
+      var correctSetter = false;
+      var test = {};
+      var setter;
+      try {
+        setter = Object.getOwnPropertyDescriptor(Object.prototype, '__proto__').set;
+        setter.call(test, []);
+        correctSetter = test instanceof Array;
+      } catch (error) { /* empty */ }
+      return function setPrototypeOf(O, proto) {
+        validateSetPrototypeOfArguments(O, proto);
+        if (correctSetter) setter.call(O, proto);
+        else O.__proto__ = proto;
+        return O;
+      };
+    }() : undefined);
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/own-keys.js":
+    /*!****************************************************!*\
+      !*** ./node_modules/core-js/internals/own-keys.js ***!
+      \****************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var global = __webpack_require__(/*! ../internals/global */ "./node_modules/core-js/internals/global.js");
+    var getOwnPropertyNamesModule = __webpack_require__(/*! ../internals/object-get-own-property-names */ "./node_modules/core-js/internals/object-get-own-property-names.js");
+    var getOwnPropertySymbolsModule = __webpack_require__(/*! ../internals/object-get-own-property-symbols */ "./node_modules/core-js/internals/object-get-own-property-symbols.js");
+    var anObject = __webpack_require__(/*! ../internals/an-object */ "./node_modules/core-js/internals/an-object.js");
+
+    var Reflect = global.Reflect;
+
+    // all object keys, includes non-enumerable and symbols
+    module.exports = Reflect && Reflect.ownKeys || function ownKeys(it) {
+      var keys = getOwnPropertyNamesModule.f(anObject(it));
+      var getOwnPropertySymbols = getOwnPropertySymbolsModule.f;
+      return getOwnPropertySymbols ? keys.concat(getOwnPropertySymbols(it)) : keys;
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/path.js":
+    /*!************************************************!*\
+      !*** ./node_modules/core-js/internals/path.js ***!
+      \************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    module.exports = __webpack_require__(/*! ../internals/global */ "./node_modules/core-js/internals/global.js");
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/redefine.js":
+    /*!****************************************************!*\
+      !*** ./node_modules/core-js/internals/redefine.js ***!
+      \****************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var global = __webpack_require__(/*! ../internals/global */ "./node_modules/core-js/internals/global.js");
+    var shared = __webpack_require__(/*! ../internals/shared */ "./node_modules/core-js/internals/shared.js");
+    var hide = __webpack_require__(/*! ../internals/hide */ "./node_modules/core-js/internals/hide.js");
+    var has = __webpack_require__(/*! ../internals/has */ "./node_modules/core-js/internals/has.js");
+    var setGlobal = __webpack_require__(/*! ../internals/set-global */ "./node_modules/core-js/internals/set-global.js");
+    var nativeFunctionToString = __webpack_require__(/*! ../internals/function-to-string */ "./node_modules/core-js/internals/function-to-string.js");
+    var InternalStateModule = __webpack_require__(/*! ../internals/internal-state */ "./node_modules/core-js/internals/internal-state.js");
+
+    var getInternalState = InternalStateModule.get;
+    var enforceInternalState = InternalStateModule.enforce;
+    var TEMPLATE = String(nativeFunctionToString).split('toString');
+
+    shared('inspectSource', function (it) {
+      return nativeFunctionToString.call(it);
+    });
+
+    (module.exports = function (O, key, value, options) {
+      var unsafe = options ? !!options.unsafe : false;
+      var simple = options ? !!options.enumerable : false;
+      var noTargetGet = options ? !!options.noTargetGet : false;
+      if (typeof value == 'function') {
+        if (typeof key == 'string' && !has(value, 'name')) hide(value, 'name', key);
+        enforceInternalState(value).source = TEMPLATE.join(typeof key == 'string' ? key : '');
+      }
+      if (O === global) {
+        if (simple) O[key] = value;
+        else setGlobal(key, value);
+        return;
+      } else if (!unsafe) {
+        delete O[key];
+      } else if (!noTargetGet && O[key]) {
+        simple = true;
+      }
+      if (simple) O[key] = value;
+      else hide(O, key, value);
+    // add fake Function#toString for correct work wrapped methods / constructors with methods like LoDash isNative
+    })(Function.prototype, 'toString', function toString() {
+      return typeof this == 'function' && getInternalState(this).source || nativeFunctionToString.call(this);
+    });
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/require-object-coercible.js":
+    /*!********************************************************************!*\
+      !*** ./node_modules/core-js/internals/require-object-coercible.js ***!
+      \********************************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports) {
+
+    // `RequireObjectCoercible` abstract operation
+    // https://tc39.github.io/ecma262/#sec-requireobjectcoercible
+    module.exports = function (it) {
+      if (it == undefined) throw TypeError("Can't call method on " + it);
+      return it;
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/set-global.js":
+    /*!******************************************************!*\
+      !*** ./node_modules/core-js/internals/set-global.js ***!
+      \******************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var global = __webpack_require__(/*! ../internals/global */ "./node_modules/core-js/internals/global.js");
+    var hide = __webpack_require__(/*! ../internals/hide */ "./node_modules/core-js/internals/hide.js");
+
+    module.exports = function (key, value) {
+      try {
+        hide(global, key, value);
+      } catch (error) {
+        global[key] = value;
+      } return value;
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/set-to-string-tag.js":
+    /*!*************************************************************!*\
+      !*** ./node_modules/core-js/internals/set-to-string-tag.js ***!
+      \*************************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var defineProperty = __webpack_require__(/*! ../internals/object-define-property */ "./node_modules/core-js/internals/object-define-property.js").f;
+    var has = __webpack_require__(/*! ../internals/has */ "./node_modules/core-js/internals/has.js");
+    var wellKnownSymbol = __webpack_require__(/*! ../internals/well-known-symbol */ "./node_modules/core-js/internals/well-known-symbol.js");
+
+    var TO_STRING_TAG = wellKnownSymbol('toStringTag');
+
+    module.exports = function (it, TAG, STATIC) {
+      if (it && !has(it = STATIC ? it : it.prototype, TO_STRING_TAG)) {
+        defineProperty(it, TO_STRING_TAG, { configurable: true, value: TAG });
+      }
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/shared-key.js":
+    /*!******************************************************!*\
+      !*** ./node_modules/core-js/internals/shared-key.js ***!
+      \******************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var shared = __webpack_require__(/*! ../internals/shared */ "./node_modules/core-js/internals/shared.js");
+    var uid = __webpack_require__(/*! ../internals/uid */ "./node_modules/core-js/internals/uid.js");
+
+    var keys = shared('keys');
+
+    module.exports = function (key) {
+      return keys[key] || (keys[key] = uid(key));
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/shared.js":
+    /*!**************************************************!*\
+      !*** ./node_modules/core-js/internals/shared.js ***!
+      \**************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var global = __webpack_require__(/*! ../internals/global */ "./node_modules/core-js/internals/global.js");
+    var setGlobal = __webpack_require__(/*! ../internals/set-global */ "./node_modules/core-js/internals/set-global.js");
+    var IS_PURE = __webpack_require__(/*! ../internals/is-pure */ "./node_modules/core-js/internals/is-pure.js");
+
+    var SHARED = '__core-js_shared__';
+    var store = global[SHARED] || setGlobal(SHARED, {});
+
+    (module.exports = function (key, value) {
+      return store[key] || (store[key] = value !== undefined ? value : {});
+    })('versions', []).push({
+      version: '3.1.3',
+      mode: IS_PURE ? 'pure' : 'global',
+      copyright: '© 2019 Denis Pushkarev (zloirock.ru)'
+    });
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/string-at.js":
+    /*!*****************************************************!*\
+      !*** ./node_modules/core-js/internals/string-at.js ***!
+      \*****************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var toInteger = __webpack_require__(/*! ../internals/to-integer */ "./node_modules/core-js/internals/to-integer.js");
+    var requireObjectCoercible = __webpack_require__(/*! ../internals/require-object-coercible */ "./node_modules/core-js/internals/require-object-coercible.js");
+
+    // CONVERT_TO_STRING: true  -> String#at
+    // CONVERT_TO_STRING: false -> String#codePointAt
+    module.exports = function (that, pos, CONVERT_TO_STRING) {
+      var S = String(requireObjectCoercible(that));
+      var position = toInteger(pos);
+      var size = S.length;
+      var first, second;
+      if (position < 0 || position >= size) return CONVERT_TO_STRING ? '' : undefined;
+      first = S.charCodeAt(position);
+      return first < 0xD800 || first > 0xDBFF || position + 1 === size
+        || (second = S.charCodeAt(position + 1)) < 0xDC00 || second > 0xDFFF
+          ? CONVERT_TO_STRING ? S.charAt(position) : first
+          : CONVERT_TO_STRING ? S.slice(position, position + 2) : (first - 0xD800 << 10) + (second - 0xDC00) + 0x10000;
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/to-absolute-index.js":
+    /*!*************************************************************!*\
+      !*** ./node_modules/core-js/internals/to-absolute-index.js ***!
+      \*************************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var toInteger = __webpack_require__(/*! ../internals/to-integer */ "./node_modules/core-js/internals/to-integer.js");
+
+    var max = Math.max;
+    var min = Math.min;
+
+    // Helper for a popular repeating case of the spec:
+    // Let integer be ? ToInteger(index).
+    // If integer < 0, let result be max((length + integer), 0); else let result be min(length, length).
+    module.exports = function (index, length) {
+      var integer = toInteger(index);
+      return integer < 0 ? max(integer + length, 0) : min(integer, length);
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/to-indexed-object.js":
+    /*!*************************************************************!*\
+      !*** ./node_modules/core-js/internals/to-indexed-object.js ***!
+      \*************************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    // toObject with fallback for non-array-like ES3 strings
+    var IndexedObject = __webpack_require__(/*! ../internals/indexed-object */ "./node_modules/core-js/internals/indexed-object.js");
+    var requireObjectCoercible = __webpack_require__(/*! ../internals/require-object-coercible */ "./node_modules/core-js/internals/require-object-coercible.js");
+
+    module.exports = function (it) {
+      return IndexedObject(requireObjectCoercible(it));
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/to-integer.js":
+    /*!******************************************************!*\
+      !*** ./node_modules/core-js/internals/to-integer.js ***!
+      \******************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports) {
+
+    var ceil = Math.ceil;
+    var floor = Math.floor;
+
+    // `ToInteger` abstract operation
+    // https://tc39.github.io/ecma262/#sec-tointeger
+    module.exports = function (argument) {
+      return isNaN(argument = +argument) ? 0 : (argument > 0 ? floor : ceil)(argument);
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/to-length.js":
+    /*!*****************************************************!*\
+      !*** ./node_modules/core-js/internals/to-length.js ***!
+      \*****************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var toInteger = __webpack_require__(/*! ../internals/to-integer */ "./node_modules/core-js/internals/to-integer.js");
+
+    var min = Math.min;
+
+    // `ToLength` abstract operation
+    // https://tc39.github.io/ecma262/#sec-tolength
+    module.exports = function (argument) {
+      return argument > 0 ? min(toInteger(argument), 0x1FFFFFFFFFFFFF) : 0; // 2 ** 53 - 1 == 9007199254740991
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/to-object.js":
+    /*!*****************************************************!*\
+      !*** ./node_modules/core-js/internals/to-object.js ***!
+      \*****************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var requireObjectCoercible = __webpack_require__(/*! ../internals/require-object-coercible */ "./node_modules/core-js/internals/require-object-coercible.js");
+
+    // `ToObject` abstract operation
+    // https://tc39.github.io/ecma262/#sec-toobject
+    module.exports = function (argument) {
+      return Object(requireObjectCoercible(argument));
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/to-primitive.js":
+    /*!********************************************************!*\
+      !*** ./node_modules/core-js/internals/to-primitive.js ***!
+      \********************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var isObject = __webpack_require__(/*! ../internals/is-object */ "./node_modules/core-js/internals/is-object.js");
+
+    // 7.1.1 ToPrimitive(input [, PreferredType])
+    // instead of the ES6 spec version, we didn't implement @@toPrimitive case
+    // and the second argument - flag - preferred type is a string
+    module.exports = function (it, S) {
+      if (!isObject(it)) return it;
+      var fn, val;
+      if (S && typeof (fn = it.toString) == 'function' && !isObject(val = fn.call(it))) return val;
+      if (typeof (fn = it.valueOf) == 'function' && !isObject(val = fn.call(it))) return val;
+      if (!S && typeof (fn = it.toString) == 'function' && !isObject(val = fn.call(it))) return val;
+      throw TypeError("Can't convert object to primitive value");
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/uid.js":
+    /*!***********************************************!*\
+      !*** ./node_modules/core-js/internals/uid.js ***!
+      \***********************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports) {
+
+    var id = 0;
+    var postfix = Math.random();
+
+    module.exports = function (key) {
+      return 'Symbol('.concat(key === undefined ? '' : key, ')_', (++id + postfix).toString(36));
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/validate-set-prototype-of-arguments.js":
+    /*!*******************************************************************************!*\
+      !*** ./node_modules/core-js/internals/validate-set-prototype-of-arguments.js ***!
+      \*******************************************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var isObject = __webpack_require__(/*! ../internals/is-object */ "./node_modules/core-js/internals/is-object.js");
+    var anObject = __webpack_require__(/*! ../internals/an-object */ "./node_modules/core-js/internals/an-object.js");
+
+    module.exports = function (O, proto) {
+      anObject(O);
+      if (!isObject(proto) && proto !== null) {
+        throw TypeError("Can't set " + String(proto) + ' as a prototype');
+      }
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/internals/well-known-symbol.js":
+    /*!*************************************************************!*\
+      !*** ./node_modules/core-js/internals/well-known-symbol.js ***!
+      \*************************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var global = __webpack_require__(/*! ../internals/global */ "./node_modules/core-js/internals/global.js");
+    var shared = __webpack_require__(/*! ../internals/shared */ "./node_modules/core-js/internals/shared.js");
+    var uid = __webpack_require__(/*! ../internals/uid */ "./node_modules/core-js/internals/uid.js");
+    var NATIVE_SYMBOL = __webpack_require__(/*! ../internals/native-symbol */ "./node_modules/core-js/internals/native-symbol.js");
+
+    var Symbol = global.Symbol;
+    var store = shared('wks');
+
+    module.exports = function (name) {
+      return store[name] || (store[name] = NATIVE_SYMBOL && Symbol[name]
+        || (NATIVE_SYMBOL ? Symbol : uid)('Symbol.' + name));
+    };
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/modules/es.array.from.js":
+    /*!*******************************************************!*\
+      !*** ./node_modules/core-js/modules/es.array.from.js ***!
+      \*******************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var $ = __webpack_require__(/*! ../internals/export */ "./node_modules/core-js/internals/export.js");
+    var from = __webpack_require__(/*! ../internals/array-from */ "./node_modules/core-js/internals/array-from.js");
+    var checkCorrectnessOfIteration = __webpack_require__(/*! ../internals/check-correctness-of-iteration */ "./node_modules/core-js/internals/check-correctness-of-iteration.js");
+
+    var INCORRECT_ITERATION = !checkCorrectnessOfIteration(function (iterable) {
+    });
+
+    // `Array.from` method
+    // https://tc39.github.io/ecma262/#sec-array.from
+    $({ target: 'Array', stat: true, forced: INCORRECT_ITERATION }, {
+      from: from
+    });
+
+
+    /***/ }),
+
+    /***/ "./node_modules/core-js/modules/es.string.iterator.js":
+    /*!************************************************************!*\
+      !*** ./node_modules/core-js/modules/es.string.iterator.js ***!
+      \************************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    var codePointAt = __webpack_require__(/*! ../internals/string-at */ "./node_modules/core-js/internals/string-at.js");
+    var InternalStateModule = __webpack_require__(/*! ../internals/internal-state */ "./node_modules/core-js/internals/internal-state.js");
+    var defineIterator = __webpack_require__(/*! ../internals/define-iterator */ "./node_modules/core-js/internals/define-iterator.js");
+
+    var STRING_ITERATOR = 'String Iterator';
+    var setInternalState = InternalStateModule.set;
+    var getInternalState = InternalStateModule.getterFor(STRING_ITERATOR);
+
+    // `String.prototype[@@iterator]` method
+    // https://tc39.github.io/ecma262/#sec-string.prototype-@@iterator
+    defineIterator(String, 'String', function (iterated) {
+      setInternalState(this, {
+        type: STRING_ITERATOR,
+        string: String(iterated),
+        index: 0
+      });
+    // `%StringIteratorPrototype%.next` method
+    // https://tc39.github.io/ecma262/#sec-%stringiteratorprototype%.next
+    }, function next() {
+      var state = getInternalState(this);
+      var string = state.string;
+      var index = state.index;
+      var point;
+      if (index >= string.length) return { value: undefined, done: true };
+      point = codePointAt(string, index, true);
+      state.index += point.length;
+      return { value: point, done: false };
+    });
+
+
+    /***/ }),
+
+    /***/ "./node_modules/webpack/buildin/global.js":
+    /*!***********************************!*\
+      !*** (webpack)/buildin/global.js ***!
+      \***********************************/
+    /*! no static exports found */
+    /***/ (function(module, exports) {
+
+    var g;
+
+    // This works in non-strict mode
+    g = (function() {
+    	return this;
+    })();
+
+    try {
+    	// This works if eval is allowed (see CSP)
+    	g = g || Function("return this")() || (1, eval)("this");
+    } catch (e) {
+    	// This works if the window reference is available
+    	if (typeof window === "object") g = window;
+    }
+
+    // g can still be undefined, but nothing to do about it...
+    // We return undefined, instead of nothing here, so it's
+    // easier to handle this case. if(!global) { ...}
+
+    module.exports = g;
+
+
+    /***/ }),
+
+    /***/ "./src/default-attrs.json":
+    /*!********************************!*\
+      !*** ./src/default-attrs.json ***!
+      \********************************/
+    /*! exports provided: xmlns, width, height, viewBox, fill, stroke, stroke-width, stroke-linecap, stroke-linejoin, default */
+    /***/ (function(module) {
+
+    module.exports = {"xmlns":"http://www.w3.org/2000/svg","width":24,"height":24,"viewBox":"0 0 24 24","fill":"none","stroke":"currentColor","stroke-width":2,"stroke-linecap":"round","stroke-linejoin":"round"};
+
+    /***/ }),
+
+    /***/ "./src/icon.js":
+    /*!*********************!*\
+      !*** ./src/icon.js ***!
+      \*********************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+
+    var _extends = Object.assign || function (target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i]; for (var key in source) { if (Object.prototype.hasOwnProperty.call(source, key)) { target[key] = source[key]; } } } return target; };
+
+    var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
+
+    var _dedupe = __webpack_require__(/*! classnames/dedupe */ "./node_modules/classnames/dedupe.js");
+
+    var _dedupe2 = _interopRequireDefault(_dedupe);
+
+    var _defaultAttrs = __webpack_require__(/*! ./default-attrs.json */ "./src/default-attrs.json");
+
+    var _defaultAttrs2 = _interopRequireDefault(_defaultAttrs);
+
+    function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+    function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+
+    var Icon = function () {
+      function Icon(name, contents) {
+        var tags = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : [];
+
+        _classCallCheck(this, Icon);
+
+        this.name = name;
+        this.contents = contents;
+        this.tags = tags;
+        this.attrs = _extends({}, _defaultAttrs2.default, { class: 'feather feather-' + name });
+      }
+
+      /**
+       * Create an SVG string.
+       * @param {Object} attrs
+       * @returns {string}
+       */
+
+
+      _createClass(Icon, [{
+        key: 'toSvg',
+        value: function toSvg() {
+          var attrs = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : {};
+
+          var combinedAttrs = _extends({}, this.attrs, attrs, { class: (0, _dedupe2.default)(this.attrs.class, attrs.class) });
+
+          return '<svg ' + attrsToString(combinedAttrs) + '>' + this.contents + '</svg>';
+        }
+
+        /**
+         * Return string representation of an `Icon`.
+         *
+         * Added for backward compatibility. If old code expects `feather.icons.<name>`
+         * to be a string, `toString()` will get implicitly called.
+         *
+         * @returns {string}
+         */
+
+      }, {
+        key: 'toString',
+        value: function toString() {
+          return this.contents;
+        }
+      }]);
+
+      return Icon;
+    }();
+
+    /**
+     * Convert attributes object to string of HTML attributes.
+     * @param {Object} attrs
+     * @returns {string}
+     */
+
+
+    function attrsToString(attrs) {
+      return Object.keys(attrs).map(function (key) {
+        return key + '="' + attrs[key] + '"';
+      }).join(' ');
+    }
+
+    exports.default = Icon;
+
+    /***/ }),
+
+    /***/ "./src/icons.js":
+    /*!**********************!*\
+      !*** ./src/icons.js ***!
+      \**********************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+
+    var _icon = __webpack_require__(/*! ./icon */ "./src/icon.js");
+
+    var _icon2 = _interopRequireDefault(_icon);
+
+    var _icons = __webpack_require__(/*! ../dist/icons.json */ "./dist/icons.json");
+
+    var _icons2 = _interopRequireDefault(_icons);
+
+    var _tags = __webpack_require__(/*! ./tags.json */ "./src/tags.json");
+
+    var _tags2 = _interopRequireDefault(_tags);
+
+    function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+    exports.default = Object.keys(_icons2.default).map(function (key) {
+      return new _icon2.default(key, _icons2.default[key], _tags2.default[key]);
+    }).reduce(function (object, icon) {
+      object[icon.name] = icon;
+      return object;
+    }, {});
+
+    /***/ }),
+
+    /***/ "./src/index.js":
+    /*!**********************!*\
+      !*** ./src/index.js ***!
+      \**********************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+
+    var _icons = __webpack_require__(/*! ./icons */ "./src/icons.js");
+
+    var _icons2 = _interopRequireDefault(_icons);
+
+    var _toSvg = __webpack_require__(/*! ./to-svg */ "./src/to-svg.js");
+
+    var _toSvg2 = _interopRequireDefault(_toSvg);
+
+    var _replace = __webpack_require__(/*! ./replace */ "./src/replace.js");
+
+    var _replace2 = _interopRequireDefault(_replace);
+
+    function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+    module.exports = { icons: _icons2.default, toSvg: _toSvg2.default, replace: _replace2.default };
+
+    /***/ }),
+
+    /***/ "./src/replace.js":
+    /*!************************!*\
+      !*** ./src/replace.js ***!
+      \************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+
+    var _extends = Object.assign || function (target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i]; for (var key in source) { if (Object.prototype.hasOwnProperty.call(source, key)) { target[key] = source[key]; } } } return target; }; /* eslint-env browser */
+
+
+    var _dedupe = __webpack_require__(/*! classnames/dedupe */ "./node_modules/classnames/dedupe.js");
+
+    var _dedupe2 = _interopRequireDefault(_dedupe);
+
+    var _icons = __webpack_require__(/*! ./icons */ "./src/icons.js");
+
+    var _icons2 = _interopRequireDefault(_icons);
+
+    function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+    /**
+     * Replace all HTML elements that have a `data-feather` attribute with SVG markup
+     * corresponding to the element's `data-feather` attribute value.
+     * @param {Object} attrs
+     */
+    function replace() {
+      var attrs = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : {};
+
+      if (typeof document === 'undefined') {
+        throw new Error('`feather.replace()` only works in a browser environment.');
+      }
+
+      var elementsToReplace = document.querySelectorAll('[data-feather]');
+
+      Array.from(elementsToReplace).forEach(function (element) {
+        return replaceElement(element, attrs);
+      });
+    }
+
+    /**
+     * Replace a single HTML element with SVG markup
+     * corresponding to the element's `data-feather` attribute value.
+     * @param {HTMLElement} element
+     * @param {Object} attrs
+     */
+    function replaceElement(element) {
+      var attrs = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
+
+      var elementAttrs = getAttrs(element);
+      var name = elementAttrs['data-feather'];
+      delete elementAttrs['data-feather'];
+
+      var svgString = _icons2.default[name].toSvg(_extends({}, attrs, elementAttrs, { class: (0, _dedupe2.default)(attrs.class, elementAttrs.class) }));
+      var svgDocument = new DOMParser().parseFromString(svgString, 'image/svg+xml');
+      var svgElement = svgDocument.querySelector('svg');
+
+      element.parentNode.replaceChild(svgElement, element);
+    }
+
+    /**
+     * Get the attributes of an HTML element.
+     * @param {HTMLElement} element
+     * @returns {Object}
+     */
+    function getAttrs(element) {
+      return Array.from(element.attributes).reduce(function (attrs, attr) {
+        attrs[attr.name] = attr.value;
+        return attrs;
+      }, {});
+    }
+
+    exports.default = replace;
+
+    /***/ }),
+
+    /***/ "./src/tags.json":
+    /*!***********************!*\
+      !*** ./src/tags.json ***!
+      \***********************/
+    /*! exports provided: activity, airplay, alert-circle, alert-octagon, alert-triangle, align-center, align-justify, align-left, align-right, anchor, archive, at-sign, award, aperture, bar-chart, bar-chart-2, battery, battery-charging, bell, bell-off, bluetooth, book-open, book, bookmark, box, briefcase, calendar, camera, cast, circle, clipboard, clock, cloud-drizzle, cloud-lightning, cloud-rain, cloud-snow, cloud, codepen, codesandbox, code, coffee, columns, command, compass, copy, corner-down-left, corner-down-right, corner-left-down, corner-left-up, corner-right-down, corner-right-up, corner-up-left, corner-up-right, cpu, credit-card, crop, crosshair, database, delete, disc, dollar-sign, droplet, edit, edit-2, edit-3, eye, eye-off, external-link, facebook, fast-forward, figma, file-minus, file-plus, file-text, film, filter, flag, folder-minus, folder-plus, folder, framer, frown, gift, git-branch, git-commit, git-merge, git-pull-request, github, gitlab, globe, hard-drive, hash, headphones, heart, help-circle, hexagon, home, image, inbox, instagram, key, layers, layout, life-bouy, link, link-2, linkedin, list, lock, log-in, log-out, mail, map-pin, map, maximize, maximize-2, meh, menu, message-circle, message-square, mic-off, mic, minimize, minimize-2, minus, monitor, moon, more-horizontal, more-vertical, mouse-pointer, move, music, navigation, navigation-2, octagon, package, paperclip, pause, pause-circle, pen-tool, percent, phone-call, phone-forwarded, phone-incoming, phone-missed, phone-off, phone-outgoing, phone, play, pie-chart, play-circle, plus, plus-circle, plus-square, pocket, power, printer, radio, refresh-cw, refresh-ccw, repeat, rewind, rotate-ccw, rotate-cw, rss, save, scissors, search, send, settings, share-2, shield, shield-off, shopping-bag, shopping-cart, shuffle, skip-back, skip-forward, slack, slash, sliders, smartphone, smile, speaker, star, stop-circle, sun, sunrise, sunset, tablet, tag, target, terminal, thermometer, thumbs-down, thumbs-up, toggle-left, toggle-right, tool, trash, trash-2, triangle, truck, tv, twitch, twitter, type, umbrella, unlock, user-check, user-minus, user-plus, user-x, user, users, video-off, video, voicemail, volume, volume-1, volume-2, volume-x, watch, wifi-off, wifi, wind, x-circle, x-octagon, x-square, x, youtube, zap-off, zap, zoom-in, zoom-out, default */
+    /***/ (function(module) {
+
+    module.exports = {"activity":["pulse","health","action","motion"],"airplay":["stream","cast","mirroring"],"alert-circle":["warning","alert","danger"],"alert-octagon":["warning","alert","danger"],"alert-triangle":["warning","alert","danger"],"align-center":["text alignment","center"],"align-justify":["text alignment","justified"],"align-left":["text alignment","left"],"align-right":["text alignment","right"],"anchor":[],"archive":["index","box"],"at-sign":["mention","at","email","message"],"award":["achievement","badge"],"aperture":["camera","photo"],"bar-chart":["statistics","diagram","graph"],"bar-chart-2":["statistics","diagram","graph"],"battery":["power","electricity"],"battery-charging":["power","electricity"],"bell":["alarm","notification","sound"],"bell-off":["alarm","notification","silent"],"bluetooth":["wireless"],"book-open":["read","library"],"book":["read","dictionary","booklet","magazine","library"],"bookmark":["read","clip","marker","tag"],"box":["cube"],"briefcase":["work","bag","baggage","folder"],"calendar":["date"],"camera":["photo"],"cast":["chromecast","airplay"],"circle":["off","zero","record"],"clipboard":["copy"],"clock":["time","watch","alarm"],"cloud-drizzle":["weather","shower"],"cloud-lightning":["weather","bolt"],"cloud-rain":["weather"],"cloud-snow":["weather","blizzard"],"cloud":["weather"],"codepen":["logo"],"codesandbox":["logo"],"code":["source","programming"],"coffee":["drink","cup","mug","tea","cafe","hot","beverage"],"columns":["layout"],"command":["keyboard","cmd","terminal","prompt"],"compass":["navigation","safari","travel","direction"],"copy":["clone","duplicate"],"corner-down-left":["arrow","return"],"corner-down-right":["arrow"],"corner-left-down":["arrow"],"corner-left-up":["arrow"],"corner-right-down":["arrow"],"corner-right-up":["arrow"],"corner-up-left":["arrow"],"corner-up-right":["arrow"],"cpu":["processor","technology"],"credit-card":["purchase","payment","cc"],"crop":["photo","image"],"crosshair":["aim","target"],"database":["storage","memory"],"delete":["remove"],"disc":["album","cd","dvd","music"],"dollar-sign":["currency","money","payment"],"droplet":["water"],"edit":["pencil","change"],"edit-2":["pencil","change"],"edit-3":["pencil","change"],"eye":["view","watch"],"eye-off":["view","watch","hide","hidden"],"external-link":["outbound"],"facebook":["logo","social"],"fast-forward":["music"],"figma":["logo","design","tool"],"file-minus":["delete","remove","erase"],"file-plus":["add","create","new"],"file-text":["data","txt","pdf"],"film":["movie","video"],"filter":["funnel","hopper"],"flag":["report"],"folder-minus":["directory"],"folder-plus":["directory"],"folder":["directory"],"framer":["logo","design","tool"],"frown":["emoji","face","bad","sad","emotion"],"gift":["present","box","birthday","party"],"git-branch":["code","version control"],"git-commit":["code","version control"],"git-merge":["code","version control"],"git-pull-request":["code","version control"],"github":["logo","version control"],"gitlab":["logo","version control"],"globe":["world","browser","language","translate"],"hard-drive":["computer","server","memory","data"],"hash":["hashtag","number","pound"],"headphones":["music","audio","sound"],"heart":["like","love","emotion"],"help-circle":["question mark"],"hexagon":["shape","node.js","logo"],"home":["house","living"],"image":["picture"],"inbox":["email"],"instagram":["logo","camera"],"key":["password","login","authentication","secure"],"layers":["stack"],"layout":["window","webpage"],"life-bouy":["help","life ring","support"],"link":["chain","url"],"link-2":["chain","url"],"linkedin":["logo","social media"],"list":["options"],"lock":["security","password","secure"],"log-in":["sign in","arrow","enter"],"log-out":["sign out","arrow","exit"],"mail":["email","message"],"map-pin":["location","navigation","travel","marker"],"map":["location","navigation","travel"],"maximize":["fullscreen"],"maximize-2":["fullscreen","arrows","expand"],"meh":["emoji","face","neutral","emotion"],"menu":["bars","navigation","hamburger"],"message-circle":["comment","chat"],"message-square":["comment","chat"],"mic-off":["record","sound","mute"],"mic":["record","sound","listen"],"minimize":["exit fullscreen","close"],"minimize-2":["exit fullscreen","arrows","close"],"minus":["subtract"],"monitor":["tv","screen","display"],"moon":["dark","night"],"more-horizontal":["ellipsis"],"more-vertical":["ellipsis"],"mouse-pointer":["arrow","cursor"],"move":["arrows"],"music":["note"],"navigation":["location","travel"],"navigation-2":["location","travel"],"octagon":["stop"],"package":["box","container"],"paperclip":["attachment"],"pause":["music","stop"],"pause-circle":["music","audio","stop"],"pen-tool":["vector","drawing"],"percent":["discount"],"phone-call":["ring"],"phone-forwarded":["call"],"phone-incoming":["call"],"phone-missed":["call"],"phone-off":["call","mute"],"phone-outgoing":["call"],"phone":["call"],"play":["music","start"],"pie-chart":["statistics","diagram"],"play-circle":["music","start"],"plus":["add","new"],"plus-circle":["add","new"],"plus-square":["add","new"],"pocket":["logo","save"],"power":["on","off"],"printer":["fax","office","device"],"radio":["signal"],"refresh-cw":["synchronise","arrows"],"refresh-ccw":["arrows"],"repeat":["loop","arrows"],"rewind":["music"],"rotate-ccw":["arrow"],"rotate-cw":["arrow"],"rss":["feed","subscribe"],"save":["floppy disk"],"scissors":["cut"],"search":["find","magnifier","magnifying glass"],"send":["message","mail","email","paper airplane","paper aeroplane"],"settings":["cog","edit","gear","preferences"],"share-2":["network","connections"],"shield":["security","secure"],"shield-off":["security","insecure"],"shopping-bag":["ecommerce","cart","purchase","store"],"shopping-cart":["ecommerce","cart","purchase","store"],"shuffle":["music"],"skip-back":["music"],"skip-forward":["music"],"slack":["logo"],"slash":["ban","no"],"sliders":["settings","controls"],"smartphone":["cellphone","device"],"smile":["emoji","face","happy","good","emotion"],"speaker":["audio","music"],"star":["bookmark","favorite","like"],"stop-circle":["media","music"],"sun":["brightness","weather","light"],"sunrise":["weather","time","morning","day"],"sunset":["weather","time","evening","night"],"tablet":["device"],"tag":["label"],"target":["logo","bullseye"],"terminal":["code","command line","prompt"],"thermometer":["temperature","celsius","fahrenheit","weather"],"thumbs-down":["dislike","bad","emotion"],"thumbs-up":["like","good","emotion"],"toggle-left":["on","off","switch"],"toggle-right":["on","off","switch"],"tool":["settings","spanner"],"trash":["garbage","delete","remove","bin"],"trash-2":["garbage","delete","remove","bin"],"triangle":["delta"],"truck":["delivery","van","shipping","transport","lorry"],"tv":["television","stream"],"twitch":["logo"],"twitter":["logo","social"],"type":["text"],"umbrella":["rain","weather"],"unlock":["security"],"user-check":["followed","subscribed"],"user-minus":["delete","remove","unfollow","unsubscribe"],"user-plus":["new","add","create","follow","subscribe"],"user-x":["delete","remove","unfollow","unsubscribe","unavailable"],"user":["person","account"],"users":["group"],"video-off":["camera","movie","film"],"video":["camera","movie","film"],"voicemail":["phone"],"volume":["music","sound","mute"],"volume-1":["music","sound"],"volume-2":["music","sound"],"volume-x":["music","sound","mute"],"watch":["clock","time"],"wifi-off":["disabled"],"wifi":["connection","signal","wireless"],"wind":["weather","air"],"x-circle":["cancel","close","delete","remove","times","clear"],"x-octagon":["delete","stop","alert","warning","times","clear"],"x-square":["cancel","close","delete","remove","times","clear"],"x":["cancel","close","delete","remove","times","clear"],"youtube":["logo","video","play"],"zap-off":["flash","camera","lightning"],"zap":["flash","camera","lightning"],"zoom-in":["magnifying glass"],"zoom-out":["magnifying glass"]};
+
+    /***/ }),
+
+    /***/ "./src/to-svg.js":
+    /*!***********************!*\
+      !*** ./src/to-svg.js ***!
+      \***********************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+
+    Object.defineProperty(exports, "__esModule", {
+      value: true
+    });
+
+    var _icons = __webpack_require__(/*! ./icons */ "./src/icons.js");
+
+    var _icons2 = _interopRequireDefault(_icons);
+
+    function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+    /**
+     * Create an SVG string.
+     * @deprecated
+     * @param {string} name
+     * @param {Object} attrs
+     * @returns {string}
+     */
+    function toSvg(name) {
+      var attrs = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
+
+      console.warn('feather.toSvg() is deprecated. Please use feather.icons[name].toSvg() instead.');
+
+      if (!name) {
+        throw new Error('The required `key` (icon name) parameter is missing.');
+      }
+
+      if (!_icons2.default[name]) {
+        throw new Error('No icon matching \'' + name + '\'. See the complete list of icons at https://feathericons.com');
+      }
+
+      return _icons2.default[name].toSvg(attrs);
+    }
+
+    exports.default = toSvg;
+
+    /***/ }),
+
+    /***/ 0:
+    /*!**************************************************!*\
+      !*** multi core-js/es/array/from ./src/index.js ***!
+      \**************************************************/
+    /*! no static exports found */
+    /***/ (function(module, exports, __webpack_require__) {
+
+    __webpack_require__(/*! core-js/es/array/from */"./node_modules/core-js/es/array/from.js");
+    module.exports = __webpack_require__(/*! /home/travis/build/feathericons/feather/src/index.js */"./src/index.js");
+
+
+    /***/ })
+
+    /******/ });
+    });
+    //# sourceMappingURL=feather.js.map
+    });
+
+    var feather$1 = unwrapExports(feather);
+
+    /* src/Icon.svelte generated by Svelte v3.18.1 */
+
+    function create_fragment$c(ctx) {
+    	let html_tag;
+
+    	let raw_value = (feather$1.icons[/*icon*/ ctx[0]]
+    	? feather$1.icons[/*icon*/ ctx[0]].toSvg({
+    			class: /*$$props*/ ctx[2].class,
+    			.../*attr*/ ctx[1]
+    		})
+    	: "") + "";
+
+    	const block = {
+    		c: function create() {
+    			html_tag = new HtmlTag(raw_value, null);
+    		},
+    		l: function claim(nodes) {
+    			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
+    		},
+    		m: function mount(target, anchor) {
+    			html_tag.m(target, anchor);
+    		},
+    		p: function update(ctx, [dirty]) {
+    			if (dirty & /*icon, $$props, attr*/ 7 && raw_value !== (raw_value = (feather$1.icons[/*icon*/ ctx[0]]
+    			? feather$1.icons[/*icon*/ ctx[0]].toSvg({
+    					class: /*$$props*/ ctx[2].class,
+    					.../*attr*/ ctx[1]
+    				})
+    			: "") + "")) html_tag.p(raw_value);
+    		},
+    		i: noop,
+    		o: noop,
+    		d: function destroy(detaching) {
+    			if (detaching) html_tag.d();
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_fragment$c.name,
+    		type: "component",
+    		source: "",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    function instance$c($$self, $$props, $$invalidate) {
+    	let { icon = "square" } = $$props;
+    	let { attr = {} } = $$props;
+
+    	$$self.$set = $$new_props => {
+    		$$invalidate(2, $$props = assign(assign({}, $$props), exclude_internal_props($$new_props)));
+    		if ("icon" in $$new_props) $$invalidate(0, icon = $$new_props.icon);
+    		if ("attr" in $$new_props) $$invalidate(1, attr = $$new_props.attr);
+    	};
+
+    	$$self.$capture_state = () => {
+    		return { icon, attr };
+    	};
+
+    	$$self.$inject_state = $$new_props => {
+    		$$invalidate(2, $$props = assign(assign({}, $$props), $$new_props));
+    		if ("icon" in $$props) $$invalidate(0, icon = $$new_props.icon);
+    		if ("attr" in $$props) $$invalidate(1, attr = $$new_props.attr);
+    	};
+
+    	$$props = exclude_internal_props($$props);
+    	return [icon, attr, $$props];
+    }
+
+    class Icon extends SvelteComponentDev {
+    	constructor(options) {
+    		super(options);
+    		init(this, options, instance$c, create_fragment$c, safe_not_equal, { icon: 0, attr: 1 });
+
+    		dispatch_dev("SvelteRegisterComponent", {
+    			component: this,
+    			tagName: "Icon",
+    			options,
+    			id: create_fragment$c.name
+    		});
+    	}
+
+    	get icon() {
+    		throw new Error("<Icon>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	set icon(value) {
+    		throw new Error("<Icon>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	get attr() {
+    		throw new Error("<Icon>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	set attr(value) {
+    		throw new Error("<Icon>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+    }
+
+    /* src/components/Side.svelte generated by Svelte v3.18.1 */
+    const file$9 = "src/components/Side.svelte";
+
+    function create_fragment$d(ctx) {
+    	let div4;
+    	let ul;
+    	let li0;
+    	let a0;
+    	let span0;
+    	let t0;
+    	let div0;
+    	let t2;
+    	let li1;
+    	let a1;
+    	let span1;
+    	let t3;
+    	let div1;
+    	let t5;
+    	let li2;
+    	let a2;
+    	let span2;
+    	let t6;
+    	let div2;
+    	let t8;
+    	let li3;
+    	let a3;
+    	let span3;
+    	let t9;
+    	let div3;
+    	let current;
+    	const icon0 = new Icon({ props: { icon: "home" }, $$inline: true });
+
+    	const icon1 = new Icon({
+    			props: { icon: "server" },
+    			$$inline: true
+    		});
+
+    	const icon2 = new Icon({
+    			props: { icon: "folder" },
+    			$$inline: true
+    		});
+
+    	const icon3 = new Icon({
+    			props: { icon: "user-check" },
+    			$$inline: true
+    		});
+
+    	const block = {
+    		c: function create() {
+    			div4 = element("div");
+    			ul = element("ul");
+    			li0 = element("li");
+    			a0 = element("a");
+    			span0 = element("span");
+    			create_component(icon0.$$.fragment);
+    			t0 = space();
+    			div0 = element("div");
+    			div0.textContent = "Home";
+    			t2 = space();
+    			li1 = element("li");
+    			a1 = element("a");
+    			span1 = element("span");
+    			create_component(icon1.$$.fragment);
+    			t3 = space();
+    			div1 = element("div");
+    			div1.textContent = "Problems";
+    			t5 = space();
+    			li2 = element("li");
+    			a2 = element("a");
+    			span2 = element("span");
+    			create_component(icon2.$$.fragment);
+    			t6 = space();
+    			div2 = element("div");
+    			div2.textContent = "Tests";
+    			t8 = space();
+    			li3 = element("li");
+    			a3 = element("a");
+    			span3 = element("span");
+    			create_component(icon3.$$.fragment);
+    			t9 = space();
+    			div3 = element("div");
+    			div3.textContent = "Results";
+    			attr_dev(span0, "class", "icon svelte-4j4wa5");
+    			add_location(span0, file$9, 68, 16, 2839);
+    			attr_dev(div0, "class", "name svelte-4j4wa5");
+    			add_location(div0, file$9, 71, 17, 2939);
+    			attr_dev(a0, "href", "/admin");
+    			attr_dev(a0, "class", "active svelte-4j4wa5");
+    			add_location(a0, file$9, 67, 16, 2790);
+    			attr_dev(li0, "class", "svelte-4j4wa5");
+    			add_location(li0, file$9, 67, 12, 2786);
+    			attr_dev(span1, "class", "icon svelte-4j4wa5");
+    			add_location(span1, file$9, 75, 17, 3066);
+    			attr_dev(div1, "class", "name svelte-4j4wa5");
+    			add_location(div1, file$9, 78, 17, 3168);
+    			attr_dev(a1, "href", "/showproblems");
+    			attr_dev(a1, "class", "svelte-4j4wa5");
+    			add_location(a1, file$9, 74, 16, 3024);
+    			attr_dev(li1, "class", "svelte-4j4wa5");
+    			add_location(li1, file$9, 74, 12, 3020);
+    			attr_dev(span2, "class", "icon svelte-4j4wa5");
+    			add_location(span2, file$9, 82, 16, 3298);
+    			attr_dev(div2, "class", "name svelte-4j4wa5");
+    			add_location(div2, file$9, 85, 17, 3400);
+    			attr_dev(a2, "href", "/showtests");
+    			attr_dev(a2, "class", "svelte-4j4wa5");
+    			add_location(a2, file$9, 81, 16, 3260);
+    			attr_dev(li2, "class", "svelte-4j4wa5");
+    			add_location(li2, file$9, 81, 12, 3256);
+    			attr_dev(span3, "class", "icon svelte-4j4wa5");
+    			add_location(span3, file$9, 89, 17, 3528);
+    			attr_dev(div3, "class", "name svelte-4j4wa5");
+    			add_location(div3, file$9, 92, 17, 3634);
+    			attr_dev(a3, "href", "/showresults");
+    			attr_dev(a3, "class", "svelte-4j4wa5");
+    			add_location(a3, file$9, 88, 16, 3487);
+    			attr_dev(li3, "class", "svelte-4j4wa5");
+    			add_location(li3, file$9, 88, 12, 3483);
+    			attr_dev(ul, "class", "svelte-4j4wa5");
+    			add_location(ul, file$9, 66, 8, 2769);
+    			attr_dev(div4, "class", "sidebar svelte-4j4wa5");
+    			add_location(div4, file$9, 65, 4, 2739);
+    		},
+    		l: function claim(nodes) {
+    			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, div4, anchor);
+    			append_dev(div4, ul);
+    			append_dev(ul, li0);
+    			append_dev(li0, a0);
+    			append_dev(a0, span0);
+    			mount_component(icon0, span0, null);
+    			append_dev(a0, t0);
+    			append_dev(a0, div0);
+    			append_dev(ul, t2);
+    			append_dev(ul, li1);
+    			append_dev(li1, a1);
+    			append_dev(a1, span1);
+    			mount_component(icon1, span1, null);
+    			append_dev(a1, t3);
+    			append_dev(a1, div1);
+    			append_dev(ul, t5);
+    			append_dev(ul, li2);
+    			append_dev(li2, a2);
+    			append_dev(a2, span2);
+    			mount_component(icon2, span2, null);
+    			append_dev(a2, t6);
+    			append_dev(a2, div2);
+    			append_dev(ul, t8);
+    			append_dev(ul, li3);
+    			append_dev(li3, a3);
+    			append_dev(a3, span3);
+    			mount_component(icon3, span3, null);
+    			append_dev(a3, t9);
+    			append_dev(a3, div3);
+    			current = true;
+    		},
+    		p: noop,
+    		i: function intro(local) {
+    			if (current) return;
+    			transition_in(icon0.$$.fragment, local);
+    			transition_in(icon1.$$.fragment, local);
+    			transition_in(icon2.$$.fragment, local);
+    			transition_in(icon3.$$.fragment, local);
+    			current = true;
+    		},
+    		o: function outro(local) {
+    			transition_out(icon0.$$.fragment, local);
+    			transition_out(icon1.$$.fragment, local);
+    			transition_out(icon2.$$.fragment, local);
+    			transition_out(icon3.$$.fragment, local);
+    			current = false;
+    		},
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(div4);
+    			destroy_component(icon0);
+    			destroy_component(icon1);
+    			destroy_component(icon2);
+    			destroy_component(icon3);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_fragment$d.name,
+    		type: "component",
+    		source: "",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    class Side extends SvelteComponentDev {
+    	constructor(options) {
+    		super(options);
+    		init(this, options, null, create_fragment$d, safe_not_equal, {});
+
+    		dispatch_dev("SvelteRegisterComponent", {
+    			component: this,
+    			tagName: "Side",
     			options,
     			id: create_fragment$d.name
     		});
     	}
     }
 
-    /* src/routes/Admin.svelte generated by Svelte v3.18.1 */
-    const file$b = "src/routes/Admin.svelte";
+    /* src/routes/pubnub.svelte generated by Svelte v3.18.1 */
+    const file$a = "src/routes/pubnub.svelte";
 
     function get_each_context$2(ctx, list, i) {
     	const child_ctx = ctx.slice();
-    	child_ctx[23] = list[i];
+    	child_ctx[15] = list[i];
     	return child_ctx;
     }
 
     function get_each_context_1(ctx, list, i) {
     	const child_ctx = ctx.slice();
-    	child_ctx[26] = list[i];
+    	child_ctx[18] = list[i];
     	return child_ctx;
     }
 
-    function get_each_context_2(ctx, list, i) {
-    	const child_ctx = ctx.slice();
-    	child_ctx[31] = list[i];
-    	return child_ctx;
-    }
-
-    function get_each_context_3(ctx, list, i) {
-    	const child_ctx = ctx.slice();
-    	child_ctx[34] = list[i];
-    	return child_ctx;
-    }
-
-    // (215:12) {:catch err}
-    function create_catch_block_1(ctx) {
-    	let t0;
-    	let t1_value = /*err*/ ctx[30] + "";
-    	let t1;
-
-    	const block = {
-    		c: function create() {
-    			t0 = text("Error: ");
-    			t1 = text(t1_value);
-    		},
-    		m: function mount(target, anchor) {
-    			insert_dev(target, t0, anchor);
-    			insert_dev(target, t1, anchor);
-    		},
-    		p: function update(ctx, dirty) {
-    			if (dirty[0] & /*$Test*/ 32 && t1_value !== (t1_value = /*err*/ ctx[30] + "")) set_data_dev(t1, t1_value);
-    		},
-    		d: function destroy(detaching) {
-    			if (detaching) detach_dev(t0);
-    			if (detaching) detach_dev(t1);
-    		}
-    	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_catch_block_1.name,
-    		type: "catch",
-    		source: "(215:12) {:catch err}",
-    		ctx
-    	});
-
-    	return block;
-    }
-
-    // (207:12) {:then result}
-    function create_then_block_1(ctx) {
-    	let each_1_anchor;
-    	let each_value_3 = /*result*/ ctx[29].data.allTests;
-    	let each_blocks = [];
-
-    	for (let i = 0; i < each_value_3.length; i += 1) {
-    		each_blocks[i] = create_each_block_3(get_each_context_3(ctx, each_value_3, i));
-    	}
-
-    	const block = {
-    		c: function create() {
-    			for (let i = 0; i < each_blocks.length; i += 1) {
-    				each_blocks[i].c();
-    			}
-
-    			each_1_anchor = empty();
-    		},
-    		m: function mount(target, anchor) {
-    			for (let i = 0; i < each_blocks.length; i += 1) {
-    				each_blocks[i].m(target, anchor);
-    			}
-
-    			insert_dev(target, each_1_anchor, anchor);
-    		},
-    		p: function update(ctx, dirty) {
-    			if (dirty[0] & /*$Test*/ 32) {
-    				each_value_3 = /*result*/ ctx[29].data.allTests;
-    				let i;
-
-    				for (i = 0; i < each_value_3.length; i += 1) {
-    					const child_ctx = get_each_context_3(ctx, each_value_3, i);
-
-    					if (each_blocks[i]) {
-    						each_blocks[i].p(child_ctx, dirty);
-    					} else {
-    						each_blocks[i] = create_each_block_3(child_ctx);
-    						each_blocks[i].c();
-    						each_blocks[i].m(each_1_anchor.parentNode, each_1_anchor);
-    					}
-    				}
-
-    				for (; i < each_blocks.length; i += 1) {
-    					each_blocks[i].d(1);
-    				}
-
-    				each_blocks.length = each_value_3.length;
-    			}
-    		},
-    		d: function destroy(detaching) {
-    			destroy_each(each_blocks, detaching);
-    			if (detaching) detach_dev(each_1_anchor);
-    		}
-    	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_then_block_1.name,
-    		type: "then",
-    		source: "(207:12) {:then result}",
-    		ctx
-    	});
-
-    	return block;
-    }
-
-    // (208:14) {#each result.data.allTests as test}
-    function create_each_block_3(ctx) {
-    	let li;
-    	let a;
-    	let t0_value = /*test*/ ctx[34].testName + "";
-    	let t0;
-    	let a_href_value;
-    	let t1;
-
-    	const block = {
-    		c: function create() {
-    			li = element("li");
-    			a = element("a");
-    			t0 = text(t0_value);
-    			t1 = space();
-    			attr_dev(a, "href", a_href_value = "http://localhost:5000/test/" + /*test*/ ctx[34].id);
-    			add_location(a, file$b, 209, 18, 7370);
-    			attr_dev(li, "class", "prob svelte-r6lcc4");
-    			add_location(li, file$b, 208, 16, 7334);
-    		},
-    		m: function mount(target, anchor) {
-    			insert_dev(target, li, anchor);
-    			append_dev(li, a);
-    			append_dev(a, t0);
-    			append_dev(li, t1);
-    		},
-    		p: function update(ctx, dirty) {
-    			if (dirty[0] & /*$Test*/ 32 && t0_value !== (t0_value = /*test*/ ctx[34].testName + "")) set_data_dev(t0, t0_value);
-
-    			if (dirty[0] & /*$Test*/ 32 && a_href_value !== (a_href_value = "http://localhost:5000/test/" + /*test*/ ctx[34].id)) {
-    				attr_dev(a, "href", a_href_value);
-    			}
-    		},
-    		d: function destroy(detaching) {
-    			if (detaching) detach_dev(li);
-    		}
-    	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_each_block_3.name,
-    		type: "each",
-    		source: "(208:14) {#each result.data.allTests as test}",
-    		ctx
-    	});
-
-    	return block;
-    }
-
-    // (205:26)                Loading...             {:then result}
-    function create_pending_block_1(ctx) {
-    	let t;
-
-    	const block = {
-    		c: function create() {
-    			t = text("Loading...");
-    		},
-    		m: function mount(target, anchor) {
-    			insert_dev(target, t, anchor);
-    		},
-    		p: noop,
-    		d: function destroy(detaching) {
-    			if (detaching) detach_dev(t);
-    		}
-    	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_pending_block_1.name,
-    		type: "pending",
-    		source: "(205:26)                Loading...             {:then result}",
-    		ctx
-    	});
-
-    	return block;
-    }
-
-    // (221:10) <Modal>
-    function create_default_slot_1(ctx) {
-    	let current;
-
-    	const testmodal = new TestModal({
-    			props: { changeCheck: /*handleTestAdd*/ ctx[10] },
-    			$$inline: true
-    		});
-
-    	const block = {
-    		c: function create() {
-    			create_component(testmodal.$$.fragment);
-    		},
-    		m: function mount(target, anchor) {
-    			mount_component(testmodal, target, anchor);
-    			current = true;
-    		},
-    		p: noop,
-    		i: function intro(local) {
-    			if (current) return;
-    			transition_in(testmodal.$$.fragment, local);
-    			current = true;
-    		},
-    		o: function outro(local) {
-    			transition_out(testmodal.$$.fragment, local);
-    			current = false;
-    		},
-    		d: function destroy(detaching) {
-    			destroy_component(testmodal, detaching);
-    		}
-    	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_default_slot_1.name,
-    		type: "slot",
-    		source: "(221:10) <Modal>",
-    		ctx
-    	});
-
-    	return block;
-    }
-
-    // (242:12) {:catch err}
-    function create_catch_block$1(ctx) {
-    	let t0;
-    	let t1_value = /*err*/ ctx[30] + "";
-    	let t1;
-
-    	const block = {
-    		c: function create() {
-    			t0 = text("Error: ");
-    			t1 = text(t1_value);
-    		},
-    		m: function mount(target, anchor) {
-    			insert_dev(target, t0, anchor);
-    			insert_dev(target, t1, anchor);
-    		},
-    		p: function update(ctx, dirty) {
-    			if (dirty[0] & /*$Problem*/ 64 && t1_value !== (t1_value = /*err*/ ctx[30] + "")) set_data_dev(t1, t1_value);
-    		},
-    		d: function destroy(detaching) {
-    			if (detaching) detach_dev(t0);
-    			if (detaching) detach_dev(t1);
-    		}
-    	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_catch_block$1.name,
-    		type: "catch",
-    		source: "(242:12) {:catch err}",
-    		ctx
-    	});
-
-    	return block;
-    }
-
-    // (234:12) {:then result}
-    function create_then_block$1(ctx) {
-    	let each_1_anchor;
-    	let each_value_2 = /*result*/ ctx[29].data.allProblems;
-    	let each_blocks = [];
-
-    	for (let i = 0; i < each_value_2.length; i += 1) {
-    		each_blocks[i] = create_each_block_2(get_each_context_2(ctx, each_value_2, i));
-    	}
-
-    	const block = {
-    		c: function create() {
-    			for (let i = 0; i < each_blocks.length; i += 1) {
-    				each_blocks[i].c();
-    			}
-
-    			each_1_anchor = empty();
-    		},
-    		m: function mount(target, anchor) {
-    			for (let i = 0; i < each_blocks.length; i += 1) {
-    				each_blocks[i].m(target, anchor);
-    			}
-
-    			insert_dev(target, each_1_anchor, anchor);
-    		},
-    		p: function update(ctx, dirty) {
-    			if (dirty[0] & /*$Problem*/ 64) {
-    				each_value_2 = /*result*/ ctx[29].data.allProblems;
-    				let i;
-
-    				for (i = 0; i < each_value_2.length; i += 1) {
-    					const child_ctx = get_each_context_2(ctx, each_value_2, i);
-
-    					if (each_blocks[i]) {
-    						each_blocks[i].p(child_ctx, dirty);
-    					} else {
-    						each_blocks[i] = create_each_block_2(child_ctx);
-    						each_blocks[i].c();
-    						each_blocks[i].m(each_1_anchor.parentNode, each_1_anchor);
-    					}
-    				}
-
-    				for (; i < each_blocks.length; i += 1) {
-    					each_blocks[i].d(1);
-    				}
-
-    				each_blocks.length = each_value_2.length;
-    			}
-    		},
-    		d: function destroy(detaching) {
-    			destroy_each(each_blocks, detaching);
-    			if (detaching) detach_dev(each_1_anchor);
-    		}
-    	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_then_block$1.name,
-    		type: "then",
-    		source: "(234:12) {:then result}",
-    		ctx
-    	});
-
-    	return block;
-    }
-
-    // (235:14) {#each result.data.allProblems as prob}
-    function create_each_block_2(ctx) {
-    	let li;
-    	let a;
-    	let t0_value = /*prob*/ ctx[31].problemName + "";
-    	let t0;
-    	let a_href_value;
-    	let t1;
-
-    	const block = {
-    		c: function create() {
-    			li = element("li");
-    			a = element("a");
-    			t0 = text(t0_value);
-    			t1 = space();
-    			attr_dev(a, "href", a_href_value = "http://localhost:5000/problem/" + /*prob*/ ctx[31].id);
-    			add_location(a, file$b, 236, 18, 8205);
-    			attr_dev(li, "class", "prob svelte-r6lcc4");
-    			add_location(li, file$b, 235, 16, 8169);
-    		},
-    		m: function mount(target, anchor) {
-    			insert_dev(target, li, anchor);
-    			append_dev(li, a);
-    			append_dev(a, t0);
-    			append_dev(li, t1);
-    		},
-    		p: function update(ctx, dirty) {
-    			if (dirty[0] & /*$Problem*/ 64 && t0_value !== (t0_value = /*prob*/ ctx[31].problemName + "")) set_data_dev(t0, t0_value);
-
-    			if (dirty[0] & /*$Problem*/ 64 && a_href_value !== (a_href_value = "http://localhost:5000/problem/" + /*prob*/ ctx[31].id)) {
-    				attr_dev(a, "href", a_href_value);
-    			}
-    		},
-    		d: function destroy(detaching) {
-    			if (detaching) detach_dev(li);
-    		}
-    	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_each_block_2.name,
-    		type: "each",
-    		source: "(235:14) {#each result.data.allProblems as prob}",
-    		ctx
-    	});
-
-    	return block;
-    }
-
-    // (232:29)                Loading...             {:then result}
-    function create_pending_block$1(ctx) {
-    	let t;
-
-    	const block = {
-    		c: function create() {
-    			t = text("Loading...");
-    		},
-    		m: function mount(target, anchor) {
-    			insert_dev(target, t, anchor);
-    		},
-    		p: noop,
-    		d: function destroy(detaching) {
-    			if (detaching) detach_dev(t);
-    		}
-    	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_pending_block$1.name,
-    		type: "pending",
-    		source: "(232:29)                Loading...             {:then result}",
-    		ctx
-    	});
-
-    	return block;
-    }
-
-    // (248:10) <Modal>
-    function create_default_slot$1(ctx) {
-    	let current;
-
-    	const content = new ProblemModal({
-    			props: { changeCheck: /*handleProblemAdd*/ ctx[9] },
-    			$$inline: true
-    		});
-
-    	const block = {
-    		c: function create() {
-    			create_component(content.$$.fragment);
-    		},
-    		m: function mount(target, anchor) {
-    			mount_component(content, target, anchor);
-    			current = true;
-    		},
-    		p: noop,
-    		i: function intro(local) {
-    			if (current) return;
-    			transition_in(content.$$.fragment, local);
-    			current = true;
-    		},
-    		o: function outro(local) {
-    			transition_out(content.$$.fragment, local);
-    			current = false;
-    		},
-    		d: function destroy(detaching) {
-    			destroy_component(content, detaching);
-    		}
-    	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_default_slot$1.name,
-    		type: "slot",
-    		source: "(248:10) <Modal>",
-    		ctx
-    	});
-
-    	return block;
-    }
-
-    // (376:4) {:else}
+    // (289:2) {:else}
     function create_else_block$1(ctx) {
     	let div3;
     	let div2;
@@ -37730,20 +39981,20 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			div1 = element("div");
     			h4 = element("h4");
     			h4.textContent = "User Chat";
-    			attr_dev(img, "class", "chat-notification-logo svelte-r6lcc4");
+    			attr_dev(img, "class", "chat-notification-logo svelte-1ue8m0r");
     			if (img.src !== (img_src_value = "https://img.icons8.com/cotton/50/000000/filled-chat.png")) attr_dev(img, "src", img_src_value);
     			attr_dev(img, "alt", "ChitChat Logo");
-    			add_location(img, file$b, 379, 12, 12697);
-    			attr_dev(div0, "class", "chat-notification-logo-wrapper svelte-r6lcc4");
-    			add_location(div0, file$b, 378, 10, 12640);
-    			attr_dev(h4, "class", "chat-notification-title svelte-r6lcc4");
-    			add_location(h4, file$b, 385, 12, 12939);
-    			attr_dev(div1, "class", "chat-notification-content svelte-r6lcc4");
-    			add_location(div1, file$b, 384, 10, 12887);
-    			attr_dev(div2, "class", "chat-notification svelte-r6lcc4");
-    			add_location(div2, file$b, 377, 8, 12598);
-    			attr_dev(div3, "class", "btm svelte-r6lcc4");
-    			add_location(div3, file$b, 376, 6, 12554);
+    			add_location(img, file$a, 292, 10, 9944);
+    			attr_dev(div0, "class", "chat-notification-logo-wrapper svelte-1ue8m0r");
+    			add_location(div0, file$a, 291, 8, 9889);
+    			attr_dev(h4, "class", "chat-notification-title svelte-1ue8m0r");
+    			add_location(h4, file$a, 298, 10, 10174);
+    			attr_dev(div1, "class", "chat-notification-content svelte-1ue8m0r");
+    			add_location(div1, file$a, 297, 8, 10124);
+    			attr_dev(div2, "class", "chat-notification svelte-1ue8m0r");
+    			add_location(div2, file$a, 290, 6, 9849);
+    			attr_dev(div3, "class", "btm svelte-1ue8m0r");
+    			add_location(div3, file$a, 289, 4, 9807);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div3, anchor);
@@ -37753,7 +40004,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			append_dev(div2, t0);
     			append_dev(div2, div1);
     			append_dev(div1, h4);
-    			dispose = listen_dev(div3, "click", /*joined*/ ctx[11], false, false, false);
+    			dispose = listen_dev(div3, "click", /*joined*/ ctx[5], false, false, false);
     		},
     		p: noop,
     		d: function destroy(detaching) {
@@ -37766,14 +40017,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_else_block$1.name,
     		type: "else",
-    		source: "(376:4) {:else}",
+    		source: "(289:2) {:else}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (257:4) {#if hasJoinedChat}
+    // (171:2) {#if hasJoinedChat}
     function create_if_block$3(ctx) {
     	let div15;
     	let div3;
@@ -37879,69 +40130,69 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			div17 = element("div");
     			div16 = element("div");
     			img = element("img");
-    			add_location(p0, file$b, 267, 14, 9035);
+    			add_location(p0, file$a, 181, 12, 6492);
     			attr_dev(div0, "class", "flex");
-    			add_location(div0, file$b, 265, 12, 9001);
-    			attr_dev(div1, "class", "py-2 px-3 bg-grey-lighter flex flex-row justify-between\n            items-center");
-    			add_location(div1, file$b, 262, 10, 8882);
+    			add_location(div0, file$a, 179, 10, 6460);
+    			attr_dev(div1, "class", "py-2 px-3 bg-grey-lighter flex flex-row justify-between\n          items-center");
+    			add_location(div1, file$a, 176, 8, 6347);
     			attr_dev(div2, "class", "bg-grey-lighter flex-1 overflow-auto");
-    			add_location(div2, file$b, 272, 10, 9129);
+    			add_location(div2, file$a, 186, 8, 6578);
     			attr_dev(div3, "class", "w-1/3 border flex flex-col");
-    			add_location(div3, file$b, 259, 8, 8804);
+    			add_location(div3, file$a, 173, 6, 6273);
     			attr_dev(p1, "class", "text-grey-darkest");
-    			add_location(p1, file$b, 303, 16, 10120);
+    			add_location(p1, file$a, 217, 14, 7523);
     			attr_dev(div4, "class", "flex items-bottom justify-between");
-    			add_location(div4, file$b, 302, 14, 10056);
+    			add_location(div4, file$a, 216, 12, 7461);
     			attr_dev(p2, "class", "text-grey-dark mt-1 text-sm");
-    			add_location(p2, file$b, 305, 14, 10202);
+    			add_location(p2, file$a, 219, 12, 7601);
     			attr_dev(div5, "class", "ml-4 flex-1 border-b border-grey-lighter py-4");
-    			add_location(div5, file$b, 301, 12, 9982);
-    			attr_dev(div6, "class", "px-3 flex-row items-center bg-grey-light cursor-pointer\n            rounded-lg");
-    			add_location(div6, file$b, 298, 10, 9865);
+    			add_location(div5, file$a, 215, 10, 7389);
+    			attr_dev(div6, "class", "px-3 flex-row items-center bg-grey-light cursor-pointer\n          rounded-lg");
+    			add_location(div6, file$a, 212, 8, 7278);
     			attr_dev(p3, "class", "text-grey-darkest");
-    			add_location(p3, file$b, 317, 20, 10742);
+    			add_location(p3, file$a, 231, 18, 8119);
     			attr_dev(div7, "class", "flex items-bottom justify-between");
-    			add_location(div7, file$b, 316, 18, 10674);
+    			add_location(div7, file$a, 230, 16, 8053);
     			attr_dev(p4, "class", "text-grey-dark mt-1 text-sm");
-    			add_location(p4, file$b, 320, 18, 10825);
+    			add_location(p4, file$a, 234, 16, 8198);
     			attr_dev(div8, "class", "ml-4 flex-1 border-b border-grey-lighter py-4");
-    			add_location(div8, file$b, 315, 16, 10596);
+    			add_location(div8, file$a, 229, 14, 7977);
     			attr_dev(div9, "class", "flex-1 overflow-auto");
-    			add_location(div9, file$b, 314, 14, 10545);
+    			add_location(div9, file$a, 228, 12, 7928);
     			attr_dev(div10, "class", "message-form");
-    			add_location(div10, file$b, 313, 12, 10504);
+    			add_location(div10, file$a, 227, 10, 7889);
     			attr_dev(div11, "class", "container mx-auto overflow-auto margin-bottom:10%;");
     			set_style(div11, "bottom", "120px");
     			set_style(div11, "right", "55px");
     			set_style(div11, "height", "380px");
     			set_style(div11, "width", "390px");
-    			add_location(div11, file$b, 310, 10, 10337);
+    			add_location(div11, file$a, 224, 8, 7728);
     			attr_dev(input, "type", "search");
     			attr_dev(input, "name", "serch");
     			attr_dev(input, "placeholder", "Type Message and Press Enter");
-    			attr_dev(input, "class", "bg-white h-10 px-5 pr-10 rounded-full text-sm\n                  focus:outline-none svelte-r6lcc4");
-    			add_location(input, file$b, 344, 16, 11719);
-    			add_location(form, file$b, 342, 14, 11610);
+    			attr_dev(input, "class", "bg-white h-10 px-5 pr-10 rounded-full text-sm\n                focus:outline-none svelte-1ue8m0r");
+    			add_location(input, file$a, 257, 14, 9024);
+    			add_location(form, file$a, 256, 12, 8943);
     			attr_dev(div12, "class", "relative text-gray-600");
-    			add_location(div12, file$b, 341, 12, 11559);
+    			add_location(div12, file$a, 255, 10, 8894);
     			attr_dev(div13, "class", "container block");
     			set_style(div13, "position", "absolute");
     			set_style(div13, "bottom", "0");
-    			add_location(div13, file$b, 340, 10, 11477);
+    			add_location(div13, file$a, 254, 8, 8814);
     			attr_dev(div14, "class", "w-2/3 border flex flex-col");
-    			add_location(div14, file$b, 294, 8, 9784);
-    			attr_dev(div15, "class", "chat flex flex-row shadow-xl rounded-lg svelte-r6lcc4");
-    			add_location(div15, file$b, 257, 6, 8721);
-    			attr_dev(img, "class", "chat-notification-logo svelte-r6lcc4");
+    			add_location(div14, file$a, 208, 6, 7201);
+    			attr_dev(div15, "class", "chat flex flex-row shadow-xl rounded-lg svelte-1ue8m0r");
+    			add_location(div15, file$a, 171, 4, 6194);
+    			attr_dev(img, "class", "chat-notification-logo svelte-1ue8m0r");
     			if (img.src !== (img_src_value = "https://img.icons8.com/cute-clipart/50/000000/close-window.png")) attr_dev(img, "src", img_src_value);
     			attr_dev(img, "alt", "ChitChat Logo");
-    			add_location(img, file$b, 368, 12, 12321);
-    			attr_dev(div16, "class", "chat-notification-logo-wrapper svelte-r6lcc4");
-    			add_location(div16, file$b, 367, 10, 12264);
-    			attr_dev(div17, "class", "chat-notification svelte-r6lcc4");
-    			add_location(div17, file$b, 366, 8, 12222);
-    			attr_dev(div18, "class", "btm svelte-r6lcc4");
-    			add_location(div18, file$b, 365, 6, 12179);
+    			add_location(img, file$a, 281, 10, 9590);
+    			attr_dev(div16, "class", "chat-notification-logo-wrapper svelte-1ue8m0r");
+    			add_location(div16, file$a, 280, 8, 9535);
+    			attr_dev(div17, "class", "chat-notification svelte-1ue8m0r");
+    			add_location(div17, file$a, 279, 6, 9495);
+    			attr_dev(div18, "class", "btm svelte-1ue8m0r");
+    			add_location(div18, file$a, 278, 4, 9454);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div15, anchor);
@@ -37993,24 +40244,24 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			append_dev(div16, img);
 
     			dispose = [
-    				listen_dev(input, "input", /*input_input_handler*/ ctx[22]),
+    				listen_dev(input, "input", /*input_input_handler*/ ctx[14]),
     				listen_dev(
     					form,
     					"submit",
     					prevent_default(function () {
-    						if (is_function(publish(/*newMessage*/ ctx[2], "channel." + /*userName*/ ctx[13]))) publish(/*newMessage*/ ctx[2], "channel." + /*userName*/ ctx[13]).apply(this, arguments);
+    						if (is_function(publish(/*newMessage*/ ctx[2], /*channelName*/ ctx[4]))) publish(/*newMessage*/ ctx[2], /*channelName*/ ctx[4]).apply(this, arguments);
     					}),
     					false,
     					true,
     					false
     				),
-    				listen_dev(div18, "click", /*close*/ ctx[12], false, false, false)
+    				listen_dev(div18, "click", /*close*/ ctx[6], false, false, false)
     			];
     		},
     		p: function update(new_ctx, dirty) {
     			ctx = new_ctx;
 
-    			if (dirty[0] & /*changeChannel, channels*/ 16386) {
+    			if (dirty & /*changeChannel, channels*/ 130) {
     				each_value_1 = /*channels*/ ctx[1];
     				let i;
 
@@ -38033,9 +40284,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     				each_blocks_1.length = each_value_1.length;
     			}
 
-    			if (dirty[0] & /*channelName*/ 16) set_data_dev(t3, /*channelName*/ ctx[4]);
+    			if (dirty & /*channelName*/ 16) set_data_dev(t3, /*channelName*/ ctx[4]);
 
-    			if (dirty[0] & /*output*/ 8) {
+    			if (dirty & /*output*/ 8) {
     				each_value = /*output*/ ctx[3];
     				let i;
 
@@ -38058,7 +40309,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     				each_blocks.length = each_value.length;
     			}
 
-    			if (dirty[0] & /*newMessage*/ 4) {
+    			if (dirty & /*newMessage*/ 4) {
     				set_input_value(input, /*newMessage*/ ctx[2]);
     			}
     		},
@@ -38076,20 +40327,20 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_if_block$3.name,
     		type: "if",
-    		source: "(257:4) {#if hasJoinedChat}",
+    		source: "(171:2) {#if hasJoinedChat}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (275:12) {#each channels as channel}
+    // (189:10) {#each channels as channel}
     function create_each_block_1(ctx) {
     	let div2;
     	let div1;
     	let div0;
     	let p;
-    	let t0_value = /*channel*/ ctx[26] + "";
+    	let t0_value = /*channel*/ ctx[18] + "";
     	let t0;
     	let t1;
     	let dispose;
@@ -38103,13 +40354,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			t0 = text(t0_value);
     			t1 = space();
     			attr_dev(p, "class", "text-grey-darkest");
-    			add_location(p, file$b, 282, 20, 9585);
+    			add_location(p, file$a, 196, 18, 7018);
     			attr_dev(div0, "class", "flex items-bottom justify-between");
-    			add_location(div0, file$b, 281, 18, 9517);
+    			add_location(div0, file$a, 195, 16, 6952);
     			attr_dev(div1, "class", "ml-4 flex-1 border-b border-grey-lighter py-4");
-    			add_location(div1, file$b, 280, 16, 9439);
-    			attr_dev(div2, "class", "bg-white hover:bg-gray-400 px-3 flex items-center\n                hover:bg-grey-lighter cursor-pointer");
-    			add_location(div2, file$b, 275, 14, 9235);
+    			add_location(div1, file$a, 194, 14, 6876);
+    			attr_dev(div2, "class", "bg-white hover:bg-gray-400 px-3 flex items-center\n              hover:bg-grey-lighter cursor-pointer");
+    			add_location(div2, file$a, 189, 12, 6680);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div2, anchor);
@@ -38123,7 +40374,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     				div2,
     				"click",
     				function () {
-    					if (is_function(/*changeChannel*/ ctx[14]({ channel: /*channel*/ ctx[26] }))) /*changeChannel*/ ctx[14]({ channel: /*channel*/ ctx[26] }).apply(this, arguments);
+    					if (is_function(/*changeChannel*/ ctx[7]({ channel: /*channel*/ ctx[18] }))) /*changeChannel*/ ctx[7]({ channel: /*channel*/ ctx[18] }).apply(this, arguments);
     				},
     				false,
     				false,
@@ -38132,7 +40383,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		},
     		p: function update(new_ctx, dirty) {
     			ctx = new_ctx;
-    			if (dirty[0] & /*channels*/ 2 && t0_value !== (t0_value = /*channel*/ ctx[26] + "")) set_data_dev(t0, t0_value);
+    			if (dirty & /*channels*/ 2 && t0_value !== (t0_value = /*channel*/ ctx[18] + "")) set_data_dev(t0, t0_value);
     		},
     		d: function destroy(detaching) {
     			if (detaching) detach_dev(div2);
@@ -38144,19 +40395,19 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_each_block_1.name,
     		type: "each",
-    		source: "(275:12) {#each channels as channel}",
+    		source: "(189:10) {#each channels as channel}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (325:16) {#each output as message}
+    // (239:14) {#each output as message}
     function create_each_block$2(ctx) {
     	let div1;
     	let div0;
     	let p;
-    	let t0_value = /*message*/ ctx[23] + "";
+    	let t0_value = /*message*/ ctx[15] + "";
     	let t0;
     	let t1;
 
@@ -38168,12 +40419,12 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			t0 = text(t0_value);
     			t1 = space();
     			attr_dev(p, "class", "text-sm mt-1");
-    			add_location(p, file$b, 329, 22, 11223);
+    			add_location(p, file$a, 243, 20, 8578);
     			attr_dev(div0, "class", "rounded py-2 px-3");
     			set_style(div0, "background-color", "#E2F7CB");
-    			add_location(div0, file$b, 326, 20, 11091);
+    			add_location(div0, file$a, 240, 18, 8452);
     			attr_dev(div1, "class", "flex justify-end mb-2");
-    			add_location(div1, file$b, 325, 18, 11035);
+    			add_location(div1, file$a, 239, 16, 8398);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div1, anchor);
@@ -38183,7 +40434,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			append_dev(div1, t1);
     		},
     		p: function update(ctx, dirty) {
-    			if (dirty[0] & /*output*/ 8 && t0_value !== (t0_value = /*message*/ ctx[23] + "")) set_data_dev(t0, t0_value);
+    			if (dirty & /*output*/ 8 && t0_value !== (t0_value = /*message*/ ctx[15] + "")) set_data_dev(t0, t0_value);
     		},
     		d: function destroy(detaching) {
     			if (detaching) detach_dev(div1);
@@ -38194,7 +40445,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_each_block$2.name,
     		type: "each",
-    		source: "(325:16) {#each output as message}",
+    		source: "(239:14) {#each output as message}",
     		ctx
     	});
 
@@ -38203,75 +40454,8 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     function create_fragment$e(ctx) {
     	let link;
-    	let t0;
-    	let body;
-    	let t1;
-    	let div10;
-    	let div4;
-    	let div3;
-    	let div1;
-    	let div0;
-    	let t3;
-    	let ol0;
-    	let promise;
-    	let t4;
-    	let div2;
-    	let t5;
-    	let div9;
-    	let div8;
-    	let div6;
-    	let div5;
-    	let t7;
-    	let ol1;
-    	let promise_1;
-    	let t8;
-    	let div7;
-    	let t9;
-    	let div11;
-    	let current;
-    	const navbar = new Navbar({ $$inline: true });
-
-    	let info = {
-    		ctx,
-    		current: null,
-    		token: null,
-    		pending: create_pending_block_1,
-    		then: create_then_block_1,
-    		catch: create_catch_block_1,
-    		value: 29,
-    		error: 30
-    	};
-
-    	handle_promise(promise = /*$Test*/ ctx[5], info);
-
-    	const modal0 = new Modal({
-    			props: {
-    				$$slots: { default: [create_default_slot_1] },
-    				$$scope: { ctx }
-    			},
-    			$$inline: true
-    		});
-
-    	let info_1 = {
-    		ctx,
-    		current: null,
-    		token: null,
-    		pending: create_pending_block$1,
-    		then: create_then_block$1,
-    		catch: create_catch_block$1,
-    		value: 29,
-    		error: 30
-    	};
-
-    	handle_promise(promise_1 = /*$Problem*/ ctx[6], info_1);
-
-    	const modal1 = new Modal({
-    			props: {
-    				$$slots: { default: [create_default_slot$1] },
-    				$$scope: { ctx }
-    			},
-    			$$inline: true
-    		});
+    	let t;
+    	let div;
 
     	function select_block_type(ctx, dirty) {
     		if (/*hasJoinedChat*/ ctx[0]) return create_if_block$3;
@@ -38284,144 +40468,25 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	const block = {
     		c: function create() {
     			link = element("link");
-    			t0 = space();
-    			body = element("body");
-    			create_component(navbar.$$.fragment);
-    			t1 = space();
-    			div10 = element("div");
-    			div4 = element("div");
-    			div3 = element("div");
-    			div1 = element("div");
-    			div0 = element("div");
-    			div0.textContent = "Your Tests";
-    			t3 = space();
-    			ol0 = element("ol");
-    			info.block.c();
-    			t4 = space();
-    			div2 = element("div");
-    			create_component(modal0.$$.fragment);
-    			t5 = space();
-    			div9 = element("div");
-    			div8 = element("div");
-    			div6 = element("div");
-    			div5 = element("div");
-    			div5.textContent = "Your Problems";
-    			t7 = space();
-    			ol1 = element("ol");
-    			info_1.block.c();
-    			t8 = space();
-    			div7 = element("div");
-    			create_component(modal1.$$.fragment);
-    			t9 = space();
-    			div11 = element("div");
+    			t = space();
+    			div = element("div");
     			if_block.c();
     			attr_dev(link, "href", "https://unpkg.com/tailwindcss@^1.0/dist/tailwind.min.css");
     			attr_dev(link, "rel", "stylesheet");
-    			add_location(link, file$b, 191, 0, 6835);
-    			attr_dev(div0, "class", "font-bold text-xl mb-2");
-    			add_location(div0, file$b, 202, 10, 7120);
-    			add_location(ol0, file$b, 203, 10, 7183);
-    			attr_dev(div1, "class", "px-6 py-4");
-    			add_location(div1, file$b, 201, 8, 7086);
-    			attr_dev(div2, "class", "px-6 py-4");
-    			set_style(div2, "margin-right", "5%");
-    			add_location(div2, file$b, 219, 8, 7633);
-    			attr_dev(div3, "class", "max-w-lg rounded overflow-hidden shadow-lg");
-    			add_location(div3, file$b, 200, 6, 7021);
-    			attr_dev(div4, "class", "w-1/2 h-12");
-    			add_location(div4, file$b, 199, 4, 6990);
-    			attr_dev(div5, "class", "font-bold text-xl mb-2");
-    			add_location(div5, file$b, 229, 10, 7946);
-    			add_location(ol1, file$b, 230, 10, 8012);
-    			attr_dev(div6, "class", "px-6 py-4");
-    			add_location(div6, file$b, 228, 8, 7912);
-    			attr_dev(div7, "class", "px-6 py-4");
-    			set_style(div7, "margin-right", "10%");
-    			add_location(div7, file$b, 246, 8, 8474);
-    			attr_dev(div8, "class", "max-w-lg rounded overflow-hidden shadow-lg");
-    			add_location(div8, file$b, 227, 6, 7847);
-    			attr_dev(div9, "class", "w-1/2 h-12");
-    			add_location(div9, file$b, 226, 4, 7816);
-    			attr_dev(div10, "id", "blk");
-    			attr_dev(div10, "class", "flex mb-4 svelte-r6lcc4");
-    			add_location(div10, file$b, 198, 2, 6953);
-    			attr_dev(div11, "class", "container");
-    			add_location(div11, file$b, 255, 2, 8667);
-    			add_location(body, file$b, 194, 0, 6929);
+    			add_location(link, file$a, 165, 0, 6049);
+    			attr_dev(div, "class", "container");
+    			add_location(div, file$a, 169, 0, 6144);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, link, anchor);
-    			insert_dev(target, t0, anchor);
-    			insert_dev(target, body, anchor);
-    			mount_component(navbar, body, null);
-    			append_dev(body, t1);
-    			append_dev(body, div10);
-    			append_dev(div10, div4);
-    			append_dev(div4, div3);
-    			append_dev(div3, div1);
-    			append_dev(div1, div0);
-    			append_dev(div1, t3);
-    			append_dev(div1, ol0);
-    			info.block.m(ol0, info.anchor = null);
-    			info.mount = () => ol0;
-    			info.anchor = null;
-    			append_dev(div3, t4);
-    			append_dev(div3, div2);
-    			mount_component(modal0, div2, null);
-    			append_dev(div10, t5);
-    			append_dev(div10, div9);
-    			append_dev(div9, div8);
-    			append_dev(div8, div6);
-    			append_dev(div6, div5);
-    			append_dev(div6, t7);
-    			append_dev(div6, ol1);
-    			info_1.block.m(ol1, info_1.anchor = null);
-    			info_1.mount = () => ol1;
-    			info_1.anchor = null;
-    			append_dev(div8, t8);
-    			append_dev(div8, div7);
-    			mount_component(modal1, div7, null);
-    			append_dev(body, t9);
-    			append_dev(body, div11);
-    			if_block.m(div11, null);
-    			current = true;
+    			insert_dev(target, t, anchor);
+    			insert_dev(target, div, anchor);
+    			if_block.m(div, null);
     		},
-    		p: function update(new_ctx, dirty) {
-    			ctx = new_ctx;
-    			info.ctx = ctx;
-
-    			if (dirty[0] & /*$Test*/ 32 && promise !== (promise = /*$Test*/ ctx[5]) && handle_promise(promise, info)) ; else {
-    				const child_ctx = ctx.slice();
-    				child_ctx[29] = info.resolved;
-    				info.block.p(child_ctx, dirty);
-    			}
-
-    			const modal0_changes = {};
-
-    			if (dirty[1] & /*$$scope*/ 64) {
-    				modal0_changes.$$scope = { dirty, ctx };
-    			}
-
-    			modal0.$set(modal0_changes);
-    			info_1.ctx = ctx;
-
-    			if (dirty[0] & /*$Problem*/ 64 && promise_1 !== (promise_1 = /*$Problem*/ ctx[6]) && handle_promise(promise_1, info_1)) ; else {
-    				const child_ctx = ctx.slice();
-    				child_ctx[29] = info_1.resolved;
-    				info_1.block.p(child_ctx, dirty);
-    			}
-
-    			const modal1_changes = {};
-
-    			if (dirty[1] & /*$$scope*/ 64) {
-    				modal1_changes.$$scope = { dirty, ctx };
-    			}
-
-    			modal1.$set(modal1_changes);
-
+    		p: function update(ctx, [dirty]) {
     			if (current_block_type === (current_block_type = select_block_type(ctx)) && if_block) {
     				if_block.p(ctx, dirty);
     			} else {
@@ -38430,36 +40495,16 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     				if (if_block) {
     					if_block.c();
-    					if_block.m(div11, null);
+    					if_block.m(div, null);
     				}
     			}
     		},
-    		i: function intro(local) {
-    			if (current) return;
-    			transition_in(navbar.$$.fragment, local);
-    			transition_in(modal0.$$.fragment, local);
-    			transition_in(modal1.$$.fragment, local);
-    			current = true;
-    		},
-    		o: function outro(local) {
-    			transition_out(navbar.$$.fragment, local);
-    			transition_out(modal0.$$.fragment, local);
-    			transition_out(modal1.$$.fragment, local);
-    			current = false;
-    		},
+    		i: noop,
+    		o: noop,
     		d: function destroy(detaching) {
     			if (detaching) detach_dev(link);
-    			if (detaching) detach_dev(t0);
-    			if (detaching) detach_dev(body);
-    			destroy_component(navbar);
-    			info.block.d();
-    			info.token = null;
-    			info = null;
-    			destroy_component(modal0);
-    			info_1.block.d();
-    			info_1.token = null;
-    			info_1 = null;
-    			destroy_component(modal1);
+    			if (detaching) detach_dev(t);
+    			if (detaching) detach_dev(div);
     			if_block.d();
     		}
     	};
@@ -38480,27 +40525,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	if (match) return match[2];
     }
 
-    function instance$e($$self, $$props, $$invalidate) {
-    	let $Test;
-    	let $Problem;
-    	const client = getClient();
-    	const tokens = cookieHandler.getCookie("access_token").split(".");
-    	console.log(atob(tokens[1]));
-    	const Test = query(client, { query: apolloClient.allTests });
-    	validate_store(Test, "Test");
-    	component_subscribe($$self, Test, value => $$invalidate(5, $Test = value));
-    	const Problem = query(client, { query: apolloClient.getProblems });
-    	validate_store(Problem, "Problem");
-    	component_subscribe($$self, Problem, value => $$invalidate(6, $Problem = value));
-
-    	const handleProblemAdd = () => {
-    		Problem.refetch();
-    	};
-
-    	const handleTestAdd = () => {
-    		Test.refetch();
-    	};
-
+    function instance$d($$self, $$props, $$invalidate) {
     	let hasJoinedChat = false;
     	let channels = [""];
     	let username = "";
@@ -38581,10 +40606,8 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		if ("messages" in $$props) messages = $$props.messages;
     		if ("output" in $$props) $$invalidate(3, output = $$props.output);
     		if ("sEmails" in $$props) sEmails = $$props.sEmails;
-    		if ("userName" in $$props) $$invalidate(13, userName = $$props.userName);
+    		if ("userName" in $$props) userName = $$props.userName;
     		if ("channelName" in $$props) $$invalidate(4, channelName = $$props.channelName);
-    		if ("$Test" in $$props) Test.set($Test = $$props.$Test);
-    		if ("$Problem" in $$props) Problem.set($Problem = $$props.$Problem);
     	};
 
     	return [
@@ -38593,37 +40616,143 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		newMessage,
     		output,
     		channelName,
-    		$Test,
-    		$Problem,
-    		Test,
-    		Problem,
-    		handleProblemAdd,
-    		handleTestAdd,
     		joined,
     		close,
-    		userName,
     		changeChannel,
-    		client,
-    		tokens,
     		username,
     		messages,
     		userEmail,
     		sEmails,
+    		userName,
     		user,
     		input_input_handler
     	];
     }
 
+    class Pubnub extends SvelteComponentDev {
+    	constructor(options) {
+    		super(options);
+    		init(this, options, instance$d, create_fragment$e, safe_not_equal, {});
+
+    		dispatch_dev("SvelteRegisterComponent", {
+    			component: this,
+    			tagName: "Pubnub",
+    			options,
+    			id: create_fragment$e.name
+    		});
+    	}
+    }
+
+    /* src/routes/Admin.svelte generated by Svelte v3.18.1 */
+    const file$b = "src/routes/Admin.svelte";
+
+    function create_fragment$f(ctx) {
+    	let link;
+    	let t0;
+    	let body;
+    	let header;
+    	let t1;
+    	let t2;
+    	let current;
+    	const navbar = new Navbar({ $$inline: true });
+    	const sidebar = new Side({ $$inline: true });
+    	const pubnub = new Pubnub({ $$inline: true });
+
+    	const block = {
+    		c: function create() {
+    			link = element("link");
+    			t0 = space();
+    			body = element("body");
+    			header = element("header");
+    			create_component(navbar.$$.fragment);
+    			t1 = space();
+    			create_component(sidebar.$$.fragment);
+    			t2 = space();
+    			create_component(pubnub.$$.fragment);
+    			attr_dev(link, "href", "https://unpkg.com/tailwindcss@^1.0/dist/tailwind.min.css");
+    			attr_dev(link, "rel", "stylesheet");
+    			add_location(link, file$b, 23, 0, 877);
+    			add_location(header, file$b, 28, 2, 981);
+    			add_location(body, file$b, 27, 0, 972);
+    		},
+    		l: function claim(nodes) {
+    			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, link, anchor);
+    			insert_dev(target, t0, anchor);
+    			insert_dev(target, body, anchor);
+    			append_dev(body, header);
+    			mount_component(navbar, header, null);
+    			append_dev(header, t1);
+    			mount_component(sidebar, header, null);
+    			append_dev(body, t2);
+    			mount_component(pubnub, body, null);
+    			current = true;
+    		},
+    		p: noop,
+    		i: function intro(local) {
+    			if (current) return;
+    			transition_in(navbar.$$.fragment, local);
+    			transition_in(sidebar.$$.fragment, local);
+    			transition_in(pubnub.$$.fragment, local);
+    			current = true;
+    		},
+    		o: function outro(local) {
+    			transition_out(navbar.$$.fragment, local);
+    			transition_out(sidebar.$$.fragment, local);
+    			transition_out(pubnub.$$.fragment, local);
+    			current = false;
+    		},
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(link);
+    			if (detaching) detach_dev(t0);
+    			if (detaching) detach_dev(body);
+    			destroy_component(navbar);
+    			destroy_component(sidebar);
+    			destroy_component(pubnub);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_fragment$f.name,
+    		type: "component",
+    		source: "",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    function instance$e($$self) {
+    	const client = getClient();
+    	const tokens = cookieHandler.getCookie("access_token").split(".");
+    	console.log(atob(tokens[1]));
+    	const Test = query(client, { query: apolloClient.allTests });
+    	const Problem = query(client, { query: apolloClient.getProblems });
+
+    	$$self.$capture_state = () => {
+    		return {};
+    	};
+
+    	$$self.$inject_state = $$props => {
+    		
+    	};
+
+    	return [];
+    }
+
     class Admin extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$e, create_fragment$e, safe_not_equal, {}, [-1, -1]);
+    		init(this, options, instance$e, create_fragment$f, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Admin",
     			options,
-    			id: create_fragment$e.name
+    			id: create_fragment$f.name
     		});
     	}
     }
@@ -38632,7 +40761,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     const file$c = "src/routes/Login.svelte";
 
-    function create_fragment$f(ctx) {
+    function create_fragment$g(ctx) {
     	let link;
     	let t0;
     	let body;
@@ -38782,7 +40911,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$f.name,
+    		id: create_fragment$g.name,
     		type: "component",
     		source: "",
     		ctx
@@ -38794,13 +40923,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Login extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, null, create_fragment$f, safe_not_equal, {});
+    		init(this, options, null, create_fragment$g, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Login",
     			options,
-    			id: create_fragment$f.name
+    			id: create_fragment$g.name
     		});
     	}
     }
@@ -38810,10 +40939,10 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     const { console: console_1$2 } = globals;
     const file$d = "src/routes/Problems.svelte";
 
-    // (126:4) {:catch err}
-    function create_catch_block$2(ctx) {
+    // (127:4) {:catch err}
+    function create_catch_block$1(ctx) {
     	let t0;
-    	let t1_value = /*err*/ ctx[7] + "";
+    	let t1_value = /*err*/ ctx[8] + "";
     	let t1;
 
     	const block = {
@@ -38826,7 +40955,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			insert_dev(target, t1, anchor);
     		},
     		p: function update(ctx, dirty) {
-    			if (dirty & /*$problem*/ 2 && t1_value !== (t1_value = /*err*/ ctx[7] + "")) set_data_dev(t1, t1_value);
+    			if (dirty & /*$problem*/ 2 && t1_value !== (t1_value = /*err*/ ctx[8] + "")) set_data_dev(t1, t1_value);
     		},
     		d: function destroy(detaching) {
     			if (detaching) detach_dev(t0);
@@ -38836,9 +40965,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_catch_block$2.name,
+    		id: create_catch_block$1.name,
     		type: "catch",
-    		source: "(126:4) {:catch err}",
+    		source: "(127:4) {:catch err}",
     		ctx
     	});
 
@@ -38846,21 +40975,21 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (57:4) {:then result}
-    function create_then_block$2(ctx) {
+    function create_then_block$1(ctx) {
     	let div3;
     	let div0;
-    	let t0_value = /*result*/ ctx[6].data.problemById.problemName + "";
+    	let t0_value = /*result*/ ctx[7].data.problemById.problemName + "";
     	let t0;
     	let t1;
     	let div1;
     	let t2;
-    	let t3_value = /*result*/ ctx[6].data.problemById.datalimit + "";
+    	let t3_value = /*result*/ ctx[7].data.problemById.datalimit + "";
     	let t3;
     	let t4;
     	let t5;
     	let div2;
     	let t6;
-    	let t7_value = /*result*/ ctx[6].data.problemById.timelimit + "";
+    	let t7_value = /*result*/ ctx[7].data.problemById.timelimit + "";
     	let t7;
     	let t8;
     	let t9;
@@ -38871,7 +41000,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	let label0;
     	let t11;
     	let p0;
-    	let t12_value = /*result*/ ctx[6].data.problemById.description + "";
+    	let t12_value = /*result*/ ctx[7].data.problemById.description + "";
     	let t12;
     	let t13;
     	let div5;
@@ -38890,12 +41019,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	let label3;
     	let t21;
     	let p1;
-    	let t22_value = /*result*/ ctx[6].data.problemById.tags + "";
+    	let t22_value = /*result*/ ctx[7].data.problemById.tags + "";
     	let t22;
     	let t23;
     	let div12;
     	let div11;
     	let button0;
+    	let t24;
+    	let button0_lick_value;
     	let t25;
     	let button1;
     	let dispose;
@@ -38948,62 +41079,63 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			div12 = element("div");
     			div11 = element("div");
     			button0 = element("button");
-    			button0.textContent = "Edit";
+    			t24 = text("Edit");
     			t25 = space();
     			button1 = element("button");
     			button1.textContent = "Delete";
     			attr_dev(div0, "class", "font-bold text-2xl text-elight mx-auto svelte-1xwh2qq");
-    			add_location(div0, file$d, 58, 8, 1977);
+    			add_location(div0, file$d, 58, 8, 2042);
     			attr_dev(div1, "class", " text-xl text-elight mx-auto svelte-1xwh2qq");
-    			add_location(div1, file$d, 61, 8, 2101);
+    			add_location(div1, file$d, 61, 8, 2166);
     			attr_dev(div2, "class", " text-xl text-elight mx-auto svelte-1xwh2qq");
-    			add_location(div2, file$d, 64, 8, 2230);
+    			add_location(div2, file$d, 64, 8, 2295);
     			attr_dev(div3, "class", "mx-auto mt-8 max-w-xl flex flex-col svelte-1xwh2qq");
-    			add_location(div3, file$d, 57, 6, 1919);
+    			add_location(div3, file$d, 57, 6, 1984);
     			attr_dev(label0, "class", " text-2xl text-elight mb-3 my-2 svelte-1xwh2qq");
-    			add_location(label0, file$d, 73, 14, 2565);
+    			add_location(label0, file$d, 73, 14, 2630);
     			attr_dev(p0, "class", "text-xl text-elight svelte-1xwh2qq");
-    			add_location(p0, file$d, 74, 14, 2646);
+    			add_location(p0, file$d, 74, 14, 2711);
     			attr_dev(div4, "class", "w-full h-full px-3 flex flex-col svelte-1xwh2qq");
-    			add_location(div4, file$d, 72, 12, 2504);
+    			add_location(div4, file$d, 72, 12, 2569);
     			attr_dev(label1, "class", " text-2xl text-elight mb-3 my-2 svelte-1xwh2qq");
-    			add_location(label1, file$d, 80, 14, 2844);
-    			textarea0.value = textarea0_value_value = JSON.parse(/*result*/ ctx[6].data.problemById.problemTests);
+    			add_location(label1, file$d, 80, 14, 2909);
+    			textarea0.value = textarea0_value_value = JSON.parse(/*result*/ ctx[7].data.problemById.problemTests);
     			attr_dev(textarea0, "class", " w-full bg-edark flex-grow text-elight text-2xl border\n                rounded py-3 px-4 mb-3 leading-tight focus:outline-none\n                focus:border-white h-48 resize-none svelte-1xwh2qq");
     			attr_dev(textarea0, "id", "message");
     			textarea0.readOnly = true;
-    			add_location(textarea0, file$d, 81, 14, 2923);
+    			add_location(textarea0, file$d, 81, 14, 2988);
     			attr_dev(div5, "class", "w-full h-full px-3 flex flex-col svelte-1xwh2qq");
-    			add_location(div5, file$d, 79, 12, 2783);
+    			add_location(div5, file$d, 79, 12, 2848);
     			attr_dev(label2, "class", " text-2xl text-elight mb-3 my-2 svelte-1xwh2qq");
-    			add_location(label2, file$d, 90, 14, 3358);
-    			textarea1.value = textarea1_value_value = /*result*/ ctx[6].data.problemById.solution;
+    			add_location(label2, file$d, 90, 14, 3423);
+    			textarea1.value = textarea1_value_value = /*result*/ ctx[7].data.problemById.solution;
     			attr_dev(textarea1, "class", " flex-grow w-full bg-edark text-elight text-2xl border\n                rounded py-3 px-4 mb-3 leading-tight focus:outline-none\n                focus:border-white h-48 resize-none svelte-1xwh2qq");
     			attr_dev(textarea1, "id", "message");
     			textarea1.readOnly = true;
-    			add_location(textarea1, file$d, 91, 14, 3436);
+    			add_location(textarea1, file$d, 91, 14, 3501);
     			attr_dev(div6, "class", "flex flex-col w-full h-full px-3 svelte-1xwh2qq");
-    			add_location(div6, file$d, 89, 12, 3297);
+    			add_location(div6, file$d, 89, 12, 3362);
     			attr_dev(label3, "class", " text-2xl text-elight mb-3 my-2 svelte-1xwh2qq");
-    			add_location(label3, file$d, 101, 14, 3856);
+    			add_location(label3, file$d, 101, 14, 3921);
     			attr_dev(p1, "class", "text-xl text-elight svelte-1xwh2qq");
-    			add_location(p1, file$d, 102, 14, 3930);
+    			add_location(p1, file$d, 102, 14, 3995);
     			attr_dev(div7, "class", "w-full h-full px-3 flex flex-col svelte-1xwh2qq");
-    			add_location(div7, file$d, 100, 12, 3795);
+    			add_location(div7, file$d, 100, 12, 3860);
     			attr_dev(div8, "class", "px-12 py-8 svelte-1xwh2qq");
-    			add_location(div8, file$d, 71, 10, 2467);
+    			add_location(div8, file$d, 71, 10, 2532);
     			attr_dev(div9, "class", "rounded shadow-lg svelte-1xwh2qq");
-    			add_location(div9, file$d, 70, 8, 2425);
+    			add_location(div9, file$d, 70, 8, 2490);
     			attr_dev(div10, "class", "bg-dark max-w-6xl mt-12 mx-auto svelte-1xwh2qq");
-    			add_location(div10, file$d, 68, 6, 2370);
+    			add_location(div10, file$d, 68, 6, 2435);
+    			attr_dev(button0, "lick", button0_lick_value = /*func*/ ctx[6]);
     			attr_dev(button0, "class", "savebutton hover:bg-white hover:text-edark font-bold py-2\n            px-4 border rounded svelte-1xwh2qq");
-    			add_location(button0, file$d, 109, 10, 4168);
+    			add_location(button0, file$d, 109, 10, 4233);
     			attr_dev(button1, "class", "savebutton hover:bg-white hover:text-edark font-bold py-2\n            px-4 border rounded svelte-1xwh2qq");
-    			add_location(button1, file$d, 117, 10, 4479);
+    			add_location(button1, file$d, 118, 10, 4545);
     			attr_dev(div11, "class", "float-right  svelte-1xwh2qq");
-    			add_location(div11, file$d, 108, 8, 4131);
+    			add_location(div11, file$d, 108, 8, 4196);
     			attr_dev(div12, "class", "max-w-6xl my-4 mb-32 flex flex-col mx-auto svelte-1xwh2qq");
-    			add_location(div12, file$d, 107, 6, 4066);
+    			add_location(div12, file$d, 107, 6, 4131);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div3, anchor);
@@ -39048,29 +41180,34 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			insert_dev(target, div12, anchor);
     			append_dev(div12, div11);
     			append_dev(div11, button0);
+    			append_dev(button0, t24);
     			append_dev(div11, t25);
     			append_dev(div11, button1);
 
     			dispose = [
-    				listen_dev(button0, "click", /*click_handler*/ ctx[5], false, false, false),
+    				listen_dev(button0, "c", /*c_handler*/ ctx[5], false, false, false),
     				listen_dev(button1, "click", /*deleteProblemHandler*/ ctx[3], false, false, false)
     			];
     		},
     		p: function update(ctx, dirty) {
-    			if (dirty & /*$problem*/ 2 && t0_value !== (t0_value = /*result*/ ctx[6].data.problemById.problemName + "")) set_data_dev(t0, t0_value);
-    			if (dirty & /*$problem*/ 2 && t3_value !== (t3_value = /*result*/ ctx[6].data.problemById.datalimit + "")) set_data_dev(t3, t3_value);
-    			if (dirty & /*$problem*/ 2 && t7_value !== (t7_value = /*result*/ ctx[6].data.problemById.timelimit + "")) set_data_dev(t7, t7_value);
-    			if (dirty & /*$problem*/ 2 && t12_value !== (t12_value = /*result*/ ctx[6].data.problemById.description + "")) set_data_dev(t12, t12_value);
+    			if (dirty & /*$problem*/ 2 && t0_value !== (t0_value = /*result*/ ctx[7].data.problemById.problemName + "")) set_data_dev(t0, t0_value);
+    			if (dirty & /*$problem*/ 2 && t3_value !== (t3_value = /*result*/ ctx[7].data.problemById.datalimit + "")) set_data_dev(t3, t3_value);
+    			if (dirty & /*$problem*/ 2 && t7_value !== (t7_value = /*result*/ ctx[7].data.problemById.timelimit + "")) set_data_dev(t7, t7_value);
+    			if (dirty & /*$problem*/ 2 && t12_value !== (t12_value = /*result*/ ctx[7].data.problemById.description + "")) set_data_dev(t12, t12_value);
 
-    			if (dirty & /*$problem*/ 2 && textarea0_value_value !== (textarea0_value_value = JSON.parse(/*result*/ ctx[6].data.problemById.problemTests))) {
+    			if (dirty & /*$problem*/ 2 && textarea0_value_value !== (textarea0_value_value = JSON.parse(/*result*/ ctx[7].data.problemById.problemTests))) {
     				prop_dev(textarea0, "value", textarea0_value_value);
     			}
 
-    			if (dirty & /*$problem*/ 2 && textarea1_value_value !== (textarea1_value_value = /*result*/ ctx[6].data.problemById.solution)) {
+    			if (dirty & /*$problem*/ 2 && textarea1_value_value !== (textarea1_value_value = /*result*/ ctx[7].data.problemById.solution)) {
     				prop_dev(textarea1, "value", textarea1_value_value);
     			}
 
-    			if (dirty & /*$problem*/ 2 && t22_value !== (t22_value = /*result*/ ctx[6].data.problemById.tags + "")) set_data_dev(t22, t22_value);
+    			if (dirty & /*$problem*/ 2 && t22_value !== (t22_value = /*result*/ ctx[7].data.problemById.tags + "")) set_data_dev(t22, t22_value);
+
+    			if (dirty & /*currentRoute*/ 1 && button0_lick_value !== (button0_lick_value = /*func*/ ctx[6])) {
+    				attr_dev(button0, "lick", button0_lick_value);
+    			}
     		},
     		d: function destroy(detaching) {
     			if (detaching) detach_dev(div3);
@@ -39084,7 +41221,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_then_block$2.name,
+    		id: create_then_block$1.name,
     		type: "then",
     		source: "(57:4) {:then result}",
     		ctx
@@ -39094,7 +41231,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (55:21)        Loading...     {:then result}
-    function create_pending_block$2(ctx) {
+    function create_pending_block$1(ctx) {
     	let t;
 
     	const block = {
@@ -39112,7 +41249,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_pending_block$2.name,
+    		id: create_pending_block$1.name,
     		type: "pending",
     		source: "(55:21)        Loading...     {:then result}",
     		ctx
@@ -39121,26 +41258,28 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function create_fragment$g(ctx) {
+    function create_fragment$h(ctx) {
     	let link;
     	let t0;
     	let div1;
     	let header;
     	let t1;
+    	let t2;
     	let div0;
     	let promise;
     	let current;
     	const navbar = new Navbar({ $$inline: true });
+    	const sidebar = new Side({ $$inline: true });
 
     	let info = {
     		ctx,
     		current: null,
     		token: null,
-    		pending: create_pending_block$2,
-    		then: create_then_block$2,
-    		catch: create_catch_block$2,
-    		value: 6,
-    		error: 7
+    		pending: create_pending_block$1,
+    		then: create_then_block$1,
+    		catch: create_catch_block$1,
+    		value: 7,
+    		error: 8
     	};
 
     	handle_promise(promise = /*$problem*/ ctx[1], info);
@@ -39153,18 +41292,20 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			header = element("header");
     			create_component(navbar.$$.fragment);
     			t1 = space();
+    			create_component(sidebar.$$.fragment);
+    			t2 = space();
     			div0 = element("div");
     			info.block.c();
     			attr_dev(link, "href", "https://unpkg.com/tailwindcss@^1.0/dist/tailwind.min.css");
     			attr_dev(link, "rel", "stylesheet");
     			attr_dev(link, "class", "svelte-1xwh2qq");
-    			add_location(link, file$d, 45, 0, 1603);
+    			add_location(link, file$d, 44, 0, 1652);
     			attr_dev(header, "class", "svelte-1xwh2qq");
-    			add_location(header, file$d, 50, 2, 1755);
+    			add_location(header, file$d, 49, 2, 1804);
     			attr_dev(div0, "class", "bg-edark flex flex-col max-w-full overflow-auto svelte-1xwh2qq");
-    			add_location(div0, file$d, 53, 2, 1793);
+    			add_location(div0, file$d, 53, 2, 1858);
     			attr_dev(div1, "class", "bg-edark h-full flex flex-col box-border svelte-1xwh2qq");
-    			add_location(div1, file$d, 49, 0, 1698);
+    			add_location(div1, file$d, 48, 0, 1747);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -39175,7 +41316,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			insert_dev(target, div1, anchor);
     			append_dev(div1, header);
     			mount_component(navbar, header, null);
-    			append_dev(div1, t1);
+    			append_dev(header, t1);
+    			mount_component(sidebar, header, null);
+    			append_dev(div1, t2);
     			append_dev(div1, div0);
     			info.block.m(div0, info.anchor = null);
     			info.mount = () => div0;
@@ -39188,17 +41331,19 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     			if (dirty & /*$problem*/ 2 && promise !== (promise = /*$problem*/ ctx[1]) && handle_promise(promise, info)) ; else {
     				const child_ctx = ctx.slice();
-    				child_ctx[6] = info.resolved;
+    				child_ctx[7] = info.resolved;
     				info.block.p(child_ctx, dirty);
     			}
     		},
     		i: function intro(local) {
     			if (current) return;
     			transition_in(navbar.$$.fragment, local);
+    			transition_in(sidebar.$$.fragment, local);
     			current = true;
     		},
     		o: function outro(local) {
     			transition_out(navbar.$$.fragment, local);
+    			transition_out(sidebar.$$.fragment, local);
     			current = false;
     		},
     		d: function destroy(detaching) {
@@ -39206,6 +41351,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			if (detaching) detach_dev(t0);
     			if (detaching) detach_dev(div1);
     			destroy_component(navbar);
+    			destroy_component(sidebar);
     			info.block.d();
     			info.token = null;
     			info = null;
@@ -39214,7 +41360,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$g.name,
+    		id: create_fragment$h.name,
     		type: "component",
     		source: "",
     		ctx
@@ -39262,7 +41408,11 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$2.warn(`<Problems> was created with unknown prop '${key}'`);
     	});
 
-    	const click_handler = () => {
+    	function c_handler(event) {
+    		bubble($$self, event);
+    	}
+
+    	const func = () => {
     		location.replace(`http://localhost:5000/editProblem/${currentRoute.namedParams.id}`);
     	};
 
@@ -39279,19 +41429,19 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		if ("$problem" in $$props) problem.set($problem = $$props.$problem);
     	};
 
-    	return [currentRoute, $problem, problem, deleteProblemHandler, client, click_handler];
+    	return [currentRoute, $problem, problem, deleteProblemHandler, client, c_handler, func];
     }
 
     class Problems extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$f, create_fragment$g, safe_not_equal, { currentRoute: 0 });
+    		init(this, options, instance$f, create_fragment$h, safe_not_equal, { currentRoute: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Problems",
     			options,
-    			id: create_fragment$g.name
+    			id: create_fragment$h.name
     		});
 
     		const { ctx } = this.$$;
@@ -39329,7 +41479,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (179:4) {:catch err}
-    function create_catch_block_1$1(ctx) {
+    function create_catch_block_1(ctx) {
     	let t0;
     	let t1_value = /*err*/ ctx[9] + "";
     	let t1;
@@ -39356,7 +41506,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_catch_block_1$1.name,
+    		id: create_catch_block_1.name,
     		type: "catch",
     		source: "(179:4) {:catch err}",
     		ctx
@@ -39366,7 +41516,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (80:4) {:then result}
-    function create_then_block$3(ctx) {
+    function create_then_block$2(ctx) {
     	let t0;
     	let div16;
     	let div13;
@@ -39429,9 +41579,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		ctx,
     		current: null,
     		token: null,
-    		pending: create_pending_block_1$1,
-    		then: create_then_block_1$1,
-    		catch: create_catch_block$3,
+    		pending: create_pending_block_1,
+    		then: create_then_block_1,
+    		catch: create_catch_block$2,
     		value: 8,
     		error: 9
     	};
@@ -39680,7 +41830,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_then_block$3.name,
+    		id: create_then_block$2.name,
     		type: "then",
     		source: "(80:4) {:then result}",
     		ctx
@@ -39740,7 +41890,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (142:20) {:catch err}
-    function create_catch_block$3(ctx) {
+    function create_catch_block$2(ctx) {
     	let t0;
     	let t1_value = /*err*/ ctx[9] + "";
     	let t1;
@@ -39765,7 +41915,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_catch_block$3.name,
+    		id: create_catch_block$2.name,
     		type: "catch",
     		source: "(142:20) {:catch err}",
     		ctx
@@ -39775,7 +41925,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (136:20) {:then result}
-    function create_then_block_1$1(ctx) {
+    function create_then_block_1(ctx) {
     	let each_1_anchor;
     	let each_value = /*result*/ ctx[8].data.getAttempt;
     	let each_blocks = [];
@@ -39831,7 +41981,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_then_block_1$1.name,
+    		id: create_then_block_1.name,
     		type: "then",
     		source: "(136:20) {:then result}",
     		ctx
@@ -39891,7 +42041,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (134:37)                        Loading...                     {:then result}
-    function create_pending_block_1$1(ctx) {
+    function create_pending_block_1(ctx) {
     	let t;
 
     	const block = {
@@ -39909,7 +42059,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_pending_block_1$1.name,
+    		id: create_pending_block_1.name,
     		type: "pending",
     		source: "(134:37)                        Loading...                     {:then result}",
     		ctx
@@ -39919,7 +42069,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (78:18)        Loading ...     {:then result}
-    function create_pending_block$3(ctx) {
+    function create_pending_block$2(ctx) {
     	let t;
 
     	const block = {
@@ -39939,7 +42089,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_pending_block$3.name,
+    		id: create_pending_block$2.name,
     		type: "pending",
     		source: "(78:18)        Loading ...     {:then result}",
     		ctx
@@ -39948,7 +42098,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function create_fragment$h(ctx) {
+    function create_fragment$i(ctx) {
     	let link;
     	let t;
     	let body;
@@ -39960,9 +42110,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		ctx,
     		current: null,
     		token: null,
-    		pending: create_pending_block$3,
-    		then: create_then_block$3,
-    		catch: create_catch_block_1$1,
+    		pending: create_pending_block$2,
+    		then: create_then_block$2,
+    		catch: create_catch_block_1,
     		value: 8,
     		error: 9,
     		blocks: [,,,]
@@ -40031,7 +42181,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$h.name,
+    		id: create_fragment$i.name,
     		type: "component",
     		source: "",
     		ctx
@@ -40116,13 +42266,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Tests extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$g, create_fragment$h, safe_not_equal, { currentRoute: 5 });
+    		init(this, options, instance$g, create_fragment$i, safe_not_equal, { currentRoute: 5 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Tests",
     			options,
-    			id: create_fragment$h.name
+    			id: create_fragment$i.name
     		});
 
     		const { ctx } = this.$$;
@@ -40148,7 +42298,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     const file$f = "src/routes/send_test.svelte";
 
     // (151:8) {:catch err}
-    function create_catch_block$4(ctx) {
+    function create_catch_block$3(ctx) {
     	let t0;
     	let t1_value = /*err*/ ctx[9] + "";
     	let t1;
@@ -40173,7 +42323,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_catch_block$4.name,
+    		id: create_catch_block$3.name,
     		type: "catch",
     		source: "(151:8) {:catch err}",
     		ctx
@@ -40183,7 +42333,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (82:8) {:then result}
-    function create_then_block$4(ctx) {
+    function create_then_block$3(ctx) {
     	let div7;
     	let div6;
     	let div2;
@@ -40322,7 +42472,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_then_block$4.name,
+    		id: create_then_block$3.name,
     		type: "then",
     		source: "(82:8) {:then result}",
     		ctx
@@ -40332,7 +42482,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (80:23)            Loading...         {:then result}
-    function create_pending_block$4(ctx) {
+    function create_pending_block$3(ctx) {
     	let t;
 
     	const block = {
@@ -40350,7 +42500,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_pending_block$4.name,
+    		id: create_pending_block$3.name,
     		type: "pending",
     		source: "(80:23)            Loading...         {:then result}",
     		ctx
@@ -40359,7 +42509,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function create_fragment$i(ctx) {
+    function create_fragment$j(ctx) {
     	let link;
     	let t0;
     	let body;
@@ -40378,9 +42528,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		ctx,
     		current: null,
     		token: null,
-    		pending: create_pending_block$4,
-    		then: create_then_block$4,
-    		catch: create_catch_block$4,
+    		pending: create_pending_block$3,
+    		then: create_then_block$3,
+    		catch: create_catch_block$3,
     		value: 8,
     		error: 9
     	};
@@ -40467,7 +42617,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$i.name,
+    		id: create_fragment$j.name,
     		type: "component",
     		source: "",
     		ctx
@@ -40545,13 +42695,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Send_test extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$h, create_fragment$i, safe_not_equal, { currentRoute: 5 });
+    		init(this, options, instance$h, create_fragment$j, safe_not_equal, { currentRoute: 5 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Send_test",
     			options,
-    			id: create_fragment$i.name
+    			id: create_fragment$j.name
     		});
 
     		const { ctx } = this.$$;
@@ -40701,7 +42851,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function create_fragment$j(ctx) {
+    function create_fragment$k(ctx) {
     	let div6;
     	let div2;
     	let div0;
@@ -40810,7 +42960,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$j.name,
+    		id: create_fragment$k.name,
     		type: "component",
     		source: "",
     		ctx
@@ -40859,13 +43009,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Test_navbar extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$i, create_fragment$j, safe_not_equal, { position: 0 });
+    		init(this, options, instance$i, create_fragment$k, safe_not_equal, { position: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Test_navbar",
     			options,
-    			id: create_fragment$j.name
+    			id: create_fragment$k.name
     		});
     	}
 
@@ -40882,7 +43032,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     const file$h = "src/routes/test/loader.svelte";
 
-    function create_fragment$k(ctx) {
+    function create_fragment$l(ctx) {
     	let div3;
     	let div0;
     	let t0;
@@ -40928,7 +43078,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$k.name,
+    		id: create_fragment$l.name,
     		type: "component",
     		source: "",
     		ctx
@@ -40940,13 +43090,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Loader extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, null, create_fragment$k, safe_not_equal, {});
+    		init(this, options, null, create_fragment$l, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Loader",
     			options,
-    			id: create_fragment$k.name
+    			id: create_fragment$l.name
     		});
     	}
     }
@@ -40971,7 +43121,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (114:10) {#if uniqueNameStatus === 2}
-    function create_if_block_2$1(ctx) {
+    function create_if_block_2$2(ctx) {
     	let current;
     	const loader = new Loader({ $$inline: true });
 
@@ -40999,7 +43149,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_if_block_2$1.name,
+    		id: create_if_block_2$2.name,
     		type: "if",
     		source: "(114:10) {#if uniqueNameStatus === 2}",
     		ctx
@@ -41110,7 +43260,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function create_fragment$l(ctx) {
+    function create_fragment$m(ctx) {
     	let div15;
     	let div14;
     	let div5;
@@ -41165,7 +43315,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	let input5;
     	let current;
     	let dispose;
-    	let if_block0 = /*uniqueNameStatus*/ ctx[1] === 2 && create_if_block_2$1(ctx);
+    	let if_block0 = /*uniqueNameStatus*/ ctx[1] === 2 && create_if_block_2$2(ctx);
     	let if_block1 = /*uniqueNameStatus*/ ctx[1] === 1 && create_if_block_1$3(ctx);
     	let if_block2 = /*uniqueNameStatus*/ ctx[1] === 3 && create_if_block$5(ctx);
     	let each_value = /*tagList*/ ctx[3];
@@ -41416,7 +43566,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     			if (/*uniqueNameStatus*/ ctx[1] === 2) {
     				if (!if_block0) {
-    					if_block0 = create_if_block_2$1(ctx);
+    					if_block0 = create_if_block_2$2(ctx);
     					if_block0.c();
     					transition_in(if_block0, 1);
     					if_block0.m(div3, t5);
@@ -41522,7 +43672,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$l.name,
+    		id: create_fragment$m.name,
     		type: "component",
     		source: "",
     		ctx
@@ -41682,13 +43832,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Test_initials extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$j, create_fragment$l, safe_not_equal, {});
+    		init(this, options, instance$j, create_fragment$m, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Test_initials",
     			options,
-    			id: create_fragment$l.name
+    			id: create_fragment$m.name
     		});
     	}
     }
@@ -41703,7 +43853,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (47:2) {:catch err}
-    function create_catch_block$5(ctx) {
+    function create_catch_block$4(ctx) {
     	let t0;
     	let t1_value = /*err*/ ctx[6] + "";
     	let t1;
@@ -41728,7 +43878,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_catch_block$5.name,
+    		id: create_catch_block$4.name,
     		type: "catch",
     		source: "(47:2) {:catch err}",
     		ctx
@@ -41738,7 +43888,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (18:2) {:then result}
-    function create_then_block$5(ctx) {
+    function create_then_block$4(ctx) {
     	let each_1_anchor;
     	let each_value = /*result*/ ctx[5].data.allProblems;
     	let each_blocks = [];
@@ -41794,7 +43944,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_then_block$5.name,
+    		id: create_then_block$4.name,
     		type: "then",
     		source: "(18:2) {:then result}",
     		ctx
@@ -41891,7 +44041,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (16:20)      Loading...   {:then result}
-    function create_pending_block$5(ctx) {
+    function create_pending_block$4(ctx) {
     	let t;
 
     	const block = {
@@ -41909,7 +44059,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_pending_block$5.name,
+    		id: create_pending_block$4.name,
     		type: "pending",
     		source: "(16:20)      Loading...   {:then result}",
     		ctx
@@ -41918,7 +44068,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function create_fragment$m(ctx) {
+    function create_fragment$n(ctx) {
     	let div;
     	let promise;
 
@@ -41926,9 +44076,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		ctx,
     		current: null,
     		token: null,
-    		pending: create_pending_block$5,
-    		then: create_then_block$5,
-    		catch: create_catch_block$5,
+    		pending: create_pending_block$4,
+    		then: create_then_block$4,
+    		catch: create_catch_block$4,
     		value: 5,
     		error: 6
     	};
@@ -41973,7 +44123,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$m.name,
+    		id: create_fragment$n.name,
     		type: "component",
     		source: "",
     		ctx
@@ -42023,13 +44173,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class All_problems extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$k, create_fragment$m, safe_not_equal, { addProblem: 0 });
+    		init(this, options, instance$k, create_fragment$n, safe_not_equal, { addProblem: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "All_problems",
     			options,
-    			id: create_fragment$m.name
+    			id: create_fragment$n.name
     		});
 
     		const { ctx } = this.$$;
@@ -42169,7 +44319,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function create_fragment$n(ctx) {
+    function create_fragment$o(ctx) {
     	let div15;
     	let div13;
     	let div12;
@@ -42367,7 +44517,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$n.name,
+    		id: create_fragment$o.name,
     		type: "component",
     		source: "",
     		ctx
@@ -42481,13 +44631,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Select_problems extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$l, create_fragment$n, safe_not_equal, {});
+    		init(this, options, instance$l, create_fragment$o, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Select_problems",
     			options,
-    			id: create_fragment$n.name
+    			id: create_fragment$o.name
     		});
     	}
     }
@@ -42571,7 +44721,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function create_fragment$o(ctx) {
+    function create_fragment$p(ctx) {
     	let div;
     	let t;
     	let current;
@@ -42655,7 +44805,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$o.name,
+    		id: create_fragment$p.name,
     		type: "component",
     		source: "",
     		ctx
@@ -42690,13 +44840,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Select_page extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$m, create_fragment$o, safe_not_equal, { pageNum: 0 });
+    		init(this, options, instance$m, create_fragment$p, safe_not_equal, { pageNum: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Select_page",
     			options,
-    			id: create_fragment$o.name
+    			id: create_fragment$p.name
     		});
     	}
 
@@ -42712,7 +44862,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     /* src/routes/test/add_test.svelte generated by Svelte v3.18.1 */
     const file$m = "src/routes/test/add_test.svelte";
 
-    function create_fragment$p(ctx) {
+    function create_fragment$q(ctx) {
     	let div2;
     	let header;
     	let t0;
@@ -42843,7 +44993,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$p.name,
+    		id: create_fragment$q.name,
     		type: "component",
     		source: "",
     		ctx
@@ -42887,13 +45037,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Add_test extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$n, create_fragment$p, safe_not_equal, {});
+    		init(this, options, instance$n, create_fragment$q, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Add_test",
     			options,
-    			id: create_fragment$p.name
+    			id: create_fragment$q.name
     		});
     	}
     }
@@ -42952,7 +45102,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (243:16) {:catch err}
-    function create_catch_block$6(ctx) {
+    function create_catch_block$5(ctx) {
     	let t0;
     	let t1_value = /*err*/ ctx[18] + "";
     	let t1;
@@ -42977,7 +45127,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_catch_block$6.name,
+    		id: create_catch_block$5.name,
     		type: "catch",
     		source: "(243:16) {:catch err}",
     		ctx
@@ -42987,7 +45137,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (228:16) {:then result}
-    function create_then_block$6(ctx) {
+    function create_then_block$5(ctx) {
     	let each_1_anchor;
     	let each_value = /*result*/ ctx[17].data.allProblems;
     	let each_blocks = [];
@@ -43043,7 +45193,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_then_block$6.name,
+    		id: create_then_block$5.name,
     		type: "then",
     		source: "(228:16) {:then result}",
     		ctx
@@ -43137,7 +45287,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (226:34)                    Loading...                 {:then result}
-    function create_pending_block$6(ctx) {
+    function create_pending_block$5(ctx) {
     	let t;
 
     	const block = {
@@ -43155,7 +45305,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_pending_block$6.name,
+    		id: create_pending_block$5.name,
     		type: "pending",
     		source: "(226:34)                    Loading...                 {:then result}",
     		ctx
@@ -43164,7 +45314,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function create_fragment$q(ctx) {
+    function create_fragment$r(ctx) {
     	let link;
     	let t0;
     	let body;
@@ -43243,9 +45393,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		ctx,
     		current: null,
     		token: null,
-    		pending: create_pending_block$6,
-    		then: create_then_block$6,
-    		catch: create_catch_block$6,
+    		pending: create_pending_block$5,
+    		then: create_then_block$5,
+    		catch: create_catch_block$5,
     		value: 17,
     		error: 18
     	};
@@ -43602,7 +45752,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$q.name,
+    		id: create_fragment$r.name,
     		type: "component",
     		source: "",
     		ctx
@@ -43774,13 +45924,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class EditTest extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$o, create_fragment$q, safe_not_equal, { currentRoute: 7 });
+    		init(this, options, instance$o, create_fragment$r, safe_not_equal, { currentRoute: 7 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "EditTest",
     			options,
-    			id: create_fragment$q.name
+    			id: create_fragment$r.name
     		});
 
     		const { ctx } = this.$$;
@@ -43930,7 +46080,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function create_fragment$r(ctx) {
+    function create_fragment$s(ctx) {
     	let div8;
     	let div2;
     	let div0;
@@ -44057,7 +46207,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$r.name,
+    		id: create_fragment$s.name,
     		type: "component",
     		source: "",
     		ctx
@@ -44106,13 +46256,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Problem_navbar extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$p, create_fragment$r, safe_not_equal, { position: 0 });
+    		init(this, options, instance$p, create_fragment$s, safe_not_equal, { position: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Problem_navbar",
     			options,
-    			id: create_fragment$r.name
+    			id: create_fragment$s.name
     		});
     	}
 
@@ -44129,7 +46279,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     const file$p = "src/routes/problem/loader.svelte";
 
-    function create_fragment$s(ctx) {
+    function create_fragment$t(ctx) {
     	let div3;
     	let div0;
     	let t0;
@@ -44175,7 +46325,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$s.name,
+    		id: create_fragment$t.name,
     		type: "component",
     		source: "",
     		ctx
@@ -44187,13 +46337,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Loader$1 extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, null, create_fragment$s, safe_not_equal, {});
+    		init(this, options, null, create_fragment$t, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Loader",
     			options,
-    			id: create_fragment$s.name
+    			id: create_fragment$t.name
     		});
     	}
     }
@@ -44220,7 +46370,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (118:10) {#if uniqueNameStatus === 2}
-    function create_if_block_2$2(ctx) {
+    function create_if_block_2$3(ctx) {
     	let current;
     	const loader = new Loader$1({ $$inline: true });
 
@@ -44248,7 +46398,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_if_block_2$2.name,
+    		id: create_if_block_2$3.name,
     		type: "if",
     		source: "(118:10) {#if uniqueNameStatus === 2}",
     		ctx
@@ -44359,7 +46509,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function create_fragment$t(ctx) {
+    function create_fragment$u(ctx) {
     	let div14;
     	let div13;
     	let div5;
@@ -44405,7 +46555,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	let input3;
     	let current;
     	let dispose;
-    	let if_block0 = /*uniqueNameStatus*/ ctx[2] === 2 && create_if_block_2$2(ctx);
+    	let if_block0 = /*uniqueNameStatus*/ ctx[2] === 2 && create_if_block_2$3(ctx);
     	let if_block1 = /*uniqueNameStatus*/ ctx[2] === 1 && create_if_block_1$5(ctx);
     	let if_block2 = /*uniqueNameStatus*/ ctx[2] === 3 && create_if_block$8(ctx);
     	let each_value = /*tagList*/ ctx[4];
@@ -44612,7 +46762,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     			if (/*uniqueNameStatus*/ ctx[2] === 2) {
     				if (!if_block0) {
-    					if_block0 = create_if_block_2$2(ctx);
+    					if_block0 = create_if_block_2$3(ctx);
     					if_block0.c();
     					transition_in(if_block0, 1);
     					if_block0.m(div3, t5);
@@ -44707,7 +46857,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$t.name,
+    		id: create_fragment$u.name,
     		type: "component",
     		source: "",
     		ctx
@@ -44853,13 +47003,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Problem_initials extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$q, create_fragment$t, safe_not_equal, {});
+    		init(this, options, instance$q, create_fragment$u, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Problem_initials",
     			options,
-    			id: create_fragment$t.name
+    			id: create_fragment$u.name
     		});
     	}
     }
@@ -44867,7 +47017,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     /* src/routes/problem/problem_statement.svelte generated by Svelte v3.18.1 */
     const file$r = "src/routes/problem/problem_statement.svelte";
 
-    function create_fragment$u(ctx) {
+    function create_fragment$v(ctx) {
     	let div2;
     	let div1;
     	let div0;
@@ -44925,7 +47075,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$u.name,
+    		id: create_fragment$v.name,
     		type: "component",
     		source: "",
     		ctx
@@ -44958,13 +47108,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Problem_statement extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$r, create_fragment$u, safe_not_equal, {});
+    		init(this, options, instance$r, create_fragment$v, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Problem_statement",
     			options,
-    			id: create_fragment$u.name
+    			id: create_fragment$v.name
     		});
     	}
     }
@@ -44972,7 +47122,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     /* src/routes/problem/testcase.svelte generated by Svelte v3.18.1 */
     const file$s = "src/routes/problem/testcase.svelte";
 
-    function create_fragment$v(ctx) {
+    function create_fragment$w(ctx) {
     	let div2;
     	let h1;
     	let t1;
@@ -45033,7 +47183,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$v.name,
+    		id: create_fragment$w.name,
     		type: "component",
     		source: "",
     		ctx
@@ -45128,13 +47278,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Testcase extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$s, create_fragment$v, safe_not_equal, {});
+    		init(this, options, instance$s, create_fragment$w, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Testcase",
     			options,
-    			id: create_fragment$v.name
+    			id: create_fragment$w.name
     		});
     	}
     }
@@ -45142,7 +47292,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     /* src/routes/problem/problem_solution.svelte generated by Svelte v3.18.1 */
     const file$t = "src/routes/problem/problem_solution.svelte";
 
-    function create_fragment$w(ctx) {
+    function create_fragment$x(ctx) {
     	let div8;
     	let h1;
     	let t1;
@@ -45272,7 +47422,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$w.name,
+    		id: create_fragment$x.name,
     		type: "component",
     		source: "",
     		ctx
@@ -45390,13 +47540,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Problem_solution extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$t, create_fragment$w, safe_not_equal, {});
+    		init(this, options, instance$t, create_fragment$x, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Problem_solution",
     			options,
-    			id: create_fragment$w.name
+    			id: create_fragment$x.name
     		});
     	}
     }
@@ -45443,7 +47593,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (13:2) {#if pageNum === 2}
-    function create_if_block_2$3(ctx) {
+    function create_if_block_2$4(ctx) {
     	let current;
     	const problemstatement = new Problem_statement({ $$inline: true });
 
@@ -45471,7 +47621,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_if_block_2$3.name,
+    		id: create_if_block_2$4.name,
     		type: "if",
     		source: "(13:2) {#if pageNum === 2}",
     		ctx
@@ -45556,14 +47706,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function create_fragment$x(ctx) {
+    function create_fragment$y(ctx) {
     	let div;
     	let t0;
     	let t1;
     	let t2;
     	let current;
     	let if_block0 = /*pageNum*/ ctx[0] === 1 && create_if_block_3(ctx);
-    	let if_block1 = /*pageNum*/ ctx[0] === 2 && create_if_block_2$3(ctx);
+    	let if_block1 = /*pageNum*/ ctx[0] === 2 && create_if_block_2$4(ctx);
     	let if_block2 = /*pageNum*/ ctx[0] === 3 && create_if_block_1$6(ctx);
     	let if_block3 = /*pageNum*/ ctx[0] === 4 && create_if_block$9(ctx);
 
@@ -45615,7 +47765,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     			if (/*pageNum*/ ctx[0] === 2) {
     				if (!if_block1) {
-    					if_block1 = create_if_block_2$3(ctx);
+    					if_block1 = create_if_block_2$4(ctx);
     					if_block1.c();
     					transition_in(if_block1, 1);
     					if_block1.m(div, t1);
@@ -45696,7 +47846,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$x.name,
+    		id: create_fragment$y.name,
     		type: "component",
     		source: "",
     		ctx
@@ -45731,13 +47881,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Select_page$1 extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$u, create_fragment$x, safe_not_equal, { pageNum: 0 });
+    		init(this, options, instance$u, create_fragment$y, safe_not_equal, { pageNum: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Select_page",
     			options,
-    			id: create_fragment$x.name
+    			id: create_fragment$y.name
     		});
     	}
 
@@ -45753,23 +47903,25 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     /* src/routes/problem/add_problem.svelte generated by Svelte v3.18.1 */
     const file$v = "src/routes/problem/add_problem.svelte";
 
-    function create_fragment$y(ctx) {
+    function create_fragment$z(ctx) {
     	let div2;
     	let header;
     	let t0;
-    	let subheader;
     	let t1;
-    	let main;
+    	let subheader;
     	let t2;
+    	let main;
+    	let t3;
     	let footer;
     	let div0;
     	let button0;
-    	let t4;
+    	let t5;
     	let div1;
     	let button1;
     	let current;
     	let dispose;
     	const navbar = new Navbar({ $$inline: true });
+    	const sidebar = new Side({ $$inline: true });
 
     	const subnavbar = new Problem_navbar({
     			props: { position: /*pageNum*/ ctx[0] },
@@ -45790,40 +47942,42 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			header = element("header");
     			create_component(navbar.$$.fragment);
     			t0 = space();
+    			create_component(sidebar.$$.fragment);
+    			t1 = space();
     			subheader = element("subheader");
     			create_component(subnavbar.$$.fragment);
-    			t1 = space();
+    			t2 = space();
     			main = element("main");
     			create_component(selectpage.$$.fragment);
-    			t2 = space();
+    			t3 = space();
     			footer = element("footer");
     			div0 = element("div");
     			button0 = element("button");
     			button0.textContent = "Prev";
-    			t4 = space();
+    			t5 = space();
     			div1 = element("div");
     			button1 = element("button");
     			button1.textContent = "Next";
     			attr_dev(subheader, "class", "svelte-1cw36oz");
-    			add_location(subheader, file$v, 16, 4, 683);
+    			add_location(subheader, file$v, 18, 4, 753);
     			attr_dev(header, "class", "svelte-1cw36oz");
-    			add_location(header, file$v, 14, 2, 655);
+    			add_location(header, file$v, 15, 2, 709);
     			attr_dev(main, "class", " mx-auto w-full flex-grow overflow-auto svelte-1cw36oz");
-    			add_location(main, file$v, 20, 2, 765);
+    			add_location(main, file$v, 22, 2, 835);
     			attr_dev(button0, "id", "prevbutton");
     			attr_dev(button0, "class", "py-4 px-6 float-left shadow-md no-underline rounded-full bg-dark\n        text-white font-sans font-semibold text-sm border-white btn-primary\n        hover:text-white text-xl hover:bg-elight focus:outline-none\n        active:shadow-none mr-2 svelte-1cw36oz");
-    			add_location(button0, file$v, 25, 6, 966);
+    			add_location(button0, file$v, 27, 6, 1036);
     			attr_dev(div0, "class", "flex-1  svelte-1cw36oz");
-    			add_location(div0, file$v, 24, 4, 938);
+    			add_location(div0, file$v, 26, 4, 1008);
     			attr_dev(button1, "id", "nextbutton");
     			attr_dev(button1, "class", "py-4 px-6 shadow-md text-xl float-right no-underline rounded-full\n        bg-dark text-white font-sans font-semibold text-sm border-white\n        btn-primary hover:text-dark hover:bg-elight focus:outline-none\n        active:shadow-none mr-2 svelte-1cw36oz");
-    			add_location(button1, file$v, 42, 6, 1480);
+    			add_location(button1, file$v, 44, 6, 1550);
     			attr_dev(div1, "class", "flex-1 svelte-1cw36oz");
-    			add_location(div1, file$v, 41, 4, 1453);
+    			add_location(div1, file$v, 43, 4, 1523);
     			attr_dev(footer, "class", " footer my-8 w-full px-20 mx-auto sticky svelte-1cw36oz");
-    			add_location(footer, file$v, 23, 2, 876);
+    			add_location(footer, file$v, 25, 2, 946);
     			attr_dev(div2, "class", "w-screen bg-edark h-screen flex flex-col svelte-1cw36oz");
-    			add_location(div2, file$v, 13, 0, 598);
+    			add_location(div2, file$v, 14, 0, 652);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -45833,16 +47987,18 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			append_dev(div2, header);
     			mount_component(navbar, header, null);
     			append_dev(header, t0);
+    			mount_component(sidebar, header, null);
+    			append_dev(header, t1);
     			append_dev(header, subheader);
     			mount_component(subnavbar, subheader, null);
-    			append_dev(div2, t1);
+    			append_dev(div2, t2);
     			append_dev(div2, main);
     			mount_component(selectpage, main, null);
-    			append_dev(div2, t2);
+    			append_dev(div2, t3);
     			append_dev(div2, footer);
     			append_dev(footer, div0);
     			append_dev(div0, button0);
-    			append_dev(footer, t4);
+    			append_dev(footer, t5);
     			append_dev(footer, div1);
     			append_dev(div1, button1);
     			current = true;
@@ -45863,12 +48019,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		i: function intro(local) {
     			if (current) return;
     			transition_in(navbar.$$.fragment, local);
+    			transition_in(sidebar.$$.fragment, local);
     			transition_in(subnavbar.$$.fragment, local);
     			transition_in(selectpage.$$.fragment, local);
     			current = true;
     		},
     		o: function outro(local) {
     			transition_out(navbar.$$.fragment, local);
+    			transition_out(sidebar.$$.fragment, local);
     			transition_out(subnavbar.$$.fragment, local);
     			transition_out(selectpage.$$.fragment, local);
     			current = false;
@@ -45876,6 +48034,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		d: function destroy(detaching) {
     			if (detaching) detach_dev(div2);
     			destroy_component(navbar);
+    			destroy_component(sidebar);
     			destroy_component(subnavbar);
     			destroy_component(selectpage);
     			run_all(dispose);
@@ -45884,7 +48043,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$y.name,
+    		id: create_fragment$z.name,
     		type: "component",
     		source: "",
     		ctx
@@ -45928,13 +48087,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Add_problem extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$v, create_fragment$y, safe_not_equal, {});
+    		init(this, options, instance$v, create_fragment$z, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Add_problem",
     			options,
-    			id: create_fragment$y.name
+    			id: create_fragment$z.name
     		});
     	}
     }
@@ -46069,7 +48228,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function create_fragment$z(ctx) {
+    function create_fragment$A(ctx) {
     	let div8;
     	let div2;
     	let div0;
@@ -46196,7 +48355,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$z.name,
+    		id: create_fragment$A.name,
     		type: "component",
     		source: "",
     		ctx
@@ -46245,13 +48404,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Problem_navbar$1 extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$w, create_fragment$z, safe_not_equal, { position: 0 });
+    		init(this, options, instance$w, create_fragment$A, safe_not_equal, { position: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Problem_navbar",
     			options,
-    			id: create_fragment$z.name
+    			id: create_fragment$A.name
     		});
     	}
 
@@ -46268,7 +48427,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     const file$x = "src/routes/update_problem/loader.svelte";
 
-    function create_fragment$A(ctx) {
+    function create_fragment$B(ctx) {
     	let div3;
     	let div0;
     	let t0;
@@ -46314,7 +48473,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$A.name,
+    		id: create_fragment$B.name,
     		type: "component",
     		source: "",
     		ctx
@@ -46326,13 +48485,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Loader$2 extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, null, create_fragment$A, safe_not_equal, {});
+    		init(this, options, null, create_fragment$B, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Loader",
     			options,
-    			id: create_fragment$A.name
+    			id: create_fragment$B.name
     		});
     	}
     }
@@ -46359,7 +48518,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (128:10) {#if uniqueNameStatus === 2}
-    function create_if_block_2$4(ctx) {
+    function create_if_block_2$5(ctx) {
     	let current;
     	const loader = new Loader$2({ $$inline: true });
 
@@ -46387,7 +48546,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_if_block_2$4.name,
+    		id: create_if_block_2$5.name,
     		type: "if",
     		source: "(128:10) {#if uniqueNameStatus === 2}",
     		ctx
@@ -46498,7 +48657,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function create_fragment$B(ctx) {
+    function create_fragment$C(ctx) {
     	let div14;
     	let div13;
     	let div5;
@@ -46544,7 +48703,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	let input3;
     	let current;
     	let dispose;
-    	let if_block0 = /*uniqueNameStatus*/ ctx[0] === 2 && create_if_block_2$4(ctx);
+    	let if_block0 = /*uniqueNameStatus*/ ctx[0] === 2 && create_if_block_2$5(ctx);
     	let if_block1 = /*uniqueNameStatus*/ ctx[0] === 1 && create_if_block_1$7(ctx);
     	let if_block2 = /*uniqueNameStatus*/ ctx[0] === 3 && create_if_block$b(ctx);
     	let each_value = /*tagList*/ ctx[4];
@@ -46752,7 +48911,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     			if (/*uniqueNameStatus*/ ctx[0] === 2) {
     				if (!if_block0) {
-    					if_block0 = create_if_block_2$4(ctx);
+    					if_block0 = create_if_block_2$5(ctx);
     					if_block0.c();
     					transition_in(if_block0, 1);
     					if_block0.m(div3, t5);
@@ -46847,7 +49006,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$B.name,
+    		id: create_fragment$C.name,
     		type: "component",
     		source: "",
     		ctx
@@ -47021,13 +49180,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Problem_initials$1 extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$x, create_fragment$B, safe_not_equal, {});
+    		init(this, options, instance$x, create_fragment$C, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Problem_initials",
     			options,
-    			id: create_fragment$B.name
+    			id: create_fragment$C.name
     		});
     	}
     }
@@ -47035,7 +49194,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     /* src/routes/update_problem/problem_statement.svelte generated by Svelte v3.18.1 */
     const file$z = "src/routes/update_problem/problem_statement.svelte";
 
-    function create_fragment$C(ctx) {
+    function create_fragment$D(ctx) {
     	let div2;
     	let div1;
     	let div0;
@@ -47093,7 +49252,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$C.name,
+    		id: create_fragment$D.name,
     		type: "component",
     		source: "",
     		ctx
@@ -47126,13 +49285,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Problem_statement$1 extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$y, create_fragment$C, safe_not_equal, {});
+    		init(this, options, instance$y, create_fragment$D, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Problem_statement",
     			options,
-    			id: create_fragment$C.name
+    			id: create_fragment$D.name
     		});
     	}
     }
@@ -47142,7 +49301,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     const { console: console_1$6 } = globals;
     const file$A = "src/routes/update_problem/testcase.svelte";
 
-    function create_fragment$D(ctx) {
+    function create_fragment$E(ctx) {
     	let div2;
     	let h1;
     	let t1;
@@ -47203,7 +49362,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$D.name,
+    		id: create_fragment$E.name,
     		type: "component",
     		source: "",
     		ctx
@@ -47319,13 +49478,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Testcase$1 extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$z, create_fragment$D, safe_not_equal, { currentRoute: 2 });
+    		init(this, options, instance$z, create_fragment$E, safe_not_equal, { currentRoute: 2 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Testcase",
     			options,
-    			id: create_fragment$D.name
+    			id: create_fragment$E.name
     		});
 
     		const { ctx } = this.$$;
@@ -47348,7 +49507,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     /* src/routes/update_problem/problem_solution.svelte generated by Svelte v3.18.1 */
     const file$B = "src/routes/update_problem/problem_solution.svelte";
 
-    function create_fragment$E(ctx) {
+    function create_fragment$F(ctx) {
     	let div8;
     	let h1;
     	let t1;
@@ -47478,7 +49637,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$E.name,
+    		id: create_fragment$F.name,
     		type: "component",
     		source: "",
     		ctx
@@ -47595,13 +49754,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Problem_solution$1 extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$A, create_fragment$E, safe_not_equal, {});
+    		init(this, options, instance$A, create_fragment$F, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Problem_solution",
     			options,
-    			id: create_fragment$E.name
+    			id: create_fragment$F.name
     		});
     	}
     }
@@ -47648,7 +49807,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (15:2) {#if pageNum === 2}
-    function create_if_block_2$5(ctx) {
+    function create_if_block_2$6(ctx) {
     	let current;
     	const problemstatement = new Problem_statement$1({ $$inline: true });
 
@@ -47676,7 +49835,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_if_block_2$5.name,
+    		id: create_if_block_2$6.name,
     		type: "if",
     		source: "(15:2) {#if pageNum === 2}",
     		ctx
@@ -47770,14 +49929,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function create_fragment$F(ctx) {
+    function create_fragment$G(ctx) {
     	let div;
     	let t0;
     	let t1;
     	let t2;
     	let current;
     	let if_block0 = /*pageNum*/ ctx[0] === 1 && create_if_block_3$1(ctx);
-    	let if_block1 = /*pageNum*/ ctx[0] === 2 && create_if_block_2$5(ctx);
+    	let if_block1 = /*pageNum*/ ctx[0] === 2 && create_if_block_2$6(ctx);
     	let if_block2 = /*pageNum*/ ctx[0] === 3 && create_if_block_1$8(ctx);
     	let if_block3 = /*pageNum*/ ctx[0] === 4 && create_if_block$c(ctx);
 
@@ -47829,7 +49988,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     			if (/*pageNum*/ ctx[0] === 2) {
     				if (!if_block1) {
-    					if_block1 = create_if_block_2$5(ctx);
+    					if_block1 = create_if_block_2$6(ctx);
     					if_block1.c();
     					transition_in(if_block1, 1);
     					if_block1.m(div, t1);
@@ -47911,7 +50070,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$F.name,
+    		id: create_fragment$G.name,
     		type: "component",
     		source: "",
     		ctx
@@ -47949,13 +50108,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Select_page$2 extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$B, create_fragment$F, safe_not_equal, { pageNum: 0, currentRoute: 1 });
+    		init(this, options, instance$B, create_fragment$G, safe_not_equal, { pageNum: 0, currentRoute: 1 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Select_page",
     			options,
-    			id: create_fragment$F.name
+    			id: create_fragment$G.name
     		});
 
     		const { ctx } = this.$$;
@@ -47988,7 +50147,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     const { console: console_1$7 } = globals;
     const file$D = "src/routes/update_problem/edit_problem.svelte";
 
-    function create_fragment$G(ctx) {
+    function create_fragment$H(ctx) {
     	let div2;
     	let header;
     	let t0;
@@ -48121,7 +50280,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$G.name,
+    		id: create_fragment$H.name,
     		type: "component",
     		source: "",
     		ctx
@@ -48221,13 +50380,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Edit_problem extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$C, create_fragment$G, safe_not_equal, { currentRoute: 0 });
+    		init(this, options, instance$C, create_fragment$H, safe_not_equal, { currentRoute: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Edit_problem",
     			options,
-    			id: create_fragment$G.name
+    			id: create_fragment$H.name
     		});
 
     		const { ctx } = this.$$;
@@ -48251,7 +50410,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     const file$E = "src/routes/thankyou.svelte";
 
-    function create_fragment$H(ctx) {
+    function create_fragment$I(ctx) {
     	let h10;
     	let t1;
     	let h11;
@@ -48296,7 +50455,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$H.name,
+    		id: create_fragment$I.name,
     		type: "component",
     		source: "",
     		ctx
@@ -48308,91 +50467,1016 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Thankyou extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, null, create_fragment$H, safe_not_equal, {});
+    		init(this, options, null, create_fragment$I, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Thankyou",
     			options,
-    			id: create_fragment$H.name
+    			id: create_fragment$I.name
     		});
     	}
     }
 
-    /* src/routes/pubnub.svelte generated by Svelte v3.18.1 */
-    const file$F = "src/routes/pubnub.svelte";
+    /* src/routes/AdminPanel.svelte generated by Svelte v3.18.1 */
 
-    function get_each_context$d(ctx, list, i) {
+    const { console: console_1$8, document: document_1 } = globals;
+    const file$F = "src/routes/AdminPanel.svelte";
+
+    function get_each_context_2(ctx, list, i) {
     	const child_ctx = ctx.slice();
     	child_ctx[18] = list[i];
     	return child_ctx;
     }
 
-    // (265:4) {:else}
-    function create_else_block$2(ctx) {
-    	let div;
-    	let button;
+    function get_each_context_1$3(ctx, list, i) {
+    	const child_ctx = ctx.slice();
+    	child_ctx[15] = list[i];
+    	return child_ctx;
+    }
+
+    function get_each_context$d(ctx, list, i) {
+    	const child_ctx = ctx.slice();
+    	child_ctx[12] = list[i];
+    	return child_ctx;
+    }
+
+    // (166:55) 
+    function create_if_block_2$7(ctx) {
+    	let h1;
+    	let t1;
+    	let input;
+    	let t2;
+    	let table;
+    	let thead;
+    	let tr;
+    	let th0;
+    	let t4;
+    	let th1;
+    	let t6;
+    	let th2;
+    	let t8;
+    	let th3;
+    	let t10;
+    	let tbody;
+    	let promise;
     	let dispose;
+
+    	let info = {
+    		ctx,
+    		current: null,
+    		token: null,
+    		pending: create_pending_block_2,
+    		then: create_then_block_2,
+    		catch: create_catch_block_2,
+    		value: 10,
+    		error: 11
+    	};
+
+    	handle_promise(promise = /*$Attempts*/ ctx[3], info);
 
     	const block = {
     		c: function create() {
-    			div = element("div");
-    			button = element("button");
-    			button.textContent = "Helpdesk...";
-    			attr_dev(button, "class", "bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4\n          rounded-full svelte-vqb2s2");
-    			add_location(button, file$F, 266, 8, 8882);
-    			attr_dev(div, "class", "btm svelte-vqb2s2");
-    			add_location(div, file$F, 265, 6, 8856);
+    			h1 = element("h1");
+    			h1.textContent = "Scoreboard:";
+    			t1 = space();
+    			input = element("input");
+    			t2 = space();
+    			table = element("table");
+    			thead = element("thead");
+    			tr = element("tr");
+    			th0 = element("th");
+    			th0.textContent = "User Name";
+    			t4 = space();
+    			th1 = element("th");
+    			th1.textContent = "College Name";
+    			t6 = space();
+    			th2 = element("th");
+    			th2.textContent = "Test Name";
+    			t8 = space();
+    			th3 = element("th");
+    			th3.textContent = "Score";
+    			t10 = space();
+    			tbody = element("tbody");
+    			info.block.c();
+    			attr_dev(h1, "class", "mb-8");
+    			add_location(h1, file$F, 167, 5, 7327);
+    			attr_dev(input, "type", "text");
+    			attr_dev(input, "id", "myInput");
+    			attr_dev(input, "placeholder", "Search for users..");
+    			attr_dev(input, "title", "Type in a name");
+    			set_style(input, "width", "100%");
+    			attr_dev(input, "class", "svelte-1jk77du");
+    			add_location(input, file$F, 168, 6, 7368);
+    			attr_dev(th0, "class", "p-4 w-1/4");
+    			add_location(th0, file$F, 172, 7, 7647);
+    			attr_dev(th1, "class", "p-4 w-1/4");
+    			add_location(th1, file$F, 173, 7, 7691);
+    			attr_dev(th2, "class", "p-4 w-1/4");
+    			add_location(th2, file$F, 174, 7, 7738);
+    			attr_dev(th3, "class", "p-4 w-1/4");
+    			add_location(th3, file$F, 175, 7, 7782);
+    			attr_dev(tr, "class", "flex w-full mb-4");
+    			add_location(tr, file$F, 171, 6, 7610);
+    			attr_dev(thead, "class", "bg-black flex text-white w-full");
+    			add_location(thead, file$F, 170, 5, 7556);
+    			attr_dev(tbody, "class", "bg-grey-light flex flex-col items-center justify-between overflow-y-scroll w-full");
+    			set_style(tbody, "height", "50vh");
+    			add_location(tbody, file$F, 178, 5, 7846);
+    			attr_dev(table, "id", "myTable");
+    			attr_dev(table, "class", "text-left w-full");
+    			add_location(table, file$F, 169, 5, 7504);
     		},
     		m: function mount(target, anchor) {
-    			insert_dev(target, div, anchor);
-    			append_dev(div, button);
-    			dispose = listen_dev(button, "click", /*joined*/ ctx[3], false, false, false);
+    			insert_dev(target, h1, anchor);
+    			insert_dev(target, t1, anchor);
+    			insert_dev(target, input, anchor);
+    			insert_dev(target, t2, anchor);
+    			insert_dev(target, table, anchor);
+    			append_dev(table, thead);
+    			append_dev(thead, tr);
+    			append_dev(tr, th0);
+    			append_dev(tr, t4);
+    			append_dev(tr, th1);
+    			append_dev(tr, t6);
+    			append_dev(tr, th2);
+    			append_dev(tr, t8);
+    			append_dev(tr, th3);
+    			append_dev(table, t10);
+    			append_dev(table, tbody);
+    			info.block.m(tbody, info.anchor = null);
+    			info.mount = () => tbody;
+    			info.anchor = null;
+    			dispose = listen_dev(input, "keyup", myFunction$1, false, false, false);
     		},
-    		p: noop,
+    		p: function update(new_ctx, dirty) {
+    			ctx = new_ctx;
+    			info.ctx = ctx;
+
+    			if (dirty & /*$Attempts*/ 8 && promise !== (promise = /*$Attempts*/ ctx[3]) && handle_promise(promise, info)) ; else {
+    				const child_ctx = ctx.slice();
+    				child_ctx[10] = info.resolved;
+    				info.block.p(child_ctx, dirty);
+    			}
+    		},
     		d: function destroy(detaching) {
-    			if (detaching) detach_dev(div);
+    			if (detaching) detach_dev(h1);
+    			if (detaching) detach_dev(t1);
+    			if (detaching) detach_dev(input);
+    			if (detaching) detach_dev(t2);
+    			if (detaching) detach_dev(table);
+    			info.block.d();
+    			info.token = null;
+    			info = null;
     			dispose();
     		}
     	};
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_else_block$2.name,
-    		type: "else",
-    		source: "(265:4) {:else}",
+    		id: create_if_block_2$7.name,
+    		type: "if",
+    		source: "(166:55) ",
     		ctx
     	});
 
     	return block;
     }
 
-    // (229:4) {#if hasJoinedChat}
-    function create_if_block$d(ctx) {
-    	let div2;
-    	let div0;
-    	let button0;
+    // (127:53) 
+    function create_if_block_1$9(ctx) {
+    	let h1;
     	let t1;
-    	let p0;
-    	let a;
-    	let img;
-    	let img_src_value;
-    	let t2;
-    	let p1;
-    	let t3;
-    	let p2;
-    	let t5;
-    	let form;
+    	let div;
     	let input;
+    	let t2;
+    	let a;
+    	let t4;
+    	let table;
+    	let thead;
+    	let tr;
+    	let th0;
     	let t6;
-    	let button1;
+    	let th1;
     	let t8;
-    	let p3;
+    	let th2;
     	let t10;
-    	let div1;
-    	let ul;
+    	let tbody;
+    	let promise;
     	let dispose;
-    	let each_value = /*output*/ ctx[2];
+
+    	let info = {
+    		ctx,
+    		current: null,
+    		token: null,
+    		pending: create_pending_block_1$1,
+    		then: create_then_block_1$1,
+    		catch: create_catch_block_1$1,
+    		value: 10,
+    		error: 11
+    	};
+
+    	handle_promise(promise = /*$Test*/ ctx[2], info);
+
+    	const block = {
+    		c: function create() {
+    			h1 = element("h1");
+    			h1.textContent = "All Tests:";
+    			t1 = space();
+    			div = element("div");
+    			input = element("input");
+    			t2 = space();
+    			a = element("a");
+    			a.textContent = "Add Test";
+    			t4 = space();
+    			table = element("table");
+    			thead = element("thead");
+    			tr = element("tr");
+    			th0 = element("th");
+    			th0.textContent = "Test Name";
+    			t6 = space();
+    			th1 = element("th");
+    			th1.textContent = "Difficulty";
+    			t8 = space();
+    			th2 = element("th");
+    			th2.textContent = "CreatedAt";
+    			t10 = space();
+    			tbody = element("tbody");
+    			info.block.c();
+    			attr_dev(h1, "class", "mb-8");
+    			add_location(h1, file$F, 127, 5, 5769);
+    			attr_dev(input, "type", "text");
+    			attr_dev(input, "id", "myInput");
+    			attr_dev(input, "placeholder", "Search for Tests..");
+    			attr_dev(input, "title", "Type in a name");
+    			set_style(input, "width", "90%");
+    			attr_dev(input, "class", "svelte-1jk77du");
+    			add_location(input, file$F, 129, 6, 5820);
+    			attr_dev(a, "href", "/newtest");
+    			attr_dev(a, "class", "add-btn svelte-1jk77du");
+    			add_location(a, file$F, 130, 6, 5956);
+    			add_location(div, file$F, 128, 5, 5808);
+    			attr_dev(th0, "class", "p-4 w-1/3");
+    			add_location(th0, file$F, 135, 7, 6167);
+    			attr_dev(th1, "class", "p-4 w-1/3");
+    			add_location(th1, file$F, 136, 7, 6211);
+    			attr_dev(th2, "class", "p-4 w-1/3");
+    			add_location(th2, file$F, 137, 7, 6256);
+    			attr_dev(tr, "class", "flex w-full mb-4");
+    			add_location(tr, file$F, 134, 6, 6130);
+    			attr_dev(thead, "class", "bg-black flex text-white w-full");
+    			add_location(thead, file$F, 133, 5, 6076);
+    			attr_dev(tbody, "class", "bg-grey-light flex flex-col items-center justify-between overflow-y-scroll w-full");
+    			set_style(tbody, "height", "50vh");
+    			add_location(tbody, file$F, 140, 5, 6324);
+    			attr_dev(table, "id", "myTable");
+    			attr_dev(table, "class", "text-left w-full");
+    			add_location(table, file$F, 132, 5, 6024);
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, h1, anchor);
+    			insert_dev(target, t1, anchor);
+    			insert_dev(target, div, anchor);
+    			append_dev(div, input);
+    			append_dev(div, t2);
+    			append_dev(div, a);
+    			insert_dev(target, t4, anchor);
+    			insert_dev(target, table, anchor);
+    			append_dev(table, thead);
+    			append_dev(thead, tr);
+    			append_dev(tr, th0);
+    			append_dev(tr, t6);
+    			append_dev(tr, th1);
+    			append_dev(tr, t8);
+    			append_dev(tr, th2);
+    			append_dev(table, t10);
+    			append_dev(table, tbody);
+    			info.block.m(tbody, info.anchor = null);
+    			info.mount = () => tbody;
+    			info.anchor = null;
+    			dispose = listen_dev(input, "keyup", myFunction$1, false, false, false);
+    		},
+    		p: function update(new_ctx, dirty) {
+    			ctx = new_ctx;
+    			info.ctx = ctx;
+
+    			if (dirty & /*$Test*/ 4 && promise !== (promise = /*$Test*/ ctx[2]) && handle_promise(promise, info)) ; else {
+    				const child_ctx = ctx.slice();
+    				child_ctx[10] = info.resolved;
+    				info.block.p(child_ctx, dirty);
+    			}
+    		},
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(h1);
+    			if (detaching) detach_dev(t1);
+    			if (detaching) detach_dev(div);
+    			if (detaching) detach_dev(t4);
+    			if (detaching) detach_dev(table);
+    			info.block.d();
+    			info.token = null;
+    			info = null;
+    			dispose();
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_if_block_1$9.name,
+    		type: "if",
+    		source: "(127:53) ",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (89:7) {#if currentRoute.name ==="/showproblems"}
+    function create_if_block$d(ctx) {
+    	let h1;
+    	let t1;
+    	let div;
+    	let input;
+    	let t2;
+    	let a;
+    	let t4;
+    	let table;
+    	let thead;
+    	let tr;
+    	let th0;
+    	let t6;
+    	let th1;
+    	let t8;
+    	let th2;
+    	let t10;
+    	let th3;
+    	let t12;
+    	let tbody;
+    	let promise;
+    	let dispose;
+
+    	let info = {
+    		ctx,
+    		current: null,
+    		token: null,
+    		pending: create_pending_block$6,
+    		then: create_then_block$6,
+    		catch: create_catch_block$6,
+    		value: 10,
+    		error: 11
+    	};
+
+    	handle_promise(promise = /*$Problem*/ ctx[1], info);
+
+    	const block = {
+    		c: function create() {
+    			h1 = element("h1");
+    			h1.textContent = "All Problems:";
+    			t1 = space();
+    			div = element("div");
+    			input = element("input");
+    			t2 = space();
+    			a = element("a");
+    			a.textContent = "Add Problem";
+    			t4 = space();
+    			table = element("table");
+    			thead = element("thead");
+    			tr = element("tr");
+    			th0 = element("th");
+    			th0.textContent = "Problem Name";
+    			t6 = space();
+    			th1 = element("th");
+    			th1.textContent = "Tag";
+    			t8 = space();
+    			th2 = element("th");
+    			th2.textContent = "Time Limit";
+    			t10 = space();
+    			th3 = element("th");
+    			th3.textContent = "CreatedAt";
+    			t12 = space();
+    			tbody = element("tbody");
+    			info.block.c();
+    			attr_dev(h1, "class", "mb-8");
+    			add_location(h1, file$F, 89, 4, 4197);
+    			attr_dev(input, "type", "text");
+    			attr_dev(input, "id", "myInput");
+    			attr_dev(input, "placeholder", "Search for Problems..");
+    			attr_dev(input, "title", "Type in a name");
+    			set_style(input, "width", "90%");
+    			attr_dev(input, "class", "svelte-1jk77du");
+    			add_location(input, file$F, 91, 5, 4249);
+    			attr_dev(a, "href", "/newProblem");
+    			attr_dev(a, "class", "add-btn svelte-1jk77du");
+    			add_location(a, file$F, 92, 5, 4387);
+    			add_location(div, file$F, 90, 4, 4238);
+    			attr_dev(th0, "class", "p-4 w-1/4");
+    			add_location(th0, file$F, 97, 6, 4602);
+    			attr_dev(th1, "class", "p-4 w-1/4");
+    			add_location(th1, file$F, 98, 6, 4648);
+    			attr_dev(th2, "class", "p-4 w-1/4");
+    			add_location(th2, file$F, 99, 6, 4685);
+    			attr_dev(th3, "class", "p-4 w-1/4");
+    			add_location(th3, file$F, 100, 6, 4729);
+    			attr_dev(tr, "class", "flex w-full mb-4");
+    			add_location(tr, file$F, 96, 5, 4566);
+    			attr_dev(thead, "class", "bg-black flex text-white w-full");
+    			add_location(thead, file$F, 95, 4, 4513);
+    			attr_dev(tbody, "class", "bg-grey-light flex flex-col items-center justify-between overflow-y-scroll w-full");
+    			set_style(tbody, "height", "50vh");
+    			add_location(tbody, file$F, 103, 4, 4794);
+    			attr_dev(table, "id", "myTable");
+    			attr_dev(table, "class", "text-left w-full");
+    			add_location(table, file$F, 94, 7, 4462);
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, h1, anchor);
+    			insert_dev(target, t1, anchor);
+    			insert_dev(target, div, anchor);
+    			append_dev(div, input);
+    			append_dev(div, t2);
+    			append_dev(div, a);
+    			insert_dev(target, t4, anchor);
+    			insert_dev(target, table, anchor);
+    			append_dev(table, thead);
+    			append_dev(thead, tr);
+    			append_dev(tr, th0);
+    			append_dev(tr, t6);
+    			append_dev(tr, th1);
+    			append_dev(tr, t8);
+    			append_dev(tr, th2);
+    			append_dev(tr, t10);
+    			append_dev(tr, th3);
+    			append_dev(table, t12);
+    			append_dev(table, tbody);
+    			info.block.m(tbody, info.anchor = null);
+    			info.mount = () => tbody;
+    			info.anchor = null;
+    			dispose = listen_dev(input, "keyup", myFunction$1, false, false, false);
+    		},
+    		p: function update(new_ctx, dirty) {
+    			ctx = new_ctx;
+    			info.ctx = ctx;
+
+    			if (dirty & /*$Problem*/ 2 && promise !== (promise = /*$Problem*/ ctx[1]) && handle_promise(promise, info)) ; else {
+    				const child_ctx = ctx.slice();
+    				child_ctx[10] = info.resolved;
+    				info.block.p(child_ctx, dirty);
+    			}
+    		},
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(h1);
+    			if (detaching) detach_dev(t1);
+    			if (detaching) detach_dev(div);
+    			if (detaching) detach_dev(t4);
+    			if (detaching) detach_dev(table);
+    			info.block.d();
+    			info.token = null;
+    			info = null;
+    			dispose();
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_if_block$d.name,
+    		type: "if",
+    		source: "(89:7) {#if currentRoute.name ===\\\"/showproblems\\\"}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (197:7) {:catch err}
+    function create_catch_block_2(ctx) {
+    	let td;
+
+    	const block = {
+    		c: function create() {
+    			td = element("td");
+    			td.textContent = "Server Not responding..";
+    			attr_dev(td, "class", "p-4 w-1/4");
+    			add_location(td, file$F, 197, 8, 8629);
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, td, anchor);
+    		},
+    		p: noop,
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(td);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_catch_block_2.name,
+    		type: "catch",
+    		source: "(197:7) {:catch err}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (188:7) {:then result}
+    function create_then_block_2(ctx) {
+    	let each_1_anchor;
+    	let each_value_2 = /*result*/ ctx[10].data.getAllAttempt;
+    	let each_blocks = [];
+
+    	for (let i = 0; i < each_value_2.length; i += 1) {
+    		each_blocks[i] = create_each_block_2(get_each_context_2(ctx, each_value_2, i));
+    	}
+
+    	const block = {
+    		c: function create() {
+    			for (let i = 0; i < each_blocks.length; i += 1) {
+    				each_blocks[i].c();
+    			}
+
+    			each_1_anchor = empty();
+    		},
+    		m: function mount(target, anchor) {
+    			for (let i = 0; i < each_blocks.length; i += 1) {
+    				each_blocks[i].m(target, anchor);
+    			}
+
+    			insert_dev(target, each_1_anchor, anchor);
+    		},
+    		p: function update(ctx, dirty) {
+    			if (dirty & /*$Attempts*/ 8) {
+    				each_value_2 = /*result*/ ctx[10].data.getAllAttempt;
+    				let i;
+
+    				for (i = 0; i < each_value_2.length; i += 1) {
+    					const child_ctx = get_each_context_2(ctx, each_value_2, i);
+
+    					if (each_blocks[i]) {
+    						each_blocks[i].p(child_ctx, dirty);
+    					} else {
+    						each_blocks[i] = create_each_block_2(child_ctx);
+    						each_blocks[i].c();
+    						each_blocks[i].m(each_1_anchor.parentNode, each_1_anchor);
+    					}
+    				}
+
+    				for (; i < each_blocks.length; i += 1) {
+    					each_blocks[i].d(1);
+    				}
+
+    				each_blocks.length = each_value_2.length;
+    			}
+    		},
+    		d: function destroy(detaching) {
+    			destroy_each(each_blocks, detaching);
+    			if (detaching) detach_dev(each_1_anchor);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_then_block_2.name,
+    		type: "then",
+    		source: "(188:7) {:then result}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (189:7) {#each result.data.getAllAttempt as attempt}
+    function create_each_block_2(ctx) {
+    	let tr;
+    	let td0;
+    	let t0_value = /*attempt*/ ctx[18].user.name + "";
+    	let t0;
+    	let t1;
+    	let td1;
+    	let t2_value = /*attempt*/ ctx[18].user.collegeName + "";
+    	let t2;
+    	let t3;
+    	let td2;
+    	let t4_value = /*attempt*/ ctx[18].test.testName + "";
+    	let t4;
+    	let t5;
+    	let td3;
+    	let t6_value = /*attempt*/ ctx[18].score + "";
+    	let t6;
+    	let t7;
+
+    	const block = {
+    		c: function create() {
+    			tr = element("tr");
+    			td0 = element("td");
+    			t0 = text(t0_value);
+    			t1 = space();
+    			td1 = element("td");
+    			t2 = text(t2_value);
+    			t3 = space();
+    			td2 = element("td");
+    			t4 = text(t4_value);
+    			t5 = space();
+    			td3 = element("td");
+    			t6 = text(t6_value);
+    			t7 = space();
+    			attr_dev(td0, "class", "p-4 w-1/4");
+    			add_location(td0, file$F, 190, 9, 8350);
+    			attr_dev(td1, "class", "p-4 w-1/4");
+    			add_location(td1, file$F, 191, 9, 8406);
+    			attr_dev(td2, "class", "p-4 w-1/4");
+    			add_location(td2, file$F, 192, 9, 8469);
+    			attr_dev(td3, "class", "p-4 w-1/4");
+    			add_location(td3, file$F, 193, 9, 8529);
+    			attr_dev(tr, "class", "flex w-full mb-4 svelte-1jk77du");
+    			attr_dev(tr, "id", "pp");
+    			add_location(tr, file$F, 189, 8, 8302);
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, tr, anchor);
+    			append_dev(tr, td0);
+    			append_dev(td0, t0);
+    			append_dev(tr, t1);
+    			append_dev(tr, td1);
+    			append_dev(td1, t2);
+    			append_dev(tr, t3);
+    			append_dev(tr, td2);
+    			append_dev(td2, t4);
+    			append_dev(tr, t5);
+    			append_dev(tr, td3);
+    			append_dev(td3, t6);
+    			append_dev(tr, t7);
+    		},
+    		p: function update(ctx, dirty) {
+    			if (dirty & /*$Attempts*/ 8 && t0_value !== (t0_value = /*attempt*/ ctx[18].user.name + "")) set_data_dev(t0, t0_value);
+    			if (dirty & /*$Attempts*/ 8 && t2_value !== (t2_value = /*attempt*/ ctx[18].user.collegeName + "")) set_data_dev(t2, t2_value);
+    			if (dirty & /*$Attempts*/ 8 && t4_value !== (t4_value = /*attempt*/ ctx[18].test.testName + "")) set_data_dev(t4, t4_value);
+    			if (dirty & /*$Attempts*/ 8 && t6_value !== (t6_value = /*attempt*/ ctx[18].score + "")) set_data_dev(t6, t6_value);
+    		},
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(tr);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_each_block_2.name,
+    		type: "each",
+    		source: "(189:7) {#each result.data.getAllAttempt as attempt}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (180:24)         <tr class="flex w-full mb-4">         <td class="p-4 w-1/4">loading..</td>         <td class="p-4 w-1/4">loading..</td>         <td class="p-4 w-1/4">loading..</td>         <td class="p-4 w-1/4">loading..</td>       </tr>        {:then result}
+    function create_pending_block_2(ctx) {
+    	let tr;
+    	let td0;
+    	let t1;
+    	let td1;
+    	let t3;
+    	let td2;
+    	let t5;
+    	let td3;
+
+    	const block = {
+    		c: function create() {
+    			tr = element("tr");
+    			td0 = element("td");
+    			td0.textContent = "loading..";
+    			t1 = space();
+    			td1 = element("td");
+    			td1.textContent = "loading..";
+    			t3 = space();
+    			td2 = element("td");
+    			td2.textContent = "loading..";
+    			t5 = space();
+    			td3 = element("td");
+    			td3.textContent = "loading..";
+    			attr_dev(td0, "class", "p-4 w-1/4");
+    			add_location(td0, file$F, 182, 8, 8036);
+    			attr_dev(td1, "class", "p-4 w-1/4");
+    			add_location(td1, file$F, 183, 8, 8081);
+    			attr_dev(td2, "class", "p-4 w-1/4");
+    			add_location(td2, file$F, 184, 8, 8126);
+    			attr_dev(td3, "class", "p-4 w-1/4");
+    			add_location(td3, file$F, 185, 8, 8171);
+    			attr_dev(tr, "class", "flex w-full mb-4");
+    			add_location(tr, file$F, 181, 6, 7998);
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, tr, anchor);
+    			append_dev(tr, td0);
+    			append_dev(tr, t1);
+    			append_dev(tr, td1);
+    			append_dev(tr, t3);
+    			append_dev(tr, td2);
+    			append_dev(tr, t5);
+    			append_dev(tr, td3);
+    		},
+    		p: noop,
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(tr);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_pending_block_2.name,
+    		type: "pending",
+    		source: "(180:24)         <tr class=\\\"flex w-full mb-4\\\">         <td class=\\\"p-4 w-1/4\\\">loading..</td>         <td class=\\\"p-4 w-1/4\\\">loading..</td>         <td class=\\\"p-4 w-1/4\\\">loading..</td>         <td class=\\\"p-4 w-1/4\\\">loading..</td>       </tr>        {:then result}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (156:7) {:catch err}
+    function create_catch_block_1$1(ctx) {
+    	let td0;
+    	let t1;
+    	let td1;
+    	let t3;
+    	let td2;
+
+    	const block = {
+    		c: function create() {
+    			td0 = element("td");
+    			td0.textContent = "Server Not responding..";
+    			t1 = space();
+    			td1 = element("td");
+    			td1.textContent = "Server Not responding..";
+    			t3 = space();
+    			td2 = element("td");
+    			td2.textContent = "Server Not responding..";
+    			attr_dev(td0, "class", "p-4 w-1/3");
+    			add_location(td0, file$F, 156, 8, 7049);
+    			attr_dev(td1, "class", "p-4 w-1/3");
+    			add_location(td1, file$F, 157, 8, 7108);
+    			attr_dev(td2, "class", "p-4 w-1/3");
+    			add_location(td2, file$F, 158, 8, 7167);
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, td0, anchor);
+    			insert_dev(target, t1, anchor);
+    			insert_dev(target, td1, anchor);
+    			insert_dev(target, t3, anchor);
+    			insert_dev(target, td2, anchor);
+    		},
+    		p: noop,
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(td0);
+    			if (detaching) detach_dev(t1);
+    			if (detaching) detach_dev(td1);
+    			if (detaching) detach_dev(t3);
+    			if (detaching) detach_dev(td2);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_catch_block_1$1.name,
+    		type: "catch",
+    		source: "(156:7) {:catch err}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (148:7) {:then result}
+    function create_then_block_1$1(ctx) {
+    	let each_1_anchor;
+    	let each_value_1 = /*result*/ ctx[10].data.allTests;
+    	let each_blocks = [];
+
+    	for (let i = 0; i < each_value_1.length; i += 1) {
+    		each_blocks[i] = create_each_block_1$3(get_each_context_1$3(ctx, each_value_1, i));
+    	}
+
+    	const block = {
+    		c: function create() {
+    			for (let i = 0; i < each_blocks.length; i += 1) {
+    				each_blocks[i].c();
+    			}
+
+    			each_1_anchor = empty();
+    		},
+    		m: function mount(target, anchor) {
+    			for (let i = 0; i < each_blocks.length; i += 1) {
+    				each_blocks[i].m(target, anchor);
+    			}
+
+    			insert_dev(target, each_1_anchor, anchor);
+    		},
+    		p: function update(ctx, dirty) {
+    			if (dirty & /*window, $Test, Date*/ 4) {
+    				each_value_1 = /*result*/ ctx[10].data.allTests;
+    				let i;
+
+    				for (i = 0; i < each_value_1.length; i += 1) {
+    					const child_ctx = get_each_context_1$3(ctx, each_value_1, i);
+
+    					if (each_blocks[i]) {
+    						each_blocks[i].p(child_ctx, dirty);
+    					} else {
+    						each_blocks[i] = create_each_block_1$3(child_ctx);
+    						each_blocks[i].c();
+    						each_blocks[i].m(each_1_anchor.parentNode, each_1_anchor);
+    					}
+    				}
+
+    				for (; i < each_blocks.length; i += 1) {
+    					each_blocks[i].d(1);
+    				}
+
+    				each_blocks.length = each_value_1.length;
+    			}
+    		},
+    		d: function destroy(detaching) {
+    			destroy_each(each_blocks, detaching);
+    			if (detaching) detach_dev(each_1_anchor);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_then_block_1$1.name,
+    		type: "then",
+    		source: "(148:7) {:then result}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (149:7) {#each result.data.allTests as tes}
+    function create_each_block_1$3(ctx) {
+    	let tr;
+    	let td0;
+    	let t0_value = /*tes*/ ctx[15].testName + "";
+    	let t0;
+    	let t1;
+    	let td1;
+    	let t2_value = /*tes*/ ctx[15].difficultyLevel + "";
+    	let t2;
+    	let t3;
+    	let td2;
+    	let t4_value = new Date(/*tes*/ ctx[15].createdAt * 1000) + "";
+    	let t4;
+    	let t5;
+    	let dispose;
+
+    	function click_handler_1(...args) {
+    		return /*click_handler_1*/ ctx[9](/*tes*/ ctx[15], ...args);
+    	}
+
+    	const block = {
+    		c: function create() {
+    			tr = element("tr");
+    			td0 = element("td");
+    			t0 = text(t0_value);
+    			t1 = space();
+    			td1 = element("td");
+    			t2 = text(t2_value);
+    			t3 = space();
+    			td2 = element("td");
+    			t4 = text(t4_value);
+    			t5 = space();
+    			attr_dev(td0, "class", "p-4 w-1/3");
+    			add_location(td0, file$F, 150, 9, 6824);
+    			attr_dev(td1, "class", "p-4 w-1/3");
+    			add_location(td1, file$F, 151, 9, 6875);
+    			attr_dev(td2, "class", "p-4 w-1/3");
+    			add_location(td2, file$F, 152, 9, 6933);
+    			attr_dev(tr, "class", "flex w-full mb-4 svelte-1jk77du");
+    			attr_dev(tr, "id", "pp");
+    			add_location(tr, file$F, 149, 8, 6721);
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, tr, anchor);
+    			append_dev(tr, td0);
+    			append_dev(td0, t0);
+    			append_dev(tr, t1);
+    			append_dev(tr, td1);
+    			append_dev(td1, t2);
+    			append_dev(tr, t3);
+    			append_dev(tr, td2);
+    			append_dev(td2, t4);
+    			append_dev(tr, t5);
+    			dispose = listen_dev(tr, "click", click_handler_1, false, false, false);
+    		},
+    		p: function update(new_ctx, dirty) {
+    			ctx = new_ctx;
+    			if (dirty & /*$Test*/ 4 && t0_value !== (t0_value = /*tes*/ ctx[15].testName + "")) set_data_dev(t0, t0_value);
+    			if (dirty & /*$Test*/ 4 && t2_value !== (t2_value = /*tes*/ ctx[15].difficultyLevel + "")) set_data_dev(t2, t2_value);
+    			if (dirty & /*$Test*/ 4 && t4_value !== (t4_value = new Date(/*tes*/ ctx[15].createdAt * 1000) + "")) set_data_dev(t4, t4_value);
+    		},
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(tr);
+    			dispose();
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_each_block_1$3.name,
+    		type: "each",
+    		source: "(149:7) {#each result.data.allTests as tes}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (142:20)        <tr class="flex w-full mb-4">         <td class="p-4 w-1/3">loading..</td>         <td class="p-4 w-1/3">loading..</td>         <td class="p-4 w-1/3">loading..</td>       </tr>        {:then result}
+    function create_pending_block_1$1(ctx) {
+    	let tr;
+    	let td0;
+    	let t1;
+    	let td1;
+    	let t3;
+    	let td2;
+
+    	const block = {
+    		c: function create() {
+    			tr = element("tr");
+    			td0 = element("td");
+    			td0.textContent = "loading..";
+    			t1 = space();
+    			td1 = element("td");
+    			td1.textContent = "loading..";
+    			t3 = space();
+    			td2 = element("td");
+    			td2.textContent = "loading..";
+    			attr_dev(td0, "class", "p-4 w-1/3");
+    			add_location(td0, file$F, 143, 8, 6509);
+    			attr_dev(td1, "class", "p-4 w-1/3");
+    			add_location(td1, file$F, 144, 8, 6554);
+    			attr_dev(td2, "class", "p-4 w-1/3");
+    			add_location(td2, file$F, 145, 8, 6599);
+    			attr_dev(tr, "class", "flex w-full mb-4");
+    			add_location(tr, file$F, 142, 6, 6471);
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, tr, anchor);
+    			append_dev(tr, td0);
+    			append_dev(tr, t1);
+    			append_dev(tr, td1);
+    			append_dev(tr, t3);
+    			append_dev(tr, td2);
+    		},
+    		p: noop,
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(tr);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_pending_block_1$1.name,
+    		type: "pending",
+    		source: "(142:20)        <tr class=\\\"flex w-full mb-4\\\">         <td class=\\\"p-4 w-1/3\\\">loading..</td>         <td class=\\\"p-4 w-1/3\\\">loading..</td>         <td class=\\\"p-4 w-1/3\\\">loading..</td>       </tr>        {:then result}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (121:6) {:catch err}
+    function create_catch_block$6(ctx) {
+    	let td;
+
+    	const block = {
+    		c: function create() {
+    			td = element("td");
+    			td.textContent = "Server Not responding..";
+    			attr_dev(td, "class", "p-4 w-1/4");
+    			add_location(td, file$F, 121, 7, 5604);
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, td, anchor);
+    		},
+    		p: noop,
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(td);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_catch_block$6.name,
+    		type: "catch",
+    		source: "(121:6) {:catch err}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (112:6) {:then result}
+    function create_then_block$6(ctx) {
+    	let each_1_anchor;
+    	let each_value = /*result*/ ctx[10].data.allProblems;
     	let each_blocks = [];
 
     	for (let i = 0; i < each_value.length; i += 1) {
@@ -48401,123 +51485,22 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	const block = {
     		c: function create() {
-    			div2 = element("div");
-    			div0 = element("div");
-    			button0 = element("button");
-    			button0.textContent = "Close";
-    			t1 = space();
-    			p0 = element("p");
-    			a = element("a");
-    			img = element("img");
-    			t2 = space();
-    			p1 = element("p");
-    			t3 = space();
-    			p2 = element("p");
-    			p2.textContent = "Enter chat and press enter.";
-    			t5 = space();
-    			form = element("form");
-    			input = element("input");
-    			t6 = space();
-    			button1 = element("button");
-    			button1.textContent = "Send";
-    			t8 = space();
-    			p3 = element("p");
-    			p3.textContent = "Chat Output:";
-    			t10 = space();
-    			div1 = element("div");
-    			ul = element("ul");
-
     			for (let i = 0; i < each_blocks.length; i += 1) {
     				each_blocks[i].c();
     			}
 
-    			attr_dev(button0, "class", "btm2 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2\n            px-4 rounded-full svelte-vqb2s2");
-    			add_location(button0, file$F, 231, 10, 7794);
-    			attr_dev(div0, "class", "header svelte-vqb2s2");
-    			add_location(div0, file$F, 230, 8, 7763);
-    			if (img.src !== (img_src_value = "https://d2c805weuec6z7.cloudfront.net/Powered_By_PubNub.png")) attr_dev(img, "src", img_src_value);
-    			attr_dev(img, "alt", "Powered By PubNub");
-    			attr_dev(img, "width", "150");
-    			attr_dev(img, "class", "svelte-vqb2s2");
-    			add_location(img, file$F, 240, 12, 8093);
-    			attr_dev(a, "href", "https://www.pubnub.com/?devrel_pbpn=javascript-chat");
-    			attr_dev(a, "class", "svelte-vqb2s2");
-    			add_location(a, file$F, 239, 10, 8018);
-    			attr_dev(p0, "class", "svelte-vqb2s2");
-    			add_location(p0, file$F, 238, 8, 8004);
-    			attr_dev(p1, "class", "svelte-vqb2s2");
-    			add_location(p1, file$F, 246, 8, 8281);
-    			attr_dev(p2, "class", "svelte-vqb2s2");
-    			add_location(p2, file$F, 247, 8, 8295);
-    			attr_dev(input, "placeholder", "Your Message Here");
-    			attr_dev(input, "class", "svelte-vqb2s2");
-    			add_location(input, file$F, 250, 10, 8435);
-    			attr_dev(button1, "type", "submit");
-    			attr_dev(button1, "class", "svelte-vqb2s2");
-    			add_location(button1, file$F, 251, 10, 8511);
-    			attr_dev(form, "class", "svelte-vqb2s2");
-    			add_location(form, file$F, 248, 8, 8338);
-    			attr_dev(p3, "class", "svelte-vqb2s2");
-    			add_location(p3, file$F, 253, 8, 8571);
-    			attr_dev(ul, "class", "messages svelte-vqb2s2");
-    			add_location(ul, file$F, 255, 10, 8636);
-    			attr_dev(div1, "class", "message-form svelte-vqb2s2");
-    			add_location(div1, file$F, 254, 8, 8599);
-    			attr_dev(div2, "class", "chat svelte-vqb2s2");
-    			add_location(div2, file$F, 229, 6, 7736);
+    			each_1_anchor = empty();
     		},
     		m: function mount(target, anchor) {
-    			insert_dev(target, div2, anchor);
-    			append_dev(div2, div0);
-    			append_dev(div0, button0);
-    			append_dev(div2, t1);
-    			append_dev(div2, p0);
-    			append_dev(p0, a);
-    			append_dev(a, img);
-    			append_dev(div2, t2);
-    			append_dev(div2, p1);
-    			append_dev(div2, t3);
-    			append_dev(div2, p2);
-    			append_dev(div2, t5);
-    			append_dev(div2, form);
-    			append_dev(form, input);
-    			set_input_value(input, /*newMessage*/ ctx[1]);
-    			append_dev(form, t6);
-    			append_dev(form, button1);
-    			append_dev(div2, t8);
-    			append_dev(div2, p3);
-    			append_dev(div2, t10);
-    			append_dev(div2, div1);
-    			append_dev(div1, ul);
-
     			for (let i = 0; i < each_blocks.length; i += 1) {
-    				each_blocks[i].m(ul, null);
+    				each_blocks[i].m(target, anchor);
     			}
 
-    			dispose = [
-    				listen_dev(button0, "click", /*close*/ ctx[4], false, false, false),
-    				listen_dev(input, "input", /*input_input_handler*/ ctx[17]),
-    				listen_dev(
-    					form,
-    					"submit",
-    					prevent_default(function () {
-    						if (is_function(publish(/*newMessage*/ ctx[1], "channel." + /*userName*/ ctx[5]))) publish(/*newMessage*/ ctx[1], "channel." + /*userName*/ ctx[5]).apply(this, arguments);
-    					}),
-    					false,
-    					true,
-    					false
-    				)
-    			];
+    			insert_dev(target, each_1_anchor, anchor);
     		},
-    		p: function update(new_ctx, dirty) {
-    			ctx = new_ctx;
-
-    			if (dirty & /*newMessage*/ 2 && input.value !== /*newMessage*/ ctx[1]) {
-    				set_input_value(input, /*newMessage*/ ctx[1]);
-    			}
-
-    			if (dirty & /*output*/ 4) {
-    				each_value = /*output*/ ctx[2];
+    		p: function update(ctx, dirty) {
+    			if (dirty & /*window, $Problem, Date*/ 2) {
+    				each_value = /*result*/ ctx[10].data.allProblems;
     				let i;
 
     				for (i = 0; i < each_value.length; i += 1) {
@@ -48528,7 +51511,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     					} else {
     						each_blocks[i] = create_each_block$d(child_ctx);
     						each_blocks[i].c();
-    						each_blocks[i].m(ul, null);
+    						each_blocks[i].m(each_1_anchor.parentNode, each_1_anchor);
     					}
     				}
 
@@ -48540,53 +51523,100 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			}
     		},
     		d: function destroy(detaching) {
-    			if (detaching) detach_dev(div2);
     			destroy_each(each_blocks, detaching);
-    			run_all(dispose);
+    			if (detaching) detach_dev(each_1_anchor);
     		}
     	};
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_if_block$d.name,
-    		type: "if",
-    		source: "(229:4) {#if hasJoinedChat}",
+    		id: create_then_block$6.name,
+    		type: "then",
+    		source: "(112:6) {:then result}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (257:12) {#each output as message}
+    // (113:6) {#each result.data.allProblems as prob}
     function create_each_block$d(ctx) {
-    	let li;
-    	let span;
-    	let t0_value = /*message*/ ctx[18] + "";
+    	let tr;
+    	let td0;
+    	let t0_value = /*prob*/ ctx[12].problemName + "";
     	let t0;
     	let t1;
+    	let td1;
+    	let t2_value = /*prob*/ ctx[12].tags + "";
+    	let t2;
+    	let t3;
+    	let td2;
+    	let t4_value = /*prob*/ ctx[12].timelimit + "";
+    	let t4;
+    	let t5;
+    	let td3;
+    	let t6_value = new Date(/*prob*/ ctx[12].createdAt * 1000) + "";
+    	let t6;
+    	let t7;
+    	let dispose;
+
+    	function click_handler(...args) {
+    		return /*click_handler*/ ctx[8](/*prob*/ ctx[12], ...args);
+    	}
 
     	const block = {
     		c: function create() {
-    			li = element("li");
-    			span = element("span");
+    			tr = element("tr");
+    			td0 = element("td");
     			t0 = text(t0_value);
     			t1 = space();
-    			attr_dev(span, "class", "svelte-vqb2s2");
-    			add_location(span, file$F, 258, 16, 8731);
-    			attr_dev(li, "class", "svelte-vqb2s2");
-    			add_location(li, file$F, 257, 14, 8710);
+    			td1 = element("td");
+    			t2 = text(t2_value);
+    			t3 = space();
+    			td2 = element("td");
+    			t4 = text(t4_value);
+    			t5 = space();
+    			td3 = element("td");
+    			t6 = text(t6_value);
+    			t7 = space();
+    			attr_dev(td0, "class", "p-4 w-1/4");
+    			add_location(td0, file$F, 114, 8, 5338);
+    			attr_dev(td1, "class", "p-4 w-1/4");
+    			add_location(td1, file$F, 115, 8, 5392);
+    			attr_dev(td2, "class", "p-4 w-1/4");
+    			add_location(td2, file$F, 116, 8, 5439);
+    			attr_dev(td3, "class", "p-4 w-1/4");
+    			add_location(td3, file$F, 117, 8, 5491);
+    			attr_dev(tr, "class", "flex w-full mb-4 svelte-1jk77du");
+    			attr_dev(tr, "id", "pp");
+    			add_location(tr, file$F, 113, 7, 5233);
     		},
     		m: function mount(target, anchor) {
-    			insert_dev(target, li, anchor);
-    			append_dev(li, span);
-    			append_dev(span, t0);
-    			append_dev(li, t1);
+    			insert_dev(target, tr, anchor);
+    			append_dev(tr, td0);
+    			append_dev(td0, t0);
+    			append_dev(tr, t1);
+    			append_dev(tr, td1);
+    			append_dev(td1, t2);
+    			append_dev(tr, t3);
+    			append_dev(tr, td2);
+    			append_dev(td2, t4);
+    			append_dev(tr, t5);
+    			append_dev(tr, td3);
+    			append_dev(td3, t6);
+    			append_dev(tr, t7);
+    			dispose = listen_dev(tr, "click", click_handler, false, false, false);
     		},
-    		p: function update(ctx, dirty) {
-    			if (dirty & /*output*/ 4 && t0_value !== (t0_value = /*message*/ ctx[18] + "")) set_data_dev(t0, t0_value);
+    		p: function update(new_ctx, dirty) {
+    			ctx = new_ctx;
+    			if (dirty & /*$Problem*/ 2 && t0_value !== (t0_value = /*prob*/ ctx[12].problemName + "")) set_data_dev(t0, t0_value);
+    			if (dirty & /*$Problem*/ 2 && t2_value !== (t2_value = /*prob*/ ctx[12].tags + "")) set_data_dev(t2, t2_value);
+    			if (dirty & /*$Problem*/ 2 && t4_value !== (t4_value = /*prob*/ ctx[12].timelimit + "")) set_data_dev(t4, t4_value);
+    			if (dirty & /*$Problem*/ 2 && t6_value !== (t6_value = new Date(/*prob*/ ctx[12].createdAt * 1000) + "")) set_data_dev(t6, t6_value);
     		},
     		d: function destroy(detaching) {
-    			if (detaching) detach_dev(li);
+    			if (detaching) detach_dev(tr);
+    			dispose();
     		}
     	};
 
@@ -48594,109 +51624,174 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_each_block$d.name,
     		type: "each",
-    		source: "(257:12) {#each output as message}",
+    		source: "(113:6) {#each result.data.allProblems as prob}",
     		ctx
     	});
 
     	return block;
     }
 
-    function create_fragment$I(ctx) {
-    	let link;
-    	let t0;
-    	let body;
+    // (105:22)       <tr class="flex w-full mb-4">        <td class="p-4 w-1/4">loading..</td>        <td class="p-4 w-1/4">loading..</td>        <td class="p-4 w-1/4">loading..</td>        <td class="p-4 w-1/4">loading..</td>      </tr>       {:then result}
+    function create_pending_block$6(ctx) {
+    	let tr;
+    	let td0;
     	let t1;
-    	let div0;
-    	let p;
+    	let td1;
     	let t3;
-    	let div1;
-    	let current;
-    	const navbar = new Navbar({ $$inline: true });
-
-    	function select_block_type(ctx, dirty) {
-    		if (/*hasJoinedChat*/ ctx[0]) return create_if_block$d;
-    		return create_else_block$2;
-    	}
-
-    	let current_block_type = select_block_type(ctx);
-    	let if_block = current_block_type(ctx);
+    	let td2;
+    	let t5;
+    	let td3;
 
     	const block = {
     		c: function create() {
-    			link = element("link");
-    			t0 = space();
-    			body = element("body");
-    			create_component(navbar.$$.fragment);
+    			tr = element("tr");
+    			td0 = element("td");
+    			td0.textContent = "loading..";
     			t1 = space();
-    			div0 = element("div");
-    			p = element("p");
-    			p.textContent = "USER PAGE";
+    			td1 = element("td");
+    			td1.textContent = "loading..";
     			t3 = space();
-    			div1 = element("div");
-    			if_block.c();
-    			attr_dev(link, "href", "https://unpkg.com/tailwindcss@^1.0/dist/tailwind.min.css");
-    			attr_dev(link, "rel", "stylesheet");
-    			attr_dev(link, "class", "svelte-vqb2s2");
-    			add_location(link, file$F, 216, 0, 7531);
-    			attr_dev(p, "class", "svelte-vqb2s2");
-    			add_location(p, file$F, 224, 4, 7659);
-    			attr_dev(div0, "class", "svelte-vqb2s2");
-    			add_location(div0, file$F, 223, 2, 7649);
-    			attr_dev(div1, "class", "App svelte-vqb2s2");
-    			add_location(div1, file$F, 227, 2, 7688);
-    			attr_dev(body, "class", "svelte-vqb2s2");
-    			add_location(body, file$F, 219, 0, 7625);
+    			td2 = element("td");
+    			td2.textContent = "loading..";
+    			t5 = space();
+    			td3 = element("td");
+    			td3.textContent = "loading..";
+    			attr_dev(td0, "class", "p-4 w-1/4");
+    			add_location(td0, file$F, 106, 7, 4979);
+    			attr_dev(td1, "class", "p-4 w-1/4");
+    			add_location(td1, file$F, 107, 7, 5023);
+    			attr_dev(td2, "class", "p-4 w-1/4");
+    			add_location(td2, file$F, 108, 7, 5067);
+    			attr_dev(td3, "class", "p-4 w-1/4");
+    			add_location(td3, file$F, 109, 7, 5111);
+    			attr_dev(tr, "class", "flex w-full mb-4");
+    			add_location(tr, file$F, 105, 5, 4942);
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, tr, anchor);
+    			append_dev(tr, td0);
+    			append_dev(tr, t1);
+    			append_dev(tr, td1);
+    			append_dev(tr, t3);
+    			append_dev(tr, td2);
+    			append_dev(tr, t5);
+    			append_dev(tr, td3);
+    		},
+    		p: noop,
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(tr);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_pending_block$6.name,
+    		type: "pending",
+    		source: "(105:22)       <tr class=\\\"flex w-full mb-4\\\">        <td class=\\\"p-4 w-1/4\\\">loading..</td>        <td class=\\\"p-4 w-1/4\\\">loading..</td>        <td class=\\\"p-4 w-1/4\\\">loading..</td>        <td class=\\\"p-4 w-1/4\\\">loading..</td>      </tr>       {:then result}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    function create_fragment$J(ctx) {
+    	let script;
+    	let script_src_value;
+    	let t1;
+    	let body;
+    	let header;
+    	let t2;
+    	let t3;
+    	let div;
+    	let current;
+    	const navbar = new Navbar({ $$inline: true });
+    	const sidebar = new Side({ $$inline: true });
+
+    	function select_block_type(ctx, dirty) {
+    		if (/*currentRoute*/ ctx[0].name === "/showproblems") return create_if_block$d;
+    		if (/*currentRoute*/ ctx[0].name === "/showtests") return create_if_block_1$9;
+    		if (/*currentRoute*/ ctx[0].name === "/showresults") return create_if_block_2$7;
+    	}
+
+    	let current_block_type = select_block_type(ctx);
+    	let if_block = current_block_type && current_block_type(ctx);
+
+    	const block = {
+    		c: function create() {
+    			script = element("script");
+    			script.textContent = "import { currentRoute } from \"./Problems.svelte\";";
+    			t1 = space();
+    			body = element("body");
+    			header = element("header");
+    			create_component(navbar.$$.fragment);
+    			t2 = space();
+    			create_component(sidebar.$$.fragment);
+    			t3 = space();
+    			div = element("div");
+    			if (if_block) if_block.c();
+    			if (script.src !== (script_src_value = "https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.22.2/moment.min.js")) attr_dev(script, "src", script_src_value);
+    			add_location(script, file$F, 1, 1, 15);
+    			add_location(header, file$F, 83, 2, 4071);
+    			attr_dev(div, "class", "container svelte-1jk77du");
+    			add_location(div, file$F, 87, 1, 4119);
+    			add_location(body, file$F, 82, 0, 4062);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
     		m: function mount(target, anchor) {
-    			insert_dev(target, link, anchor);
-    			insert_dev(target, t0, anchor);
+    			append_dev(document_1.head, script);
+    			insert_dev(target, t1, anchor);
     			insert_dev(target, body, anchor);
-    			mount_component(navbar, body, null);
-    			append_dev(body, t1);
-    			append_dev(body, div0);
-    			append_dev(div0, p);
+    			append_dev(body, header);
+    			mount_component(navbar, header, null);
+    			append_dev(header, t2);
+    			mount_component(sidebar, header, null);
     			append_dev(body, t3);
-    			append_dev(body, div1);
-    			if_block.m(div1, null);
+    			append_dev(body, div);
+    			if (if_block) if_block.m(div, null);
     			current = true;
     		},
     		p: function update(ctx, [dirty]) {
     			if (current_block_type === (current_block_type = select_block_type(ctx)) && if_block) {
     				if_block.p(ctx, dirty);
     			} else {
-    				if_block.d(1);
-    				if_block = current_block_type(ctx);
+    				if (if_block) if_block.d(1);
+    				if_block = current_block_type && current_block_type(ctx);
 
     				if (if_block) {
     					if_block.c();
-    					if_block.m(div1, null);
+    					if_block.m(div, null);
     				}
     			}
     		},
     		i: function intro(local) {
     			if (current) return;
     			transition_in(navbar.$$.fragment, local);
+    			transition_in(sidebar.$$.fragment, local);
     			current = true;
     		},
     		o: function outro(local) {
     			transition_out(navbar.$$.fragment, local);
+    			transition_out(sidebar.$$.fragment, local);
     			current = false;
     		},
     		d: function destroy(detaching) {
-    			if (detaching) detach_dev(link);
-    			if (detaching) detach_dev(t0);
+    			detach_dev(script);
+    			if (detaching) detach_dev(t1);
     			if (detaching) detach_dev(body);
     			destroy_component(navbar);
-    			if_block.d();
+    			destroy_component(sidebar);
+
+    			if (if_block) {
+    				if_block.d();
+    			}
     		}
     	};
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$I.name,
+    		id: create_fragment$J.name,
     		type: "component",
     		source: "",
     		ctx
@@ -48705,183 +51800,193 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function getCookie$2(name) {
-    	var match = document.cookie.match(new RegExp("(^| )" + name + "=([^;]+)"));
-    	if (match) return match[2];
+    function myFunction$1() {
+    	//console.log("key");
+    	var input, filter, table, tr, td, i, txtValue;
+
+    	input = document.getElementById("myInput");
+    	filter = input.value.toUpperCase();
+
+    	//console.log(filter);
+    	table = document.getElementById("myTable");
+
+    	tr = table.getElementsByTagName("tr");
+
+    	for (i = 0; i < tr.length; i++) {
+    		//tr[i].style.display = "none";
+    		td = tr[i].getElementsByTagName("td")[0];
+
+    		if (td) {
+    			//console.log(td.textContent);
+    			txtValue = td.textContent || td.innerText;
+
+    			if (txtValue.toUpperCase().indexOf(filter) > -1) {
+    				console.log("true", txtValue);
+    				tr[i].style.display = "";
+    			} else {
+    				tr[i].style.display = "none";
+    				console.log("false", txtValue);
+    			}
+    		}
+    	}
     }
 
     function instance$D($$self, $$props, $$invalidate) {
+    	let $Problem;
+    	let $Test;
+    	let $Attempts;
     	const client = getClient();
+    	const Attempts = query(client, { query: apolloClient.getAllAttempts });
+    	validate_store(Attempts, "Attempts");
+    	component_subscribe($$self, Attempts, value => $$invalidate(3, $Attempts = value));
     	const Test = query(client, { query: apolloClient.allTests });
+    	validate_store(Test, "Test");
+    	component_subscribe($$self, Test, value => $$invalidate(2, $Test = value));
     	const Problem = query(client, { query: apolloClient.getProblems });
+    	validate_store(Problem, "Problem");
+    	component_subscribe($$self, Problem, value => $$invalidate(1, $Problem = value));
+    	let { currentRoute } = $$props;
+    	console.log(currentRoute, "ddddddcdcdcd");
+    	const writable_props = ["currentRoute"];
 
-    	const handleProblemAdd = () => {
-    		Problem.refetch();
-    	};
-
-    	const handleTestAdd = () => {
-    		Test.refetch();
-    	};
-
-    	let hasJoinedChat = false;
-    	let channel = "";
-    	let username = "";
-    	let newMessage = "";
-    	let messages = "";
-    	let output = [""];
-
-    	function joined() {
-    		$$invalidate(0, hasJoinedChat = true);
-    	}
-
-    	function close() {
-    		$$invalidate(0, hasJoinedChat = false);
-    	}
-
-    	// const user = {
-    	//   id: 1,
-    	//   email: "newUserr.com",
-    	//   name: "adarash",
-    	//   flag: "U",
-    	//   ttl: 1440,
-    	//   profileUrl: "xyz.com"
-    	// };
-    	pubnub.addListener({
-    		message(m) {
-    			$$invalidate(2, output = [...output, m.message]); // console.log(m);
-    			$$invalidate(1, newMessage = "");
-    		}, // console.log(m);
-    		
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$8.warn(`<AdminPanel> was created with unknown prop '${key}'`);
     	});
 
-    	const userEmail = getCookie$2("access_email");
-    	let sEmails = userEmail.split("%");
-    	let userName = sEmails[0];
-
-    	const user = {
-    		id: Math.floor(Math.random() * 10) + 1,
-    		email: userName,
-    		name: userName,
-    		flag: "U",
-    		ttl: 1440,
-    		profileUrl: null
+    	const click_handler = prob => {
+    		window.location = `/problem/${prob.id}`;
     	};
 
-    	grantPermissions(user);
+    	const click_handler_1 = tes => {
+    		window.location = `/test/${tes.id}`;
+    	};
 
-    	function input_input_handler() {
-    		newMessage = this.value;
-    		$$invalidate(1, newMessage);
-    	}
+    	$$self.$set = $$props => {
+    		if ("currentRoute" in $$props) $$invalidate(0, currentRoute = $$props.currentRoute);
+    	};
 
     	$$self.$capture_state = () => {
-    		return {};
+    		return { currentRoute, $Problem, $Test, $Attempts };
     	};
 
     	$$self.$inject_state = $$props => {
-    		if ("hasJoinedChat" in $$props) $$invalidate(0, hasJoinedChat = $$props.hasJoinedChat);
-    		if ("channel" in $$props) channel = $$props.channel;
-    		if ("username" in $$props) username = $$props.username;
-    		if ("newMessage" in $$props) $$invalidate(1, newMessage = $$props.newMessage);
-    		if ("messages" in $$props) messages = $$props.messages;
-    		if ("output" in $$props) $$invalidate(2, output = $$props.output);
-    		if ("sEmails" in $$props) sEmails = $$props.sEmails;
-    		if ("userName" in $$props) $$invalidate(5, userName = $$props.userName);
+    		if ("currentRoute" in $$props) $$invalidate(0, currentRoute = $$props.currentRoute);
+    		if ("$Problem" in $$props) Problem.set($Problem = $$props.$Problem);
+    		if ("$Test" in $$props) Test.set($Test = $$props.$Test);
+    		if ("$Attempts" in $$props) Attempts.set($Attempts = $$props.$Attempts);
     	};
 
     	return [
-    		hasJoinedChat,
-    		newMessage,
-    		output,
-    		joined,
-    		close,
-    		userName,
-    		client,
+    		currentRoute,
+    		$Problem,
+    		$Test,
+    		$Attempts,
+    		Attempts,
     		Test,
     		Problem,
-    		handleProblemAdd,
-    		handleTestAdd,
-    		channel,
-    		username,
-    		messages,
-    		userEmail,
-    		sEmails,
-    		user,
-    		input_input_handler
+    		client,
+    		click_handler,
+    		click_handler_1
     	];
     }
 
-    class Pubnub extends SvelteComponentDev {
+    class AdminPanel extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$D, create_fragment$I, safe_not_equal, {});
+    		init(this, options, instance$D, create_fragment$J, safe_not_equal, { currentRoute: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
-    			tagName: "Pubnub",
+    			tagName: "AdminPanel",
     			options,
-    			id: create_fragment$I.name
+    			id: create_fragment$J.name
     		});
+
+    		const { ctx } = this.$$;
+    		const props = options.props || {};
+
+    		if (/*currentRoute*/ ctx[0] === undefined && !("currentRoute" in props)) {
+    			console_1$8.warn("<AdminPanel> was created without expected prop 'currentRoute'");
+    		}
+    	}
+
+    	get currentRoute() {
+    		throw new Error("<AdminPanel>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	set currentRoute(value) {
+    		throw new Error("<AdminPanel>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
     	}
     }
 
-    const routes = [
-      {
-        name: '/',
-        component: Login,
-      },
-      {
-        name: '/newtest',
-        component: Add_test,
-      },
-      {
-        name: '/newProblem',
-        component: Add_problem,
-      },
-      {
-        name: '/editProblem/:id',
-        component: Edit_problem,
-      },
-      {
-        name: '/editTest/:id',
-        component: EditTest,
-      },
-      {
-        name: '/admin',
-        component: Admin,
-      },
-      {
-        name: '/test/:id',
-        component: Tests,
-      },
-      {
-        name: '/problem/:id',
-        component: Problems,
-      },
-      {
-        name: '/sendtest/:id',
-        component: Send_test,
-      },
-      {
-        name: '/givetest/:token',
-        component: Home,
-      },
-      {
-        name: '/thankyou',
-        component: Thankyou,
-      },
-      {
-        name: '/pubnub',
-        component: Pubnub,
-      },
-      {
-        name: '/home',
-        component: Home,
-      },
-      {
-        name: '/sendtest/:id',
-        component: Send_test,
-      },
+    const routes = [{
+            name: '/',
+            component: Login,
+        },
+        {
+            name: '/newtest',
+            component: Add_test,
+        },
+        {
+            name: '/newProblem',
+            component: Add_problem,
+        },
+        {
+            name: '/editProblem/:id',
+            component: Edit_problem,
+        },
+        {
+            name: '/editTest/:id',
+            component: EditTest,
+        },
+        {
+            name: '/admin',
+            component: Admin,
+        },
+        {
+            name: '/test/:id',
+            component: Tests,
+        },
+        {
+            name: '/problem/:id',
+            component: Problems,
+        },
+        {
+            name: '/sendtest/:id',
+            component: Send_test,
+        },
+        {
+            name: '/givetest/:token',
+            component: Home,
+        },
+        {
+            name: '/thankyou',
+            component: Thankyou,
+        },
+        {
+            name: '/pubnub',
+            component: Pubnub,
+        },
+        {
+            name: '/home',
+            component: Home,
+        },
+        {
+            name: '/sendtest/:id',
+            component: Send_test,
+        },
+        {
+            name: '/showproblems',
+            component: AdminPanel,
+        },
+        {
+            name: '/showtests',
+            component: AdminPanel,
+        },
+        {
+            name: '/showresults',
+            component: AdminPanel,
+        },
     ];
 
     var Observable_1 = createCommonjsModule(function (module, exports) {
@@ -54265,7 +57370,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     /* src/App.svelte generated by Svelte v3.18.1 */
 
-    function create_fragment$J(ctx) {
+    function create_fragment$K(ctx) {
     	let current;
 
     	const router = new src_6({
@@ -54308,7 +57413,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$J.name,
+    		id: create_fragment$K.name,
     		type: "component",
     		source: "",
     		ctx
@@ -54348,13 +57453,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class App extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$E, create_fragment$J, safe_not_equal, { currentRoute: 0 });
+    		init(this, options, instance$E, create_fragment$K, safe_not_equal, { currentRoute: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "App",
     			options,
-    			id: create_fragment$J.name
+    			id: create_fragment$K.name
     		});
 
     		const { ctx } = this.$$;
