@@ -102,11 +102,17 @@ async function updateTest(id, test) {
   const updatedTest = await Test.query().patchAndFetchById(parseInt(id), {
     testName: test.testName,
     difficultyLevel: test.difficultyLevel,
+    tags: test.tags,
+    timelimit: parseInt(test.timelimit),
   });
 
   await TestProblem.query().delete().where('t_id', parseInt(id));
-  test.problems.forEach((ele) => {
-    addTestProblem({ t_id: parseInt(id), p_id: parseInt(ele) });
+  JSON.parse(test.problems).forEach((ele) => {
+    addTestProblem({
+      t_id: parseInt(id),
+      p_id: parseInt(ele.problem.id),
+      score: parseInt(ele.score),
+    });
   });
 
   return {
@@ -156,14 +162,30 @@ function problemReducer(prob) {
     timelimit: prob.timelimit,
   };
 }
+async function getTestProblems(test) {
+  const res = await TestProblem.query()
+    .leftJoin('problems', 'testProblems.p_id', '=', 'problems.id')
+    .where('testProblems.t_id', parseInt(test.id))
+    .select('problems.*', 'testProblems.score');
+
+  console.log(res);
+  const problems = [
+    ...res.map((prob) => {
+      return { problem: prob, score: prob.score };
+    }),
+  ];
+  return problems;
+}
 async function testReducer(test) {
+  const problems = await getTestProblems(test);
+  console.log('reached here');
   return {
     id: test.id,
     testName: test.testName,
     difficultyLevel: test.difficultyLevel,
     email: test.email,
+    problems: JSON.stringify(problems),
     createdAt: test.createdAt,
-    problems: test.problems,
     tags: test.tags,
     timelimit: test.timelimit,
   };

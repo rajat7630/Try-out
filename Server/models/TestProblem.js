@@ -26,7 +26,7 @@ class TestProblem extends BaseModel {
         modelClass: 'Problem',
         join: {
           from: 'testProblems.p_id',
-          to: 'Problems.id',
+          to: 'problems.id',
         },
       },
     };

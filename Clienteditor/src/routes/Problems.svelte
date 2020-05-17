@@ -42,7 +42,6 @@
 <div class="bg-edark h-full flex flex-col box-border">
   <header>
     <Navbar />
-    <Sidebar />
   </header>
   <div class="bg-edark flex flex-col max-w-full overflow-auto">
     {#await $problem}
@@ -59,7 +58,7 @@
           Time Limit :- {result.data.problemById.timelimit} ms
         </div>
       </div>
-      <div class="bg-dark max-w-6xl mt-12 mx-auto">
+      <div class="bg-dark max-w-full mt-12 mx-64">
 
         <div class="rounded shadow-lg">
           <div class="px-12 py-8">
@@ -102,7 +101,7 @@
         <div class="float-right ">
           <button
             on:c
-lick={() => {
+            lick={() => {
               location.replace(`http://localhost:5000/editProblem/${currentRoute.namedParams.id}`);
             }}
             class="savebutton hover:bg-white hover:text-edark font-bold py-2
@@ -122,4 +121,3 @@ lick={() => {
     {/await}
   </div>
 </div>
-

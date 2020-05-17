@@ -1,6 +1,6 @@
 const { gql } = require('apollo-server');
 const { ApolloServer } = require('apollo-server');
-const typeDefs = gql `
+const typeDefs = gql`
   scalar JSON
   scalar JSONObject
 
@@ -141,7 +141,9 @@ const typeDefs = gql `
   input updateTestInputs {
     testName: String
     difficultyLevel: String
-    problems: [ID]
+    problems: JSON
+    timelimit: String
+    tags: String
   }
   type addProblemOutput {
     success: Boolean!

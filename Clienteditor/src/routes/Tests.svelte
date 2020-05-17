@@ -9,9 +9,8 @@
     query: apolloClient.getTestById,
     variables: { id: parseInt(currentRoute.namedParams.id) }
   });
-  const attempt = query(client, {
-    query: apolloClient.getAttempts,
-    variables: { id: currentRoute.namedParams.id }
+  $test.then(res => {
+    console.log(res);
   });
   async function deleteTestHandler() {
     try {
@@ -26,140 +25,140 @@
   }
 </script>
 
-<style>
-  .btn {
-    @apply font-bold py-2 px-4 rounded;
-  }
-  .btn-blue {
-    @apply bg-blue-500 text-white;
-  }
-  .btn-blue:hover {
-    @apply bg-blue-700;
-  }
-  .buttonbox {
-    margin-left: 70vw;
-  }
-  .savebutton {
-    margin-right: 3vw;
-  }
-  .deleteButton {
-    margin-left: 3vw;
-  }
-  #blk {
-    margin-top: 6%;
-    margin-left: 10%;
-    margin-right: 6%;
-  }
-</style>
-
 <link
   href="https://unpkg.com/tailwindcss@^1.0/dist/tailwind.min.css"
   rel="stylesheet" />
 <body>
-  <div>
-    {#await $test}
-      Loading ...
-    {:then result}
+  <style>
+    ::-webkit-scrollbar {
+      width: 0px;
+    }
+    .savebutton {
+      @apply text-white ml-4 outline-none px-4;
+    }
+    .statement {
+      height: 50vh;
+    }
+    .labels {
+      @apply text-elight text-2xl;
+    }
+    .outer_box {
+      @apply p-3 flex-1 border-solid border-dark border-2 rounded;
+    }
+    .rows {
+      @apply mx-auto text-xl text-elight;
+    }
+    .boxheight2 {
+      max-height: 385px;
+    }
+  </style>
+  <link
+    href="https://unpkg.com/tailwindcss@^1.0/dist/tailwind.min.css"
+    rel="stylesheet" />
+
+  <div class="bg-edark h-full flex flex-col box-border">
+    <header>
       <Navbar />
-      <!-- style="margin-left:23%;margin-top:7%; -->
-      <div class="flex mb-4 h-12">
-        <div class="h-12 w-1/2">
-
-          <div class="p-8 mx-2 mt-24 items-center">
-            <div class="max-w-auto rounded overflow-hidden shadow-lg">
-              <div class="px-12 py-8">
-
-                <br class="my-24" />
-
-                <div class="flex">
-                  <div class="flex-initial text-center px-4 py-2 m-2">
-                    <div class="font-bold text-3xl mb-2">
-                      {result.data.testById.testName}
-                    </div>
-                  </div>
-                </div>
-
-                <p class="font-bold text-2xl mb-2">Difficulty Level :</p>
-                <p class="text-gray-700 text-2xl">
-                  {result.data.testById.difficultyLevel}
-                </p>
-                <br />
-                <br />
-                <p class="font-bold text-2xl mb-2">Problems :</p>
-                <ul>
-                  {#each result.data.testById.problems as problem}
-                    <li class="text-xl mb-2">
-                      <a
-                        target="_blank"
-                        href="http://localhost:5000/problem/{problem.id}">
-                        {problem.problemName}
-                      </a>
-                    </li>
-                  {/each}
-                </ul>
-
-              </div>
-
-            </div>
+    </header>
+    {#await $test}
+      Loading...
+    {:then result}
+      <div class="bg-edark flex flex-col max-w-full overflow-auto">
+        <div class="mx-auto mt-8 max-w-full flex flex-col">
+          <div class="font-bold text-2xl text-elight mx-auto">
+            {result.data.testById.testName}
           </div>
+          <div class=" text-xl text-elight mx-auto">
+            Time Limit :- {result.data.testById.timelimit} ms
+          </div>
+          <div class=" text-xl text-elight mx-auto">
+            Difficulty :- {result.data.testById.difficultyLevel}
+          </div>
+        </div>
+        <div class="bg-dark max-w-full mt-12 mx-64">
 
-          <div class="w-1/2 h-12">
-            <div class="p-8 mx-2 mt-24 items-center">
-              <div class="max-w-auto rounded overflow-hidden shadow-lg">
-                <div class="px-6 py-4">
-                  <div class="flex">
-                    <div class="flex-initial text-center px-4 py-2 m-2">
-                      <div class="font-bold text-3xl mb-2">Test Submission</div>
+          <div class="outer_box flex-col h-full">
+            <div class="mx-auto mb-4 w-32">
+              <h1 class="labels">Problems</h1>
+            </div>
+            <div class="flex-col">
+              <div class="flex mb-6">
+                <div class="w-10/12">
+                  <div class="rows mx-4">Problem Name</div>
+                </div>
+                <div class="w-2/12">
+                  <div class="rows mx-4">Score</div>
+                </div>
+              </div>
+              <div class="boxheight2 flex flex-col flex-grow overflow-auto">
+                {#each JSON.parse(result.data.testById.problems) as prob}
+                  <div class="flex pb-3">
+                    <div class="w-10/12">
+                      <div class="rows bg-edark rounded-full p-2 px-4 mx-2">
+                        <a
+                          href="http://localhost:5000/problem/{prob.problem.id}"
+                          class="no-underline px-3 text-elight">
+                          {prob.problem.problemName}
+                        </a>
+                      </div>
+                    </div>
+                    <div class="w-2/12">
+                      <div class="rows bg-edark rounded-full">
+                        <div
+                          type="string"
+                          class=" mx-auto w-10 outline-none text-white p-2">
+                          {prob.score}
+                        </div>
+                      </div>
                     </div>
                   </div>
-                  <ol>
-                    {#await $attempt}
-                      Loading...
-                    {:then result}
-                      {#each result.data.getAttempt as attempt}
-                        <label>
-                          <li>{attempt.user.name} :- {attempt.score}</li>
-                        </label>
-                      {/each}
-                    {:catch err}
-                      Error: {err}
-                    {/await}
-                  </ol>
-                </div>
+                {/each}
               </div>
             </div>
           </div>
         </div>
-        <div class="px-4 py-2">
-          <div class="flex buttonbox">
+        <div class="max-w-6xl my-4 mb-32 flex flex-col mx-auto">
+          <div class="float-right ">
             <button
               on:click={() => {
-                location.replace(`http://localhost:5000/editTest/${result.data.testById.id}`);
+                location.replace(`http://localhost:5000/edittest/${currentRoute.namedParams.id}`);
               }}
-              class="savebutton bg-red-500 hover:bg-red-700 text-white font-bold
-              py-2 px-4 border border-red-700 rounded">
+              class="savebutton hover:bg-white hover:text-edark font-bold py-2
+              px-4 border rounded">
               Edit
             </button>
-            <a href="http://localhost:5000/sendtest/{result.data.testById.id}">
-              <button
-                class="bg-red-500 hover:bg-red-700 text-white font-bold py-2
-                px-4 border border-red-700 rounded">
-                Send Test
-              </button>
-            </a>
             <button
               on:click={deleteTestHandler}
-              class="deleteButton bg-red-500 hover:bg-red-700 text-white
-              font-bold py-2 px-4 border border-red-700 rounded">
+              class="savebutton hover:bg-white hover:text-edark font-bold py-2
+              px-4 border rounded">
               Delete
+            </button>
+            <button
+              on:click={() => {
+                location.replace(`http://localhost:5000/sendtest/${currentRoute.namedParams.id}`);
+              }}
+              class="savebutton hover:bg-white hover:text-edark font-bold py-2
+              px-4 border rounded">
+              Send Test
             </button>
           </div>
         </div>
-
       </div>
-
+      <div class=" flex-grow align-bottom relative mx-64">
+        <div class="flex bottom-0 absolute w-auto">
+          {#each result.data.testById.tags.split('#') as tag, index}
+            {#if index !== 0}
+              <div
+                class="text-white border-solid border-2 mr-4 mb-10 border-white
+                rounded-full p-2 px-4 ">
+                {tag}
+              </div>
+            {/if}
+          {/each}
+        </div>
+      </div>
     {:catch err}
-      Error: {err}
+      Error : {err}
     {/await}
   </div>
 </body>

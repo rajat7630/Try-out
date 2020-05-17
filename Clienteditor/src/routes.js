@@ -5,7 +5,7 @@ import Problems from './routes/Problems.svelte';
 import Tests from './routes/Tests.svelte';
 import SendTest from './routes/send_test.svelte';
 import NewTest from './routes/test/add_test.svelte';
-import EditTest from './routes/editTest.svelte';
+import EditTest from './routes/update_test/edit_test.svelte';
 import NewProblem from './routes/problem/add_problem.svelte';
 import EditProblem from './routes/update_problem/edit_problem.svelte';
 import Thankyou from './routes/thankyou.svelte';
@@ -72,10 +72,6 @@ const routes = [{
     {
         name: '/home',
         component: Home,
-    },
-    {
-        name: '/sendtest/:id',
-        component: SendTest,
     },
     {
         name: '/showproblems',

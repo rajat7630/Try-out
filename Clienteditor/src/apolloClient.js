@@ -205,7 +205,9 @@ const updateTest = gql`
     $id: ID
     $testName: String
     $difficultyLevel: String
-    $problems: [ID]
+    $problems: JSON
+    $tags: String
+    $timelimit: String
   ) {
     updateTest(
       id: $id
@@ -213,6 +215,8 @@ const updateTest = gql`
         testName: $testName
         difficultyLevel: $difficultyLevel
         problems: $problems
+        tags: $tags
+        timelimit: $timelimit
       }
     ) {
       success
@@ -275,15 +279,13 @@ const getTestById = gql`
   query getTestById($id: ID!) {
     testById(id: $id) {
       id
+      email
       testName
       difficultyLevel
-      problems {
-        id
-        problemName
-        problemTests
-        description
-        email
-      }
+      problems
+      timelimit
+      createdAt
+      tags
     }
   }
 `;
