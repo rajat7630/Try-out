@@ -164,11 +164,6 @@
     font-size: 1.25rem;
     line-height: 1;
   }
-  .chat-notification-message {
-    color: #718096;
-    font-size: 1rem;
-    line-height: 1.5;
-  }
 </style>
 
 <!-- <svelte:window

@@ -40,11 +40,6 @@
     display: inline-block;
   }
 
-  .dropdown-content {
-    display: none;
-    position: absolute;
-  }
-
   .dropdown:hover .dropdown-content {
     display: block;
   }
@@ -68,9 +63,9 @@
             let themesize = themes.length;
             changeTheme(number % themesize);
           }}
-          class="container bg-white flex outline-none flex-row hover:bg-elight text-dark
-          font-semibold hover:text-white py-4 px-6 border border-white-500
-          rounded hover:border-white  rounded-full">
+          class="container bg-white flex outline-none flex-row hover:bg-elight
+          text-dark font-semibold hover:text-white py-4 px-6 border
+          border-white-500 rounded hover:border-white rounded-full">
           <img
             alt="admin"
             width="25"

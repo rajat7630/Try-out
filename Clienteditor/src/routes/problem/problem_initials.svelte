@@ -90,7 +90,7 @@
               bind:value={$problemStore.problemName}
               type="search"
               name="serch"
-              placeholder="Search"
+              placeholder="Enter Problem Name"
               class="bg-elight h-10 px-5 pr-10 rounded-full w-full text-xl
               tet-edark focus:outline-none" />
           </div>

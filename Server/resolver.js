@@ -1,93 +1,38 @@
+/* eslint-disable no-unused-vars */
 const store = require('./store.js');
+
 module.exports = {
   Query: {
-    getTest: (_, { token }) => {
-      console.log(token, "tttttt");
-      return store.getTestByToken(token);
-    },
-    getToken: (_, { id }) => {
-      return store.getToken(id);
-    },
-
-    allProblems: () => {
-      return store.getAllProblems();
-    },
-    problemById: (_, { id }) => {
-      return store.getProblemById(id);
-    },
-    allTests: () => {
-      return store.getAllTests();
-    },
-    testByToken: (_, { token }) => {
-      return store.getTestByToken(token);
-    },
-    testById: (_, { id }) => {
-      return store.getTestById(id);
-    },
-
-    testsByAuthor: (_, { email }) => {
-      return store.getTestsByAuthor(email);
-    },
-    problemsByAuthor: (_, { email }) => {
-      return store.getProblemsByAuthor(email);
-    },
-
-    getAttempt: (_, { id }) => {
-      console.log(id);
-      return store.getAttempt(id);
-    },
+    getTest: (_, { token }) => store.getTestByToken(token),
+    getToken: (_, { id }) => store.getToken(id),
+    allProblems: () => store.getAllProblems(),
+    problemById: (_, { id }) => store.getProblemById(id),
+    allTests: () => store.getAllTests(),
+    testByToken: (_, { token }) => store.getTestByToken(token),
+    testById: (_, { id }) => store.getTestById(id),
+    testsByAuthor: (_, { email }) => store.getTestsByAuthor(email),
+    problemsByAuthor: (_, { email }) => store.getProblemsByAuthor(email),
+    getAttempt: (_, { id }) => store.getAttempt(id),
+    getAllAttempt: () => store.getAllAttempt(),
   },
   Mutation: {
-    checkTestIfExists: (_, { testName }) => {
-      return store.checkTestIfExists(testName);
-    },
-    checkProblemIfExists: (_, { problemName }) => {
-      return store.checkProblemIfExists(problemName);
-    },
-    addAttempt: (_, { data }) => {
-      console.log(data);
-      return store.addNewAttempt(data);
-    },
-    addProblem: (parent, { data }, ctx, info) => {
-      console.log(data);
-      return store.addNewProblem(data);
-    },
-    deleteProblem: (parent, { id }, ctx, info) => {
-      console.log(id);
-      return store.deleteProblem(id);
-    },
-    updateProblem: (parent, { id, data }, ctx, info) => {
-      console.log(id, data);
-      return store.updateProblem(id, data);
-    },
-    addTest: (parent, { data }, ctx, info) => {
-      console.log('data', data);
-      return store.addNewTest(data);
-    },
-    deleteTest: (parent, { id }, ctx, info) => {
-      console.log(id);
-      return store.deleteTest(id);
-    },
-    updateTest: (parent, { id, data }, ctx, info) => {
-      console.log(id, data);
-      return store.updateTest(id, data);
-    },
-    addUser: (parent, { data }, ctx, info) => {
-      console.log(data, 'resolver');
-      return store.addNewUser(data);
-    },
+    checkTestIfExists: (_, { testName }) => store.checkTestIfExists(testName),
+    checkProblemIfExists: (_, { problemName }) =>
+      store.checkProblemIfExists(problemName),
+    addAttempt: (_, { data }) => store.addNewAttempt(data),
+    addProblem: (parent, { data }, ctx, info) => store.addNewProblem(data),
+    deleteProblem: (parent, { id }, ctx, info) => store.deleteProblem(id),
+    updateProblem: (parent, { id, data }, ctx, info) =>
+      store.updateProblem(id, data),
+    addTest: (parent, { data }, ctx, info) => store.addNewTest(data),
+    deleteTest: (parent, { id }, ctx, info) => store.deleteTest(id),
+    updateTest: (parent, { id, data }, ctx, info) => store.updateTest(id, data),
+    addUser: (parent, { data }, ctx, info) => store.addNewUser(data),
 
-    addTestProblem: (parent, { data }, ctx, info) => {
-      console.log(data);
-      return store.addTestProblem(data);
-    },
+    addTestProblem: (parent, { data }, ctx, info) => store.addTestProblem(data),
 
-    sendMail: (_, mailDetails) => {
-      return store.sendMail(mailDetails);
-    },
+    sendMail: (_, mailDetails) => store.sendMail(mailDetails),
 
-    updateAttempt: (_, { data }) => {
-      return store.updateAttempt(data);
-    },
+    updateAttempt: (_, { data }) => store.updateAttempt(data),
   },
 };

@@ -23,15 +23,6 @@
     padding: 2vh;
     color: white;
   }
-  .addButton {
-    padding: 0 0.5vh 0 0.5vh;
-    background-color: green;
-    color: red;
-    margin-left: 3vw;
-    font-weight: bold;
-    height: 2.5vh;
-    border-radius: 0.5vh;
-  }
   .textLabel {
     color: white;
     font-size: 1.5rem;
@@ -40,20 +31,7 @@
     width: 20px;
     height: 4px;
   }
-  .testInput {
-    width: 5vw;
-    margin-left: 2vw;
-  }
-  .inputList {
-    display: flex;
-    max-width: 50vw;
-    overflow-x: auto;
-  }
-  .inputWindow {
-    width: 50vw;
-    height: 30vh;
-    font-size: 2rem;
-  }
+
   .saveButton {
     margin-left: 90%;
     margin-top: 2vh;

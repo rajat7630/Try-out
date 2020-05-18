@@ -65,7 +65,7 @@ const testByToken = gql`
   query getTest($token: String) {
     testByToken(token: $token) {
       id
-      problems 
+      problems
     }
   }
 `;
@@ -296,18 +296,6 @@ const getAttempts = gql`
         name
         collegeName
       }
-      test {
-        id
-        testName
-        difficultyLevel
-        problems {
-          id
-          problemName
-          problemTests
-          description
-          email
-        }
-      }
       solutions
       attemptTime
       score
@@ -325,18 +313,7 @@ const getAllAttempts = gql`
         name
         collegeName
       }
-      test {
-        id
-        testName
-        difficultyLevel
-        problems {
-          id
-          problemName
-          problemTests
-          description
-          email
-        }
-      }
+      test
       solutions
       attemptTime
       score

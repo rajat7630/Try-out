@@ -100,8 +100,7 @@
       <div class="max-w-6xl my-4 mb-32 flex flex-col mx-auto">
         <div class="float-right ">
           <button
-            on:c
-            lick={() => {
+            on:click={() => {
               location.replace(`http://localhost:5000/editProblem/${currentRoute.namedParams.id}`);
             }}
             class="savebutton hover:bg-white hover:text-edark font-bold py-2

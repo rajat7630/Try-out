@@ -9,7 +9,9 @@
   const Attempts = query(client, { query: apolloClient.getAllAttempts });
   const Test = query(client, { query: apolloClient.allTests });
   const Problem = query(client, { query: apolloClient.getProblems });
-
+  $Attempts.then(res => {
+    console.log(res);
+  });
   export let currentRoute;
   console.log(currentRoute, "ddddddcdcdcd");
 
@@ -223,7 +225,7 @@
                 <tr class="flex w-full mb-4" id="pp">
                   <td class="p-4 w-1/4">{attempt.user.name}</td>
                   <td class="p-4 w-1/4">{attempt.user.collegeName}</td>
-                  <td class="p-4 w-1/4">{attempt.test.testName}</td>
+                  <td class="p-4 w-1/4">{attempt.test}</td>
                   <td class="p-4 w-1/4">{attempt.score}</td>
                 </tr>
               {/each}

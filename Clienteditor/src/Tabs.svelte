@@ -26,43 +26,9 @@
     text-align: center;
     color: white;
   }
-  .closeButton {
-    padding-right: 1rem;
-    color: white;
-    background: #25282c;
-    border: none;
-    border-radius: 0%;
-    outline: none;
-  }
-  .closeButtonActive {
-    outline: none;
-    padding-right: 2vh;
-    color: white;
-    background: #1d1f21;
-    border: none;
-    border-radius: 0%;
-  }
-  .closeButtonActive:active{
-    background:#1d1f21 ;
-  }
-  .closeButton:active{
-    background: #25282c;
-  }
+
   .parentDiv {
     border-right: solid 2px #1d1f21;
-  }
-
-  .addButton{
-    padding: 0 2vw 0 2vw;
-    background: #25282c;
-    color: white;
-    outline: none;
-    border-radius: 0%;
-    border: none;
-    font-size: 4vh;
-  }
-  .addButton:active{
-    background: #1d1f21;
   }
 </style>
 
@@ -73,7 +39,7 @@
         class:active={tab.active}
         class="tab flex-grow"
         on:click={() => dataStore.activate(tab.id)}>
-        Problem {index+1}
+        Problem {index + 1}
       </li>
       <!-- <button
         class:closeButtonActive={tab.active}

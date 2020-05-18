@@ -12,26 +12,6 @@
 </script>
 
 <style>
-  .btn {
-    @apply font-bold py-2 px-4 rounded;
-  }
-  .btn-blue {
-    @apply bg-blue-500 text-white;
-  }
-  .btn-blue:hover {
-    @apply bg-blue-700;
-  }
-  .savebutton {
-    margin-right: 3vw;
-  }
-  .deleteButton {
-    margin-left: 3vw;
-  }
-  #blk {
-    margin-top: 6%;
-    margin-left: 10%;
-    margin-right: 6%;
-  }
   .heading {
     width: 100%;
     padding: 1vh;

@@ -86,7 +86,7 @@
               bind:value={$testStore.testName}
               type="search"
               name="serch"
-              placeholder="Search"
+              placeholder="Enter Test Name"
               class="bg-elight h-10 px-5 pr-10 rounded-full w-full text-xl
               tet-edark focus:outline-none" />
           </div>

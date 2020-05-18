@@ -40,15 +40,9 @@
   .labels {
     @apply text-elight text-3xl mb-3;
   }
-  .unit {
-    @apply text-2xl text-elight ml-3;
-  }
 
   .unitinput {
     @apply ml-6 p-2 mb-3 text-2xl bg-elight w-full max-w-4xl box-border text-edark rounded;
-  }
-  .status {
-    @apply text-elight text-6xl px-3 flex;
   }
 </style>
 

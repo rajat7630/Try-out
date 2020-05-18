@@ -86,27 +86,9 @@
   .mainDiv {
     height: 94.9%;
   }
-  .title {
-    font-size: 1.5rem;
-  }
+
   .sizechanger {
     background: #25282c;
-  }
-
-  .runButton {
-    padding: 0 2vw 0 2vw;
-    margin-left: 90%;
-    margin-top: 2vh;
-    outline: none;
-    font-size: 1.4rem;
-  }
-  .runButton:active {
-    outline: none;
-    border: white;
-    background: #1d1f21;
-  }
-  .outputValue {
-    font-size: 1.2rem;
   }
 </style>
 
@@ -143,7 +125,7 @@
     }} />
   <div class="output" id="outputid" style="height:{height}">
 
-    <div class="flex my-4 p-2 border-solid  border-2 border-black">
+    <div class="flex my-4 p-2 border-solid border-2 border-black">
       <div class="flex-1 mr-4 box-border">
         <h2 class="text-xl text-white my-3 my-2">Input</h2>
         <div class="flex-grow h-48 box-border">
@@ -167,8 +149,8 @@
     </div>
     <div class="float-left ml-10 text-xl">
       <button
-        class="bg-black hover:bg-white hover:text-black mr-10 outline-none text-white
-        float-right py-2 px-4 rounded-full"
+        class="bg-black hover:bg-white hover:text-black mr-10 outline-none
+        text-white float-right py-2 px-4 rounded-full"
         on:click={() => {
           console.log(JSON.stringify($dataStore));
           sendSolution($dataStore);
@@ -179,8 +161,8 @@
         on:click={e => {
           runHandler(e);
         }}
-        class="bg-black hover:bg-white hover:text-black mr-10 outline-none text-white
-        float-right py-2 px-4 rounded-full">
+        class="bg-black hover:bg-white hover:text-black mr-10 outline-none
+        text-white float-right py-2 px-4 rounded-full">
         Run
       </button>
     </div>

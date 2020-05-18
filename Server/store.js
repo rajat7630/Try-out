@@ -1,10 +1,11 @@
+const jwt = require('jsonwebtoken');
+const nodemailer = require('nodemailer');
 const Problem = require('./models/Problem');
 const TestProblem = require('./models/TestProblem');
 const Test = require('./models/Test');
 const User = require('./models/User');
 const Attempt = require('./models/Attempt');
-const jwt = require('jsonwebtoken');
-const nodemailer = require('nodemailer');
+
 const transporter = nodemailer.createTransport({
   service: 'Gmail',
   auth: {
@@ -13,62 +14,15 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-let mailOptions = {
+const mailOptions = {
   from: 'tryouteditor@gmail.com',
   to: '',
   subject: 'Test from Sourcefuse Technologies',
   text: '',
   html: '',
 };
-async function addNewProblem(problem) {
-  const res = await Problem.query().insert({
-    problemName: problem.problemName,
-    description: problem.description,
-    problemTests: JSON.stringify(problem.problemTests),
-    tags: problem.tags,
-    solution: problem.solution,
-    timelimit: problem.timelimit,
-    datalimit: problem.datalimit,
-    email: problem.email,
-  });
-  console.log(res);
-  return {
-    success: true,
-    message: 'Problem Added Successfully',
-    problems: getAllProblems(),
-  };
-}
 
-async function deleteProblem(id) {
-  console.log('delete problem');
-  const deleteTest = await TestProblem.query()
-    .delete()
-    .where('p_id', parseInt(id));
-
-  await Problem.query().deleteById(parseInt(id));
-
-  return getAllProblems();
-}
-
-async function updateProblem(id, problem) {
-  const updatedProblem = await Problem.query().patchAndFetchById(parseInt(id), {
-    problemName: problem.problemName,
-    description: problem.description,
-    problemTests: JSON.stringify(problem.problemTests),
-    tags: problem.tags,
-    solution: problem.solution,
-    timelimit: problem.timelimit,
-    datalimit: problem.datalimit,
-  });
-
-  return {
-    success: true,
-    message: 'Problem updated Successfully',
-    problem: problemReducer(updatedProblem),
-  };
-}
 async function addNewTest(test) {
-  console.log(test);
   const res = await Test.query().insert({
     testName: test.testName,
     difficultyLevel: test.difficultyLevel,
@@ -76,7 +30,6 @@ async function addNewTest(test) {
     tags: test.tags,
     timelimit: parseInt(test.timelimit),
   });
-  console.log(res.id);
 
   JSON.parse(test.problems).forEach((ele) => {
     addTestProblem({
@@ -93,17 +46,14 @@ async function addNewTest(test) {
   };
 }
 async function deleteTest(id) {
-  console.log('iddd', parseInt(id));
   await TestProblem.query().delete().where('t_id', parseInt(id));
   await Test.query().delete().where('id', parseInt(id));
-  console.log('deleted');
   return {
     success: true,
     message: 'deleted',
   };
 }
 async function updateTest(id, test) {
-  console.log(id, test);
   const updatedTest = await Test.query().patchAndFetchById(parseInt(id), {
     testName: test.testName,
     difficultyLevel: test.difficultyLevel,
@@ -132,10 +82,12 @@ async function addNewUser(user) {
     name: user.name,
     collegeName: user.collegeName,
   });
+  console.log(res);
   const res2 = await Test.query().where('id', parseInt(user.testId));
   const res1 = await getTestProblems(res2[0]);
   const res3 = await addNewAttempt({
     id: parseInt(user.testId),
+    u_id: parseInt(res.id),
     problems: res1,
   });
   const token = jwt.sign(
@@ -148,7 +100,7 @@ async function addNewUser(user) {
   return {
     success: true,
     message: 'User Added Successfully',
-    token: token,
+    token,
   };
 }
 
@@ -162,7 +114,7 @@ async function addTestProblem(testProblem) {
   return {
     success: true,
     message: 'Problem added successfully',
-    test: test,
+    test,
   };
 }
 
@@ -180,6 +132,23 @@ function problemReducer(prob) {
     timelimit: prob.timelimit,
   };
 }
+async function updateProblem(id, problem) {
+  const updatedProblem = await Problem.query().patchAndFetchById(parseInt(id), {
+    problemName: problem.problemName,
+    description: problem.description,
+    problemTests: JSON.stringify(problem.problemTests),
+    tags: problem.tags,
+    solution: problem.solution,
+    timelimit: problem.timelimit,
+    datalimit: problem.datalimit,
+  });
+
+  return {
+    success: true,
+    message: 'Problem updated Successfully',
+    problem: problemReducer(updatedProblem),
+  };
+}
 async function getTestProblems(test) {
   const res = await TestProblem.query()
     .leftJoin('problems', 'testProblems.p_id', '=', 'problems.id')
@@ -187,15 +156,12 @@ async function getTestProblems(test) {
     .select('problems.*', 'testProblems.score');
 
   const problems = [
-    ...res.map((prob) => {
-      return { problem: prob, score: prob.score };
-    }),
+    ...res.map((prob) => ({ problem: prob, score: prob.score })),
   ];
   return problems;
 }
 async function testReducer(test) {
   const problems = await getTestProblems(test);
-  console.log('reached here');
   return {
     id: test.id,
     testName: test.testName,
@@ -210,30 +176,44 @@ async function testReducer(test) {
 
 async function getAllProblems() {
   const res = await Problem.query();
-  return res.map((problem) => {
-    return problemReducer(problem);
-  });
+  return res.map((problem) => problemReducer(problem));
+}
+async function deleteProblem(id) {
+  await TestProblem.query().delete().where('p_id', parseInt(id));
+  await Problem.query().deleteById(parseInt(id));
+  return getAllProblems();
 }
 
+async function addNewProblem(problem) {
+  await Problem.query().insert({
+    problemName: problem.problemName,
+    description: problem.description,
+    problemTests: JSON.stringify(problem.problemTests),
+    tags: problem.tags,
+    solution: problem.solution,
+    timelimit: problem.timelimit,
+    datalimit: problem.datalimit,
+    email: problem.email,
+  });
+  return {
+    success: true,
+    message: 'Problem Added Successfully',
+    problems: getAllProblems(),
+  };
+}
 async function getProblemById(id) {
   const res = await Problem.query().findById(id);
-  console.log(res);
   return problemReducer(res);
 }
 
 async function getAllTests() {
   const res = await Test.query();
-  console.log(res);
-  return res.map((test) => {
-    return testReducer(test);
-  });
+  return res.map((test) => testReducer(test));
 }
 
 async function getTestsByAuthor(email) {
   const res = await Test.query().where('email', email);
-  return res.map((test) => {
-    return testReducer(test);
-  });
+  return res.map((test) => testReducer(test));
 }
 
 async function getTestById(id) {
@@ -243,40 +223,31 @@ async function getTestById(id) {
 
 async function getProblemsByAuthor(email) {
   const res = await Problem.query().where('email', email);
-  return res.map((problem) => {
-    return problemReducer(problem);
-  });
+  return res.map((problem) => problemReducer(problem));
 }
 
 async function getToken(id) {
   const res = await getTestById(parseInt(id));
   const attempt = await addNewAttempt(res);
-  console.log(attempt);
   const token = jwt.sign({ testId: id, attemptId: attempt.id }, 'helloo', {
     expiresIn: 60 * 60,
   });
-  return { token: token };
+  return { token };
 }
 
 async function getTestByToken(token) {
   const decode = jwt.decode(token);
-  console.log(decode, 'decode');
   const res2 = await Test.query().where('id', parseInt(decode.test_id));
   const res1 = await getTestProblems(res2[0]);
-  console.log(res1);
-  res2[0].problems = res1.map((ele) => {
-    return {
-      problemName: ele.problem.problemName,
-      id: ele.problem.id,
-      description: ele.problem.description,
-    };
-  });
-  console.log(res2[0]);
+  res2[0].problems = res1.map((ele) => ({
+    problemName: ele.problem.problemName,
+    id: ele.problem.id,
+    description: ele.problem.description,
+  }));
   return res2[0];
 }
 
 function sendMail(mailDetails) {
-  console.log(mailDetails);
   const token = jwt.sign(
     { testId: mailDetails.test_id, email: mailDetails.email },
     'helloo',
@@ -284,15 +255,13 @@ function sendMail(mailDetails) {
       expiresIn: 60 * 60 * parseInt(mailDetails.linktime),
     }
   );
-  let mailBody = `<h1>Sourcefuse Technoogies</h1><p>This link will be active for ${mailDetails.linktime} hours</p><span>To give test click <a href="http://localhost:5000/givetest/${token}">here</a></span>`;
+  const mailBody = `<h1>Sourcefuse Technologies</h1><p>This link will be active for ${mailDetails.linktime} hours</p><span>To give test click <a href="http://localhost:5000/givetest/${token}">here</a></span>`;
   mailOptions.html = mailBody;
   mailOptions.to = mailDetails.email;
-  console.log(mailOptions);
   transporter.sendMail(mailOptions, (error, info) => {
     if (error) {
-      console.log(error);
+      throw error;
     } else {
-      console.log(('Email Sent: ', info));
       return {
         success: true,
         message: 'mail sent successfully',
@@ -302,10 +271,11 @@ function sendMail(mailDetails) {
 }
 
 async function addNewAttempt(data) {
-  let tt = JSON.stringify(data.problems);
+  const tt = JSON.stringify(data.problems);
   const res = await Attempt.query().insert({
     t_id: parseInt(data.id),
     solutions: JSON.stringify(data.problems),
+    u_id: parseInt(data.u_id),
   });
 
   return {
@@ -316,30 +286,30 @@ async function addNewAttempt(data) {
 }
 
 async function updateAttempt(data) {
-  let res = await Attempt.query().where('id', parseInt(data.id));
-  let rr = res[0].solutions;
-  let tt = JSON.parse(data.solutions);
-  console.log(rr);
-  console.log(tt);
+  const res = await Attempt.query().where('id', parseInt(data.id));
+  const rr = res[0].solutions;
+  const tt = JSON.parse(data.solutions);
+
   let score = 0;
   rr.map((ele, index) => {
-    let result = eval(
+    const result = eval(
       `${tt[index].solution} solution(JSON.parse(${ele.problem.problemTests}))`
     );
-    let originalResult = eval(
+    const originalResult = eval(
       `${ele.problem.solution} solution(JSON.parse(${ele.problem.problemTests}))`
     );
-    console.log(result, 'result', 'original', originalResult);
+    console.log("result", result, "original", originalResult);
     if (result === originalResult) {
       score += parseInt(ele.score);
     }
     return { ...ele, userSolution: tt[index].solution };
   });
-  let res2 = await Attempt.query().patchAndFetchById(parseInt(data.id), {
+  const res2 = await Attempt.query().patchAndFetchById(parseInt(data.id), {
     u_id: parseInt(data.u_id),
     solutions: JSON.stringify(rr),
     Score: score,
   });
+
   console.log(res2);
   return {
     success: true,
@@ -348,19 +318,14 @@ async function updateAttempt(data) {
 }
 
 async function attemptReducer(attempt) {
+  console.log(attempt);
   const user = await User.query().where('id', parseInt(attempt.u_id));
   const test = await Test.query().where('id', parseInt(attempt.t_id));
-  console.log(user[0].id);
-  console.log(test);
+
   return {
     id: attempt.id,
-    user: {
-      id: user[0].id,
-      email: user[0].email,
-      name: user[0].name,
-      collegeName: user[0].collegeName,
-    },
-    test: testReducer(test[0]),
+    user: user[0],
+    test:test[0].testName,
     solutions: attempt.solutions,
     attemptTime: attempt.attemptTime,
     score: attempt.Score,
@@ -369,24 +334,16 @@ async function attemptReducer(attempt) {
 
 async function getAttempt(id) {
   const res = await Attempt.query().where('t_id', parseInt(id));
-  console.log(res);
-  return res.map((attempt) => {
-    return attemptReducer(attempt);
-  });
+  return res.map((attempt) => attemptReducer(attempt));
 }
 
 async function getAllAttempt() {
   const res = await Attempt.query();
-  console.log(res);
-  return res.map((attempt) => {
-    return attemptReducer(attempt);
-  });
+  return res.map((attempt) => attemptReducer(attempt));
 }
 
 async function checkProblemIfExists(problemName) {
-  console.log(problemName);
   const res = await Problem.query().where('problemName', problemName);
-  console.log(res);
   if (res.length === 0) {
     return {
       success: false,
@@ -399,9 +356,7 @@ async function checkProblemIfExists(problemName) {
   };
 }
 async function checkTestIfExists(testName) {
-  console.log(testName);
   const res = await Test.query().where('testName', testName);
-  console.log(res);
   if (res.length === 0) {
     return {
       success: false,
@@ -434,6 +389,7 @@ module.exports = {
   addTestProblem,
   getTestByToken,
   getToken,
+  getAllAttempt,
   sendMail,
   addNewUser,
 };
