@@ -15,15 +15,15 @@
   async function sendSolution(data) {
     let solutions = {
       u_id: parseInt(cookieHandler.getCookie("user_id")),
-      t_id: parseInt(cookieHandler.getCookie("test_id")),
+      id: parseInt(cookieHandler.getCookie("attempt_id")),
       solutions: JSON.stringify(data)
     };
     try {
       await mutate(client, {
-        mutation: apolloClient.addAttempt,
+        mutation: apolloClient.updateAttempt,
         variables: solutions
       });
-      location.replace("http://localhost:5000/feedback");
+      location.replace("http://localhost:5000/thankyou");
     } catch (err) {
       console.log(err);
     }

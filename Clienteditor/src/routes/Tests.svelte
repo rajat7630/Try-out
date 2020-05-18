@@ -14,7 +14,7 @@
   });
   async function deleteTestHandler() {
     try {
-      mutate(client, {
+      await mutate(client, {
         mutation: apolloClient.deleteTest,
         variables: { id: currentRoute.namedParams.id }
       });

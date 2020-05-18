@@ -93,17 +93,14 @@ async function addNewTest(test) {
   };
 }
 async function deleteTest(id) {
-  try {
-    await Test.query().delete().where('id', parseInt(id));
-    await TestProblem.query().delete().where('t_id', parseInt(id));
-    console.log('deleted');
-    return {
-      success: true,
-      message: 'deleted',
-    };
-  } catch (er) {
-    console.log(err);
-  }
+  console.log('iddd', parseInt(id));
+  await TestProblem.query().delete().where('t_id', parseInt(id));
+  await Test.query().delete().where('id', parseInt(id));
+  console.log('deleted');
+  return {
+    success: true,
+    message: 'deleted',
+  };
 }
 async function updateTest(id, test) {
   console.log(id, test);

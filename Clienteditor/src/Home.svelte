@@ -22,7 +22,7 @@
     console.log(res);
   });
   var tokens = currentRoute.namedParams.token.split(".");
-  console.log(JSON.parse(atob(tokens[1]))); 
+  console.log(JSON.parse(atob(tokens[1])));
   cookieHandler.setCookie("attempt_id", JSON.parse(atob(tokens[1])).attempt_id);
   cookieHandler.setCookie("user_id", JSON.parse(atob(tokens[1])).user_id);
   $problems.then(res => {
@@ -117,6 +117,12 @@
     position: fixed;
     right: 3%;
     bottom: 5%;
+  }
+  :root {
+    --color-ed: #1d1f21;
+    --color-d: #25282c;
+    --color-l: #303030;
+    --color-el: #c4c4c4;
   }
 
   .chat {
