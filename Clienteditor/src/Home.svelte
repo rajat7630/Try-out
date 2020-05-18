@@ -6,16 +6,12 @@
   import { apolloClient } from "./apolloClient.js";
   import { dataStore, currentTab } from "./store.js";
   import { getContext } from "svelte";
-  import Content from "./Modals/userHelper.svelte";
-  import Modal from "svelte-simple-modal";
   import { cookieHandler } from "./helperFunctions/cookie_handler.js";
   export let currentRoute;
   import Timer from "./components/timer.svelte";
   import { publish, grantPermissions } from "../pubnubClient.js";
   import pubnub from "../pubnubinit.js";
-
   console.log(currentRoute);
-
   const client = getClient();
   const problems = subscribe(client, {
     query: apolloClient.testByToken,
@@ -23,7 +19,6 @@
   });
   var tokens = currentRoute.namedParams.token.split(".");
   console.log(JSON.parse(atob(tokens[1])));
-  cookieHandler.setCookie("attemptId", JSON.parse(atob(tokens[1])).attemptId);
 
   $problems.then(res => {
     cookieHandler.setCookie("test_id", res.data.testByToken.id);
@@ -197,13 +192,6 @@
     }
   }} /> -->
 <body>
-  {#if cookieHandler.getCookie('loggedIn') !== 'true'}
-    <div>
-      <Modal>
-        <Content changeStatus />
-      </Modal>
-    </div>
-  {/if}
 
   {#await $problems}
     {pubbie()}

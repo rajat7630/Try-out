@@ -75,8 +75,8 @@ const testByToken = gql`
 `;
 
 const sendMail = gql`
-  mutation mailSender($mailBody: String, $email: String) {
-    sendMail(mailBody: $mailBody, email: $email) {
+  mutation mailSender($linktime: String, $email: String, $test_id: String) {
+    sendMail(linktime: $linktime, test_id: $test_id, email: $email) {
       success
       message
     }
@@ -226,15 +226,23 @@ const updateTest = gql`
 `;
 
 const addUser = gql`
-  mutation addNewUser($name: String, $email: String, $collegeName: String) {
-    addUser(data: { name: $name, email: $email, collegeName: $collegeName }) {
+  mutation addNewUser(
+    $name: String
+    $email: String
+    $collegeName: String
+    $testId: String
+  ) {
+    addUser(
+      data: {
+        name: $name
+        email: $email
+        collegeName: $collegeName
+        testId: $testId
+      }
+    ) {
       success
       message
-      user {
-        name
-        id
-        collegeName
-      }
+      token
     }
   }
 `;

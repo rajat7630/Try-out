@@ -18,6 +18,7 @@ let mailOptions = {
   to: '',
   subject: 'Test from Sourcefuse Technologies',
   text: '',
+  html: '',
 };
 async function addNewProblem(problem) {
   const res = await Problem.query().insert({
@@ -127,10 +128,16 @@ async function addNewUser(user) {
     name: user.name,
     collegeName: user.collegeName,
   });
+  console.log(user);
+  const res2 = await Test.query().where('id', parseInt(user.testId));
+  console.log(res2[0].timelimit);
+  const token = jwt.sign({ test_id: user.testId, user_id: res.id }, 'helloo', {
+    expiresIn: 60 * 60 * parseInt(res2[0].timelimit),
+  });
   return {
     success: true,
     message: 'User Added Successfully',
-    user: res,
+    token: token,
   };
 }
 
@@ -250,7 +257,15 @@ async function getTestByToken(token) {
 
 function sendMail(mailDetails) {
   console.log(mailDetails);
-  mailOptions.text = mailDetails.mailBody;
+  const token = jwt.sign(
+    { testId: mailDetails.test_id, email: mailDetails.email },
+    'helloo',
+    {
+      expiresIn: 60 * 60 * 60 * parseInt(mailDetails.linktime),
+    }
+  );
+  let mailBody = `<h1>Sourcefuse Technoogies</h1><p>This link will be active for ${mailDetails.linktime} hours</p><span>To give test click <a href="http://localhost:5000/givetest/${token}">here</a></span>`;
+  mailOptions.html = mailBody;
   mailOptions.to = mailDetails.email;
   console.log(mailOptions);
   transporter.sendMail(mailOptions, (error, info) => {

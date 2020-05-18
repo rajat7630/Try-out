@@ -71,7 +71,7 @@ const typeDefs = gql`
     deleteTest(id: ID): Test
     updateTest(id: ID, data: updateTestInputs): updateTestOutput!
     addUser(data: addUserInputs): userDetail
-    sendMail(mailBody: String, email: String): mailSent
+    sendMail(linktime: String, test_id: String, email: String): mailSent
     addTestProblem(data: addTestProblemsInputs): testProblemOutput!
     updateAttempt(data: updateAttemptInput): updateAttemptOutput
   }
@@ -123,6 +123,7 @@ const typeDefs = gql`
   input addUserInputs {
     name: String
     email: String
+    testId: String
     collegeName: String
   }
   input addTestProblemsInputs {
@@ -157,7 +158,7 @@ const typeDefs = gql`
   type userDetail {
     success: Boolean
     message: String
-    user: User!
+    token: String
   }
   type testProblemOutput {
     success: Boolean

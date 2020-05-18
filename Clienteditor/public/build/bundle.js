@@ -4,7 +4,6 @@ var app = (function () {
     'use strict';
 
     function noop() { }
-    const identity = x => x;
     function assign(tar, src) {
         // @ts-ignore
         for (const k in src)
@@ -90,41 +89,6 @@ var app = (function () {
     function set_store_value(store, ret, value = ret) {
         store.set(value);
         return ret;
-    }
-
-    const is_client = typeof window !== 'undefined';
-    let now = is_client
-        ? () => window.performance.now()
-        : () => Date.now();
-    let raf = is_client ? cb => requestAnimationFrame(cb) : noop;
-
-    const tasks = new Set();
-    function run_tasks(now) {
-        tasks.forEach(task => {
-            if (!task.c(now)) {
-                tasks.delete(task);
-                task.f();
-            }
-        });
-        if (tasks.size !== 0)
-            raf(run_tasks);
-    }
-    /**
-     * Creates a new task that runs on each raf frame
-     * until it returns a falsy value or is aborted
-     */
-    function loop(callback) {
-        let task;
-        if (tasks.size === 0)
-            raf(run_tasks);
-        return {
-            promise: new Promise(fulfill => {
-                tasks.add(task = { c: callback, f: fulfill });
-            }),
-            abort() {
-                tasks.delete(task);
-            }
-        };
     }
 
     function append(target, node) {
@@ -219,62 +183,6 @@ var app = (function () {
         }
     }
 
-    let stylesheet;
-    let active = 0;
-    let current_rules = {};
-    // https://github.com/darkskyapp/string-hash/blob/master/index.js
-    function hash(str) {
-        let hash = 5381;
-        let i = str.length;
-        while (i--)
-            hash = ((hash << 5) - hash) ^ str.charCodeAt(i);
-        return hash >>> 0;
-    }
-    function create_rule(node, a, b, duration, delay, ease, fn, uid = 0) {
-        const step = 16.666 / duration;
-        let keyframes = '{\n';
-        for (let p = 0; p <= 1; p += step) {
-            const t = a + (b - a) * ease(p);
-            keyframes += p * 100 + `%{${fn(t, 1 - t)}}\n`;
-        }
-        const rule = keyframes + `100% {${fn(b, 1 - b)}}\n}`;
-        const name = `__svelte_${hash(rule)}_${uid}`;
-        if (!current_rules[name]) {
-            if (!stylesheet) {
-                const style = element('style');
-                document.head.appendChild(style);
-                stylesheet = style.sheet;
-            }
-            current_rules[name] = true;
-            stylesheet.insertRule(`@keyframes ${name} ${rule}`, stylesheet.cssRules.length);
-        }
-        const animation = node.style.animation || '';
-        node.style.animation = `${animation ? `${animation}, ` : ``}${name} ${duration}ms linear ${delay}ms 1 both`;
-        active += 1;
-        return name;
-    }
-    function delete_rule(node, name) {
-        node.style.animation = (node.style.animation || '')
-            .split(', ')
-            .filter(name
-            ? anim => anim.indexOf(name) < 0 // remove specific animation
-            : anim => anim.indexOf('__svelte') === -1 // remove all Svelte animations
-        )
-            .join(', ');
-        if (name && !--active)
-            clear_rules();
-    }
-    function clear_rules() {
-        raf(() => {
-            if (active)
-                return;
-            let i = stylesheet.cssRules.length;
-            while (i--)
-                stylesheet.deleteRule(i);
-            current_rules = {};
-        });
-    }
-
     let current_component;
     function set_current_component(component) {
         current_component = component;
@@ -362,20 +270,6 @@ var app = (function () {
             $$.after_update.forEach(add_render_callback);
         }
     }
-
-    let promise;
-    function wait() {
-        if (!promise) {
-            promise = Promise.resolve();
-            promise.then(() => {
-                promise = null;
-            });
-        }
-        return promise;
-    }
-    function dispatch(node, direction, kind) {
-        node.dispatchEvent(custom_event(`${direction ? 'intro' : 'outro'}${kind}`));
-    }
     const outroing = new Set();
     let outros;
     function group_outros() {
@@ -412,112 +306,6 @@ var app = (function () {
             });
             block.o(local);
         }
-    }
-    const null_transition = { duration: 0 };
-    function create_bidirectional_transition(node, fn, params, intro) {
-        let config = fn(node, params);
-        let t = intro ? 0 : 1;
-        let running_program = null;
-        let pending_program = null;
-        let animation_name = null;
-        function clear_animation() {
-            if (animation_name)
-                delete_rule(node, animation_name);
-        }
-        function init(program, duration) {
-            const d = program.b - t;
-            duration *= Math.abs(d);
-            return {
-                a: t,
-                b: program.b,
-                d,
-                duration,
-                start: program.start,
-                end: program.start + duration,
-                group: program.group
-            };
-        }
-        function go(b) {
-            const { delay = 0, duration = 300, easing = identity, tick = noop, css } = config || null_transition;
-            const program = {
-                start: now() + delay,
-                b
-            };
-            if (!b) {
-                // @ts-ignore todo: improve typings
-                program.group = outros;
-                outros.r += 1;
-            }
-            if (running_program) {
-                pending_program = program;
-            }
-            else {
-                // if this is an intro, and there's a delay, we need to do
-                // an initial tick and/or apply CSS animation immediately
-                if (css) {
-                    clear_animation();
-                    animation_name = create_rule(node, t, b, duration, delay, easing, css);
-                }
-                if (b)
-                    tick(0, 1);
-                running_program = init(program, duration);
-                add_render_callback(() => dispatch(node, b, 'start'));
-                loop(now => {
-                    if (pending_program && now > pending_program.start) {
-                        running_program = init(pending_program, duration);
-                        pending_program = null;
-                        dispatch(node, running_program.b, 'start');
-                        if (css) {
-                            clear_animation();
-                            animation_name = create_rule(node, t, running_program.b, running_program.duration, 0, easing, config.css);
-                        }
-                    }
-                    if (running_program) {
-                        if (now >= running_program.end) {
-                            tick(t = running_program.b, 1 - t);
-                            dispatch(node, running_program.b, 'end');
-                            if (!pending_program) {
-                                // we're done
-                                if (running_program.b) {
-                                    // intro — we can tidy up immediately
-                                    clear_animation();
-                                }
-                                else {
-                                    // outro — needs to be coordinated
-                                    if (!--running_program.group.r)
-                                        run_all(running_program.group.c);
-                                }
-                            }
-                            running_program = null;
-                        }
-                        else if (now >= running_program.start) {
-                            const p = now - running_program.start;
-                            t = running_program.a + running_program.d * easing(p / running_program.duration);
-                            tick(t, 1 - t);
-                        }
-                    }
-                    return !!(running_program || pending_program);
-                });
-            }
-        }
-        return {
-            run(b) {
-                if (is_function(config)) {
-                    wait().then(() => {
-                        // @ts-ignore
-                        config = config();
-                        go(b);
-                    });
-                }
-                else {
-                    go(b);
-                }
-            },
-            end() {
-                clear_animation();
-                running_program = pending_program = null;
-            }
-        };
     }
 
     function handle_promise(promise, info) {
@@ -587,43 +375,6 @@ var app = (function () {
     }
 
     const globals = (typeof window !== 'undefined' ? window : global);
-
-    function get_spread_update(levels, updates) {
-        const update = {};
-        const to_null_out = {};
-        const accounted_for = { $$scope: 1 };
-        let i = levels.length;
-        while (i--) {
-            const o = levels[i];
-            const n = updates[i];
-            if (n) {
-                for (const key in o) {
-                    if (!(key in n))
-                        to_null_out[key] = 1;
-                }
-                for (const key in n) {
-                    if (!accounted_for[key]) {
-                        update[key] = n[key];
-                        accounted_for[key] = 1;
-                    }
-                }
-                levels[i] = n;
-            }
-            else {
-                for (const key in o) {
-                    accounted_for[key] = 1;
-                }
-            }
-        }
-        for (const key in to_null_out) {
-            if (!(key in update))
-                update[key] = undefined;
-        }
-        return update;
-    }
-    function get_spread_object(spread_props) {
-        return typeof spread_props === 'object' && spread_props !== null ? spread_props : {};
-    }
     function create_component(block) {
         block && block.c();
     }
@@ -30953,8 +30704,8 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 `;
 
     const sendMail = src$1`
-  mutation mailSender($mailBody: String, $email: String) {
-    sendMail(mailBody: $mailBody, email: $email) {
+  mutation mailSender($linktime: String, $email: String, $test_id: String) {
+    sendMail(linktime: $linktime, test_id: $test_id, email: $email) {
       success
       message
     }
@@ -31104,15 +30855,23 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 `;
 
     const addUser = src$1`
-  mutation addNewUser($name: String, $email: String, $collegeName: String) {
-    addUser(data: { name: $name, email: $email, collegeName: $collegeName }) {
+  mutation addNewUser(
+    $name: String
+    $email: String
+    $collegeName: String
+    $testId: String
+  ) {
+    addUser(
+      data: {
+        name: $name
+        email: $email
+        collegeName: $collegeName
+        testId: $testId
+      }
+    ) {
       success
       message
-      user {
-        name
-        id
-        collegeName
-      }
+      token
     }
   }
 `;
@@ -33281,6 +33040,228 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	}
     }
 
+    /* src/components/timer.svelte generated by Svelte v3.18.1 */
+
+    const { console: console_1 } = globals;
+    const file$4 = "src/components/timer.svelte";
+
+    function create_fragment$6(ctx) {
+    	let div6;
+    	let div1;
+    	let span0;
+    	let t0_value = /*timer*/ ctx[0].hour + "";
+    	let t0;
+    	let t1;
+    	let div0;
+    	let t3;
+    	let div3;
+    	let span1;
+    	let t4_value = /*timer*/ ctx[0].minute + "";
+    	let t4;
+    	let t5;
+    	let div2;
+    	let t7;
+    	let div5;
+    	let span2;
+    	let t8_value = /*timer*/ ctx[0].second + "";
+    	let t8;
+    	let t9;
+    	let div4;
+
+    	const block = {
+    		c: function create() {
+    			div6 = element("div");
+    			div1 = element("div");
+    			span0 = element("span");
+    			t0 = text(t0_value);
+    			t1 = space();
+    			div0 = element("div");
+    			div0.textContent = "Hours";
+    			t3 = space();
+    			div3 = element("div");
+    			span1 = element("span");
+    			t4 = text(t4_value);
+    			t5 = space();
+    			div2 = element("div");
+    			div2.textContent = "Minutes";
+    			t7 = space();
+    			div5 = element("div");
+    			span2 = element("span");
+    			t8 = text(t8_value);
+    			t9 = space();
+    			div4 = element("div");
+    			div4.textContent = "Seconds";
+    			attr_dev(span0, "class", "hours svelte-wl0drd");
+    			add_location(span0, file$4, 81, 4, 3124);
+    			attr_dev(div0, "class", "smalltext svelte-wl0drd");
+    			add_location(div0, file$4, 82, 4, 3168);
+    			attr_dev(div1, "class", "svelte-wl0drd");
+    			add_location(div1, file$4, 80, 2, 3114);
+    			attr_dev(span1, "class", "minutes svelte-wl0drd");
+    			add_location(span1, file$4, 85, 4, 3224);
+    			attr_dev(div2, "class", "smalltext svelte-wl0drd");
+    			add_location(div2, file$4, 86, 4, 3272);
+    			attr_dev(div3, "class", "svelte-wl0drd");
+    			add_location(div3, file$4, 84, 2, 3214);
+    			attr_dev(span2, "class", "seconds svelte-wl0drd");
+    			add_location(span2, file$4, 89, 4, 3330);
+    			attr_dev(div4, "class", "smalltext svelte-wl0drd");
+    			add_location(div4, file$4, 90, 4, 3378);
+    			attr_dev(div5, "class", "svelte-wl0drd");
+    			add_location(div5, file$4, 88, 2, 3320);
+    			attr_dev(div6, "id", "clockdiv");
+    			attr_dev(div6, "class", "svelte-wl0drd");
+    			add_location(div6, file$4, 79, 0, 3092);
+    		},
+    		l: function claim(nodes) {
+    			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, div6, anchor);
+    			append_dev(div6, div1);
+    			append_dev(div1, span0);
+    			append_dev(span0, t0);
+    			append_dev(div1, t1);
+    			append_dev(div1, div0);
+    			append_dev(div6, t3);
+    			append_dev(div6, div3);
+    			append_dev(div3, span1);
+    			append_dev(span1, t4);
+    			append_dev(div3, t5);
+    			append_dev(div3, div2);
+    			append_dev(div6, t7);
+    			append_dev(div6, div5);
+    			append_dev(div5, span2);
+    			append_dev(span2, t8);
+    			append_dev(div5, t9);
+    			append_dev(div5, div4);
+    		},
+    		p: function update(ctx, [dirty]) {
+    			if (dirty & /*timer*/ 1 && t0_value !== (t0_value = /*timer*/ ctx[0].hour + "")) set_data_dev(t0, t0_value);
+    			if (dirty & /*timer*/ 1 && t4_value !== (t4_value = /*timer*/ ctx[0].minute + "")) set_data_dev(t4, t4_value);
+    			if (dirty & /*timer*/ 1 && t8_value !== (t8_value = /*timer*/ ctx[0].second + "")) set_data_dev(t8, t8_value);
+    		},
+    		i: noop,
+    		o: noop,
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(div6);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_fragment$6.name,
+    		type: "component",
+    		source: "",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    function instance$6($$self, $$props, $$invalidate) {
+    	let $dataStore;
+    	validate_store(dataStore, "dataStore");
+    	component_subscribe($$self, dataStore, $$value => $$invalidate(2, $dataStore = $$value));
+    	let { expireTime } = $$props;
+    	console.log(expireTime);
+    	let timer = { hour: "", minute: "", second: "" };
+    	const client = getClient();
+
+    	async function sendSolution(data) {
+    		let solutions = {
+    			u_id: parseInt(cookieHandler.getCookie("user_id")),
+    			t_id: parseInt(cookieHandler.getCookie("test_id")),
+    			solutions: JSON.stringify(data)
+    		};
+
+    		try {
+    			await mutate(client, {
+    				mutation: apolloClient.addAttempt,
+    				variables: solutions
+    			});
+
+    			location.replace("http://localhost:5000/feedback");
+    		} catch(err) {
+    			console.log(err);
+    		}
+    	}
+
+    	function InitializeTimer() {
+    		let d = new Date();
+    		let currentTime = Math.floor(d.getTime() / 1000);
+
+    		if (currentTime > expireTime) {
+    			clearInterval(timeCounter);
+    			sendSolution($dataStore);
+    			return;
+    		}
+
+    		let remainingTime = Math.floor(expireTime - currentTime);
+    		$$invalidate(0, timer.hour = Math.floor(remainingTime / 3600).toString(), timer);
+    		$$invalidate(0, timer.minute = (Math.floor(remainingTime / 60) % 60).toString(), timer);
+    		$$invalidate(0, timer.second = (remainingTime % 60).toString(), timer);
+    	}
+
+    	let timeCounter = setInterval(InitializeTimer, 1000);
+    	const writable_props = ["expireTime"];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1.warn(`<Timer> was created with unknown prop '${key}'`);
+    	});
+
+    	$$self.$set = $$props => {
+    		if ("expireTime" in $$props) $$invalidate(1, expireTime = $$props.expireTime);
+    	};
+
+    	$$self.$capture_state = () => {
+    		return {
+    			expireTime,
+    			timer,
+    			timeCounter,
+    			$dataStore
+    		};
+    	};
+
+    	$$self.$inject_state = $$props => {
+    		if ("expireTime" in $$props) $$invalidate(1, expireTime = $$props.expireTime);
+    		if ("timer" in $$props) $$invalidate(0, timer = $$props.timer);
+    		if ("timeCounter" in $$props) timeCounter = $$props.timeCounter;
+    		if ("$dataStore" in $$props) dataStore.set($dataStore = $$props.$dataStore);
+    	};
+
+    	return [timer, expireTime];
+    }
+
+    class Timer extends SvelteComponentDev {
+    	constructor(options) {
+    		super(options);
+    		init(this, options, instance$6, create_fragment$6, safe_not_equal, { expireTime: 1 });
+
+    		dispatch_dev("SvelteRegisterComponent", {
+    			component: this,
+    			tagName: "Timer",
+    			options,
+    			id: create_fragment$6.name
+    		});
+
+    		const { ctx } = this.$$;
+    		const props = options.props || {};
+
+    		if (/*expireTime*/ ctx[1] === undefined && !("expireTime" in props)) {
+    			console_1.warn("<Timer> was created without expected prop 'expireTime'");
+    		}
+    	}
+
+    	get expireTime() {
+    		throw new Error("<Timer>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	set expireTime(value) {
+    		throw new Error("<Timer>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+    }
+
     var bind = function bind(fn, thisArg) {
       return function wrap() {
         var args = new Array(arguments.length);
@@ -34812,1204 +34793,10 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
       }
     };
 
-    /* src/Modals/userModal.svelte generated by Svelte v3.18.1 */
-    const file$4 = "src/Modals/userModal.svelte";
-
-    function create_fragment$6(ctx) {
-    	let div11;
-    	let div0;
-    	let p;
-    	let t1;
-    	let form;
-    	let div3;
-    	let div1;
-    	let label0;
-    	let t3;
-    	let div2;
-    	let input0;
-    	let t4;
-    	let div6;
-    	let div4;
-    	let label1;
-    	let t6;
-    	let div5;
-    	let input1;
-    	let t7;
-    	let div9;
-    	let div7;
-    	let label2;
-    	let t9;
-    	let div8;
-    	let input2;
-    	let t10;
-    	let div10;
-    	let button;
-    	let dispose;
-
-    	const block = {
-    		c: function create() {
-    			div11 = element("div");
-    			div0 = element("div");
-    			p = element("p");
-    			p.textContent = "User Details";
-    			t1 = space();
-    			form = element("form");
-    			div3 = element("div");
-    			div1 = element("div");
-    			label0 = element("label");
-    			label0.textContent = "Name";
-    			t3 = space();
-    			div2 = element("div");
-    			input0 = element("input");
-    			t4 = space();
-    			div6 = element("div");
-    			div4 = element("div");
-    			label1 = element("label");
-    			label1.textContent = "College Name";
-    			t6 = space();
-    			div5 = element("div");
-    			input1 = element("input");
-    			t7 = space();
-    			div9 = element("div");
-    			div7 = element("div");
-    			label2 = element("label");
-    			label2.textContent = "E-mail";
-    			t9 = space();
-    			div8 = element("div");
-    			input2 = element("input");
-    			t10 = space();
-    			div10 = element("div");
-    			button = element("button");
-    			button.textContent = "Submit";
-    			attr_dev(p, "class", "text-2xl font-bold");
-    			add_location(p, file$4, 38, 4, 1122);
-    			attr_dev(div0, "class", "flex justify-between items-center pb-3");
-    			add_location(div0, file$4, 37, 2, 1065);
-    			attr_dev(label0, "class", "block text-gray-500 font-bold md:text-right mb-1 md:mb-0 pr-4");
-    			attr_dev(label0, "for", "inline-full-name");
-    			add_location(label0, file$4, 43, 8, 1295);
-    			attr_dev(div1, "class", "md:w-1/3");
-    			add_location(div1, file$4, 42, 6, 1264);
-    			attr_dev(input0, "class", "bg-gray-200 appearance-none border-2 border-gray-200 rounded\n          w-full py-2 px-4 text-gray-700 leading-tight focus:outline-none\n          focus:bg-white focus:border-purple-500");
-    			attr_dev(input0, "id", "inline-full-name");
-    			attr_dev(input0, "type", "text");
-    			attr_dev(input0, "placeholder", "Name");
-    			input0.required = true;
-    			add_location(input0, file$4, 50, 8, 1498);
-    			attr_dev(div2, "class", "md:w-2/3");
-    			add_location(div2, file$4, 49, 6, 1467);
-    			attr_dev(div3, "class", "md:flex md:items-center mb-6");
-    			add_location(div3, file$4, 41, 4, 1215);
-    			attr_dev(label1, "class", "block text-gray-500 font-bold md:text-right mb-1 md:mb-0 pr-4");
-    			attr_dev(label1, "for", "inline-username");
-    			add_location(label1, file$4, 63, 8, 1953);
-    			attr_dev(div4, "class", "md:w-1/3");
-    			add_location(div4, file$4, 62, 6, 1922);
-    			attr_dev(input1, "class", "bg-gray-200 appearance-none border-2 border-gray-200 rounded\n          w-full py-2 px-4 text-gray-700 leading-tight focus:outline-none\n          focus:bg-white focus:border-purple-500");
-    			attr_dev(input1, "id", "inline-username");
-    			attr_dev(input1, "type", "text-area");
-    			attr_dev(input1, "placeholder", "College Name");
-    			input1.required = true;
-    			add_location(input1, file$4, 70, 8, 2163);
-    			attr_dev(div5, "class", "md:w-2/3");
-    			add_location(div5, file$4, 69, 6, 2132);
-    			attr_dev(div6, "class", "md:flex md:items-center mb-6");
-    			add_location(div6, file$4, 61, 4, 1873);
-    			attr_dev(label2, "class", "block text-gray-500 font-bold md:text-right mb-1 md:mb-0 pr-4");
-    			attr_dev(label2, "for", "inline-username");
-    			add_location(label2, file$4, 83, 8, 2637);
-    			attr_dev(div7, "class", "md:w-1/3");
-    			add_location(div7, file$4, 82, 6, 2606);
-    			attr_dev(input2, "class", "bg-gray-200 appearance-none border-2 border-gray-200 rounded\n          w-full py-2 px-4 text-gray-700 leading-tight focus:outline-none\n          focus:bg-white focus:border-purple-500");
-    			attr_dev(input2, "id", "inline-username");
-    			attr_dev(input2, "type", "text-area");
-    			attr_dev(input2, "placeholder", "E-mail");
-    			input2.required = true;
-    			add_location(input2, file$4, 90, 8, 2841);
-    			attr_dev(div8, "class", "md:w-2/3");
-    			add_location(div8, file$4, 89, 6, 2810);
-    			attr_dev(div9, "class", "md:flex md:items-center mb-6");
-    			add_location(div9, file$4, 81, 4, 2557);
-    			attr_dev(form, "class", "w-full max-w-md");
-    			add_location(form, file$4, 40, 2, 1180);
-    			attr_dev(button, "class", "px-4 bg-transparent p-3 rounded-lg text-indigo-500\n      hover:bg-gray-100 hover:text-indigo-400 mr-2");
-    			add_location(button, file$4, 103, 4, 3271);
-    			attr_dev(div10, "class", "flex justify-end pt-2");
-    			add_location(div10, file$4, 102, 2, 3231);
-    			add_location(div11, file$4, 36, 0, 1057);
-    		},
-    		l: function claim(nodes) {
-    			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
-    		},
-    		m: function mount(target, anchor) {
-    			insert_dev(target, div11, anchor);
-    			append_dev(div11, div0);
-    			append_dev(div0, p);
-    			append_dev(div11, t1);
-    			append_dev(div11, form);
-    			append_dev(form, div3);
-    			append_dev(div3, div1);
-    			append_dev(div1, label0);
-    			append_dev(div3, t3);
-    			append_dev(div3, div2);
-    			append_dev(div2, input0);
-    			set_input_value(input0, /*user*/ ctx[0].name);
-    			append_dev(form, t4);
-    			append_dev(form, div6);
-    			append_dev(div6, div4);
-    			append_dev(div4, label1);
-    			append_dev(div6, t6);
-    			append_dev(div6, div5);
-    			append_dev(div5, input1);
-    			set_input_value(input1, /*user*/ ctx[0].collegeName);
-    			append_dev(form, t7);
-    			append_dev(form, div9);
-    			append_dev(div9, div7);
-    			append_dev(div7, label2);
-    			append_dev(div9, t9);
-    			append_dev(div9, div8);
-    			append_dev(div8, input2);
-    			set_input_value(input2, /*user*/ ctx[0].email);
-    			append_dev(div11, t10);
-    			append_dev(div11, div10);
-    			append_dev(div10, button);
-
-    			dispose = [
-    				listen_dev(input0, "input", /*input0_input_handler*/ ctx[4]),
-    				listen_dev(input1, "input", /*input1_input_handler*/ ctx[5]),
-    				listen_dev(input2, "input", /*input2_input_handler*/ ctx[6]),
-    				listen_dev(button, "click", /*clickHandler*/ ctx[1], false, false, false)
-    			];
-    		},
-    		p: function update(ctx, [dirty]) {
-    			if (dirty & /*user*/ 1 && input0.value !== /*user*/ ctx[0].name) {
-    				set_input_value(input0, /*user*/ ctx[0].name);
-    			}
-
-    			if (dirty & /*user*/ 1) {
-    				set_input_value(input1, /*user*/ ctx[0].collegeName);
-    			}
-
-    			if (dirty & /*user*/ 1) {
-    				set_input_value(input2, /*user*/ ctx[0].email);
-    			}
-    		},
-    		i: noop,
-    		o: noop,
-    		d: function destroy(detaching) {
-    			if (detaching) detach_dev(div11);
-    			run_all(dispose);
-    		}
-    	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_fragment$6.name,
-    		type: "component",
-    		source: "",
-    		ctx
-    	});
-
-    	return block;
-    }
-
-    function instance$6($$self, $$props, $$invalidate) {
-    	const { close } = getContext("simple-modal");
-    	let user = { name: "", email: "", collegeName: "" };
-    	const client = getClient();
-
-    	async function clickHandler() {
-    		if (user.name === "" || user.email === "" || user.collegeName === "") {
-    			return;
-    		}
-
-    		console.log(user);
-
-    		try {
-    			const res = await mutate(client, {
-    				mutation: apolloClient.addUser,
-    				variables: user
-    			});
-
-    			console.log(res);
-    			cookieHandler.setCookie("user_id", res.data.addUser.user.id);
-    			cookieHandler.setCookie("access_email", user.email);
-    		} catch(err) {
-    			console.log(err);
-    		}
-
-    		cookieHandler.setCookie("loggedIn", "true", 1);
-    		close();
-    	}
-
-    	function input0_input_handler() {
-    		user.name = this.value;
-    		$$invalidate(0, user);
-    	}
-
-    	function input1_input_handler() {
-    		user.collegeName = this.value;
-    		$$invalidate(0, user);
-    	}
-
-    	function input2_input_handler() {
-    		user.email = this.value;
-    		$$invalidate(0, user);
-    	}
-
-    	$$self.$capture_state = () => {
-    		return {};
-    	};
-
-    	$$self.$inject_state = $$props => {
-    		if ("user" in $$props) $$invalidate(0, user = $$props.user);
-    	};
-
-    	return [
-    		user,
-    		clickHandler,
-    		close,
-    		client,
-    		input0_input_handler,
-    		input1_input_handler,
-    		input2_input_handler
-    	];
-    }
-
-    class UserModal extends SvelteComponentDev {
-    	constructor(options) {
-    		super(options);
-    		init(this, options, instance$6, create_fragment$6, safe_not_equal, {});
-
-    		dispatch_dev("SvelteRegisterComponent", {
-    			component: this,
-    			tagName: "UserModal",
-    			options,
-    			id: create_fragment$6.name
-    		});
-    	}
-    }
-
-    /* src/Modals/userHelper.svelte generated by Svelte v3.18.1 */
-
-    function create_fragment$7(ctx) {
-    	const block = {
-    		c: noop,
-    		l: function claim(nodes) {
-    			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
-    		},
-    		m: noop,
-    		p: noop,
-    		i: noop,
-    		o: noop,
-    		d: noop
-    	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_fragment$7.name,
-    		type: "component",
-    		source: "",
-    		ctx
-    	});
-
-    	return block;
-    }
-
-    function instance$7($$self) {
-    	const { open } = getContext("simple-modal");
-
-    	const showSurprise = () => {
-    		open(UserModal, {}, {
-    			closeOnEsc: false,
-    			closeOnOuterClick: false,
-    			closeButton: false
-    		});
-    	};
-
-    	showSurprise();
-
-    	$$self.$capture_state = () => {
-    		return {};
-    	};
-
-    	$$self.$inject_state = $$props => {
-    		
-    	};
-
-    	return [];
-    }
-
-    class UserHelper extends SvelteComponentDev {
-    	constructor(options) {
-    		super(options);
-    		init(this, options, instance$7, create_fragment$7, safe_not_equal, {});
-
-    		dispatch_dev("SvelteRegisterComponent", {
-    			component: this,
-    			tagName: "UserHelper",
-    			options,
-    			id: create_fragment$7.name
-    		});
-    	}
-    }
-
-    function fade(node, { delay = 0, duration = 400, easing = identity }) {
-        const o = +getComputedStyle(node).opacity;
-        return {
-            delay,
-            duration,
-            easing,
-            css: t => `opacity: ${t * o}`
-        };
-    }
-
-    /* node_modules/svelte-simple-modal/src/Modal.svelte generated by Svelte v3.18.1 */
-
-    const { Object: Object_1 } = globals;
-    const file$5 = "node_modules/svelte-simple-modal/src/Modal.svelte";
-
-    // (201:2) {#if Component}
-    function create_if_block$1(ctx) {
-    	let div3;
-    	let div2;
-    	let div1;
-    	let t;
-    	let div0;
-    	let div1_transition;
-    	let div3_transition;
-    	let current;
-    	let dispose;
-    	let if_block = /*state*/ ctx[0].closeButton && create_if_block_1$1(ctx);
-    	const component_spread_levels = [/*props*/ ctx[2]];
-    	let component_props = {};
-
-    	for (let i = 0; i < component_spread_levels.length; i += 1) {
-    		component_props = assign(component_props, component_spread_levels[i]);
-    	}
-
-    	const component = new /*Component*/ ctx[1]({ props: component_props, $$inline: true });
-
-    	const block = {
-    		c: function create() {
-    			div3 = element("div");
-    			div2 = element("div");
-    			div1 = element("div");
-    			if (if_block) if_block.c();
-    			t = space();
-    			div0 = element("div");
-    			create_component(component.$$.fragment);
-    			attr_dev(div0, "class", "content svelte-12ra95k");
-    			attr_dev(div0, "style", /*cssContent*/ ctx[7]);
-    			add_location(div0, file$5, 217, 10, 9065);
-    			attr_dev(div1, "class", "window svelte-12ra95k");
-    			attr_dev(div1, "style", /*cssWindow*/ ctx[6]);
-    			add_location(div1, file$5, 209, 8, 8801);
-    			attr_dev(div2, "class", "window-wrap svelte-12ra95k");
-    			add_location(div2, file$5, 208, 6, 8750);
-    			attr_dev(div3, "class", "bg svelte-12ra95k");
-    			attr_dev(div3, "style", /*cssBg*/ ctx[5]);
-    			add_location(div3, file$5, 201, 4, 8570);
-    		},
-    		m: function mount(target, anchor) {
-    			insert_dev(target, div3, anchor);
-    			append_dev(div3, div2);
-    			append_dev(div2, div1);
-    			if (if_block) if_block.m(div1, null);
-    			append_dev(div1, t);
-    			append_dev(div1, div0);
-    			mount_component(component, div0, null);
-    			/*div2_binding*/ ctx[31](div2);
-    			/*div3_binding*/ ctx[32](div3);
-    			current = true;
-    			dispose = listen_dev(div3, "click", /*handleOuterClick*/ ctx[12], false, false, false);
-    		},
-    		p: function update(ctx, dirty) {
-    			if (/*state*/ ctx[0].closeButton) {
-    				if (if_block) {
-    					if_block.p(ctx, dirty);
-    				} else {
-    					if_block = create_if_block_1$1(ctx);
-    					if_block.c();
-    					if_block.m(div1, t);
-    				}
-    			} else if (if_block) {
-    				if_block.d(1);
-    				if_block = null;
-    			}
-
-    			const component_changes = (dirty[0] & /*props*/ 4)
-    			? get_spread_update(component_spread_levels, [get_spread_object(/*props*/ ctx[2])])
-    			: {};
-
-    			component.$set(component_changes);
-
-    			if (!current || dirty[0] & /*cssContent*/ 128) {
-    				attr_dev(div0, "style", /*cssContent*/ ctx[7]);
-    			}
-
-    			if (!current || dirty[0] & /*cssWindow*/ 64) {
-    				attr_dev(div1, "style", /*cssWindow*/ ctx[6]);
-    			}
-
-    			if (!current || dirty[0] & /*cssBg*/ 32) {
-    				attr_dev(div3, "style", /*cssBg*/ ctx[5]);
-    			}
-    		},
-    		i: function intro(local) {
-    			if (current) return;
-    			transition_in(component.$$.fragment, local);
-
-    			add_render_callback(() => {
-    				if (!div1_transition) div1_transition = create_bidirectional_transition(div1, /*currentTransitionWindow*/ ctx[9], /*state*/ ctx[0].transitionWindowProps, true);
-    				div1_transition.run(1);
-    			});
-
-    			add_render_callback(() => {
-    				if (!div3_transition) div3_transition = create_bidirectional_transition(div3, /*currentTransitionBg*/ ctx[8], /*state*/ ctx[0].transitionBgProps, true);
-    				div3_transition.run(1);
-    			});
-
-    			current = true;
-    		},
-    		o: function outro(local) {
-    			transition_out(component.$$.fragment, local);
-    			if (!div1_transition) div1_transition = create_bidirectional_transition(div1, /*currentTransitionWindow*/ ctx[9], /*state*/ ctx[0].transitionWindowProps, false);
-    			div1_transition.run(0);
-    			if (!div3_transition) div3_transition = create_bidirectional_transition(div3, /*currentTransitionBg*/ ctx[8], /*state*/ ctx[0].transitionBgProps, false);
-    			div3_transition.run(0);
-    			current = false;
-    		},
-    		d: function destroy(detaching) {
-    			if (detaching) detach_dev(div3);
-    			if (if_block) if_block.d();
-    			destroy_component(component);
-    			if (detaching && div1_transition) div1_transition.end();
-    			/*div2_binding*/ ctx[31](null);
-    			/*div3_binding*/ ctx[32](null);
-    			if (detaching && div3_transition) div3_transition.end();
-    			dispose();
-    		}
-    	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_if_block$1.name,
-    		type: "if",
-    		source: "(201:2) {#if Component}",
-    		ctx
-    	});
-
-    	return block;
-    }
-
-    // (215:10) {#if state.closeButton}
-    function create_if_block_1$1(ctx) {
-    	let button;
-    	let dispose;
-
-    	const block = {
-    		c: function create() {
-    			button = element("button");
-    			attr_dev(button, "class", "close svelte-12ra95k");
-    			add_location(button, file$5, 215, 12, 8990);
-    		},
-    		m: function mount(target, anchor) {
-    			insert_dev(target, button, anchor);
-    			dispose = listen_dev(button, "click", /*close*/ ctx[10], false, false, false);
-    		},
-    		p: noop,
-    		d: function destroy(detaching) {
-    			if (detaching) detach_dev(button);
-    			dispose();
-    		}
-    	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_if_block_1$1.name,
-    		type: "if",
-    		source: "(215:10) {#if state.closeButton}",
-    		ctx
-    	});
-
-    	return block;
-    }
-
-    function create_fragment$8(ctx) {
-    	let div;
-    	let t;
-    	let current;
-    	let dispose;
-    	let if_block = /*Component*/ ctx[1] && create_if_block$1(ctx);
-    	const default_slot_template = /*$$slots*/ ctx[30].default;
-    	const default_slot = create_slot(default_slot_template, ctx, /*$$scope*/ ctx[29], null);
-
-    	const block = {
-    		c: function create() {
-    			div = element("div");
-    			if (if_block) if_block.c();
-    			t = space();
-    			if (default_slot) default_slot.c();
-    			attr_dev(div, "class", "svelte-12ra95k");
-    			add_location(div, file$5, 199, 0, 8542);
-    		},
-    		l: function claim(nodes) {
-    			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
-    		},
-    		m: function mount(target, anchor) {
-    			insert_dev(target, div, anchor);
-    			if (if_block) if_block.m(div, null);
-    			append_dev(div, t);
-
-    			if (default_slot) {
-    				default_slot.m(div, null);
-    			}
-
-    			current = true;
-    			dispose = listen_dev(window, "keyup", /*handleKeyup*/ ctx[11], false, false, false);
-    		},
-    		p: function update(ctx, dirty) {
-    			if (/*Component*/ ctx[1]) {
-    				if (if_block) {
-    					if_block.p(ctx, dirty);
-    					transition_in(if_block, 1);
-    				} else {
-    					if_block = create_if_block$1(ctx);
-    					if_block.c();
-    					transition_in(if_block, 1);
-    					if_block.m(div, t);
-    				}
-    			} else if (if_block) {
-    				group_outros();
-
-    				transition_out(if_block, 1, 1, () => {
-    					if_block = null;
-    				});
-
-    				check_outros();
-    			}
-
-    			if (default_slot && default_slot.p && dirty[0] & /*$$scope*/ 536870912) {
-    				default_slot.p(get_slot_context(default_slot_template, ctx, /*$$scope*/ ctx[29], null), get_slot_changes(default_slot_template, /*$$scope*/ ctx[29], dirty, null));
-    			}
-    		},
-    		i: function intro(local) {
-    			if (current) return;
-    			transition_in(if_block);
-    			transition_in(default_slot, local);
-    			current = true;
-    		},
-    		o: function outro(local) {
-    			transition_out(if_block);
-    			transition_out(default_slot, local);
-    			current = false;
-    		},
-    		d: function destroy(detaching) {
-    			if (detaching) detach_dev(div);
-    			if (if_block) if_block.d();
-    			if (default_slot) default_slot.d(detaching);
-    			dispose();
-    		}
-    	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_fragment$8.name,
-    		type: "component",
-    		source: "",
-    		ctx
-    	});
-
-    	return block;
-    }
-
-    function instance$8($$self, $$props, $$invalidate) {
-    	let { key = "simple-modal" } = $$props;
-    	let { closeButton = true } = $$props;
-    	let { closeOnEsc = true } = $$props;
-    	let { closeOnOuterClick = true } = $$props;
-    	let { styleBg = { top: 0, left: 0 } } = $$props;
-    	let { styleWindow = {} } = $$props;
-    	let { styleContent = {} } = $$props;
-    	let { setContext: setContext$1 = setContext } = $$props;
-    	let { transitionBg = fade } = $$props;
-    	let { transitionBgProps = { duration: 250 } } = $$props;
-    	let { transitionWindow = transitionBg } = $$props;
-    	let { transitionWindowProps = transitionBgProps } = $$props;
-
-    	const defaultState = {
-    		closeButton,
-    		closeOnEsc,
-    		closeOnOuterClick,
-    		styleBg,
-    		styleWindow,
-    		styleContent,
-    		transitionBg,
-    		transitionBgProps,
-    		transitionWindow,
-    		transitionWindowProps
-    	};
-
-    	let state = { ...defaultState };
-    	let Component = null;
-    	let props = null;
-    	let background;
-    	let wrap;
-    	const camelCaseToDash = str => str.replace(/([a-zA-Z])(?=[A-Z])/g, "$1-").toLowerCase();
-    	const toCssString = props => Object.keys(props).reduce((str, key) => `${str}; ${camelCaseToDash(key)}: ${props[key]}`, "");
-
-    	const open = (NewComponent, newProps = {}, options = {}) => {
-    		$$invalidate(1, Component = NewComponent);
-    		$$invalidate(2, props = newProps);
-    		$$invalidate(0, state = { ...defaultState, ...options });
-    	};
-
-    	const close = () => {
-    		$$invalidate(1, Component = null);
-    		$$invalidate(2, props = null);
-    	};
-
-    	const handleKeyup = ({ key }) => {
-    		if (state.closeOnEsc && Component && key === "Escape") {
-    			event.preventDefault();
-    			close();
-    		}
-    	};
-
-    	const handleOuterClick = event => {
-    		if (state.closeOnOuterClick && (event.target === background || event.target === wrap)) {
-    			event.preventDefault();
-    			close();
-    		}
-    	};
-
-    	setContext$1(key, { open, close });
-
-    	const writable_props = [
-    		"key",
-    		"closeButton",
-    		"closeOnEsc",
-    		"closeOnOuterClick",
-    		"styleBg",
-    		"styleWindow",
-    		"styleContent",
-    		"setContext",
-    		"transitionBg",
-    		"transitionBgProps",
-    		"transitionWindow",
-    		"transitionWindowProps"
-    	];
-
-    	Object_1.keys($$props).forEach(key => {
-    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<Modal> was created with unknown prop '${key}'`);
-    	});
-
-    	let { $$slots = {}, $$scope } = $$props;
-
-    	function div2_binding($$value) {
-    		binding_callbacks[$$value ? "unshift" : "push"](() => {
-    			$$invalidate(4, wrap = $$value);
-    		});
-    	}
-
-    	function div3_binding($$value) {
-    		binding_callbacks[$$value ? "unshift" : "push"](() => {
-    			$$invalidate(3, background = $$value);
-    		});
-    	}
-
-    	$$self.$set = $$props => {
-    		if ("key" in $$props) $$invalidate(13, key = $$props.key);
-    		if ("closeButton" in $$props) $$invalidate(14, closeButton = $$props.closeButton);
-    		if ("closeOnEsc" in $$props) $$invalidate(15, closeOnEsc = $$props.closeOnEsc);
-    		if ("closeOnOuterClick" in $$props) $$invalidate(16, closeOnOuterClick = $$props.closeOnOuterClick);
-    		if ("styleBg" in $$props) $$invalidate(17, styleBg = $$props.styleBg);
-    		if ("styleWindow" in $$props) $$invalidate(18, styleWindow = $$props.styleWindow);
-    		if ("styleContent" in $$props) $$invalidate(19, styleContent = $$props.styleContent);
-    		if ("setContext" in $$props) $$invalidate(20, setContext$1 = $$props.setContext);
-    		if ("transitionBg" in $$props) $$invalidate(21, transitionBg = $$props.transitionBg);
-    		if ("transitionBgProps" in $$props) $$invalidate(22, transitionBgProps = $$props.transitionBgProps);
-    		if ("transitionWindow" in $$props) $$invalidate(23, transitionWindow = $$props.transitionWindow);
-    		if ("transitionWindowProps" in $$props) $$invalidate(24, transitionWindowProps = $$props.transitionWindowProps);
-    		if ("$$scope" in $$props) $$invalidate(29, $$scope = $$props.$$scope);
-    	};
-
-    	$$self.$capture_state = () => {
-    		return {
-    			key,
-    			closeButton,
-    			closeOnEsc,
-    			closeOnOuterClick,
-    			styleBg,
-    			styleWindow,
-    			styleContent,
-    			setContext: setContext$1,
-    			transitionBg,
-    			transitionBgProps,
-    			transitionWindow,
-    			transitionWindowProps,
-    			state,
-    			Component,
-    			props,
-    			background,
-    			wrap,
-    			cssBg,
-    			cssWindow,
-    			cssContent,
-    			currentTransitionBg,
-    			currentTransitionWindow
-    		};
-    	};
-
-    	$$self.$inject_state = $$props => {
-    		if ("key" in $$props) $$invalidate(13, key = $$props.key);
-    		if ("closeButton" in $$props) $$invalidate(14, closeButton = $$props.closeButton);
-    		if ("closeOnEsc" in $$props) $$invalidate(15, closeOnEsc = $$props.closeOnEsc);
-    		if ("closeOnOuterClick" in $$props) $$invalidate(16, closeOnOuterClick = $$props.closeOnOuterClick);
-    		if ("styleBg" in $$props) $$invalidate(17, styleBg = $$props.styleBg);
-    		if ("styleWindow" in $$props) $$invalidate(18, styleWindow = $$props.styleWindow);
-    		if ("styleContent" in $$props) $$invalidate(19, styleContent = $$props.styleContent);
-    		if ("setContext" in $$props) $$invalidate(20, setContext$1 = $$props.setContext);
-    		if ("transitionBg" in $$props) $$invalidate(21, transitionBg = $$props.transitionBg);
-    		if ("transitionBgProps" in $$props) $$invalidate(22, transitionBgProps = $$props.transitionBgProps);
-    		if ("transitionWindow" in $$props) $$invalidate(23, transitionWindow = $$props.transitionWindow);
-    		if ("transitionWindowProps" in $$props) $$invalidate(24, transitionWindowProps = $$props.transitionWindowProps);
-    		if ("state" in $$props) $$invalidate(0, state = $$props.state);
-    		if ("Component" in $$props) $$invalidate(1, Component = $$props.Component);
-    		if ("props" in $$props) $$invalidate(2, props = $$props.props);
-    		if ("background" in $$props) $$invalidate(3, background = $$props.background);
-    		if ("wrap" in $$props) $$invalidate(4, wrap = $$props.wrap);
-    		if ("cssBg" in $$props) $$invalidate(5, cssBg = $$props.cssBg);
-    		if ("cssWindow" in $$props) $$invalidate(6, cssWindow = $$props.cssWindow);
-    		if ("cssContent" in $$props) $$invalidate(7, cssContent = $$props.cssContent);
-    		if ("currentTransitionBg" in $$props) $$invalidate(8, currentTransitionBg = $$props.currentTransitionBg);
-    		if ("currentTransitionWindow" in $$props) $$invalidate(9, currentTransitionWindow = $$props.currentTransitionWindow);
-    	};
-
-    	let cssBg;
-    	let cssWindow;
-    	let cssContent;
-    	let currentTransitionBg;
-    	let currentTransitionWindow;
-
-    	$$self.$$.update = () => {
-    		if ($$self.$$.dirty[0] & /*state*/ 1) {
-    			 $$invalidate(5, cssBg = toCssString(state.styleBg));
-    		}
-
-    		if ($$self.$$.dirty[0] & /*state*/ 1) {
-    			 $$invalidate(6, cssWindow = toCssString(state.styleWindow));
-    		}
-
-    		if ($$self.$$.dirty[0] & /*state*/ 1) {
-    			 $$invalidate(7, cssContent = toCssString(state.styleContent));
-    		}
-
-    		if ($$self.$$.dirty[0] & /*state*/ 1) {
-    			 $$invalidate(8, currentTransitionBg = state.transitionBg);
-    		}
-
-    		if ($$self.$$.dirty[0] & /*state*/ 1) {
-    			 $$invalidate(9, currentTransitionWindow = state.transitionWindow);
-    		}
-    	};
-
-    	return [
-    		state,
-    		Component,
-    		props,
-    		background,
-    		wrap,
-    		cssBg,
-    		cssWindow,
-    		cssContent,
-    		currentTransitionBg,
-    		currentTransitionWindow,
-    		close,
-    		handleKeyup,
-    		handleOuterClick,
-    		key,
-    		closeButton,
-    		closeOnEsc,
-    		closeOnOuterClick,
-    		styleBg,
-    		styleWindow,
-    		styleContent,
-    		setContext$1,
-    		transitionBg,
-    		transitionBgProps,
-    		transitionWindow,
-    		transitionWindowProps,
-    		defaultState,
-    		camelCaseToDash,
-    		toCssString,
-    		open,
-    		$$scope,
-    		$$slots,
-    		div2_binding,
-    		div3_binding
-    	];
-    }
-
-    class Modal extends SvelteComponentDev {
-    	constructor(options) {
-    		super(options);
-
-    		init(
-    			this,
-    			options,
-    			instance$8,
-    			create_fragment$8,
-    			safe_not_equal,
-    			{
-    				key: 13,
-    				closeButton: 14,
-    				closeOnEsc: 15,
-    				closeOnOuterClick: 16,
-    				styleBg: 17,
-    				styleWindow: 18,
-    				styleContent: 19,
-    				setContext: 20,
-    				transitionBg: 21,
-    				transitionBgProps: 22,
-    				transitionWindow: 23,
-    				transitionWindowProps: 24
-    			},
-    			[-1, -1]
-    		);
-
-    		dispatch_dev("SvelteRegisterComponent", {
-    			component: this,
-    			tagName: "Modal",
-    			options,
-    			id: create_fragment$8.name
-    		});
-    	}
-
-    	get key() {
-    		throw new Error("<Modal>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
-    	}
-
-    	set key(value) {
-    		throw new Error("<Modal>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
-    	}
-
-    	get closeButton() {
-    		throw new Error("<Modal>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
-    	}
-
-    	set closeButton(value) {
-    		throw new Error("<Modal>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
-    	}
-
-    	get closeOnEsc() {
-    		throw new Error("<Modal>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
-    	}
-
-    	set closeOnEsc(value) {
-    		throw new Error("<Modal>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
-    	}
-
-    	get closeOnOuterClick() {
-    		throw new Error("<Modal>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
-    	}
-
-    	set closeOnOuterClick(value) {
-    		throw new Error("<Modal>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
-    	}
-
-    	get styleBg() {
-    		throw new Error("<Modal>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
-    	}
-
-    	set styleBg(value) {
-    		throw new Error("<Modal>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
-    	}
-
-    	get styleWindow() {
-    		throw new Error("<Modal>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
-    	}
-
-    	set styleWindow(value) {
-    		throw new Error("<Modal>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
-    	}
-
-    	get styleContent() {
-    		throw new Error("<Modal>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
-    	}
-
-    	set styleContent(value) {
-    		throw new Error("<Modal>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
-    	}
-
-    	get setContext() {
-    		throw new Error("<Modal>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
-    	}
-
-    	set setContext(value) {
-    		throw new Error("<Modal>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
-    	}
-
-    	get transitionBg() {
-    		throw new Error("<Modal>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
-    	}
-
-    	set transitionBg(value) {
-    		throw new Error("<Modal>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
-    	}
-
-    	get transitionBgProps() {
-    		throw new Error("<Modal>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
-    	}
-
-    	set transitionBgProps(value) {
-    		throw new Error("<Modal>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
-    	}
-
-    	get transitionWindow() {
-    		throw new Error("<Modal>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
-    	}
-
-    	set transitionWindow(value) {
-    		throw new Error("<Modal>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
-    	}
-
-    	get transitionWindowProps() {
-    		throw new Error("<Modal>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
-    	}
-
-    	set transitionWindowProps(value) {
-    		throw new Error("<Modal>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
-    	}
-    }
-
-    /* src/components/timer.svelte generated by Svelte v3.18.1 */
-
-    const { console: console_1 } = globals;
-    const file$6 = "src/components/timer.svelte";
-
-    function create_fragment$9(ctx) {
-    	let div6;
-    	let div1;
-    	let span0;
-    	let t0_value = /*timer*/ ctx[0].hour + "";
-    	let t0;
-    	let t1;
-    	let div0;
-    	let t3;
-    	let div3;
-    	let span1;
-    	let t4_value = /*timer*/ ctx[0].minute + "";
-    	let t4;
-    	let t5;
-    	let div2;
-    	let t7;
-    	let div5;
-    	let span2;
-    	let t8_value = /*timer*/ ctx[0].second + "";
-    	let t8;
-    	let t9;
-    	let div4;
-
-    	const block = {
-    		c: function create() {
-    			div6 = element("div");
-    			div1 = element("div");
-    			span0 = element("span");
-    			t0 = text(t0_value);
-    			t1 = space();
-    			div0 = element("div");
-    			div0.textContent = "Hours";
-    			t3 = space();
-    			div3 = element("div");
-    			span1 = element("span");
-    			t4 = text(t4_value);
-    			t5 = space();
-    			div2 = element("div");
-    			div2.textContent = "Minutes";
-    			t7 = space();
-    			div5 = element("div");
-    			span2 = element("span");
-    			t8 = text(t8_value);
-    			t9 = space();
-    			div4 = element("div");
-    			div4.textContent = "Seconds";
-    			attr_dev(span0, "class", "hours svelte-wl0drd");
-    			add_location(span0, file$6, 81, 4, 3124);
-    			attr_dev(div0, "class", "smalltext svelte-wl0drd");
-    			add_location(div0, file$6, 82, 4, 3168);
-    			attr_dev(div1, "class", "svelte-wl0drd");
-    			add_location(div1, file$6, 80, 2, 3114);
-    			attr_dev(span1, "class", "minutes svelte-wl0drd");
-    			add_location(span1, file$6, 85, 4, 3224);
-    			attr_dev(div2, "class", "smalltext svelte-wl0drd");
-    			add_location(div2, file$6, 86, 4, 3272);
-    			attr_dev(div3, "class", "svelte-wl0drd");
-    			add_location(div3, file$6, 84, 2, 3214);
-    			attr_dev(span2, "class", "seconds svelte-wl0drd");
-    			add_location(span2, file$6, 89, 4, 3330);
-    			attr_dev(div4, "class", "smalltext svelte-wl0drd");
-    			add_location(div4, file$6, 90, 4, 3378);
-    			attr_dev(div5, "class", "svelte-wl0drd");
-    			add_location(div5, file$6, 88, 2, 3320);
-    			attr_dev(div6, "id", "clockdiv");
-    			attr_dev(div6, "class", "svelte-wl0drd");
-    			add_location(div6, file$6, 79, 0, 3092);
-    		},
-    		l: function claim(nodes) {
-    			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
-    		},
-    		m: function mount(target, anchor) {
-    			insert_dev(target, div6, anchor);
-    			append_dev(div6, div1);
-    			append_dev(div1, span0);
-    			append_dev(span0, t0);
-    			append_dev(div1, t1);
-    			append_dev(div1, div0);
-    			append_dev(div6, t3);
-    			append_dev(div6, div3);
-    			append_dev(div3, span1);
-    			append_dev(span1, t4);
-    			append_dev(div3, t5);
-    			append_dev(div3, div2);
-    			append_dev(div6, t7);
-    			append_dev(div6, div5);
-    			append_dev(div5, span2);
-    			append_dev(span2, t8);
-    			append_dev(div5, t9);
-    			append_dev(div5, div4);
-    		},
-    		p: function update(ctx, [dirty]) {
-    			if (dirty & /*timer*/ 1 && t0_value !== (t0_value = /*timer*/ ctx[0].hour + "")) set_data_dev(t0, t0_value);
-    			if (dirty & /*timer*/ 1 && t4_value !== (t4_value = /*timer*/ ctx[0].minute + "")) set_data_dev(t4, t4_value);
-    			if (dirty & /*timer*/ 1 && t8_value !== (t8_value = /*timer*/ ctx[0].second + "")) set_data_dev(t8, t8_value);
-    		},
-    		i: noop,
-    		o: noop,
-    		d: function destroy(detaching) {
-    			if (detaching) detach_dev(div6);
-    		}
-    	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_fragment$9.name,
-    		type: "component",
-    		source: "",
-    		ctx
-    	});
-
-    	return block;
-    }
-
-    function instance$9($$self, $$props, $$invalidate) {
-    	let $dataStore;
-    	validate_store(dataStore, "dataStore");
-    	component_subscribe($$self, dataStore, $$value => $$invalidate(2, $dataStore = $$value));
-    	let { expireTime } = $$props;
-    	console.log(expireTime);
-    	let timer = { hour: "", minute: "", second: "" };
-    	const client = getClient();
-
-    	async function sendSolution(data) {
-    		let solutions = {
-    			u_id: parseInt(cookieHandler.getCookie("user_id")),
-    			t_id: parseInt(cookieHandler.getCookie("test_id")),
-    			solutions: JSON.stringify(data)
-    		};
-
-    		try {
-    			await mutate(client, {
-    				mutation: apolloClient.addAttempt,
-    				variables: solutions
-    			});
-
-    			location.replace("http://localhost:5000/feedback");
-    		} catch(err) {
-    			console.log(err);
-    		}
-    	}
-
-    	function InitializeTimer() {
-    		let d = new Date();
-    		let currentTime = Math.floor(d.getTime() / 1000);
-
-    		if (currentTime > expireTime) {
-    			clearInterval(timeCounter);
-    			sendSolution($dataStore);
-    			return;
-    		}
-
-    		let remainingTime = Math.floor(expireTime - currentTime);
-    		$$invalidate(0, timer.hour = Math.floor(remainingTime / 3600).toString(), timer);
-    		$$invalidate(0, timer.minute = (Math.floor(remainingTime / 60) % 60).toString(), timer);
-    		$$invalidate(0, timer.second = (remainingTime % 60).toString(), timer);
-    	}
-
-    	let timeCounter = setInterval(InitializeTimer, 1000);
-    	const writable_props = ["expireTime"];
-
-    	Object.keys($$props).forEach(key => {
-    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1.warn(`<Timer> was created with unknown prop '${key}'`);
-    	});
-
-    	$$self.$set = $$props => {
-    		if ("expireTime" in $$props) $$invalidate(1, expireTime = $$props.expireTime);
-    	};
-
-    	$$self.$capture_state = () => {
-    		return {
-    			expireTime,
-    			timer,
-    			timeCounter,
-    			$dataStore
-    		};
-    	};
-
-    	$$self.$inject_state = $$props => {
-    		if ("expireTime" in $$props) $$invalidate(1, expireTime = $$props.expireTime);
-    		if ("timer" in $$props) $$invalidate(0, timer = $$props.timer);
-    		if ("timeCounter" in $$props) timeCounter = $$props.timeCounter;
-    		if ("$dataStore" in $$props) dataStore.set($dataStore = $$props.$dataStore);
-    	};
-
-    	return [timer, expireTime];
-    }
-
-    class Timer extends SvelteComponentDev {
-    	constructor(options) {
-    		super(options);
-    		init(this, options, instance$9, create_fragment$9, safe_not_equal, { expireTime: 1 });
-
-    		dispatch_dev("SvelteRegisterComponent", {
-    			component: this,
-    			tagName: "Timer",
-    			options,
-    			id: create_fragment$9.name
-    		});
-
-    		const { ctx } = this.$$;
-    		const props = options.props || {};
-
-    		if (/*expireTime*/ ctx[1] === undefined && !("expireTime" in props)) {
-    			console_1.warn("<Timer> was created without expected prop 'expireTime'");
-    		}
-    	}
-
-    	get expireTime() {
-    		throw new Error("<Timer>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
-    	}
-
-    	set expireTime(value) {
-    		throw new Error("<Timer>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
-    	}
-    }
-
     /* src/Home.svelte generated by Svelte v3.18.1 */
 
     const { console: console_1$1 } = globals;
-    const file$7 = "src/Home.svelte";
+    const file$5 = "src/Home.svelte";
 
     function get_each_context$1(ctx, list, i) {
     	const child_ctx = ctx.slice();
@@ -36017,100 +34804,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return child_ctx;
     }
 
-    // (206:2) {#if cookieHandler.getCookie('loggedIn') !== 'true'}
-    function create_if_block_2$1(ctx) {
-    	let div;
-    	let current;
-
-    	const modal = new Modal({
-    			props: {
-    				$$slots: { default: [create_default_slot] },
-    				$$scope: { ctx }
-    			},
-    			$$inline: true
-    		});
-
-    	const block = {
-    		c: function create() {
-    			div = element("div");
-    			create_component(modal.$$.fragment);
-    			add_location(div, file$7, 206, 4, 7006);
-    		},
-    		m: function mount(target, anchor) {
-    			insert_dev(target, div, anchor);
-    			mount_component(modal, div, null);
-    			current = true;
-    		},
-    		i: function intro(local) {
-    			if (current) return;
-    			transition_in(modal.$$.fragment, local);
-    			current = true;
-    		},
-    		o: function outro(local) {
-    			transition_out(modal.$$.fragment, local);
-    			current = false;
-    		},
-    		d: function destroy(detaching) {
-    			if (detaching) detach_dev(div);
-    			destroy_component(modal);
-    		}
-    	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_if_block_2$1.name,
-    		type: "if",
-    		source: "(206:2) {#if cookieHandler.getCookie('loggedIn') !== 'true'}",
-    		ctx
-    	});
-
-    	return block;
-    }
-
-    // (208:6) <Modal>
-    function create_default_slot(ctx) {
-    	let current;
-
-    	const content = new UserHelper({
-    			props: { changeStatus: true },
-    			$$inline: true
-    		});
-
-    	const block = {
-    		c: function create() {
-    			create_component(content.$$.fragment);
-    		},
-    		m: function mount(target, anchor) {
-    			mount_component(content, target, anchor);
-    			current = true;
-    		},
-    		p: noop,
-    		i: function intro(local) {
-    			if (current) return;
-    			transition_in(content.$$.fragment, local);
-    			current = true;
-    		},
-    		o: function outro(local) {
-    			transition_out(content.$$.fragment, local);
-    			current = false;
-    		},
-    		d: function destroy(detaching) {
-    			destroy_component(content, detaching);
-    		}
-    	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_default_slot.name,
-    		type: "slot",
-    		source: "(208:6) <Modal>",
-    		ctx
-    	});
-
-    	return block;
-    }
-
-    // (223:2) {:catch err}
+    // (211:2) {:catch err}
     function create_catch_block(ctx) {
     	let h1;
 
@@ -36118,7 +34812,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		c: function create() {
     			h1 = element("h1");
     			h1.textContent = "Error :- Contact Admin";
-    			add_location(h1, file$7, 223, 4, 7348);
+    			add_location(h1, file$5, 211, 4, 7026);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, h1, anchor);
@@ -36135,14 +34829,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_catch_block.name,
     		type: "catch",
-    		source: "(223:2) {:catch err}",
+    		source: "(211:2) {:catch err}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (217:2) {:then result}
+    // (205:2) {:then result}
     function create_then_block(ctx) {
     	let div;
     	let t0;
@@ -36168,7 +34862,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			t1 = space();
     			create_component(editorarea.$$.fragment);
     			attr_dev(div, "class", "flex flex-col w-full");
-    			add_location(div, file$7, 217, 4, 7188);
+    			add_location(div, file$5, 205, 4, 6866);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div, anchor);
@@ -36206,14 +34900,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_then_block.name,
     		type: "then",
-    		source: "(217:2) {:then result}",
+    		source: "(205:2) {:then result}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (214:20)      {pubbie()}
+    // (202:20)      {pubbie()}
     function create_pending_block(ctx) {
     	let t0_value = /*pubbie*/ ctx[10]() + "";
     	let t0;
@@ -36226,7 +34920,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			t1 = space();
     			h1 = element("h1");
     			h1.textContent = "Test is being loaded...";
-    			add_location(h1, file$7, 215, 4, 7134);
+    			add_location(h1, file$5, 203, 4, 6812);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, t0, anchor);
@@ -36247,14 +34941,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_pending_block.name,
     		type: "pending",
-    		source: "(214:20)      {pubbie()}",
+    		source: "(202:20)      {pubbie()}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (315:4) {:else}
+    // (303:4) {:else}
     function create_else_block_1(ctx) {
     	let div3;
     	let div2;
@@ -36279,17 +34973,17 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			attr_dev(img, "class", "chat-notification-logo svelte-1ijc3hc");
     			if (img.src !== (img_src_value = "https://img.icons8.com/cotton/50/000000/filled-chat.png")) attr_dev(img, "src", img_src_value);
     			attr_dev(img, "alt", "ChitChat Logo");
-    			add_location(img, file$7, 318, 12, 10486);
+    			add_location(img, file$5, 306, 12, 10164);
     			attr_dev(div0, "class", "chat-notification-logo-wrapper svelte-1ijc3hc");
-    			add_location(div0, file$7, 317, 10, 10429);
+    			add_location(div0, file$5, 305, 10, 10107);
     			attr_dev(h4, "class", "chat-notification-title svelte-1ijc3hc");
-    			add_location(h4, file$7, 324, 12, 10728);
+    			add_location(h4, file$5, 312, 12, 10406);
     			attr_dev(div1, "class", "chat-notification-content svelte-1ijc3hc");
-    			add_location(div1, file$7, 323, 10, 10676);
+    			add_location(div1, file$5, 311, 10, 10354);
     			attr_dev(div2, "class", "chat-notification svelte-1ijc3hc");
-    			add_location(div2, file$7, 316, 8, 10387);
+    			add_location(div2, file$5, 304, 8, 10065);
     			attr_dev(div3, "class", "btm svelte-1ijc3hc");
-    			add_location(div3, file$7, 315, 6, 10343);
+    			add_location(div3, file$5, 303, 6, 10021);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div3, anchor);
@@ -36312,15 +35006,15 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_else_block_1.name,
     		type: "else",
-    		source: "(315:4) {:else}",
+    		source: "(303:4) {:else}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (228:4) {#if hasJoinedChat}
-    function create_if_block$2(ctx) {
+    // (216:4) {#if hasJoinedChat}
+    function create_if_block$1(ctx) {
     	let div9;
     	let div3;
     	let div0;
@@ -36392,52 +35086,52 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			attr_dev(img0, "alt", "admin photo");
     			attr_dev(img0, "class", "h-12 w-12 rounded-full");
     			if (img0.src !== (img0_src_value = "https://darrenjameseeley.files.wordpress.com/2014/09/expendables3.jpeg")) attr_dev(img0, "src", img0_src_value);
-    			add_location(img0, file$7, 234, 12, 7638);
-    			add_location(div0, file$7, 233, 10, 7620);
+    			add_location(img0, file$5, 222, 12, 7316);
+    			add_location(div0, file$5, 221, 10, 7298);
     			attr_dev(p0, "class", "text-grey-darkest");
-    			add_location(p0, file$7, 241, 14, 7975);
+    			add_location(p0, file$5, 229, 14, 7653);
     			attr_dev(div1, "class", "flex items-bottom justify-between");
-    			add_location(div1, file$7, 240, 12, 7913);
+    			add_location(div1, file$5, 228, 12, 7591);
     			attr_dev(p1, "class", "text-grey-dark mt-1 text-sm");
-    			add_location(p1, file$7, 243, 12, 8048);
+    			add_location(p1, file$5, 231, 12, 7726);
     			attr_dev(div2, "class", "ml-4 flex-1 border-b border-grey-lighter py-4");
-    			add_location(div2, file$7, 239, 10, 7841);
+    			add_location(div2, file$5, 227, 10, 7519);
     			attr_dev(div3, "class", "px-3 flex items-center bg-grey-light cursor-pointer rounded-lg");
-    			add_location(div3, file$7, 231, 8, 7523);
+    			add_location(div3, file$5, 219, 8, 7201);
     			attr_dev(div4, "class", "flex-1 overflow-auto");
-    			add_location(div4, file$7, 252, 12, 8371);
+    			add_location(div4, file$5, 240, 12, 8049);
     			attr_dev(div5, "class", "message-form");
-    			add_location(div5, file$7, 251, 10, 8332);
+    			add_location(div5, file$5, 239, 10, 8010);
     			attr_dev(div6, "class", "container mx-auto overflow-auto margin-bottom:10%;");
     			set_style(div6, "bottom", "120px");
     			set_style(div6, "right", "55px");
     			set_style(div6, "height", "280px");
     			set_style(div6, "width", "295px");
-    			add_location(div6, file$7, 248, 8, 8171);
+    			add_location(div6, file$5, 236, 8, 7849);
     			attr_dev(input, "type", "search");
     			attr_dev(input, "name", "serch");
     			attr_dev(input, "placeholder", "Type Message and Press Enter");
     			attr_dev(input, "class", "bg-white h-10 px-5 pr-10 rounded-full text-sm\n                focus:outline-none svelte-1ijc3hc");
-    			add_location(input, file$7, 284, 14, 9541);
-    			add_location(form, file$7, 282, 12, 9436);
+    			add_location(input, file$5, 272, 14, 9219);
+    			add_location(form, file$5, 270, 12, 9114);
     			attr_dev(div7, "class", "relative text-gray-600");
-    			add_location(div7, file$7, 281, 10, 9387);
+    			add_location(div7, file$5, 269, 10, 9065);
     			attr_dev(div8, "class", "container block");
     			set_style(div8, "position", "absolute");
     			set_style(div8, "bottom", "0");
-    			add_location(div8, file$7, 280, 8, 9307);
+    			add_location(div8, file$5, 268, 8, 8985);
     			attr_dev(div9, "class", "chat shadow-xl rounded-lg svelte-1ijc3hc");
-    			add_location(div9, file$7, 228, 6, 7448);
+    			add_location(div9, file$5, 216, 6, 7126);
     			attr_dev(img1, "class", "chat-notification-logo svelte-1ijc3hc");
     			if (img1.src !== (img1_src_value = "https://img.icons8.com/cute-clipart/50/000000/close-window.png")) attr_dev(img1, "src", img1_src_value);
     			attr_dev(img1, "alt", "ChitChat Logo");
-    			add_location(img1, file$7, 307, 12, 10110);
+    			add_location(img1, file$5, 295, 12, 9788);
     			attr_dev(div10, "class", "chat-notification-logo-wrapper svelte-1ijc3hc");
-    			add_location(div10, file$7, 306, 10, 10053);
+    			add_location(div10, file$5, 294, 10, 9731);
     			attr_dev(div11, "class", "chat-notification svelte-1ijc3hc");
-    			add_location(div11, file$7, 305, 8, 10011);
+    			add_location(div11, file$5, 293, 8, 9689);
     			attr_dev(div12, "class", "btm svelte-1ijc3hc");
-    			add_location(div12, file$7, 304, 6, 9968);
+    			add_location(div12, file$5, 292, 6, 9646);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div9, anchor);
@@ -36529,16 +35223,16 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_if_block$2.name,
+    		id: create_if_block$1.name,
     		type: "if",
-    		source: "(228:4) {#if hasJoinedChat}",
+    		source: "(216:4) {#if hasJoinedChat}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (264:16) {:else}
+    // (252:16) {:else}
     function create_else_block(ctx) {
     	let div1;
     	let div0;
@@ -36560,13 +35254,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			t2 = text(t2_value);
     			t3 = space();
     			attr_dev(p0, "class", "text-grey-darkest");
-    			add_location(p0, file$7, 266, 22, 8965);
+    			add_location(p0, file$5, 254, 22, 8643);
     			attr_dev(div0, "class", "flex items-bottom justify-between");
-    			add_location(div0, file$7, 265, 20, 8895);
+    			add_location(div0, file$5, 253, 20, 8573);
     			attr_dev(p1, "class", "text-grey-dark mt-1 text-sm");
-    			add_location(p1, file$7, 269, 20, 9052);
+    			add_location(p1, file$5, 257, 20, 8730);
     			attr_dev(div1, "class", "ml-4 flex-1 rounded py-4");
-    			add_location(div1, file$7, 264, 18, 8836);
+    			add_location(div1, file$5, 252, 18, 8514);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div1, anchor);
@@ -36589,15 +35283,15 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_else_block.name,
     		type: "else",
-    		source: "(264:16) {:else}",
+    		source: "(252:16) {:else}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (256:16) {#if temp.publisher == userName}
-    function create_if_block_1$2(ctx) {
+    // (244:16) {#if temp.publisher == userName}
+    function create_if_block_1$1(ctx) {
     	let div1;
     	let div0;
     	let p;
@@ -36613,12 +35307,12 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			t0 = text(t0_value);
     			t1 = space();
     			attr_dev(p, "class", "text-sm mt-1");
-    			add_location(p, file$7, 260, 22, 8699);
+    			add_location(p, file$5, 248, 22, 8377);
     			attr_dev(div0, "class", "rounded py-2 px-3");
     			set_style(div0, "background-color", "#E2F7CB");
-    			add_location(div0, file$7, 257, 20, 8567);
+    			add_location(div0, file$5, 245, 20, 8245);
     			attr_dev(div1, "class", "flex justify-end mb-2");
-    			add_location(div1, file$7, 256, 18, 8511);
+    			add_location(div1, file$5, 244, 18, 8189);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div1, anchor);
@@ -36637,21 +35331,21 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_if_block_1$2.name,
+    		id: create_if_block_1$1.name,
     		type: "if",
-    		source: "(256:16) {#if temp.publisher == userName}",
+    		source: "(244:16) {#if temp.publisher == userName}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (255:14) {#each output as temp}
+    // (243:14) {#each output as temp}
     function create_each_block$1(ctx) {
     	let if_block_anchor;
 
     	function select_block_type_1(ctx, dirty) {
-    		if (/*temp*/ ctx[19].publisher == /*userName*/ ctx[4]) return create_if_block_1$2;
+    		if (/*temp*/ ctx[19].publisher == /*userName*/ ctx[4]) return create_if_block_1$1;
     		return create_else_block;
     	}
 
@@ -36690,22 +35384,19 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_each_block$1.name,
     		type: "each",
-    		source: "(255:14) {#each output as temp}",
+    		source: "(243:14) {#each output as temp}",
     		ctx
     	});
 
     	return block;
     }
 
-    function create_fragment$a(ctx) {
+    function create_fragment$7(ctx) {
     	let body;
-    	let show_if = cookieHandler.getCookie("loggedIn") !== "true";
-    	let t0;
     	let promise;
-    	let t1;
+    	let t;
     	let div;
     	let current;
-    	let if_block0 = show_if && create_if_block_2$1(ctx);
 
     	let info = {
     		ctx,
@@ -36722,39 +35413,35 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	handle_promise(promise = /*$problems*/ ctx[5], info);
 
     	function select_block_type(ctx, dirty) {
-    		if (/*hasJoinedChat*/ ctx[0]) return create_if_block$2;
+    		if (/*hasJoinedChat*/ ctx[0]) return create_if_block$1;
     		return create_else_block_1;
     	}
 
     	let current_block_type = select_block_type(ctx);
-    	let if_block1 = current_block_type(ctx);
+    	let if_block = current_block_type(ctx);
 
     	const block = {
     		c: function create() {
     			body = element("body");
-    			if (if_block0) if_block0.c();
-    			t0 = space();
     			info.block.c();
-    			t1 = space();
+    			t = space();
     			div = element("div");
-    			if_block1.c();
+    			if_block.c();
     			attr_dev(div, "class", "container");
-    			add_location(div, file$7, 226, 2, 7394);
-    			add_location(body, file$7, 204, 0, 6940);
+    			add_location(div, file$5, 214, 2, 7072);
+    			add_location(body, file$5, 199, 0, 6764);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, body, anchor);
-    			if (if_block0) if_block0.m(body, null);
-    			append_dev(body, t0);
     			info.block.m(body, info.anchor = null);
     			info.mount = () => body;
-    			info.anchor = t1;
-    			append_dev(body, t1);
+    			info.anchor = t;
+    			append_dev(body, t);
     			append_dev(body, div);
-    			if_block1.m(div, null);
+    			if_block.m(div, null);
     			current = true;
     		},
     		p: function update(new_ctx, [dirty]) {
@@ -36767,27 +35454,24 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     				info.block.p(child_ctx, dirty);
     			}
 
-    			if (current_block_type === (current_block_type = select_block_type(ctx)) && if_block1) {
-    				if_block1.p(ctx, dirty);
+    			if (current_block_type === (current_block_type = select_block_type(ctx)) && if_block) {
+    				if_block.p(ctx, dirty);
     			} else {
-    				if_block1.d(1);
-    				if_block1 = current_block_type(ctx);
+    				if_block.d(1);
+    				if_block = current_block_type(ctx);
 
-    				if (if_block1) {
-    					if_block1.c();
-    					if_block1.m(div, null);
+    				if (if_block) {
+    					if_block.c();
+    					if_block.m(div, null);
     				}
     			}
     		},
     		i: function intro(local) {
     			if (current) return;
-    			transition_in(if_block0);
     			transition_in(info.block);
     			current = true;
     		},
     		o: function outro(local) {
-    			transition_out(if_block0);
-
     			for (let i = 0; i < 3; i += 1) {
     				const block = info.blocks[i];
     				transition_out(block);
@@ -36797,17 +35481,16 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		},
     		d: function destroy(detaching) {
     			if (detaching) detach_dev(body);
-    			if (if_block0) if_block0.d();
     			info.block.d();
     			info.token = null;
     			info = null;
-    			if_block1.d();
+    			if_block.d();
     		}
     	};
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$a.name,
+    		id: create_fragment$7.name,
     		type: "component",
     		source: "",
     		ctx
@@ -36816,7 +35499,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$a($$self, $$props, $$invalidate) {
+    function instance$7($$self, $$props, $$invalidate) {
     	let $problems;
     	let { currentRoute } = $$props;
     	console.log(currentRoute);
@@ -36831,7 +35514,6 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	component_subscribe($$self, problems, value => $$invalidate(5, $problems = value));
     	var tokens = currentRoute.namedParams.token.split(".");
     	console.log(JSON.parse(atob(tokens[1])));
-    	cookieHandler.setCookie("attemptId", JSON.parse(atob(tokens[1])).attemptId);
 
     	$problems.then(res => {
     		cookieHandler.setCookie("test_id", res.data.testByToken.id);
@@ -36987,13 +35669,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Home extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$a, create_fragment$a, safe_not_equal, { currentRoute: 11 });
+    		init(this, options, instance$7, create_fragment$7, safe_not_equal, { currentRoute: 11 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Home",
     			options,
-    			id: create_fragment$a.name
+    			id: create_fragment$7.name
     		});
 
     		const { ctx } = this.$$;
@@ -37014,9 +35696,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     /* src/components/navbar.svelte generated by Svelte v3.18.1 */
-    const file$8 = "src/components/navbar.svelte";
+    const file$6 = "src/components/navbar.svelte";
 
-    function create_fragment$b(ctx) {
+    function create_fragment$8(ctx) {
     	let link;
     	let t0;
     	let nav;
@@ -37080,51 +35762,51 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			attr_dev(link, "href", "https://fonts.googleapis.com/css2?family=Jost&display=swap");
     			attr_dev(link, "rel", "stylesheet");
     			attr_dev(link, "class", "svelte-1thwvf9");
-    			add_location(link, file$8, 61, 0, 2567);
+    			add_location(link, file$6, 61, 0, 2567);
     			attr_dev(h1, "class", "welcome text-primary svelte-1thwvf9");
-    			add_location(h1, file$8, 69, 4, 2814);
+    			add_location(h1, file$6, 69, 4, 2814);
     			attr_dev(img0, "alt", "admin");
     			attr_dev(img0, "width", "25");
     			attr_dev(img0, "height", "25");
     			if (img0.src !== (img0_src_value = "https://img.icons8.com/carbon-copy/64/000000/user.png")) attr_dev(img0, "src", img0_src_value);
     			attr_dev(img0, "class", "svelte-1thwvf9");
-    			add_location(img0, file$8, 77, 10, 3195);
+    			add_location(img0, file$6, 77, 10, 3195);
     			set_style(p0, "font-family", "'Jost', sans-serif");
     			attr_dev(p0, "class", "svelte-1thwvf9");
-    			add_location(p0, file$8, 82, 10, 3356);
+    			add_location(p0, file$6, 82, 10, 3356);
     			attr_dev(button, "class", "container bg-white mx-3 flex flex-row hover:bg-light text-dark\n          font-semibold hover:text-white py-4 px-6 border border-white-500\n          rounded hover:border-white hover:border-transparent rounded-full svelte-1thwvf9");
-    			add_location(button, file$8, 73, 8, 2945);
+    			add_location(button, file$6, 73, 8, 2945);
     			attr_dev(img1, "alt", "Theme");
     			attr_dev(img1, "width", "25");
     			attr_dev(img1, "height", "25");
     			if (img1.src !== (img1_src_value = "https://img.icons8.com/material-rounded/24/000000/change.png")) attr_dev(img1, "src", img1_src_value);
     			attr_dev(img1, "class", "svelte-1thwvf9");
-    			add_location(img1, file$8, 95, 12, 3878);
+    			add_location(img1, file$6, 95, 12, 3878);
     			attr_dev(p1, "class", "svelte-1thwvf9");
-    			add_location(p1, file$8, 100, 12, 4056);
+    			add_location(p1, file$6, 100, 12, 4056);
     			attr_dev(li0, "class", "rounded-t flex flex-row bg-gray-200 hover:bg-gray-400 py-2\n            px-4 block whitespace-no-wrap svelte-1thwvf9");
-    			add_location(li0, file$8, 87, 10, 3579);
+    			add_location(li0, file$6, 87, 10, 3579);
     			attr_dev(img2, "alt", "logout");
     			attr_dev(img2, "width", "25");
     			attr_dev(img2, "height", "25");
     			if (img2.src !== (img2_src_value = "https://img.icons8.com/pastel-glyph/64/000000/logout-rounded-down.png")) attr_dev(img2, "src", img2_src_value);
     			attr_dev(img2, "class", "svelte-1thwvf9");
-    			add_location(img2, file$8, 107, 12, 4270);
+    			add_location(img2, file$6, 107, 12, 4270);
     			attr_dev(p2, "class", "svelte-1thwvf9");
-    			add_location(p2, file$8, 112, 12, 4458);
+    			add_location(p2, file$6, 112, 12, 4458);
     			attr_dev(li1, "class", "bg-gray-200 flex flex-row hover:bg-gray-400 py-2 px-4 block\n            whitespace-no-wrap svelte-1thwvf9");
-    			add_location(li1, file$8, 102, 10, 4107);
+    			add_location(li1, file$6, 102, 10, 4107);
     			attr_dev(ul, "class", "ml-3 dropdown-content container text-gray-700 pt-1 svelte-1thwvf9");
-    			add_location(ul, file$8, 86, 8, 3505);
+    			add_location(ul, file$6, 86, 8, 3505);
     			attr_dev(div0, "class", "dropdown svelte-1thwvf9");
-    			add_location(div0, file$8, 72, 6, 2914);
+    			add_location(div0, file$6, 72, 6, 2914);
     			attr_dev(div1, "id", "btn");
     			attr_dev(div1, "class", "flex flex-row svelte-1thwvf9");
-    			add_location(div1, file$8, 70, 4, 2870);
+    			add_location(div1, file$6, 70, 4, 2870);
     			attr_dev(div2, "class", "w-full block flex-grow lg:items-right svelte-1thwvf9");
-    			add_location(div2, file$8, 68, 2, 2758);
+    			add_location(div2, file$6, 68, 2, 2758);
     			attr_dev(nav, "class", "flex shadow-2xl items-center justify-between flex-wrap bg-dark sticky\n  p-6 svelte-1thwvf9");
-    			add_location(nav, file$8, 64, 0, 2663);
+    			add_location(nav, file$6, 64, 0, 2663);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -37172,7 +35854,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$b.name,
+    		id: create_fragment$8.name,
     		type: "component",
     		source: "",
     		ctx
@@ -37185,7 +35867,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	location.replace("http://localhost:3000/logout");
     }
 
-    function instance$b($$self, $$props, $$invalidate) {
+    function instance$8($$self, $$props, $$invalidate) {
     	const tokens = cookieHandler.getCookie("access_token").split(".");
     	console.log(atob(tokens[1]));
 
@@ -37232,13 +35914,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Navbar extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$b, create_fragment$b, safe_not_equal, {});
+    		init(this, options, instance$8, create_fragment$8, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Navbar",
     			options,
-    			id: create_fragment$b.name
+    			id: create_fragment$8.name
     		});
     	}
     }
@@ -39630,7 +38312,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     /* src/Icon.svelte generated by Svelte v3.18.1 */
 
-    function create_fragment$c(ctx) {
+    function create_fragment$9(ctx) {
     	let html_tag;
 
     	let raw_value = (feather$1.icons[/*icon*/ ctx[0]]
@@ -39667,7 +38349,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$c.name,
+    		id: create_fragment$9.name,
     		type: "component",
     		source: "",
     		ctx
@@ -39676,7 +38358,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$c($$self, $$props, $$invalidate) {
+    function instance$9($$self, $$props, $$invalidate) {
     	let { icon = "square" } = $$props;
     	let { attr = {} } = $$props;
 
@@ -39703,13 +38385,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Icon extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$c, create_fragment$c, safe_not_equal, { icon: 0, attr: 1 });
+    		init(this, options, instance$9, create_fragment$9, safe_not_equal, { icon: 0, attr: 1 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Icon",
     			options,
-    			id: create_fragment$c.name
+    			id: create_fragment$9.name
     		});
     	}
 
@@ -39731,9 +38413,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     /* src/components/Side.svelte generated by Svelte v3.18.1 */
-    const file$9 = "src/components/Side.svelte";
+    const file$7 = "src/components/Side.svelte";
 
-    function create_fragment$d(ctx) {
+    function create_fragment$a(ctx) {
     	let div4;
     	let ul;
     	let li0;
@@ -39813,45 +38495,45 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			div3 = element("div");
     			div3.textContent = "Results";
     			attr_dev(span0, "class", "icon svelte-4j4wa5");
-    			add_location(span0, file$9, 68, 16, 2839);
+    			add_location(span0, file$7, 68, 16, 2839);
     			attr_dev(div0, "class", "name svelte-4j4wa5");
-    			add_location(div0, file$9, 71, 17, 2939);
+    			add_location(div0, file$7, 71, 17, 2939);
     			attr_dev(a0, "href", "/admin");
     			attr_dev(a0, "class", "active svelte-4j4wa5");
-    			add_location(a0, file$9, 67, 16, 2790);
+    			add_location(a0, file$7, 67, 16, 2790);
     			attr_dev(li0, "class", "svelte-4j4wa5");
-    			add_location(li0, file$9, 67, 12, 2786);
+    			add_location(li0, file$7, 67, 12, 2786);
     			attr_dev(span1, "class", "icon svelte-4j4wa5");
-    			add_location(span1, file$9, 75, 17, 3066);
+    			add_location(span1, file$7, 75, 17, 3066);
     			attr_dev(div1, "class", "name svelte-4j4wa5");
-    			add_location(div1, file$9, 78, 17, 3168);
+    			add_location(div1, file$7, 78, 17, 3168);
     			attr_dev(a1, "href", "/showproblems");
     			attr_dev(a1, "class", "svelte-4j4wa5");
-    			add_location(a1, file$9, 74, 16, 3024);
+    			add_location(a1, file$7, 74, 16, 3024);
     			attr_dev(li1, "class", "svelte-4j4wa5");
-    			add_location(li1, file$9, 74, 12, 3020);
+    			add_location(li1, file$7, 74, 12, 3020);
     			attr_dev(span2, "class", "icon svelte-4j4wa5");
-    			add_location(span2, file$9, 82, 16, 3298);
+    			add_location(span2, file$7, 82, 16, 3298);
     			attr_dev(div2, "class", "name svelte-4j4wa5");
-    			add_location(div2, file$9, 85, 17, 3400);
+    			add_location(div2, file$7, 85, 17, 3400);
     			attr_dev(a2, "href", "/showtests");
     			attr_dev(a2, "class", "svelte-4j4wa5");
-    			add_location(a2, file$9, 81, 16, 3260);
+    			add_location(a2, file$7, 81, 16, 3260);
     			attr_dev(li2, "class", "svelte-4j4wa5");
-    			add_location(li2, file$9, 81, 12, 3256);
+    			add_location(li2, file$7, 81, 12, 3256);
     			attr_dev(span3, "class", "icon svelte-4j4wa5");
-    			add_location(span3, file$9, 89, 17, 3528);
+    			add_location(span3, file$7, 89, 17, 3528);
     			attr_dev(div3, "class", "name svelte-4j4wa5");
-    			add_location(div3, file$9, 92, 17, 3634);
+    			add_location(div3, file$7, 92, 17, 3634);
     			attr_dev(a3, "href", "/showresults");
     			attr_dev(a3, "class", "svelte-4j4wa5");
-    			add_location(a3, file$9, 88, 16, 3487);
+    			add_location(a3, file$7, 88, 16, 3487);
     			attr_dev(li3, "class", "svelte-4j4wa5");
-    			add_location(li3, file$9, 88, 12, 3483);
+    			add_location(li3, file$7, 88, 12, 3483);
     			attr_dev(ul, "class", "svelte-4j4wa5");
-    			add_location(ul, file$9, 66, 8, 2769);
+    			add_location(ul, file$7, 66, 8, 2769);
     			attr_dev(div4, "class", "sidebar svelte-4j4wa5");
-    			add_location(div4, file$9, 65, 4, 2739);
+    			add_location(div4, file$7, 65, 4, 2739);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -39915,7 +38597,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$d.name,
+    		id: create_fragment$a.name,
     		type: "component",
     		source: "",
     		ctx
@@ -39927,19 +38609,19 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Side extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, null, create_fragment$d, safe_not_equal, {});
+    		init(this, options, null, create_fragment$a, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Side",
     			options,
-    			id: create_fragment$d.name
+    			id: create_fragment$a.name
     		});
     	}
     }
 
     /* src/routes/pubnub.svelte generated by Svelte v3.18.1 */
-    const file$a = "src/routes/pubnub.svelte";
+    const file$8 = "src/routes/pubnub.svelte";
 
     function get_each_context$2(ctx, list, i) {
     	const child_ctx = ctx.slice();
@@ -39978,17 +38660,17 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			attr_dev(img, "class", "chat-notification-logo svelte-1ue8m0r");
     			if (img.src !== (img_src_value = "https://img.icons8.com/cotton/50/000000/filled-chat.png")) attr_dev(img, "src", img_src_value);
     			attr_dev(img, "alt", "ChitChat Logo");
-    			add_location(img, file$a, 292, 10, 9944);
+    			add_location(img, file$8, 292, 10, 9944);
     			attr_dev(div0, "class", "chat-notification-logo-wrapper svelte-1ue8m0r");
-    			add_location(div0, file$a, 291, 8, 9889);
+    			add_location(div0, file$8, 291, 8, 9889);
     			attr_dev(h4, "class", "chat-notification-title svelte-1ue8m0r");
-    			add_location(h4, file$a, 298, 10, 10174);
+    			add_location(h4, file$8, 298, 10, 10174);
     			attr_dev(div1, "class", "chat-notification-content svelte-1ue8m0r");
-    			add_location(div1, file$a, 297, 8, 10124);
+    			add_location(div1, file$8, 297, 8, 10124);
     			attr_dev(div2, "class", "chat-notification svelte-1ue8m0r");
-    			add_location(div2, file$a, 290, 6, 9849);
+    			add_location(div2, file$8, 290, 6, 9849);
     			attr_dev(div3, "class", "btm svelte-1ue8m0r");
-    			add_location(div3, file$a, 289, 4, 9807);
+    			add_location(div3, file$8, 289, 4, 9807);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div3, anchor);
@@ -40019,7 +38701,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (171:2) {#if hasJoinedChat}
-    function create_if_block$3(ctx) {
+    function create_if_block$2(ctx) {
     	let div15;
     	let div3;
     	let div1;
@@ -40124,69 +38806,69 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			div17 = element("div");
     			div16 = element("div");
     			img = element("img");
-    			add_location(p0, file$a, 181, 12, 6492);
+    			add_location(p0, file$8, 181, 12, 6492);
     			attr_dev(div0, "class", "flex");
-    			add_location(div0, file$a, 179, 10, 6460);
+    			add_location(div0, file$8, 179, 10, 6460);
     			attr_dev(div1, "class", "py-2 px-3 bg-grey-lighter flex flex-row justify-between\n          items-center");
-    			add_location(div1, file$a, 176, 8, 6347);
+    			add_location(div1, file$8, 176, 8, 6347);
     			attr_dev(div2, "class", "bg-grey-lighter flex-1 overflow-auto");
-    			add_location(div2, file$a, 186, 8, 6578);
+    			add_location(div2, file$8, 186, 8, 6578);
     			attr_dev(div3, "class", "w-1/3 border flex flex-col");
-    			add_location(div3, file$a, 173, 6, 6273);
+    			add_location(div3, file$8, 173, 6, 6273);
     			attr_dev(p1, "class", "text-grey-darkest");
-    			add_location(p1, file$a, 217, 14, 7523);
+    			add_location(p1, file$8, 217, 14, 7523);
     			attr_dev(div4, "class", "flex items-bottom justify-between");
-    			add_location(div4, file$a, 216, 12, 7461);
+    			add_location(div4, file$8, 216, 12, 7461);
     			attr_dev(p2, "class", "text-grey-dark mt-1 text-sm");
-    			add_location(p2, file$a, 219, 12, 7601);
+    			add_location(p2, file$8, 219, 12, 7601);
     			attr_dev(div5, "class", "ml-4 flex-1 border-b border-grey-lighter py-4");
-    			add_location(div5, file$a, 215, 10, 7389);
+    			add_location(div5, file$8, 215, 10, 7389);
     			attr_dev(div6, "class", "px-3 flex-row items-center bg-grey-light cursor-pointer\n          rounded-lg");
-    			add_location(div6, file$a, 212, 8, 7278);
+    			add_location(div6, file$8, 212, 8, 7278);
     			attr_dev(p3, "class", "text-grey-darkest");
-    			add_location(p3, file$a, 231, 18, 8119);
+    			add_location(p3, file$8, 231, 18, 8119);
     			attr_dev(div7, "class", "flex items-bottom justify-between");
-    			add_location(div7, file$a, 230, 16, 8053);
+    			add_location(div7, file$8, 230, 16, 8053);
     			attr_dev(p4, "class", "text-grey-dark mt-1 text-sm");
-    			add_location(p4, file$a, 234, 16, 8198);
+    			add_location(p4, file$8, 234, 16, 8198);
     			attr_dev(div8, "class", "ml-4 flex-1 border-b border-grey-lighter py-4");
-    			add_location(div8, file$a, 229, 14, 7977);
+    			add_location(div8, file$8, 229, 14, 7977);
     			attr_dev(div9, "class", "flex-1 overflow-auto");
-    			add_location(div9, file$a, 228, 12, 7928);
+    			add_location(div9, file$8, 228, 12, 7928);
     			attr_dev(div10, "class", "message-form");
-    			add_location(div10, file$a, 227, 10, 7889);
+    			add_location(div10, file$8, 227, 10, 7889);
     			attr_dev(div11, "class", "container mx-auto overflow-auto margin-bottom:10%;");
     			set_style(div11, "bottom", "120px");
     			set_style(div11, "right", "55px");
     			set_style(div11, "height", "380px");
     			set_style(div11, "width", "390px");
-    			add_location(div11, file$a, 224, 8, 7728);
+    			add_location(div11, file$8, 224, 8, 7728);
     			attr_dev(input, "type", "search");
     			attr_dev(input, "name", "serch");
     			attr_dev(input, "placeholder", "Type Message and Press Enter");
     			attr_dev(input, "class", "bg-white h-10 px-5 pr-10 rounded-full text-sm\n                focus:outline-none svelte-1ue8m0r");
-    			add_location(input, file$a, 257, 14, 9024);
-    			add_location(form, file$a, 256, 12, 8943);
+    			add_location(input, file$8, 257, 14, 9024);
+    			add_location(form, file$8, 256, 12, 8943);
     			attr_dev(div12, "class", "relative text-gray-600");
-    			add_location(div12, file$a, 255, 10, 8894);
+    			add_location(div12, file$8, 255, 10, 8894);
     			attr_dev(div13, "class", "container block");
     			set_style(div13, "position", "absolute");
     			set_style(div13, "bottom", "0");
-    			add_location(div13, file$a, 254, 8, 8814);
+    			add_location(div13, file$8, 254, 8, 8814);
     			attr_dev(div14, "class", "w-2/3 border flex flex-col");
-    			add_location(div14, file$a, 208, 6, 7201);
+    			add_location(div14, file$8, 208, 6, 7201);
     			attr_dev(div15, "class", "chat flex flex-row shadow-xl rounded-lg svelte-1ue8m0r");
-    			add_location(div15, file$a, 171, 4, 6194);
+    			add_location(div15, file$8, 171, 4, 6194);
     			attr_dev(img, "class", "chat-notification-logo svelte-1ue8m0r");
     			if (img.src !== (img_src_value = "https://img.icons8.com/cute-clipart/50/000000/close-window.png")) attr_dev(img, "src", img_src_value);
     			attr_dev(img, "alt", "ChitChat Logo");
-    			add_location(img, file$a, 281, 10, 9590);
+    			add_location(img, file$8, 281, 10, 9590);
     			attr_dev(div16, "class", "chat-notification-logo-wrapper svelte-1ue8m0r");
-    			add_location(div16, file$a, 280, 8, 9535);
+    			add_location(div16, file$8, 280, 8, 9535);
     			attr_dev(div17, "class", "chat-notification svelte-1ue8m0r");
-    			add_location(div17, file$a, 279, 6, 9495);
+    			add_location(div17, file$8, 279, 6, 9495);
     			attr_dev(div18, "class", "btm svelte-1ue8m0r");
-    			add_location(div18, file$a, 278, 4, 9454);
+    			add_location(div18, file$8, 278, 4, 9454);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div15, anchor);
@@ -40319,7 +39001,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_if_block$3.name,
+    		id: create_if_block$2.name,
     		type: "if",
     		source: "(171:2) {#if hasJoinedChat}",
     		ctx
@@ -40348,13 +39030,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			t0 = text(t0_value);
     			t1 = space();
     			attr_dev(p, "class", "text-grey-darkest");
-    			add_location(p, file$a, 196, 18, 7018);
+    			add_location(p, file$8, 196, 18, 7018);
     			attr_dev(div0, "class", "flex items-bottom justify-between");
-    			add_location(div0, file$a, 195, 16, 6952);
+    			add_location(div0, file$8, 195, 16, 6952);
     			attr_dev(div1, "class", "ml-4 flex-1 border-b border-grey-lighter py-4");
-    			add_location(div1, file$a, 194, 14, 6876);
+    			add_location(div1, file$8, 194, 14, 6876);
     			attr_dev(div2, "class", "bg-white hover:bg-gray-400 px-3 flex items-center\n              hover:bg-grey-lighter cursor-pointer");
-    			add_location(div2, file$a, 189, 12, 6680);
+    			add_location(div2, file$8, 189, 12, 6680);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div2, anchor);
@@ -40413,12 +39095,12 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			t0 = text(t0_value);
     			t1 = space();
     			attr_dev(p, "class", "text-sm mt-1");
-    			add_location(p, file$a, 243, 20, 8578);
+    			add_location(p, file$8, 243, 20, 8578);
     			attr_dev(div0, "class", "rounded py-2 px-3");
     			set_style(div0, "background-color", "#E2F7CB");
-    			add_location(div0, file$a, 240, 18, 8452);
+    			add_location(div0, file$8, 240, 18, 8452);
     			attr_dev(div1, "class", "flex justify-end mb-2");
-    			add_location(div1, file$a, 239, 16, 8398);
+    			add_location(div1, file$8, 239, 16, 8398);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div1, anchor);
@@ -40446,13 +39128,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function create_fragment$e(ctx) {
+    function create_fragment$b(ctx) {
     	let link;
     	let t;
     	let div;
 
     	function select_block_type(ctx, dirty) {
-    		if (/*hasJoinedChat*/ ctx[0]) return create_if_block$3;
+    		if (/*hasJoinedChat*/ ctx[0]) return create_if_block$2;
     		return create_else_block$1;
     	}
 
@@ -40467,9 +39149,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			if_block.c();
     			attr_dev(link, "href", "https://unpkg.com/tailwindcss@^1.0/dist/tailwind.min.css");
     			attr_dev(link, "rel", "stylesheet");
-    			add_location(link, file$a, 165, 0, 6049);
+    			add_location(link, file$8, 165, 0, 6049);
     			attr_dev(div, "class", "container");
-    			add_location(div, file$a, 169, 0, 6144);
+    			add_location(div, file$8, 169, 0, 6144);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -40505,7 +39187,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$e.name,
+    		id: create_fragment$b.name,
     		type: "component",
     		source: "",
     		ctx
@@ -40519,7 +39201,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	if (match) return match[2];
     }
 
-    function instance$d($$self, $$props, $$invalidate) {
+    function instance$a($$self, $$props, $$invalidate) {
     	let hasJoinedChat = false;
     	let channels = [""];
     	let username = "";
@@ -40626,21 +39308,21 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Pubnub extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$d, create_fragment$e, safe_not_equal, {});
+    		init(this, options, instance$a, create_fragment$b, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Pubnub",
     			options,
-    			id: create_fragment$e.name
+    			id: create_fragment$b.name
     		});
     	}
     }
 
     /* src/routes/Admin.svelte generated by Svelte v3.18.1 */
-    const file$b = "src/routes/Admin.svelte";
+    const file$9 = "src/routes/Admin.svelte";
 
-    function create_fragment$f(ctx) {
+    function create_fragment$c(ctx) {
     	let link;
     	let t0;
     	let body;
@@ -40665,9 +39347,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			create_component(pubnub.$$.fragment);
     			attr_dev(link, "href", "https://unpkg.com/tailwindcss@^1.0/dist/tailwind.min.css");
     			attr_dev(link, "rel", "stylesheet");
-    			add_location(link, file$b, 23, 0, 877);
-    			add_location(header, file$b, 28, 2, 981);
-    			add_location(body, file$b, 27, 0, 972);
+    			add_location(link, file$9, 23, 0, 877);
+    			add_location(header, file$9, 28, 2, 981);
+    			add_location(body, file$9, 27, 0, 972);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -40710,7 +39392,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$f.name,
+    		id: create_fragment$c.name,
     		type: "component",
     		source: "",
     		ctx
@@ -40719,7 +39401,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$e($$self) {
+    function instance$b($$self) {
     	const client = getClient();
     	const tokens = cookieHandler.getCookie("access_token").split(".");
     	console.log(atob(tokens[1]));
@@ -40740,22 +39422,22 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Admin extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$e, create_fragment$f, safe_not_equal, {});
+    		init(this, options, instance$b, create_fragment$c, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Admin",
     			options,
-    			id: create_fragment$f.name
+    			id: create_fragment$c.name
     		});
     	}
     }
 
     /* src/routes/Login.svelte generated by Svelte v3.18.1 */
 
-    const file$c = "src/routes/Login.svelte";
+    const file$a = "src/routes/Login.svelte";
 
-    function create_fragment$g(ctx) {
+    function create_fragment$d(ctx) {
     	let link;
     	let t0;
     	let body;
@@ -40816,52 +39498,52 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			p1.textContent = "Try Out.";
     			attr_dev(link, "href", "https://unpkg.com/tailwindcss@^1.0/dist/tailwind.min.css");
     			attr_dev(link, "rel", "stylesheet");
-    			add_location(link, file$c, 67, 0, 3074);
+    			add_location(link, file$a, 67, 0, 3074);
     			attr_dev(h2, "class", "text-2xl font-semibold text-gray-700 text-center");
-    			add_location(h2, file$c, 81, 8, 3474);
+    			add_location(h2, file$a, 81, 8, 3474);
     			attr_dev(p0, "class", "text-xl text-gray-600 text-center");
-    			add_location(p0, file$c, 84, 8, 3578);
+    			add_location(p0, file$a, 84, 8, 3578);
     			attr_dev(path0, "d", "M36.3425 16.7358H35V16.6667H20V23.3333H29.4192C28.045 27.2142\n                24.3525 30 20 30C14.4775 30 10 25.5225 10 20C10 14.4775 14.4775\n                9.99999 20 9.99999C22.5492 9.99999 24.8683 10.9617 26.6342\n                12.5325L31.3483 7.81833C28.3717 5.04416 24.39 3.33333 20\n                3.33333C10.7958 3.33333 3.33335 10.7958 3.33335 20C3.33335\n                29.2042 10.7958 36.6667 20 36.6667C29.2042 36.6667 36.6667\n                29.2042 36.6667 20C36.6667 18.8825 36.5517 17.7917 36.3425\n                16.7358Z");
     			attr_dev(path0, "fill", "#FFC107");
-    			add_location(path0, file$c, 91, 14, 3922);
+    			add_location(path0, file$a, 91, 14, 3922);
     			attr_dev(path1, "d", "M5.25497 12.2425L10.7308 16.2583C12.2125 12.59 15.8008\n                9.99999 20 9.99999C22.5491 9.99999 24.8683 10.9617 26.6341\n                12.5325L31.3483 7.81833C28.3716 5.04416 24.39 3.33333 20\n                3.33333C13.5983 3.33333 8.04663 6.94749 5.25497 12.2425Z");
     			attr_dev(path1, "fill", "#FF3D00");
-    			add_location(path1, file$c, 101, 14, 4536);
+    			add_location(path1, file$a, 101, 14, 4536);
     			attr_dev(path2, "d", "M20 36.6667C24.305 36.6667 28.2167 35.0192 31.1742\n                32.34L26.0159 27.975C24.3425 29.2425 22.2625 30 20 30C15.665 30\n                11.9842 27.2359 10.5975 23.3784L5.16254 27.5659C7.92087 32.9634\n                13.5225 36.6667 20 36.6667Z");
     			attr_dev(path2, "fill", "#4CAF50");
-    			add_location(path2, file$c, 107, 14, 4886);
+    			add_location(path2, file$a, 107, 14, 4886);
     			attr_dev(path3, "d", "M36.3425 16.7358H35V16.6667H20V23.3333H29.4192C28.7592\n                25.1975 27.56 26.805 26.0133 27.9758C26.0142 27.975 26.015\n                27.975 26.0158 27.9742L31.1742 32.3392C30.8092 32.6708 36.6667\n                28.3333 36.6667 20C36.6667 18.8825 36.5517 17.7917 36.3425\n                16.7358Z");
     			attr_dev(path3, "fill", "#1976D2");
-    			add_location(path3, file$c, 113, 14, 5215);
+    			add_location(path3, file$a, 113, 14, 5215);
     			attr_dev(svg, "class", "h-6 w-6");
     			attr_dev(svg, "viewBox", "0 0 40 40");
-    			add_location(svg, file$c, 90, 12, 3866);
+    			add_location(svg, file$a, 90, 12, 3866);
     			attr_dev(div0, "class", "px-4 py-3");
-    			add_location(div0, file$c, 89, 10, 3830);
+    			add_location(div0, file$a, 89, 10, 3830);
     			attr_dev(h1, "class", "px-4 py-3 w-5/6 text-center text-gray-600 font-bold");
-    			add_location(h1, file$c, 122, 10, 5630);
+    			add_location(h1, file$a, 122, 10, 5630);
     			attr_dev(a, "href", "http://localhost:3000/auth/google");
     			attr_dev(a, "class", "flex items-center justify-center mt-4 text-white rounded-lg\n          shadow-md hover:bg-gray-100");
-    			add_location(a, file$c, 85, 8, 3649);
+    			add_location(a, file$a, 85, 8, 3649);
     			attr_dev(div1, "class", "flex flex-col justify-center md:justify-start w-full p-8 lg:w-1/2\n        m-64 lg:px-32 my-auto pt-8 ");
-    			add_location(div1, file$c, 78, 6, 3342);
+    			add_location(div1, file$a, 78, 6, 3342);
     			attr_dev(div2, "class", "w-full md:w-1/2 flex flex-col");
-    			add_location(div2, file$c, 76, 4, 3291);
+    			add_location(div2, file$a, 76, 4, 3291);
     			attr_dev(img, "alt", "acchi picture");
     			attr_dev(img, "class", "object-cover w-full h-screen hidden md:block");
     			if (img.src !== (img_src_value = "https://source.unsplash.com/IXUM4cJynP0")) attr_dev(img, "src", img_src_value);
-    			add_location(img, file$c, 133, 6, 5861);
+    			add_location(img, file$a, 133, 6, 5861);
     			attr_dev(p1, "class", "line-1 anim-typewriter font-semibold text-gray-900 svelte-1imoluh");
     			set_style(p1, "font-size", "70px");
-    			add_location(p1, file$c, 138, 8, 6049);
+    			add_location(p1, file$a, 138, 8, 6049);
     			attr_dev(div3, "class", "centered svelte-1imoluh");
-    			add_location(div3, file$c, 137, 6, 6018);
+    			add_location(div3, file$a, 137, 6, 6018);
     			attr_dev(div4, "class", "container w-1/2 shadow-2xl svelte-1imoluh");
-    			add_location(div4, file$c, 132, 4, 5814);
+    			add_location(div4, file$a, 132, 4, 5814);
     			attr_dev(div5, "class", "w-full flex flex-wrap");
-    			add_location(div5, file$c, 73, 2, 3223);
+    			add_location(div5, file$a, 73, 2, 3223);
     			attr_dev(body, "class", "bg-white font-family-karla h-screen svelte-1imoluh");
-    			add_location(body, file$c, 71, 0, 3169);
+    			add_location(body, file$a, 71, 0, 3169);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -40905,7 +39587,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$g.name,
+    		id: create_fragment$d.name,
     		type: "component",
     		source: "",
     		ctx
@@ -40917,13 +39599,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Login extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, null, create_fragment$g, safe_not_equal, {});
+    		init(this, options, null, create_fragment$d, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Login",
     			options,
-    			id: create_fragment$g.name
+    			id: create_fragment$d.name
     		});
     	}
     }
@@ -40931,7 +39613,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     /* src/routes/Problems.svelte generated by Svelte v3.18.1 */
 
     const { console: console_1$2 } = globals;
-    const file$d = "src/routes/Problems.svelte";
+    const file$b = "src/routes/Problems.svelte";
 
     // (126:4) {:catch err}
     function create_catch_block$1(ctx) {
@@ -41078,58 +39760,58 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			button1 = element("button");
     			button1.textContent = "Delete";
     			attr_dev(div0, "class", "font-bold text-2xl text-elight mx-auto svelte-1xwh2qq");
-    			add_location(div0, file$d, 57, 8, 2026);
+    			add_location(div0, file$b, 57, 8, 2026);
     			attr_dev(div1, "class", " text-xl text-elight mx-auto svelte-1xwh2qq");
-    			add_location(div1, file$d, 60, 8, 2150);
+    			add_location(div1, file$b, 60, 8, 2150);
     			attr_dev(div2, "class", " text-xl text-elight mx-auto svelte-1xwh2qq");
-    			add_location(div2, file$d, 63, 8, 2279);
+    			add_location(div2, file$b, 63, 8, 2279);
     			attr_dev(div3, "class", "mx-auto mt-8 max-w-xl flex flex-col svelte-1xwh2qq");
-    			add_location(div3, file$d, 56, 6, 1968);
+    			add_location(div3, file$b, 56, 6, 1968);
     			attr_dev(label0, "class", " text-2xl text-elight mb-3 my-2 svelte-1xwh2qq");
-    			add_location(label0, file$d, 72, 14, 2613);
+    			add_location(label0, file$b, 72, 14, 2613);
     			attr_dev(p0, "class", "text-xl text-elight svelte-1xwh2qq");
-    			add_location(p0, file$d, 73, 14, 2694);
+    			add_location(p0, file$b, 73, 14, 2694);
     			attr_dev(div4, "class", "w-full h-full px-3 flex flex-col svelte-1xwh2qq");
-    			add_location(div4, file$d, 71, 12, 2552);
+    			add_location(div4, file$b, 71, 12, 2552);
     			attr_dev(label1, "class", " text-2xl text-elight mb-3 my-2 svelte-1xwh2qq");
-    			add_location(label1, file$d, 79, 14, 2892);
+    			add_location(label1, file$b, 79, 14, 2892);
     			textarea0.value = textarea0_value_value = JSON.parse(/*result*/ ctx[7].data.problemById.problemTests);
     			attr_dev(textarea0, "class", " w-full bg-edark flex-grow text-elight text-2xl border\n                rounded py-3 px-4 mb-3 leading-tight focus:outline-none\n                focus:border-white h-48 resize-none svelte-1xwh2qq");
     			attr_dev(textarea0, "id", "message");
     			textarea0.readOnly = true;
-    			add_location(textarea0, file$d, 80, 14, 2971);
+    			add_location(textarea0, file$b, 80, 14, 2971);
     			attr_dev(div5, "class", "w-full h-full px-3 flex flex-col svelte-1xwh2qq");
-    			add_location(div5, file$d, 78, 12, 2831);
+    			add_location(div5, file$b, 78, 12, 2831);
     			attr_dev(label2, "class", " text-2xl text-elight mb-3 my-2 svelte-1xwh2qq");
-    			add_location(label2, file$d, 89, 14, 3406);
+    			add_location(label2, file$b, 89, 14, 3406);
     			textarea1.value = textarea1_value_value = /*result*/ ctx[7].data.problemById.solution;
     			attr_dev(textarea1, "class", " flex-grow w-full bg-edark text-elight text-2xl border\n                rounded py-3 px-4 mb-3 leading-tight focus:outline-none\n                focus:border-white h-48 resize-none svelte-1xwh2qq");
     			attr_dev(textarea1, "id", "message");
     			textarea1.readOnly = true;
-    			add_location(textarea1, file$d, 90, 14, 3484);
+    			add_location(textarea1, file$b, 90, 14, 3484);
     			attr_dev(div6, "class", "flex flex-col w-full h-full px-3 svelte-1xwh2qq");
-    			add_location(div6, file$d, 88, 12, 3345);
+    			add_location(div6, file$b, 88, 12, 3345);
     			attr_dev(label3, "class", " text-2xl text-elight mb-3 my-2 svelte-1xwh2qq");
-    			add_location(label3, file$d, 100, 14, 3904);
+    			add_location(label3, file$b, 100, 14, 3904);
     			attr_dev(p1, "class", "text-xl text-elight svelte-1xwh2qq");
-    			add_location(p1, file$d, 101, 14, 3978);
+    			add_location(p1, file$b, 101, 14, 3978);
     			attr_dev(div7, "class", "w-full h-full px-3 flex flex-col svelte-1xwh2qq");
-    			add_location(div7, file$d, 99, 12, 3843);
+    			add_location(div7, file$b, 99, 12, 3843);
     			attr_dev(div8, "class", "px-12 py-8 svelte-1xwh2qq");
-    			add_location(div8, file$d, 70, 10, 2515);
+    			add_location(div8, file$b, 70, 10, 2515);
     			attr_dev(div9, "class", "rounded shadow-lg svelte-1xwh2qq");
-    			add_location(div9, file$d, 69, 8, 2473);
+    			add_location(div9, file$b, 69, 8, 2473);
     			attr_dev(div10, "class", "bg-dark max-w-full mt-12 mx-64 svelte-1xwh2qq");
-    			add_location(div10, file$d, 67, 6, 2419);
+    			add_location(div10, file$b, 67, 6, 2419);
     			attr_dev(button0, "lick", button0_lick_value = /*func*/ ctx[6]);
     			attr_dev(button0, "class", "savebutton hover:bg-white hover:text-edark font-bold py-2\n            px-4 border rounded svelte-1xwh2qq");
-    			add_location(button0, file$d, 108, 10, 4216);
+    			add_location(button0, file$b, 108, 10, 4216);
     			attr_dev(button1, "class", "savebutton hover:bg-white hover:text-edark font-bold py-2\n            px-4 border rounded svelte-1xwh2qq");
-    			add_location(button1, file$d, 117, 10, 4540);
+    			add_location(button1, file$b, 117, 10, 4540);
     			attr_dev(div11, "class", "float-right  svelte-1xwh2qq");
-    			add_location(div11, file$d, 107, 8, 4179);
+    			add_location(div11, file$b, 107, 8, 4179);
     			attr_dev(div12, "class", "max-w-6xl my-4 mb-32 flex flex-col mx-auto svelte-1xwh2qq");
-    			add_location(div12, file$d, 106, 6, 4114);
+    			add_location(div12, file$b, 106, 6, 4114);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div3, anchor);
@@ -41252,7 +39934,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function create_fragment$h(ctx) {
+    function create_fragment$e(ctx) {
     	let link;
     	let t0;
     	let div1;
@@ -41289,13 +39971,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			attr_dev(link, "href", "https://unpkg.com/tailwindcss@^1.0/dist/tailwind.min.css");
     			attr_dev(link, "rel", "stylesheet");
     			attr_dev(link, "class", "svelte-1xwh2qq");
-    			add_location(link, file$d, 44, 0, 1652);
+    			add_location(link, file$b, 44, 0, 1652);
     			attr_dev(header, "class", "svelte-1xwh2qq");
-    			add_location(header, file$d, 49, 2, 1804);
+    			add_location(header, file$b, 49, 2, 1804);
     			attr_dev(div0, "class", "bg-edark flex flex-col max-w-full overflow-auto svelte-1xwh2qq");
-    			add_location(div0, file$d, 52, 2, 1842);
+    			add_location(div0, file$b, 52, 2, 1842);
     			attr_dev(div1, "class", "bg-edark h-full flex flex-col box-border svelte-1xwh2qq");
-    			add_location(div1, file$d, 48, 0, 1747);
+    			add_location(div1, file$b, 48, 0, 1747);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -41345,7 +40027,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$h.name,
+    		id: create_fragment$e.name,
     		type: "component",
     		source: "",
     		ctx
@@ -41354,7 +40036,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$f($$self, $$props, $$invalidate) {
+    function instance$c($$self, $$props, $$invalidate) {
     	let $problem;
     	let { currentRoute } = $$props;
     	console.log(currentRoute);
@@ -41420,13 +40102,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Problems extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$f, create_fragment$h, safe_not_equal, { currentRoute: 0 });
+    		init(this, options, instance$c, create_fragment$e, safe_not_equal, { currentRoute: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Problems",
     			options,
-    			id: create_fragment$h.name
+    			id: create_fragment$e.name
     		});
 
     		const { ctx } = this.$$;
@@ -41449,7 +40131,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     /* src/routes/Tests.svelte generated by Svelte v3.18.1 */
 
     const { console: console_1$3 } = globals;
-    const file$e = "src/routes/Tests.svelte";
+    const file$c = "src/routes/Tests.svelte";
 
     function get_each_context$3(ctx, list, i) {
     	const child_ctx = ctx.slice();
@@ -41616,51 +40298,51 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			}
 
     			attr_dev(div0, "class", "font-bold text-2xl text-elight mx-auto");
-    			add_location(div0, file$e, 88, 10, 3024);
+    			add_location(div0, file$c, 88, 10, 3024);
     			attr_dev(div1, "class", " text-xl text-elight mx-auto");
-    			add_location(div1, file$e, 91, 10, 3148);
+    			add_location(div1, file$c, 91, 10, 3148);
     			attr_dev(div2, "class", " text-xl text-elight mx-auto");
-    			add_location(div2, file$e, 94, 10, 3280);
+    			add_location(div2, file$c, 94, 10, 3280);
     			attr_dev(div3, "class", "mx-auto mt-8 max-w-full flex flex-col");
-    			add_location(div3, file$e, 87, 8, 2962);
+    			add_location(div3, file$c, 87, 8, 2962);
     			attr_dev(h1, "class", "labels");
-    			add_location(h1, file$e, 102, 14, 3582);
+    			add_location(h1, file$c, 102, 14, 3582);
     			attr_dev(div4, "class", "mx-auto mb-4 w-32");
-    			add_location(div4, file$e, 101, 12, 3536);
+    			add_location(div4, file$c, 101, 12, 3536);
     			attr_dev(div5, "class", "rows mx-4");
-    			add_location(div5, file$e, 107, 18, 3763);
+    			add_location(div5, file$c, 107, 18, 3763);
     			attr_dev(div6, "class", "w-10/12");
-    			add_location(div6, file$e, 106, 16, 3723);
+    			add_location(div6, file$c, 106, 16, 3723);
     			attr_dev(div7, "class", "rows mx-4");
-    			add_location(div7, file$e, 110, 18, 3883);
+    			add_location(div7, file$c, 110, 18, 3883);
     			attr_dev(div8, "class", "w-2/12");
-    			add_location(div8, file$e, 109, 16, 3844);
+    			add_location(div8, file$c, 109, 16, 3844);
     			attr_dev(div9, "class", "flex mb-6");
-    			add_location(div9, file$e, 105, 14, 3683);
+    			add_location(div9, file$c, 105, 14, 3683);
     			attr_dev(div10, "class", "boxheight2 flex flex-col flex-grow overflow-auto");
-    			add_location(div10, file$e, 113, 14, 3976);
+    			add_location(div10, file$c, 113, 14, 3976);
     			attr_dev(div11, "class", "flex-col");
-    			add_location(div11, file$e, 104, 12, 3646);
+    			add_location(div11, file$c, 104, 12, 3646);
     			attr_dev(div12, "class", "outer_box flex-col h-full");
-    			add_location(div12, file$e, 100, 10, 3484);
+    			add_location(div12, file$c, 100, 10, 3484);
     			attr_dev(div13, "class", "bg-dark max-w-full mt-12 mx-64");
-    			add_location(div13, file$e, 98, 8, 3428);
+    			add_location(div13, file$c, 98, 8, 3428);
     			attr_dev(button0, "class", "savebutton hover:bg-white hover:text-edark font-bold py-2\n              px-4 border rounded");
-    			add_location(button0, file$e, 142, 12, 5196);
+    			add_location(button0, file$c, 142, 12, 5196);
     			attr_dev(button1, "class", "savebutton hover:bg-white hover:text-edark font-bold py-2\n              px-4 border rounded");
-    			add_location(button1, file$e, 150, 12, 5520);
+    			add_location(button1, file$c, 150, 12, 5520);
     			attr_dev(button2, "class", "savebutton hover:bg-white hover:text-edark font-bold py-2\n              px-4 border rounded");
-    			add_location(button2, file$e, 156, 12, 5741);
+    			add_location(button2, file$c, 156, 12, 5741);
     			attr_dev(div14, "class", "float-right ");
-    			add_location(div14, file$e, 141, 10, 5157);
+    			add_location(div14, file$c, 141, 10, 5157);
     			attr_dev(div15, "class", "max-w-6xl my-4 mb-32 flex flex-col mx-auto");
-    			add_location(div15, file$e, 140, 8, 5090);
+    			add_location(div15, file$c, 140, 8, 5090);
     			attr_dev(div16, "class", "bg-edark flex flex-col max-w-full overflow-auto");
-    			add_location(div16, file$e, 86, 6, 2892);
+    			add_location(div16, file$c, 86, 6, 2892);
     			attr_dev(div17, "class", "flex bottom-0 absolute w-auto");
-    			add_location(div17, file$e, 168, 8, 6170);
+    			add_location(div17, file$c, 168, 8, 6170);
     			attr_dev(div18, "class", " flex-grow align-bottom relative mx-64");
-    			add_location(div18, file$e, 167, 6, 6109);
+    			add_location(div18, file$c, 167, 6, 6109);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div16, anchor);
@@ -41822,20 +40504,20 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			t3 = space();
     			attr_dev(a, "href", a_href_value = "http://localhost:5000/problem/" + /*prob*/ ctx[12].problem.id);
     			attr_dev(a, "class", "no-underline px-3 text-elight");
-    			add_location(a, file$e, 118, 24, 4298);
+    			add_location(a, file$c, 118, 24, 4298);
     			attr_dev(div0, "class", "rows bg-edark rounded-full p-2 px-4 mx-2");
-    			add_location(div0, file$e, 117, 22, 4219);
+    			add_location(div0, file$c, 117, 22, 4219);
     			attr_dev(div1, "class", "w-10/12");
-    			add_location(div1, file$e, 116, 20, 4175);
+    			add_location(div1, file$c, 116, 20, 4175);
     			attr_dev(div2, "type", "string");
     			attr_dev(div2, "class", " mx-auto w-10 outline-none text-white p-2");
-    			add_location(div2, file$e, 127, 24, 4713);
+    			add_location(div2, file$c, 127, 24, 4713);
     			attr_dev(div3, "class", "rows bg-edark rounded-full");
-    			add_location(div3, file$e, 126, 22, 4648);
+    			add_location(div3, file$c, 126, 22, 4648);
     			attr_dev(div4, "class", "w-2/12");
-    			add_location(div4, file$e, 125, 20, 4605);
+    			add_location(div4, file$c, 125, 20, 4605);
     			attr_dev(div5, "class", "flex pb-3");
-    			add_location(div5, file$e, 115, 18, 4131);
+    			add_location(div5, file$c, 115, 18, 4131);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div5, anchor);
@@ -41876,7 +40558,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (171:12) {#if index !== 0}
-    function create_if_block$4(ctx) {
+    function create_if_block$3(ctx) {
     	let div;
     	let t0_value = /*tag*/ ctx[9] + "";
     	let t0;
@@ -41888,7 +40570,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			t0 = text(t0_value);
     			t1 = space();
     			attr_dev(div, "class", "text-white border-solid border-2 mr-4 mb-10 border-white\n                rounded-full p-2 px-4 ");
-    			add_location(div, file$e, 171, 14, 6327);
+    			add_location(div, file$c, 171, 14, 6327);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div, anchor);
@@ -41905,7 +40587,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_if_block$4.name,
+    		id: create_if_block$3.name,
     		type: "if",
     		source: "(171:12) {#if index !== 0}",
     		ctx
@@ -41917,7 +40599,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     // (170:10) {#each result.data.testById.tags.split('#') as tag, index}
     function create_each_block$3(ctx) {
     	let if_block_anchor;
-    	let if_block = /*index*/ ctx[11] !== 0 && create_if_block$4(ctx);
+    	let if_block = /*index*/ ctx[11] !== 0 && create_if_block$3(ctx);
 
     	const block = {
     		c: function create() {
@@ -41976,7 +40658,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function create_fragment$i(ctx) {
+    function create_fragment$f(ctx) {
     	let link0;
     	let t0;
     	let body;
@@ -42021,15 +40703,15 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			info.block.c();
     			attr_dev(link0, "href", "https://unpkg.com/tailwindcss@^1.0/dist/tailwind.min.css");
     			attr_dev(link0, "rel", "stylesheet");
-    			add_location(link0, file$e, 27, 0, 742);
-    			add_location(style, file$e, 31, 2, 845);
+    			add_location(link0, file$c, 27, 0, 742);
+    			add_location(style, file$c, 31, 2, 845);
     			attr_dev(link1, "href", "https://unpkg.com/tailwindcss@^1.0/dist/tailwind.min.css");
     			attr_dev(link1, "rel", "stylesheet");
-    			add_location(link1, file$e, 75, 2, 2631);
-    			add_location(header, file$e, 80, 4, 2791);
+    			add_location(link1, file$c, 75, 2, 2631);
+    			add_location(header, file$c, 80, 4, 2791);
     			attr_dev(div, "class", "bg-edark h-full flex flex-col box-border");
-    			add_location(div, file$e, 79, 2, 2732);
-    			add_location(body, file$e, 30, 0, 836);
+    			add_location(div, file$c, 79, 2, 2732);
+    			add_location(body, file$c, 30, 0, 836);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -42083,7 +40765,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$i.name,
+    		id: create_fragment$f.name,
     		type: "component",
     		source: "",
     		ctx
@@ -42092,7 +40774,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$g($$self, $$props, $$invalidate) {
+    function instance$d($$self, $$props, $$invalidate) {
     	let $test;
     	let { currentRoute } = $$props;
     	console.log(currentRoute);
@@ -42165,13 +40847,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Tests extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$g, create_fragment$i, safe_not_equal, { currentRoute: 0 });
+    		init(this, options, instance$d, create_fragment$f, safe_not_equal, { currentRoute: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Tests",
     			options,
-    			id: create_fragment$i.name
+    			id: create_fragment$f.name
     		});
 
     		const { ctx } = this.$$;
@@ -42194,69 +40876,33 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     /* src/routes/send_test.svelte generated by Svelte v3.18.1 */
 
     const { console: console_1$4 } = globals;
-    const file$f = "src/routes/send_test.svelte";
+    const file$d = "src/routes/send_test.svelte";
 
-    // (150:0) {:catch err}
-    function create_catch_block$3(ctx) {
+    function create_fragment$g(ctx) {
+    	let link;
     	let t0;
-    	let t1_value = /*err*/ ctx[9] + "";
-    	let t1;
-
-    	const block = {
-    		c: function create() {
-    			t0 = text("Error : ");
-    			t1 = text(t1_value);
-    		},
-    		m: function mount(target, anchor) {
-    			insert_dev(target, t0, anchor);
-    			insert_dev(target, t1, anchor);
-    		},
-    		p: function update(ctx, dirty) {
-    			if (dirty & /*$token*/ 2 && t1_value !== (t1_value = /*err*/ ctx[9] + "")) set_data_dev(t1, t1_value);
-    		},
-    		i: noop,
-    		o: noop,
-    		d: function destroy(detaching) {
-    			if (detaching) detach_dev(t0);
-    			if (detaching) detach_dev(t1);
-    		}
-    	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_catch_block$3.name,
-    		type: "catch",
-    		source: "(150:0) {:catch err}",
-    		ctx
-    	});
-
-    	return block;
-    }
-
-    // (72:0) {:then result}
-    function create_then_block$3(ctx) {
     	let div11;
     	let div0;
-    	let t0;
+    	let t1;
     	let h1;
     	let strong;
-    	let t2;
+    	let t3;
     	let div8;
     	let div7;
     	let div3;
     	let div1;
     	let label0;
-    	let t4;
+    	let t5;
     	let div2;
     	let input0;
-    	let t5;
+    	let t6;
     	let div6;
     	let div4;
     	let label1;
-    	let t7;
+    	let t8;
     	let div5;
     	let input1;
-    	let t8;
+    	let t9;
     	let div10;
     	let div9;
     	let button;
@@ -42264,133 +40910,137 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	let dispose;
     	const navbar = new Navbar({ $$inline: true });
 
-    	function click_handler(...args) {
-    		return /*click_handler*/ ctx[7](/*result*/ ctx[8], ...args);
-    	}
-
     	const block = {
     		c: function create() {
+    			link = element("link");
+    			t0 = space();
     			div11 = element("div");
     			div0 = element("div");
     			create_component(navbar.$$.fragment);
-    			t0 = space();
+    			t1 = space();
     			h1 = element("h1");
     			strong = element("strong");
     			strong.textContent = "Send Test";
-    			t2 = space();
+    			t3 = space();
     			div8 = element("div");
     			div7 = element("div");
     			div3 = element("div");
     			div1 = element("div");
     			label0 = element("label");
     			label0.textContent = "Email";
-    			t4 = space();
+    			t5 = space();
     			div2 = element("div");
     			input0 = element("input");
-    			t5 = space();
+    			t6 = space();
     			div6 = element("div");
     			div4 = element("div");
     			label1 = element("label");
     			label1.textContent = "Link Activation Time";
-    			t7 = space();
+    			t8 = space();
     			div5 = element("div");
     			input1 = element("input");
-    			t8 = space();
+    			t9 = space();
     			div10 = element("div");
     			div9 = element("div");
     			button = element("button");
     			button.textContent = "Send Test";
-    			add_location(div0, file$f, 73, 4, 2674);
-    			add_location(strong, file$f, 77, 6, 2751);
+    			attr_dev(link, "href", "https://unpkg.com/tailwindcss@^1.0/dist/tailwind.min.css");
+    			attr_dev(link, "rel", "stylesheet");
+    			add_location(link, file$d, 61, 0, 2369);
+    			add_location(div0, file$d, 65, 2, 2502);
+    			add_location(strong, file$d, 69, 4, 2571);
     			attr_dev(h1, "class", "heading text-elight svelte-1hfopdb");
-    			add_location(h1, file$f, 76, 4, 2712);
-    			attr_dev(label0, "class", "block text-elight text-xl font-bold md:text-right mb-1\n              md:mb-0 pr-4");
+    			add_location(h1, file$d, 68, 2, 2534);
+    			attr_dev(label0, "class", "block text-elight text-xl font-bold md:text-right mb-1\n            md:mb-0 pr-4");
     			attr_dev(label0, "for", "inline-full-name");
-    			add_location(label0, file$f, 85, 12, 2973);
+    			add_location(label0, file$d, 77, 10, 2781);
     			attr_dev(div1, "class", "md:w-1/5");
-    			add_location(div1, file$f, 84, 10, 2938);
-    			attr_dev(input0, "class", "bg-gray-200 appearance-none border-2 border-gray-200\n              rounded w-full py-2 px-4 text-edark leading-tight\n              focus:outline-none focus:bg-white ");
+    			add_location(div1, file$d, 76, 8, 2748);
+    			attr_dev(input0, "class", "bg-gray-200 appearance-none border-2 border-gray-200 rounded\n            w-full py-2 px-4 text-edark leading-tight focus:outline-none\n            focus:bg-white ");
     			attr_dev(input0, "id", "inline-full-name");
     			attr_dev(input0, "type", "text");
     			attr_dev(input0, "placeholder", "Enter Email");
-    			add_location(input0, file$f, 93, 12, 3225);
+    			add_location(input0, file$d, 85, 10, 3017);
     			attr_dev(div2, "class", "md:w-3/5");
-    			add_location(div2, file$f, 92, 10, 3190);
+    			add_location(div2, file$d, 84, 8, 2984);
     			attr_dev(div3, "class", "md:flex md:items-center mb-6");
-    			add_location(div3, file$f, 83, 8, 2885);
-    			attr_dev(label1, "class", "block text-elight text-xl font-bold md:text-right mb-1\n              md:mb-0 pr-4");
+    			add_location(div3, file$d, 75, 6, 2697);
+    			attr_dev(label1, "class", "block text-elight text-xl font-bold md:text-right mb-1\n            md:mb-0 pr-4");
     			attr_dev(label1, "for", "inline-full-name");
-    			add_location(label1, file$f, 105, 12, 3699);
+    			add_location(label1, file$d, 97, 10, 3467);
     			attr_dev(div4, "class", "md:w-1/5");
-    			add_location(div4, file$f, 104, 10, 3664);
-    			attr_dev(input1, "class", "bg-gray-200 appearance-none border-2 border-gray-200\n              rounded w-full py-2 px-4 text-edark leading-tight\n              focus:outline-none focus:bg-white ");
+    			add_location(div4, file$d, 96, 8, 3434);
+    			attr_dev(input1, "class", "bg-gray-200 appearance-none border-2 border-gray-200 rounded\n            w-full py-2 px-4 text-edark leading-tight focus:outline-none\n            focus:bg-white ");
     			attr_dev(input1, "id", "inline-full-name");
     			attr_dev(input1, "type", "Number");
     			attr_dev(input1, "placeholder", "Enter time in hours");
-    			add_location(input1, file$f, 113, 12, 3966);
+    			add_location(input1, file$d, 105, 10, 3718);
     			attr_dev(div5, "class", "md:w-3/5");
-    			add_location(div5, file$f, 112, 10, 3931);
+    			add_location(div5, file$d, 104, 8, 3685);
     			attr_dev(div6, "class", "md:flex md:items-center mb-6");
-    			add_location(div6, file$f, 103, 8, 3611);
+    			add_location(div6, file$d, 95, 6, 3383);
     			attr_dev(div7, "class", "");
-    			add_location(div7, file$f, 81, 6, 2861);
+    			add_location(div7, file$d, 73, 4, 2675);
     			attr_dev(div8, "class", "p-8 mx-64 max-w-full mt-24 items-center bg-dark");
-    			add_location(div8, file$f, 80, 4, 2793);
-    			attr_dev(button, "class", "bg-dark hover:bg-elight text-white hover:text-edark font-bold\n          py-2 px-4 border border-white rounded");
-    			add_location(button, file$f, 127, 8, 4471);
+    			add_location(div8, file$d, 72, 2, 2609);
+    			attr_dev(button, "class", "bg-dark hover:bg-elight text-white hover:text-edark font-bold\n        py-2 px-4 border border-white rounded");
+    			add_location(button, file$d, 119, 6, 4195);
     			attr_dev(div9, "class", "flex buttonbox mx-auto w-48 mt-10");
-    			add_location(div9, file$f, 126, 6, 4415);
+    			add_location(div9, file$d, 118, 4, 4141);
     			attr_dev(div10, "class", "px-4 py-2");
-    			add_location(div10, file$f, 125, 4, 4385);
+    			add_location(div10, file$d, 117, 2, 4113);
     			attr_dev(div11, "class", "bg-edark w-full h-full");
-    			add_location(div11, file$f, 72, 2, 2633);
+    			add_location(div11, file$d, 64, 0, 2463);
+    		},
+    		l: function claim(nodes) {
+    			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
     		m: function mount(target, anchor) {
+    			insert_dev(target, link, anchor);
+    			insert_dev(target, t0, anchor);
     			insert_dev(target, div11, anchor);
     			append_dev(div11, div0);
     			mount_component(navbar, div0, null);
-    			append_dev(div11, t0);
+    			append_dev(div11, t1);
     			append_dev(div11, h1);
     			append_dev(h1, strong);
-    			append_dev(div11, t2);
+    			append_dev(div11, t3);
     			append_dev(div11, div8);
     			append_dev(div8, div7);
     			append_dev(div7, div3);
     			append_dev(div3, div1);
     			append_dev(div1, label0);
-    			append_dev(div3, t4);
+    			append_dev(div3, t5);
     			append_dev(div3, div2);
     			append_dev(div2, input0);
-    			set_input_value(input0, /*mailInitials*/ ctx[0].email);
-    			append_dev(div7, t5);
+    			set_input_value(input0, /*mailInitials*/ ctx[1].email);
+    			append_dev(div7, t6);
     			append_dev(div7, div6);
     			append_dev(div6, div4);
     			append_dev(div4, label1);
-    			append_dev(div6, t7);
+    			append_dev(div6, t8);
     			append_dev(div6, div5);
     			append_dev(div5, input1);
-    			set_input_value(input1, /*mailInitials*/ ctx[0].linktime);
-    			append_dev(div11, t8);
+    			set_input_value(input1, /*mailInitials*/ ctx[1].linktime);
+    			append_dev(div11, t9);
     			append_dev(div11, div10);
     			append_dev(div10, div9);
     			append_dev(div9, button);
     			current = true;
 
     			dispose = [
-    				listen_dev(input0, "input", /*input0_input_handler*/ ctx[5]),
-    				listen_dev(input1, "input", /*input1_input_handler*/ ctx[6]),
-    				listen_dev(button, "click", click_handler, false, false, false)
+    				listen_dev(input0, "input", /*input0_input_handler*/ ctx[3]),
+    				listen_dev(input1, "input", /*input1_input_handler*/ ctx[4]),
+    				listen_dev(button, "click", /*click_handler*/ ctx[5], false, false, false)
     			];
     		},
-    		p: function update(new_ctx, dirty) {
-    			ctx = new_ctx;
-
-    			if (dirty & /*mailInitials*/ 1 && input0.value !== /*mailInitials*/ ctx[0].email) {
-    				set_input_value(input0, /*mailInitials*/ ctx[0].email);
+    		p: function update(ctx, [dirty]) {
+    			if (dirty & /*mailInitials*/ 2 && input0.value !== /*mailInitials*/ ctx[1].email) {
+    				set_input_value(input0, /*mailInitials*/ ctx[1].email);
     			}
 
-    			if (dirty & /*mailInitials*/ 1) {
-    				set_input_value(input1, /*mailInitials*/ ctx[0].linktime);
+    			if (dirty & /*mailInitials*/ 2) {
+    				set_input_value(input1, /*mailInitials*/ ctx[1].linktime);
     			}
     		},
     		i: function intro(local) {
@@ -42403,6 +41053,8 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			current = false;
     		},
     		d: function destroy(detaching) {
+    			if (detaching) detach_dev(link);
+    			if (detaching) detach_dev(t0);
     			if (detaching) detach_dev(div11);
     			destroy_component(navbar);
     			run_all(dispose);
@@ -42411,124 +41063,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_then_block$3.name,
-    		type: "then",
-    		source: "(72:0) {:then result}",
-    		ctx
-    	});
-
-    	return block;
-    }
-
-    // (70:15)    Loading... {:then result}
-    function create_pending_block$3(ctx) {
-    	let t;
-
-    	const block = {
-    		c: function create() {
-    			t = text("Loading...");
-    		},
-    		m: function mount(target, anchor) {
-    			insert_dev(target, t, anchor);
-    		},
-    		p: noop,
-    		i: noop,
-    		o: noop,
-    		d: function destroy(detaching) {
-    			if (detaching) detach_dev(t);
-    		}
-    	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_pending_block$3.name,
-    		type: "pending",
-    		source: "(70:15)    Loading... {:then result}",
-    		ctx
-    	});
-
-    	return block;
-    }
-
-    function create_fragment$j(ctx) {
-    	let link;
-    	let t;
-    	let await_block_anchor;
-    	let promise;
-    	let current;
-
-    	let info = {
-    		ctx,
-    		current: null,
-    		token: null,
-    		pending: create_pending_block$3,
-    		then: create_then_block$3,
-    		catch: create_catch_block$3,
-    		value: 8,
-    		error: 9,
-    		blocks: [,,,]
-    	};
-
-    	handle_promise(promise = /*$token*/ ctx[1], info);
-
-    	const block = {
-    		c: function create() {
-    			link = element("link");
-    			t = space();
-    			await_block_anchor = empty();
-    			info.block.c();
-    			attr_dev(link, "href", "https://unpkg.com/tailwindcss@^1.0/dist/tailwind.min.css");
-    			attr_dev(link, "rel", "stylesheet");
-    			add_location(link, file$f, 66, 0, 2493);
-    		},
-    		l: function claim(nodes) {
-    			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
-    		},
-    		m: function mount(target, anchor) {
-    			insert_dev(target, link, anchor);
-    			insert_dev(target, t, anchor);
-    			insert_dev(target, await_block_anchor, anchor);
-    			info.block.m(target, info.anchor = anchor);
-    			info.mount = () => await_block_anchor.parentNode;
-    			info.anchor = await_block_anchor;
-    			current = true;
-    		},
-    		p: function update(new_ctx, [dirty]) {
-    			ctx = new_ctx;
-    			info.ctx = ctx;
-
-    			if (dirty & /*$token*/ 2 && promise !== (promise = /*$token*/ ctx[1]) && handle_promise(promise, info)) ; else {
-    				const child_ctx = ctx.slice();
-    				child_ctx[8] = info.resolved;
-    				info.block.p(child_ctx, dirty);
-    			}
-    		},
-    		i: function intro(local) {
-    			if (current) return;
-    			transition_in(info.block);
-    			current = true;
-    		},
-    		o: function outro(local) {
-    			for (let i = 0; i < 3; i += 1) {
-    				const block = info.blocks[i];
-    				transition_out(block);
-    			}
-
-    			current = false;
-    		},
-    		d: function destroy(detaching) {
-    			if (detaching) detach_dev(link);
-    			if (detaching) detach_dev(t);
-    			if (detaching) detach_dev(await_block_anchor);
-    			info.block.d(detaching);
-    			info.token = null;
-    			info = null;
-    		}
-    	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_fragment$j.name,
+    		id: create_fragment$g.name,
     		type: "component",
     		source: "",
     		ctx
@@ -42537,19 +41072,10 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$h($$self, $$props, $$invalidate) {
-    	let $token;
+    function instance$e($$self, $$props, $$invalidate) {
     	let { currentRoute } = $$props;
     	console.log(currentRoute);
     	const client = getClient();
-
-    	const token = query(client, {
-    		query: apolloClient.getToken,
-    		variables: { id: currentRoute.namedParams.id }
-    	});
-
-    	validate_store(token, "token");
-    	component_subscribe($$self, token, value => $$invalidate(1, $token = value));
     	let mailInitials = { email: "", linktime: "" };
     	const writable_props = ["currentRoute"];
 
@@ -42559,48 +41085,48 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	function input0_input_handler() {
     		mailInitials.email = this.value;
-    		$$invalidate(0, mailInitials);
+    		$$invalidate(1, mailInitials);
     	}
 
     	function input1_input_handler() {
     		mailInitials.linktime = this.value;
-    		$$invalidate(0, mailInitials);
+    		$$invalidate(1, mailInitials);
     	}
 
-    	const click_handler = async result => {
-    		mailBody = `localhost:5000/givetest/${result.data.getToken.token}`;
-    		console.log(email, mailBody);
-
+    	const click_handler = async () => {
     		try {
     			await mutate(client, {
     				mutation: apolloClient.sendMail,
-    				variables: { email, mailBody }
+    				variables: {
+    					email: mailInitials.email,
+    					test_id: currentRoute.namedParams.id,
+    					linktime: mailInitials.linktime
+    				}
     			});
+
+    			location.replace("http://localhost:5000/admin");
     		} catch(err) {
     			console.log(err);
     		}
     	};
 
     	$$self.$set = $$props => {
-    		if ("currentRoute" in $$props) $$invalidate(4, currentRoute = $$props.currentRoute);
+    		if ("currentRoute" in $$props) $$invalidate(0, currentRoute = $$props.currentRoute);
     	};
 
     	$$self.$capture_state = () => {
-    		return { currentRoute, mailInitials, $token };
+    		return { currentRoute, mailInitials };
     	};
 
     	$$self.$inject_state = $$props => {
-    		if ("currentRoute" in $$props) $$invalidate(4, currentRoute = $$props.currentRoute);
-    		if ("mailInitials" in $$props) $$invalidate(0, mailInitials = $$props.mailInitials);
-    		if ("$token" in $$props) token.set($token = $$props.$token);
+    		if ("currentRoute" in $$props) $$invalidate(0, currentRoute = $$props.currentRoute);
+    		if ("mailInitials" in $$props) $$invalidate(1, mailInitials = $$props.mailInitials);
     	};
 
     	return [
-    		mailInitials,
-    		$token,
-    		client,
-    		token,
     		currentRoute,
+    		mailInitials,
+    		client,
     		input0_input_handler,
     		input1_input_handler,
     		click_handler
@@ -42610,19 +41136,19 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Send_test extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$h, create_fragment$j, safe_not_equal, { currentRoute: 4 });
+    		init(this, options, instance$e, create_fragment$g, safe_not_equal, { currentRoute: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Send_test",
     			options,
-    			id: create_fragment$j.name
+    			id: create_fragment$g.name
     		});
 
     		const { ctx } = this.$$;
     		const props = options.props || {};
 
-    		if (/*currentRoute*/ ctx[4] === undefined && !("currentRoute" in props)) {
+    		if (/*currentRoute*/ ctx[0] === undefined && !("currentRoute" in props)) {
     			console_1$4.warn("<Send_test> was created without expected prop 'currentRoute'");
     		}
     	}
@@ -42638,7 +41164,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     /* src/routes/test/test_navbar.svelte generated by Svelte v3.18.1 */
 
-    const file$g = "src/routes/test/test_navbar.svelte";
+    const file$e = "src/routes/test/test_navbar.svelte";
 
     function get_each_context$4(ctx, list, i) {
     	const child_ctx = ctx.slice();
@@ -42647,7 +41173,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (20:6) {#if index !== content.length}
-    function create_if_block$5(ctx) {
+    function create_if_block$4(ctx) {
     	let div2;
     	let div1;
     	let div0;
@@ -42659,15 +41185,15 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			div1 = element("div");
     			div0 = element("div");
     			attr_dev(div0, "class", " text-xs leading-none py-1 text-center rounded ");
-    			add_location(div0, file$g, 25, 12, 1003);
+    			add_location(div0, file$e, 25, 12, 1003);
 
     			attr_dev(div1, "class", div1_class_value = /*index*/ ctx[4] < /*position*/ ctx[0]
     			? /*activeBar*/ ctx[3]
     			: "w-full text-grey-darkest  bg-light rounded items-center align-middle align-center flex-1");
 
-    			add_location(div1, file$g, 23, 10, 843);
+    			add_location(div1, file$e, 23, 10, 843);
     			attr_dev(div2, "class", "w-1/3 align-center items-center align-middle content-center\n          flex");
-    			add_location(div2, file$g, 20, 8, 734);
+    			add_location(div2, file$e, 20, 8, 734);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div2, anchor);
@@ -42688,7 +41214,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_if_block$5.name,
+    		id: create_if_block$4.name,
     		type: "if",
     		source: "(20:6) {#if index !== content.length}",
     		ctx
@@ -42707,7 +41233,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	let div0_class_value;
     	let t1;
     	let if_block_anchor;
-    	let if_block = /*index*/ ctx[4] !== /*content*/ ctx[1].length && create_if_block$5(ctx);
+    	let if_block = /*index*/ ctx[4] !== /*content*/ ctx[1].length && create_if_block$4(ctx);
 
     	const block = {
     		c: function create() {
@@ -42719,15 +41245,15 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			if (if_block) if_block.c();
     			if_block_anchor = empty();
     			attr_dev(span, "class", "text-center w-full text-2xl");
-    			add_location(span, file$g, 16, 10, 604);
+    			add_location(span, file$e, 16, 10, 604);
 
     			attr_dev(div0, "class", div0_class_value = /*index*/ ctx[4] <= /*position*/ ctx[0]
     			? /*activeCircle*/ ctx[2]
     			: "w-16 h-16  bg-light text-white border-2 mx-auto rounded-full text-lg flex items-center");
 
-    			add_location(div0, file$g, 14, 8, 446);
+    			add_location(div0, file$e, 14, 8, 446);
     			attr_dev(div1, "class", "flex-1");
-    			add_location(div1, file$g, 13, 6, 417);
+    			add_location(div1, file$e, 13, 6, 417);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div1, anchor);
@@ -42766,7 +41292,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function create_fragment$k(ctx) {
+    function create_fragment$h(ctx) {
     	let div6;
     	let div2;
     	let div0;
@@ -42806,19 +41332,19 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			div4 = element("div");
     			div4.textContent = "Select Problems";
     			attr_dev(div0, "class", "flex-1");
-    			add_location(div0, file$g, 11, 4, 359);
+    			add_location(div0, file$e, 11, 4, 359);
     			attr_dev(div1, "class", "flex-1");
-    			add_location(div1, file$g, 31, 4, 1128);
+    			add_location(div1, file$e, 31, 4, 1128);
     			attr_dev(div2, "class", "flex pb-3");
-    			add_location(div2, file$g, 10, 2, 331);
+    			add_location(div2, file$e, 10, 2, 331);
     			attr_dev(div3, "class", "w-1/2 flex-1 text-xl text-elight ");
-    			add_location(div3, file$g, 35, 4, 1221);
+    			add_location(div3, file$e, 35, 4, 1221);
     			attr_dev(div4, "class", "w-1/2 flex-1 text-xl text-elight");
-    			add_location(div4, file$g, 37, 4, 1293);
+    			add_location(div4, file$e, 37, 4, 1293);
     			attr_dev(div5, "class", "flex text-xs content-center text-center");
-    			add_location(div5, file$g, 34, 2, 1163);
+    			add_location(div5, file$e, 34, 2, 1163);
     			attr_dev(div6, "class", "max-w-2xl mx-auto py-4 my-4 pb-4");
-    			add_location(div6, file$g, 9, 0, 282);
+    			add_location(div6, file$e, 9, 0, 282);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -42875,7 +41401,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$k.name,
+    		id: create_fragment$h.name,
     		type: "component",
     		source: "",
     		ctx
@@ -42884,7 +41410,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$i($$self, $$props, $$invalidate) {
+    function instance$f($$self, $$props, $$invalidate) {
     	let { position = 1 } = $$props;
     	let content = [1, 2];
     	let activeCircle = "w-16 h-16 text-dark bg-elight  mx-auto rounded-full text-lg flex items-center";
@@ -42924,13 +41450,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Test_navbar extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$i, create_fragment$k, safe_not_equal, { position: 0 });
+    		init(this, options, instance$f, create_fragment$h, safe_not_equal, { position: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Test_navbar",
     			options,
-    			id: create_fragment$k.name
+    			id: create_fragment$h.name
     		});
     	}
 
@@ -42945,9 +41471,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     /* src/routes/test/loader.svelte generated by Svelte v3.18.1 */
 
-    const file$h = "src/routes/test/loader.svelte";
+    const file$f = "src/routes/test/loader.svelte";
 
-    function create_fragment$l(ctx) {
+    function create_fragment$i(ctx) {
     	let div3;
     	let div0;
     	let t0;
@@ -42964,13 +41490,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			t1 = space();
     			div2 = element("div");
     			attr_dev(div0, "class", "LoaderBalls__item svelte-1xkje64");
-    			add_location(div0, file$h, 42, 2, 2489);
+    			add_location(div0, file$f, 42, 2, 2489);
     			attr_dev(div1, "class", "LoaderBalls__item svelte-1xkje64");
-    			add_location(div1, file$h, 43, 2, 2525);
+    			add_location(div1, file$f, 43, 2, 2525);
     			attr_dev(div2, "class", "LoaderBalls__item svelte-1xkje64");
-    			add_location(div2, file$h, 44, 2, 2561);
+    			add_location(div2, file$f, 44, 2, 2561);
     			attr_dev(div3, "class", "LoaderBalls svelte-1xkje64");
-    			add_location(div3, file$h, 41, 0, 2461);
+    			add_location(div3, file$f, 41, 0, 2461);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -42993,7 +41519,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$l.name,
+    		id: create_fragment$i.name,
     		type: "component",
     		source: "",
     		ctx
@@ -43005,13 +41531,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Loader extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, null, create_fragment$l, safe_not_equal, {});
+    		init(this, options, null, create_fragment$i, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Loader",
     			options,
-    			id: create_fragment$l.name
+    			id: create_fragment$i.name
     		});
     	}
     }
@@ -43026,7 +41552,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     });
 
     /* src/routes/test/test_initials.svelte generated by Svelte v3.18.1 */
-    const file$i = "src/routes/test/test_initials.svelte";
+    const file$g = "src/routes/test/test_initials.svelte";
 
     function get_each_context$5(ctx, list, i) {
     	const child_ctx = ctx.slice();
@@ -43036,7 +41562,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (114:10) {#if uniqueNameStatus === 2}
-    function create_if_block_2$2(ctx) {
+    function create_if_block_2$1(ctx) {
     	let current;
     	const loader = new Loader({ $$inline: true });
 
@@ -43064,7 +41590,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_if_block_2$2.name,
+    		id: create_if_block_2$1.name,
     		type: "if",
     		source: "(114:10) {#if uniqueNameStatus === 2}",
     		ctx
@@ -43074,7 +41600,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (117:10) {#if uniqueNameStatus === 1}
-    function create_if_block_1$3(ctx) {
+    function create_if_block_1$2(ctx) {
     	let i;
 
     	const block = {
@@ -43082,7 +41608,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			i = element("i");
     			i.textContent = "";
     			attr_dev(i, "class", "material-icons status svelte-17qxgd1");
-    			add_location(i, file$i, 117, 12, 3919);
+    			add_location(i, file$g, 117, 12, 3919);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, i, anchor);
@@ -43094,7 +41620,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_if_block_1$3.name,
+    		id: create_if_block_1$2.name,
     		type: "if",
     		source: "(117:10) {#if uniqueNameStatus === 1}",
     		ctx
@@ -43104,7 +41630,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (120:10) {#if uniqueNameStatus === 3}
-    function create_if_block$6(ctx) {
+    function create_if_block$5(ctx) {
     	let span;
 
     	const block = {
@@ -43112,7 +41638,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			span = element("span");
     			span.textContent = "clear";
     			attr_dev(span, "class", "status material-icons svelte-17qxgd1");
-    			add_location(span, file$i, 120, 12, 4032);
+    			add_location(span, file$g, 120, 12, 4032);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, span, anchor);
@@ -43124,7 +41650,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_if_block$6.name,
+    		id: create_if_block$5.name,
     		type: "if",
     		source: "(120:10) {#if uniqueNameStatus === 3}",
     		ctx
@@ -43151,7 +41677,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			attr_dev(option, "name", option_name_value = /*tag*/ ctx[17]);
     			option.__value = option_value_value = /*index*/ ctx[19];
     			option.value = option.__value;
-    			add_location(option, file$i, 175, 16, 5855);
+    			add_location(option, file$g, 175, 16, 5855);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, option, anchor);
@@ -43175,7 +41701,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function create_fragment$m(ctx) {
+    function create_fragment$j(ctx) {
     	let div15;
     	let div14;
     	let div5;
@@ -43230,9 +41756,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	let input5;
     	let current;
     	let dispose;
-    	let if_block0 = /*uniqueNameStatus*/ ctx[1] === 2 && create_if_block_2$2(ctx);
-    	let if_block1 = /*uniqueNameStatus*/ ctx[1] === 1 && create_if_block_1$3(ctx);
-    	let if_block2 = /*uniqueNameStatus*/ ctx[1] === 3 && create_if_block$6(ctx);
+    	let if_block0 = /*uniqueNameStatus*/ ctx[1] === 2 && create_if_block_2$1(ctx);
+    	let if_block1 = /*uniqueNameStatus*/ ctx[1] === 1 && create_if_block_1$2(ctx);
+    	let if_block2 = /*uniqueNameStatus*/ ctx[1] === 3 && create_if_block$5(ctx);
     	let each_value = /*tagList*/ ctx[3];
     	let each_blocks = [];
 
@@ -43313,83 +41839,83 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			t28 = space();
     			input5 = element("input");
     			attr_dev(label0, "class", "text-elight text-2xl my-3");
-    			add_location(label0, file$i, 95, 6, 3157);
+    			add_location(label0, file$g, 95, 6, 3157);
     			attr_dev(input0, "type", "search");
     			attr_dev(input0, "name", "serch");
     			attr_dev(input0, "placeholder", "Search");
     			attr_dev(input0, "class", "bg-elight h-10 px-5 pr-10 rounded-full w-full text-xl\n              tet-edark focus:outline-none");
-    			add_location(input0, file$i, 99, 12, 3338);
+    			add_location(input0, file$g, 99, 12, 3338);
     			attr_dev(div0, "class", "w-full");
-    			add_location(div0, file$i, 98, 10, 3305);
+    			add_location(div0, file$g, 98, 10, 3305);
     			attr_dev(p, "class", "text-white text-sm my-2");
-    			add_location(p, file$i, 109, 12, 3684);
-    			add_location(div1, file$i, 108, 10, 3666);
+    			add_location(p, file$g, 109, 12, 3684);
+    			add_location(div1, file$g, 108, 10, 3666);
     			attr_dev(div2, "class", " flex-col w-full");
-    			add_location(div2, file$i, 97, 8, 3264);
+    			add_location(div2, file$g, 97, 8, 3264);
     			attr_dev(div3, "class", "ml-3");
-    			add_location(div3, file$i, 112, 8, 3771);
+    			add_location(div3, file$g, 112, 8, 3771);
     			attr_dev(div4, "class", "flex");
-    			add_location(div4, file$i, 96, 6, 3237);
-    			add_location(div5, file$i, 94, 4, 3145);
+    			add_location(div4, file$g, 96, 6, 3237);
+    			add_location(div5, file$g, 94, 4, 3145);
     			attr_dev(h2, "class", "labels text-3xl svelte-17qxgd1");
-    			add_location(h2, file$i, 127, 8, 4218);
-    			add_location(div6, file$i, 126, 6, 4204);
+    			add_location(h2, file$g, 127, 8, 4218);
+    			add_location(div6, file$g, 126, 6, 4204);
     			attr_dev(label1, "class", "labels svelte-17qxgd1");
-    			add_location(label1, file$i, 131, 10, 4314);
+    			add_location(label1, file$g, 131, 10, 4314);
     			attr_dev(input1, "class", "unitinput svelte-17qxgd1");
     			attr_dev(input1, "type", "text");
     			attr_dev(input1, "placeholder", "in minutes");
-    			add_location(input1, file$i, 132, 10, 4371);
+    			add_location(input1, file$g, 132, 10, 4371);
     			attr_dev(span0, "class", "unit svelte-17qxgd1");
-    			add_location(span0, file$i, 137, 10, 4528);
-    			add_location(div7, file$i, 130, 8, 4298);
+    			add_location(span0, file$g, 137, 10, 4528);
+    			add_location(div7, file$g, 130, 8, 4298);
     			attr_dev(label2, "class", "labels svelte-17qxgd1");
-    			add_location(label2, file$i, 141, 12, 4632);
+    			add_location(label2, file$g, 141, 12, 4632);
     			attr_dev(input2, "class", "unitinput svelte-17qxgd1");
     			attr_dev(input2, "type", "radio");
     			input2.__value = "Easy";
     			input2.value = input2.__value;
     			/*$$binding_groups*/ ctx[12][0].push(input2);
-    			add_location(input2, file$i, 142, 12, 4698);
+    			add_location(input2, file$g, 142, 12, 4698);
     			attr_dev(span1, "class", "unit text-2xl svelte-17qxgd1");
-    			add_location(span1, file$i, 147, 12, 4860);
+    			add_location(span1, file$g, 147, 12, 4860);
     			attr_dev(input3, "class", "unitinput svelte-17qxgd1");
     			attr_dev(input3, "type", "radio");
     			input3.__value = "Medium";
     			input3.value = input3.__value;
     			/*$$binding_groups*/ ctx[12][0].push(input3);
-    			add_location(input3, file$i, 148, 12, 4912);
+    			add_location(input3, file$g, 148, 12, 4912);
     			attr_dev(span2, "class", "unit text-2xl svelte-17qxgd1");
-    			add_location(span2, file$i, 153, 12, 5076);
+    			add_location(span2, file$g, 153, 12, 5076);
     			attr_dev(input4, "class", "unitinput svelte-17qxgd1");
     			attr_dev(input4, "type", "radio");
     			input4.__value = "Difficult";
     			input4.value = input4.__value;
     			/*$$binding_groups*/ ctx[12][0].push(input4);
-    			add_location(input4, file$i, 154, 12, 5130);
+    			add_location(input4, file$g, 154, 12, 5130);
     			attr_dev(span3, "class", "unit text-2xl svelte-17qxgd1");
-    			add_location(span3, file$i, 159, 12, 5297);
-    			add_location(div8, file$i, 140, 10, 4614);
+    			add_location(span3, file$g, 159, 12, 5297);
+    			add_location(div8, file$g, 140, 10, 4614);
     			attr_dev(div9, "class", "flex");
-    			add_location(div9, file$i, 139, 8, 4585);
+    			add_location(div9, file$g, 139, 8, 4585);
     			attr_dev(label3, "class", "labels svelte-17qxgd1");
-    			add_location(label3, file$i, 163, 10, 5398);
+    			add_location(label3, file$g, 163, 10, 5398);
     			attr_dev(select, "class", "unitinput outline-none w-64 svelte-17qxgd1");
-    			add_location(select, file$i, 165, 12, 5487);
+    			add_location(select, file$g, 165, 12, 5487);
     			attr_dev(input5, "type", "text");
     			attr_dev(input5, "class", "unitinput svelte-17qxgd1");
     			input5.readOnly = true;
-    			add_location(input5, file$i, 183, 12, 6081);
+    			add_location(input5, file$g, 183, 12, 6081);
     			attr_dev(div10, "class", "flex-col flex");
-    			add_location(div10, file$i, 164, 10, 5447);
-    			add_location(div11, file$i, 162, 8, 5382);
-    			add_location(div12, file$i, 129, 6, 4284);
+    			add_location(div10, file$g, 164, 10, 5447);
+    			add_location(div11, file$g, 162, 8, 5382);
+    			add_location(div12, file$g, 129, 6, 4284);
     			attr_dev(div13, "class", "border-solid border-2 mt-6 border-light p-4");
-    			add_location(div13, file$i, 125, 4, 4140);
+    			add_location(div13, file$g, 125, 4, 4140);
     			attr_dev(div14, "class", "text-edark mx-auto max-w-5xl w-full");
-    			add_location(div14, file$i, 93, 2, 3091);
+    			add_location(div14, file$g, 93, 2, 3091);
     			attr_dev(div15, "class", "mx-auto flex-col flex-grow");
-    			add_location(div15, file$i, 92, 0, 3048);
+    			add_location(div15, file$g, 92, 0, 3048);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -43481,7 +42007,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     			if (/*uniqueNameStatus*/ ctx[1] === 2) {
     				if (!if_block0) {
-    					if_block0 = create_if_block_2$2(ctx);
+    					if_block0 = create_if_block_2$1(ctx);
     					if_block0.c();
     					transition_in(if_block0, 1);
     					if_block0.m(div3, t5);
@@ -43500,7 +42026,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     			if (/*uniqueNameStatus*/ ctx[1] === 1) {
     				if (!if_block1) {
-    					if_block1 = create_if_block_1$3(ctx);
+    					if_block1 = create_if_block_1$2(ctx);
     					if_block1.c();
     					if_block1.m(div3, t6);
     				}
@@ -43511,7 +42037,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     			if (/*uniqueNameStatus*/ ctx[1] === 3) {
     				if (!if_block2) {
-    					if_block2 = create_if_block$6(ctx);
+    					if_block2 = create_if_block$5(ctx);
     					if_block2.c();
     					if_block2.m(div3, null);
     				}
@@ -43587,7 +42113,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$m.name,
+    		id: create_fragment$j.name,
     		type: "component",
     		source: "",
     		ctx
@@ -43596,7 +42122,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$j($$self, $$props, $$invalidate) {
+    function instance$g($$self, $$props, $$invalidate) {
     	let $testStore;
     	validate_store(testStore, "testStore");
     	component_subscribe($$self, testStore, $$value => $$invalidate(0, $testStore = $$value));
@@ -43747,19 +42273,19 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Test_initials extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$j, create_fragment$m, safe_not_equal, {});
+    		init(this, options, instance$g, create_fragment$j, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Test_initials",
     			options,
-    			id: create_fragment$m.name
+    			id: create_fragment$j.name
     		});
     	}
     }
 
     /* src/routes/test/all_problems.svelte generated by Svelte v3.18.1 */
-    const file$j = "src/routes/test/all_problems.svelte";
+    const file$h = "src/routes/test/all_problems.svelte";
 
     function get_each_context$6(ctx, list, i) {
     	const child_ctx = ctx.slice();
@@ -43768,7 +42294,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (47:2) {:catch err}
-    function create_catch_block$4(ctx) {
+    function create_catch_block$3(ctx) {
     	let t0;
     	let t1_value = /*err*/ ctx[6] + "";
     	let t1;
@@ -43793,7 +42319,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_catch_block$4.name,
+    		id: create_catch_block$3.name,
     		type: "catch",
     		source: "(47:2) {:catch err}",
     		ctx
@@ -43803,7 +42329,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (18:2) {:then result}
-    function create_then_block$4(ctx) {
+    function create_then_block$3(ctx) {
     	let each_1_anchor;
     	let each_value = /*result*/ ctx[5].data.allProblems;
     	let each_blocks = [];
@@ -43859,7 +42385,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_then_block$4.name,
+    		id: create_then_block$3.name,
     		type: "then",
     		source: "(18:2) {:then result}",
     		ctx
@@ -43903,19 +42429,19 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			t3 = space();
     			attr_dev(a, "href", a_href_value = "http://localhost:5000/problem/" + /*prob*/ ctx[7].id);
     			attr_dev(a, "class", "no-underline px-3 text-elight svelte-gm8br7");
-    			add_location(a, file$j, 24, 12, 996);
+    			add_location(a, file$h, 24, 12, 996);
     			attr_dev(div0, "class", "rows bg-dark rounded-full p-2 px-4 mx-2 text-white text-xl\n            px-3 svelte-gm8br7");
-    			add_location(div0, file$j, 21, 10, 882);
+    			add_location(div0, file$h, 21, 10, 882);
     			attr_dev(div1, "class", "w-10/12 svelte-gm8br7");
-    			add_location(div1, file$j, 20, 8, 850);
+    			add_location(div1, file$h, 20, 8, 850);
     			attr_dev(button, "class", "w-3/4 bg-dark outline-none text-white rounded-full p-2 px-4\n              mx-2 svelte-gm8br7");
-    			add_location(button, file$j, 33, 12, 1266);
+    			add_location(button, file$h, 33, 12, 1266);
     			attr_dev(div2, "class", "rows  svelte-gm8br7");
-    			add_location(div2, file$j, 32, 10, 1234);
+    			add_location(div2, file$h, 32, 10, 1234);
     			attr_dev(div3, "class", "w-2/12 svelte-gm8br7");
-    			add_location(div3, file$j, 31, 8, 1203);
+    			add_location(div3, file$h, 31, 8, 1203);
     			attr_dev(div4, "class", "flex mb mt-3 text-xl svelte-gm8br7");
-    			add_location(div4, file$j, 19, 6, 807);
+    			add_location(div4, file$h, 19, 6, 807);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div4, anchor);
@@ -43956,7 +42482,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (16:20)      Loading...   {:then result}
-    function create_pending_block$4(ctx) {
+    function create_pending_block$3(ctx) {
     	let t;
 
     	const block = {
@@ -43974,7 +42500,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_pending_block$4.name,
+    		id: create_pending_block$3.name,
     		type: "pending",
     		source: "(16:20)      Loading...   {:then result}",
     		ctx
@@ -43983,7 +42509,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function create_fragment$n(ctx) {
+    function create_fragment$k(ctx) {
     	let div;
     	let promise;
 
@@ -43991,9 +42517,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		ctx,
     		current: null,
     		token: null,
-    		pending: create_pending_block$4,
-    		then: create_then_block$4,
-    		catch: create_catch_block$4,
+    		pending: create_pending_block$3,
+    		then: create_then_block$3,
+    		catch: create_catch_block$3,
     		value: 5,
     		error: 6
     	};
@@ -44005,7 +42531,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			div = element("div");
     			info.block.c();
     			attr_dev(div, "class", "w-full mt-2 svelte-gm8br7");
-    			add_location(div, file$j, 14, 0, 678);
+    			add_location(div, file$h, 14, 0, 678);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -44038,7 +42564,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$n.name,
+    		id: create_fragment$k.name,
     		type: "component",
     		source: "",
     		ctx
@@ -44047,7 +42573,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$k($$self, $$props, $$invalidate) {
+    function instance$h($$self, $$props, $$invalidate) {
     	let $Problems;
     	let { addProblem } = $$props;
     	const client = getClient();
@@ -44088,13 +42614,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class All_problems extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$k, create_fragment$n, safe_not_equal, { addProblem: 0 });
+    		init(this, options, instance$h, create_fragment$k, safe_not_equal, { addProblem: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "All_problems",
     			options,
-    			id: create_fragment$n.name
+    			id: create_fragment$k.name
     		});
 
     		const { ctx } = this.$$;
@@ -44115,7 +42641,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     /* src/routes/test/select_problems.svelte generated by Svelte v3.18.1 */
-    const file$k = "src/routes/test/select_problems.svelte";
+    const file$i = "src/routes/test/select_problems.svelte";
 
     function get_each_context$7(ctx, list, i) {
     	const child_ctx = ctx.slice();
@@ -44168,24 +42694,24 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			button.textContent = "X";
     			t4 = space();
     			attr_dev(div0, "class", "rows bg-dark rounded-full p-2 px-4 mx-2 svelte-1xqcozc");
-    			add_location(div0, file$k, 114, 18, 3814);
+    			add_location(div0, file$i, 114, 18, 3814);
     			attr_dev(div1, "class", "w-9/12 svelte-1xqcozc");
-    			add_location(div1, file$k, 113, 16, 3775);
+    			add_location(div1, file$i, 113, 16, 3775);
     			attr_dev(input, "type", "string");
     			attr_dev(input, "class", "w-3/4 bg-dark outline-none text-white rounded-full\n                      p-2 px-4 mx-2 svelte-1xqcozc");
-    			add_location(input, file$k, 120, 20, 4061);
+    			add_location(input, file$i, 120, 20, 4061);
     			attr_dev(div2, "class", "rows  svelte-1xqcozc");
-    			add_location(div2, file$k, 119, 18, 4021);
+    			add_location(div2, file$i, 119, 18, 4021);
     			attr_dev(div3, "class", "w-2/12 svelte-1xqcozc");
-    			add_location(div3, file$k, 118, 16, 3982);
+    			add_location(div3, file$i, 118, 16, 3982);
     			attr_dev(button, "class", "w-3/4 bg-dark outline-none text-white rounded-full\n                      p-2 px-4 mx-2 svelte-1xqcozc");
-    			add_location(button, file$k, 132, 20, 4558);
+    			add_location(button, file$i, 132, 20, 4558);
     			attr_dev(div4, "class", "rows  svelte-1xqcozc");
-    			add_location(div4, file$k, 131, 18, 4518);
+    			add_location(div4, file$i, 131, 18, 4518);
     			attr_dev(div5, "class", "w-1/12 svelte-1xqcozc");
-    			add_location(div5, file$k, 130, 16, 4479);
+    			add_location(div5, file$i, 130, 16, 4479);
     			attr_dev(div6, "class", "flex pb-3 svelte-1xqcozc");
-    			add_location(div6, file$k, 112, 14, 3735);
+    			add_location(div6, file$i, 112, 14, 3735);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div6, anchor);
@@ -44234,7 +42760,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function create_fragment$o(ctx) {
+    function create_fragment$l(ctx) {
     	let div15;
     	let div13;
     	let div12;
@@ -44313,43 +42839,43 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			button = element("button");
     			button.textContent = "Submit";
     			attr_dev(h10, "class", "labels svelte-1xqcozc");
-    			add_location(h10, file$k, 99, 10, 3266);
+    			add_location(h10, file$i, 99, 10, 3266);
     			attr_dev(div0, "class", "mx-auto w-64 mb-4 svelte-1xqcozc");
-    			add_location(div0, file$k, 98, 8, 3224);
+    			add_location(div0, file$i, 98, 8, 3224);
     			attr_dev(div1, "class", "rows mx-4 svelte-1xqcozc");
-    			add_location(div1, file$k, 104, 14, 3435);
+    			add_location(div1, file$i, 104, 14, 3435);
     			attr_dev(div2, "class", "w-9/12 svelte-1xqcozc");
-    			add_location(div2, file$k, 103, 12, 3400);
+    			add_location(div2, file$i, 103, 12, 3400);
     			attr_dev(div3, "class", "rows mx-4 svelte-1xqcozc");
-    			add_location(div3, file$k, 107, 14, 3543);
+    			add_location(div3, file$i, 107, 14, 3543);
     			attr_dev(div4, "class", "w-3/12 svelte-1xqcozc");
-    			add_location(div4, file$k, 106, 12, 3508);
+    			add_location(div4, file$i, 106, 12, 3508);
     			attr_dev(div5, "class", "flex mb-6 svelte-1xqcozc");
-    			add_location(div5, file$k, 102, 10, 3364);
+    			add_location(div5, file$i, 102, 10, 3364);
     			attr_dev(div6, "class", "boxheight2 flex flex-col overflow-auto svelte-1xqcozc");
-    			add_location(div6, file$k, 110, 10, 3624);
+    			add_location(div6, file$i, 110, 10, 3624);
     			attr_dev(div7, "class", "flex-col svelte-1xqcozc");
-    			add_location(div7, file$k, 101, 8, 3331);
+    			add_location(div7, file$i, 101, 8, 3331);
     			attr_dev(div8, "class", "outer_box flex-col h-full svelte-1xqcozc");
-    			add_location(div8, file$k, 97, 6, 3176);
+    			add_location(div8, file$i, 97, 6, 3176);
     			attr_dev(h11, "class", "labels svelte-1xqcozc");
-    			add_location(h11, file$k, 149, 10, 5114);
+    			add_location(h11, file$i, 149, 10, 5114);
     			attr_dev(div9, "class", "mx-auto w-64 pb-2 flex flex-col svelte-1xqcozc");
-    			add_location(div9, file$k, 148, 8, 5058);
+    			add_location(div9, file$i, 148, 8, 5058);
     			attr_dev(div10, "class", " pb-4 max-w-full boxheight flex flex-col overflow-auto svelte-1xqcozc");
-    			add_location(div10, file$k, 151, 8, 5177);
+    			add_location(div10, file$i, 151, 8, 5177);
     			attr_dev(div11, "class", "outer_box flex-wrap h-full svelte-1xqcozc");
-    			add_location(div11, file$k, 147, 6, 5009);
+    			add_location(div11, file$i, 147, 6, 5009);
     			attr_dev(div12, "class", "flex mx-3 w-full mb-6 h-full svelte-1xqcozc");
-    			add_location(div12, file$k, 96, 4, 3127);
+    			add_location(div12, file$i, 96, 4, 3127);
     			attr_dev(div13, "class", "max-w-full mx-auto flex statement mb-4  svelte-1xqcozc");
-    			add_location(div13, file$k, 95, 2, 3069);
+    			add_location(div13, file$i, 95, 2, 3069);
     			attr_dev(button, "class", "bg-dark hover:bg-elight hover:text-edark outline-none text-white\n      font-bold py-4 px-4 text-xl rounded-full svelte-1xqcozc");
-    			add_location(button, file$k, 158, 4, 5393);
+    			add_location(button, file$i, 158, 4, 5393);
     			attr_dev(div14, "class", "mt-10 flex justify-center svelte-1xqcozc");
-    			add_location(div14, file$k, 157, 2, 5349);
+    			add_location(div14, file$i, 157, 2, 5349);
     			attr_dev(div15, "class", "svelte-1xqcozc");
-    			add_location(div15, file$k, 94, 0, 3061);
+    			add_location(div15, file$i, 94, 0, 3061);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -44432,7 +42958,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$o.name,
+    		id: create_fragment$l.name,
     		type: "component",
     		source: "",
     		ctx
@@ -44441,7 +42967,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$l($$self, $$props, $$invalidate) {
+    function instance$i($$self, $$props, $$invalidate) {
     	let $testStore;
     	validate_store(testStore, "testStore");
     	component_subscribe($$self, testStore, $$value => $$invalidate(1, $testStore = $$value));
@@ -44546,22 +43072,22 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Select_problems extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$l, create_fragment$o, safe_not_equal, {});
+    		init(this, options, instance$i, create_fragment$l, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Select_problems",
     			options,
-    			id: create_fragment$o.name
+    			id: create_fragment$l.name
     		});
     	}
     }
 
     /* src/routes/test/select_page.svelte generated by Svelte v3.18.1 */
-    const file$l = "src/routes/test/select_page.svelte";
+    const file$j = "src/routes/test/select_page.svelte";
 
     // (8:2) {#if pageNum === 1}
-    function create_if_block_1$4(ctx) {
+    function create_if_block_1$3(ctx) {
     	let current;
     	const testinitials = new Test_initials({ $$inline: true });
 
@@ -44589,7 +43115,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_if_block_1$4.name,
+    		id: create_if_block_1$3.name,
     		type: "if",
     		source: "(8:2) {#if pageNum === 1}",
     		ctx
@@ -44599,7 +43125,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (11:2) {#if pageNum === 2}
-    function create_if_block$7(ctx) {
+    function create_if_block$6(ctx) {
     	let current;
     	const testproblems = new Select_problems({ $$inline: true });
 
@@ -44627,7 +43153,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_if_block$7.name,
+    		id: create_if_block$6.name,
     		type: "if",
     		source: "(11:2) {#if pageNum === 2}",
     		ctx
@@ -44636,12 +43162,12 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function create_fragment$p(ctx) {
+    function create_fragment$m(ctx) {
     	let div;
     	let t;
     	let current;
-    	let if_block0 = /*pageNum*/ ctx[0] === 1 && create_if_block_1$4(ctx);
-    	let if_block1 = /*pageNum*/ ctx[0] === 2 && create_if_block$7(ctx);
+    	let if_block0 = /*pageNum*/ ctx[0] === 1 && create_if_block_1$3(ctx);
+    	let if_block1 = /*pageNum*/ ctx[0] === 2 && create_if_block$6(ctx);
 
     	const block = {
     		c: function create() {
@@ -44649,7 +43175,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			if (if_block0) if_block0.c();
     			t = space();
     			if (if_block1) if_block1.c();
-    			add_location(div, file$l, 6, 0, 154);
+    			add_location(div, file$j, 6, 0, 154);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -44664,7 +43190,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		p: function update(ctx, [dirty]) {
     			if (/*pageNum*/ ctx[0] === 1) {
     				if (!if_block0) {
-    					if_block0 = create_if_block_1$4(ctx);
+    					if_block0 = create_if_block_1$3(ctx);
     					if_block0.c();
     					transition_in(if_block0, 1);
     					if_block0.m(div, t);
@@ -44683,7 +43209,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     			if (/*pageNum*/ ctx[0] === 2) {
     				if (!if_block1) {
-    					if_block1 = create_if_block$7(ctx);
+    					if_block1 = create_if_block$6(ctx);
     					if_block1.c();
     					transition_in(if_block1, 1);
     					if_block1.m(div, null);
@@ -44720,7 +43246,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$p.name,
+    		id: create_fragment$m.name,
     		type: "component",
     		source: "",
     		ctx
@@ -44729,7 +43255,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$m($$self, $$props, $$invalidate) {
+    function instance$j($$self, $$props, $$invalidate) {
     	let { pageNum = 1 } = $$props;
     	const writable_props = ["pageNum"];
 
@@ -44755,13 +43281,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Select_page extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$m, create_fragment$p, safe_not_equal, { pageNum: 0 });
+    		init(this, options, instance$j, create_fragment$m, safe_not_equal, { pageNum: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Select_page",
     			options,
-    			id: create_fragment$p.name
+    			id: create_fragment$m.name
     		});
     	}
 
@@ -44775,9 +43301,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     /* src/routes/test/add_test.svelte generated by Svelte v3.18.1 */
-    const file$m = "src/routes/test/add_test.svelte";
+    const file$k = "src/routes/test/add_test.svelte";
 
-    function create_fragment$q(ctx) {
+    function create_fragment$n(ctx) {
     	let div2;
     	let header;
     	let t0;
@@ -44829,25 +43355,25 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			button1 = element("button");
     			button1.textContent = "Next";
     			attr_dev(subheader, "class", "svelte-sxkr2r");
-    			add_location(subheader, file$m, 16, 4, 664);
+    			add_location(subheader, file$k, 16, 4, 664);
     			attr_dev(header, "class", "svelte-sxkr2r");
-    			add_location(header, file$m, 14, 2, 636);
+    			add_location(header, file$k, 14, 2, 636);
     			attr_dev(main, "class", " mx-auto w-full flex-grow overflow-auto svelte-sxkr2r");
-    			add_location(main, file$m, 20, 2, 746);
+    			add_location(main, file$k, 20, 2, 746);
     			attr_dev(button0, "id", "prevbutton");
     			attr_dev(button0, "class", "py-4 px-6 float-left shadow-md no-underline rounded-full bg-dark\n        text-white font-sans font-semibold text-sm border-white btn-primary\n        hover:text-white text-xl hover:bg-elight focus:outline-none\n        active:shadow-none mr-2 svelte-sxkr2r");
-    			add_location(button0, file$m, 25, 6, 947);
+    			add_location(button0, file$k, 25, 6, 947);
     			attr_dev(div0, "class", "flex-1  svelte-sxkr2r");
-    			add_location(div0, file$m, 24, 4, 919);
+    			add_location(div0, file$k, 24, 4, 919);
     			attr_dev(button1, "id", "nextbutton");
     			attr_dev(button1, "class", "py-4 px-6 shadow-md text-xl float-right no-underline rounded-full\n        bg-dark text-white font-sans font-semibold text-sm border-white\n        btn-primary hover:text-dark hover:bg-elight focus:outline-none\n        active:shadow-none mr-2 svelte-sxkr2r");
-    			add_location(button1, file$m, 42, 6, 1461);
+    			add_location(button1, file$k, 42, 6, 1461);
     			attr_dev(div1, "class", "flex-1 svelte-sxkr2r");
-    			add_location(div1, file$m, 41, 4, 1434);
+    			add_location(div1, file$k, 41, 4, 1434);
     			attr_dev(footer, "class", " footer my-8 w-full px-20 mx-auto sticky svelte-sxkr2r");
-    			add_location(footer, file$m, 23, 2, 857);
+    			add_location(footer, file$k, 23, 2, 857);
     			attr_dev(div2, "class", "w-screen bg-edark h-screen flex flex-col svelte-sxkr2r");
-    			add_location(div2, file$m, 13, 0, 579);
+    			add_location(div2, file$k, 13, 0, 579);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -44908,7 +43434,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$q.name,
+    		id: create_fragment$n.name,
     		type: "component",
     		source: "",
     		ctx
@@ -44917,7 +43443,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$n($$self, $$props, $$invalidate) {
+    function instance$k($$self, $$props, $$invalidate) {
     	const click_handler = () => {
     		if (pageNum === 1) {
     			return;
@@ -44952,20 +43478,20 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Add_test extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$n, create_fragment$q, safe_not_equal, {});
+    		init(this, options, instance$k, create_fragment$n, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Add_test",
     			options,
-    			id: create_fragment$q.name
+    			id: create_fragment$n.name
     		});
     	}
     }
 
     /* src/routes/update_test/test_navbar.svelte generated by Svelte v3.18.1 */
 
-    const file$n = "src/routes/update_test/test_navbar.svelte";
+    const file$l = "src/routes/update_test/test_navbar.svelte";
 
     function get_each_context$8(ctx, list, i) {
     	const child_ctx = ctx.slice();
@@ -44974,7 +43500,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (20:6) {#if index !== content.length}
-    function create_if_block$8(ctx) {
+    function create_if_block$7(ctx) {
     	let div2;
     	let div1;
     	let div0;
@@ -44986,15 +43512,15 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			div1 = element("div");
     			div0 = element("div");
     			attr_dev(div0, "class", " text-xs leading-none py-1 text-center rounded ");
-    			add_location(div0, file$n, 25, 12, 1003);
+    			add_location(div0, file$l, 25, 12, 1003);
 
     			attr_dev(div1, "class", div1_class_value = /*index*/ ctx[4] < /*position*/ ctx[0]
     			? /*activeBar*/ ctx[3]
     			: "w-full text-grey-darkest  bg-light rounded items-center align-middle align-center flex-1");
 
-    			add_location(div1, file$n, 23, 10, 843);
+    			add_location(div1, file$l, 23, 10, 843);
     			attr_dev(div2, "class", "w-1/3 align-center items-center align-middle content-center\n          flex");
-    			add_location(div2, file$n, 20, 8, 734);
+    			add_location(div2, file$l, 20, 8, 734);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div2, anchor);
@@ -45015,7 +43541,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_if_block$8.name,
+    		id: create_if_block$7.name,
     		type: "if",
     		source: "(20:6) {#if index !== content.length}",
     		ctx
@@ -45034,7 +43560,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	let div0_class_value;
     	let t1;
     	let if_block_anchor;
-    	let if_block = /*index*/ ctx[4] !== /*content*/ ctx[1].length && create_if_block$8(ctx);
+    	let if_block = /*index*/ ctx[4] !== /*content*/ ctx[1].length && create_if_block$7(ctx);
 
     	const block = {
     		c: function create() {
@@ -45046,15 +43572,15 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			if (if_block) if_block.c();
     			if_block_anchor = empty();
     			attr_dev(span, "class", "text-center w-full text-2xl");
-    			add_location(span, file$n, 16, 10, 604);
+    			add_location(span, file$l, 16, 10, 604);
 
     			attr_dev(div0, "class", div0_class_value = /*index*/ ctx[4] <= /*position*/ ctx[0]
     			? /*activeCircle*/ ctx[2]
     			: "w-16 h-16  bg-light text-white border-2 mx-auto rounded-full text-lg flex items-center");
 
-    			add_location(div0, file$n, 14, 8, 446);
+    			add_location(div0, file$l, 14, 8, 446);
     			attr_dev(div1, "class", "flex-1");
-    			add_location(div1, file$n, 13, 6, 417);
+    			add_location(div1, file$l, 13, 6, 417);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div1, anchor);
@@ -45093,7 +43619,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function create_fragment$r(ctx) {
+    function create_fragment$o(ctx) {
     	let div6;
     	let div2;
     	let div0;
@@ -45133,19 +43659,19 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			div4 = element("div");
     			div4.textContent = "Select Problems";
     			attr_dev(div0, "class", "flex-1");
-    			add_location(div0, file$n, 11, 4, 359);
+    			add_location(div0, file$l, 11, 4, 359);
     			attr_dev(div1, "class", "flex-1");
-    			add_location(div1, file$n, 31, 4, 1128);
+    			add_location(div1, file$l, 31, 4, 1128);
     			attr_dev(div2, "class", "flex pb-3");
-    			add_location(div2, file$n, 10, 2, 331);
+    			add_location(div2, file$l, 10, 2, 331);
     			attr_dev(div3, "class", "w-1/2 flex-1 text-xl text-elight ");
-    			add_location(div3, file$n, 35, 4, 1221);
+    			add_location(div3, file$l, 35, 4, 1221);
     			attr_dev(div4, "class", "w-1/2 flex-1 text-xl text-elight");
-    			add_location(div4, file$n, 37, 4, 1293);
+    			add_location(div4, file$l, 37, 4, 1293);
     			attr_dev(div5, "class", "flex text-xs content-center text-center");
-    			add_location(div5, file$n, 34, 2, 1163);
+    			add_location(div5, file$l, 34, 2, 1163);
     			attr_dev(div6, "class", "max-w-2xl mx-auto py-4 my-4 pb-4");
-    			add_location(div6, file$n, 9, 0, 282);
+    			add_location(div6, file$l, 9, 0, 282);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -45202,7 +43728,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$r.name,
+    		id: create_fragment$o.name,
     		type: "component",
     		source: "",
     		ctx
@@ -45211,7 +43737,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$o($$self, $$props, $$invalidate) {
+    function instance$l($$self, $$props, $$invalidate) {
     	let { position = 1 } = $$props;
     	let content = [1, 2];
     	let activeCircle = "w-16 h-16 text-dark bg-elight  mx-auto rounded-full text-lg flex items-center";
@@ -45251,13 +43777,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Test_navbar$1 extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$o, create_fragment$r, safe_not_equal, { position: 0 });
+    		init(this, options, instance$l, create_fragment$o, safe_not_equal, { position: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Test_navbar",
     			options,
-    			id: create_fragment$r.name
+    			id: create_fragment$o.name
     		});
     	}
 
@@ -45272,9 +43798,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     /* src/routes/update_test/loader.svelte generated by Svelte v3.18.1 */
 
-    const file$o = "src/routes/update_test/loader.svelte";
+    const file$m = "src/routes/update_test/loader.svelte";
 
-    function create_fragment$s(ctx) {
+    function create_fragment$p(ctx) {
     	let div3;
     	let div0;
     	let t0;
@@ -45291,13 +43817,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			t1 = space();
     			div2 = element("div");
     			attr_dev(div0, "class", "LoaderBalls__item svelte-st741r");
-    			add_location(div0, file$o, 42, 2, 2505);
+    			add_location(div0, file$m, 42, 2, 2505);
     			attr_dev(div1, "class", "LoaderBalls__item svelte-st741r");
-    			add_location(div1, file$o, 43, 2, 2541);
+    			add_location(div1, file$m, 43, 2, 2541);
     			attr_dev(div2, "class", "LoaderBalls__item svelte-st741r");
-    			add_location(div2, file$o, 44, 2, 2577);
+    			add_location(div2, file$m, 44, 2, 2577);
     			attr_dev(div3, "class", "LoaderBalls svelte-st741r");
-    			add_location(div3, file$o, 41, 0, 2477);
+    			add_location(div3, file$m, 41, 0, 2477);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -45320,7 +43846,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$s.name,
+    		id: create_fragment$p.name,
     		type: "component",
     		source: "",
     		ctx
@@ -45332,13 +43858,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Loader$1 extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, null, create_fragment$s, safe_not_equal, {});
+    		init(this, options, null, create_fragment$p, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Loader",
     			options,
-    			id: create_fragment$s.name
+    			id: create_fragment$p.name
     		});
     	}
     }
@@ -45353,7 +43879,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     });
 
     /* src/routes/update_test/test_initials.svelte generated by Svelte v3.18.1 */
-    const file$p = "src/routes/update_test/test_initials.svelte";
+    const file$n = "src/routes/update_test/test_initials.svelte";
 
     function get_each_context$9(ctx, list, i) {
     	const child_ctx = ctx.slice();
@@ -45363,7 +43889,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (125:10) {#if uniqueNameStatus === 2}
-    function create_if_block_2$3(ctx) {
+    function create_if_block_2$2(ctx) {
     	let current;
     	const loader = new Loader$1({ $$inline: true });
 
@@ -45391,7 +43917,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_if_block_2$3.name,
+    		id: create_if_block_2$2.name,
     		type: "if",
     		source: "(125:10) {#if uniqueNameStatus === 2}",
     		ctx
@@ -45401,7 +43927,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (128:10) {#if uniqueNameStatus === 1}
-    function create_if_block_1$5(ctx) {
+    function create_if_block_1$4(ctx) {
     	let i;
 
     	const block = {
@@ -45409,7 +43935,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			i = element("i");
     			i.textContent = "";
     			attr_dev(i, "class", "material-icons status svelte-1dj45u4");
-    			add_location(i, file$p, 128, 12, 4223);
+    			add_location(i, file$n, 128, 12, 4223);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, i, anchor);
@@ -45421,7 +43947,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_if_block_1$5.name,
+    		id: create_if_block_1$4.name,
     		type: "if",
     		source: "(128:10) {#if uniqueNameStatus === 1}",
     		ctx
@@ -45431,7 +43957,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (131:10) {#if uniqueNameStatus === 3}
-    function create_if_block$9(ctx) {
+    function create_if_block$8(ctx) {
     	let span;
 
     	const block = {
@@ -45439,7 +43965,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			span = element("span");
     			span.textContent = "clear";
     			attr_dev(span, "class", "status material-icons svelte-1dj45u4");
-    			add_location(span, file$p, 131, 12, 4336);
+    			add_location(span, file$n, 131, 12, 4336);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, span, anchor);
@@ -45451,7 +43977,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_if_block$9.name,
+    		id: create_if_block$8.name,
     		type: "if",
     		source: "(131:10) {#if uniqueNameStatus === 3}",
     		ctx
@@ -45478,7 +44004,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			attr_dev(option, "name", option_name_value = /*tag*/ ctx[18]);
     			option.__value = option_value_value = /*index*/ ctx[20];
     			option.value = option.__value;
-    			add_location(option, file$p, 186, 16, 6159);
+    			add_location(option, file$n, 186, 16, 6159);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, option, anchor);
@@ -45502,7 +44028,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function create_fragment$t(ctx) {
+    function create_fragment$q(ctx) {
     	let div15;
     	let div14;
     	let div5;
@@ -45557,9 +44083,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	let input5;
     	let current;
     	let dispose;
-    	let if_block0 = /*uniqueNameStatus*/ ctx[1] === 2 && create_if_block_2$3(ctx);
-    	let if_block1 = /*uniqueNameStatus*/ ctx[1] === 1 && create_if_block_1$5(ctx);
-    	let if_block2 = /*uniqueNameStatus*/ ctx[1] === 3 && create_if_block$9(ctx);
+    	let if_block0 = /*uniqueNameStatus*/ ctx[1] === 2 && create_if_block_2$2(ctx);
+    	let if_block1 = /*uniqueNameStatus*/ ctx[1] === 1 && create_if_block_1$4(ctx);
+    	let if_block2 = /*uniqueNameStatus*/ ctx[1] === 3 && create_if_block$8(ctx);
     	let each_value = /*tagList*/ ctx[3];
     	let each_blocks = [];
 
@@ -45640,83 +44166,83 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			t28 = space();
     			input5 = element("input");
     			attr_dev(label0, "class", "text-elight text-2xl my-3");
-    			add_location(label0, file$p, 106, 6, 3461);
+    			add_location(label0, file$n, 106, 6, 3461);
     			attr_dev(input0, "type", "search");
     			attr_dev(input0, "name", "serch");
     			attr_dev(input0, "placeholder", "Search");
     			attr_dev(input0, "class", "bg-elight h-10 px-5 pr-10 rounded-full w-full text-xl\n              tet-edark focus:outline-none");
-    			add_location(input0, file$p, 110, 12, 3642);
+    			add_location(input0, file$n, 110, 12, 3642);
     			attr_dev(div0, "class", "w-full");
-    			add_location(div0, file$p, 109, 10, 3609);
+    			add_location(div0, file$n, 109, 10, 3609);
     			attr_dev(p, "class", "text-white text-sm my-2");
-    			add_location(p, file$p, 120, 12, 3988);
-    			add_location(div1, file$p, 119, 10, 3970);
+    			add_location(p, file$n, 120, 12, 3988);
+    			add_location(div1, file$n, 119, 10, 3970);
     			attr_dev(div2, "class", " flex-col w-full");
-    			add_location(div2, file$p, 108, 8, 3568);
+    			add_location(div2, file$n, 108, 8, 3568);
     			attr_dev(div3, "class", "ml-3");
-    			add_location(div3, file$p, 123, 8, 4075);
+    			add_location(div3, file$n, 123, 8, 4075);
     			attr_dev(div4, "class", "flex");
-    			add_location(div4, file$p, 107, 6, 3541);
-    			add_location(div5, file$p, 105, 4, 3449);
+    			add_location(div4, file$n, 107, 6, 3541);
+    			add_location(div5, file$n, 105, 4, 3449);
     			attr_dev(h2, "class", "labels text-3xl svelte-1dj45u4");
-    			add_location(h2, file$p, 138, 8, 4522);
-    			add_location(div6, file$p, 137, 6, 4508);
+    			add_location(h2, file$n, 138, 8, 4522);
+    			add_location(div6, file$n, 137, 6, 4508);
     			attr_dev(label1, "class", "labels svelte-1dj45u4");
-    			add_location(label1, file$p, 142, 10, 4618);
+    			add_location(label1, file$n, 142, 10, 4618);
     			attr_dev(input1, "class", "unitinput svelte-1dj45u4");
     			attr_dev(input1, "type", "text");
     			attr_dev(input1, "placeholder", "in minutes");
-    			add_location(input1, file$p, 143, 10, 4675);
+    			add_location(input1, file$n, 143, 10, 4675);
     			attr_dev(span0, "class", "unit svelte-1dj45u4");
-    			add_location(span0, file$p, 148, 10, 4832);
-    			add_location(div7, file$p, 141, 8, 4602);
+    			add_location(span0, file$n, 148, 10, 4832);
+    			add_location(div7, file$n, 141, 8, 4602);
     			attr_dev(label2, "class", "labels svelte-1dj45u4");
-    			add_location(label2, file$p, 152, 12, 4936);
+    			add_location(label2, file$n, 152, 12, 4936);
     			attr_dev(input2, "class", "unitinput svelte-1dj45u4");
     			attr_dev(input2, "type", "radio");
     			input2.__value = "Easy";
     			input2.value = input2.__value;
     			/*$$binding_groups*/ ctx[13][0].push(input2);
-    			add_location(input2, file$p, 153, 12, 5002);
+    			add_location(input2, file$n, 153, 12, 5002);
     			attr_dev(span1, "class", "unit text-2xl svelte-1dj45u4");
-    			add_location(span1, file$p, 158, 12, 5164);
+    			add_location(span1, file$n, 158, 12, 5164);
     			attr_dev(input3, "class", "unitinput svelte-1dj45u4");
     			attr_dev(input3, "type", "radio");
     			input3.__value = "Medium";
     			input3.value = input3.__value;
     			/*$$binding_groups*/ ctx[13][0].push(input3);
-    			add_location(input3, file$p, 159, 12, 5216);
+    			add_location(input3, file$n, 159, 12, 5216);
     			attr_dev(span2, "class", "unit text-2xl svelte-1dj45u4");
-    			add_location(span2, file$p, 164, 12, 5380);
+    			add_location(span2, file$n, 164, 12, 5380);
     			attr_dev(input4, "class", "unitinput svelte-1dj45u4");
     			attr_dev(input4, "type", "radio");
     			input4.__value = "Difficult";
     			input4.value = input4.__value;
     			/*$$binding_groups*/ ctx[13][0].push(input4);
-    			add_location(input4, file$p, 165, 12, 5434);
+    			add_location(input4, file$n, 165, 12, 5434);
     			attr_dev(span3, "class", "unit text-2xl svelte-1dj45u4");
-    			add_location(span3, file$p, 170, 12, 5601);
-    			add_location(div8, file$p, 151, 10, 4918);
+    			add_location(span3, file$n, 170, 12, 5601);
+    			add_location(div8, file$n, 151, 10, 4918);
     			attr_dev(div9, "class", "flex");
-    			add_location(div9, file$p, 150, 8, 4889);
+    			add_location(div9, file$n, 150, 8, 4889);
     			attr_dev(label3, "class", "labels svelte-1dj45u4");
-    			add_location(label3, file$p, 174, 10, 5702);
+    			add_location(label3, file$n, 174, 10, 5702);
     			attr_dev(select, "class", "unitinput outline-none w-64 svelte-1dj45u4");
-    			add_location(select, file$p, 176, 12, 5791);
+    			add_location(select, file$n, 176, 12, 5791);
     			attr_dev(input5, "type", "text");
     			attr_dev(input5, "class", "unitinput svelte-1dj45u4");
     			input5.readOnly = true;
-    			add_location(input5, file$p, 194, 12, 6385);
+    			add_location(input5, file$n, 194, 12, 6385);
     			attr_dev(div10, "class", "flex-col flex");
-    			add_location(div10, file$p, 175, 10, 5751);
-    			add_location(div11, file$p, 173, 8, 5686);
-    			add_location(div12, file$p, 140, 6, 4588);
+    			add_location(div10, file$n, 175, 10, 5751);
+    			add_location(div11, file$n, 173, 8, 5686);
+    			add_location(div12, file$n, 140, 6, 4588);
     			attr_dev(div13, "class", "border-solid border-2 mt-6 border-light p-4");
-    			add_location(div13, file$p, 136, 4, 4444);
+    			add_location(div13, file$n, 136, 4, 4444);
     			attr_dev(div14, "class", "text-edark mx-auto max-w-5xl w-full");
-    			add_location(div14, file$p, 104, 2, 3395);
+    			add_location(div14, file$n, 104, 2, 3395);
     			attr_dev(div15, "class", "mx-auto flex-col flex-grow");
-    			add_location(div15, file$p, 103, 0, 3352);
+    			add_location(div15, file$n, 103, 0, 3352);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -45808,7 +44334,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     			if (/*uniqueNameStatus*/ ctx[1] === 2) {
     				if (!if_block0) {
-    					if_block0 = create_if_block_2$3(ctx);
+    					if_block0 = create_if_block_2$2(ctx);
     					if_block0.c();
     					transition_in(if_block0, 1);
     					if_block0.m(div3, t5);
@@ -45827,7 +44353,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     			if (/*uniqueNameStatus*/ ctx[1] === 1) {
     				if (!if_block1) {
-    					if_block1 = create_if_block_1$5(ctx);
+    					if_block1 = create_if_block_1$4(ctx);
     					if_block1.c();
     					if_block1.m(div3, t6);
     				}
@@ -45838,7 +44364,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     			if (/*uniqueNameStatus*/ ctx[1] === 3) {
     				if (!if_block2) {
-    					if_block2 = create_if_block$9(ctx);
+    					if_block2 = create_if_block$8(ctx);
     					if_block2.c();
     					if_block2.m(div3, null);
     				}
@@ -45914,7 +44440,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$t.name,
+    		id: create_fragment$q.name,
     		type: "component",
     		source: "",
     		ctx
@@ -45923,7 +44449,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$p($$self, $$props, $$invalidate) {
+    function instance$m($$self, $$props, $$invalidate) {
     	let $testStore;
     	validate_store(testStore$1, "testStore");
     	component_subscribe($$self, testStore$1, $$value => $$invalidate(0, $testStore = $$value));
@@ -46103,19 +44629,19 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Test_initials$1 extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$p, create_fragment$t, safe_not_equal, {});
+    		init(this, options, instance$m, create_fragment$q, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Test_initials",
     			options,
-    			id: create_fragment$t.name
+    			id: create_fragment$q.name
     		});
     	}
     }
 
     /* src/routes/update_test/all_problems.svelte generated by Svelte v3.18.1 */
-    const file$q = "src/routes/update_test/all_problems.svelte";
+    const file$o = "src/routes/update_test/all_problems.svelte";
 
     function get_each_context$a(ctx, list, i) {
     	const child_ctx = ctx.slice();
@@ -46124,7 +44650,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (47:2) {:catch err}
-    function create_catch_block$5(ctx) {
+    function create_catch_block$4(ctx) {
     	let t0;
     	let t1_value = /*err*/ ctx[6] + "";
     	let t1;
@@ -46149,7 +44675,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_catch_block$5.name,
+    		id: create_catch_block$4.name,
     		type: "catch",
     		source: "(47:2) {:catch err}",
     		ctx
@@ -46159,7 +44685,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (18:2) {:then result}
-    function create_then_block$5(ctx) {
+    function create_then_block$4(ctx) {
     	let each_1_anchor;
     	let each_value = /*result*/ ctx[5].data.allProblems;
     	let each_blocks = [];
@@ -46215,7 +44741,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_then_block$5.name,
+    		id: create_then_block$4.name,
     		type: "then",
     		source: "(18:2) {:then result}",
     		ctx
@@ -46259,19 +44785,19 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			t3 = space();
     			attr_dev(a, "href", a_href_value = "http://localhost:5000/problem/" + /*prob*/ ctx[7].id);
     			attr_dev(a, "class", "no-underline px-3 text-elight svelte-4h3zj");
-    			add_location(a, file$q, 24, 12, 1012);
+    			add_location(a, file$o, 24, 12, 1012);
     			attr_dev(div0, "class", "rows bg-dark rounded-full p-2 px-4 mx-2 text-white text-xl\n            px-3 svelte-4h3zj");
-    			add_location(div0, file$q, 21, 10, 898);
+    			add_location(div0, file$o, 21, 10, 898);
     			attr_dev(div1, "class", "w-10/12 svelte-4h3zj");
-    			add_location(div1, file$q, 20, 8, 866);
+    			add_location(div1, file$o, 20, 8, 866);
     			attr_dev(button, "class", "w-3/4 bg-dark outline-none text-white rounded-full p-2 px-4\n              mx-2 svelte-4h3zj");
-    			add_location(button, file$q, 33, 12, 1282);
+    			add_location(button, file$o, 33, 12, 1282);
     			attr_dev(div2, "class", "rows  svelte-4h3zj");
-    			add_location(div2, file$q, 32, 10, 1250);
+    			add_location(div2, file$o, 32, 10, 1250);
     			attr_dev(div3, "class", "w-2/12 svelte-4h3zj");
-    			add_location(div3, file$q, 31, 8, 1219);
+    			add_location(div3, file$o, 31, 8, 1219);
     			attr_dev(div4, "class", "flex mb mt-3 text-xl svelte-4h3zj");
-    			add_location(div4, file$q, 19, 6, 823);
+    			add_location(div4, file$o, 19, 6, 823);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div4, anchor);
@@ -46312,7 +44838,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (16:20)      Loading...   {:then result}
-    function create_pending_block$5(ctx) {
+    function create_pending_block$4(ctx) {
     	let t;
 
     	const block = {
@@ -46330,7 +44856,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_pending_block$5.name,
+    		id: create_pending_block$4.name,
     		type: "pending",
     		source: "(16:20)      Loading...   {:then result}",
     		ctx
@@ -46339,7 +44865,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function create_fragment$u(ctx) {
+    function create_fragment$r(ctx) {
     	let div;
     	let promise;
 
@@ -46347,9 +44873,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		ctx,
     		current: null,
     		token: null,
-    		pending: create_pending_block$5,
-    		then: create_then_block$5,
-    		catch: create_catch_block$5,
+    		pending: create_pending_block$4,
+    		then: create_then_block$4,
+    		catch: create_catch_block$4,
     		value: 5,
     		error: 6
     	};
@@ -46361,7 +44887,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			div = element("div");
     			info.block.c();
     			attr_dev(div, "class", "w-full mt-2 svelte-4h3zj");
-    			add_location(div, file$q, 14, 0, 694);
+    			add_location(div, file$o, 14, 0, 694);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -46394,7 +44920,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$u.name,
+    		id: create_fragment$r.name,
     		type: "component",
     		source: "",
     		ctx
@@ -46403,7 +44929,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$q($$self, $$props, $$invalidate) {
+    function instance$n($$self, $$props, $$invalidate) {
     	let $Problems;
     	let { addProblem } = $$props;
     	const client = getClient();
@@ -46444,13 +44970,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class All_problems$1 extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$q, create_fragment$u, safe_not_equal, { addProblem: 0 });
+    		init(this, options, instance$n, create_fragment$r, safe_not_equal, { addProblem: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "All_problems",
     			options,
-    			id: create_fragment$u.name
+    			id: create_fragment$r.name
     		});
 
     		const { ctx } = this.$$;
@@ -46473,7 +44999,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     /* src/routes/update_test/select_problems.svelte generated by Svelte v3.18.1 */
 
     const { console: console_1$5 } = globals;
-    const file$r = "src/routes/update_test/select_problems.svelte";
+    const file$p = "src/routes/update_test/select_problems.svelte";
 
     function get_each_context$b(ctx, list, i) {
     	const child_ctx = ctx.slice();
@@ -46526,24 +45052,24 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			button.textContent = "X";
     			t4 = space();
     			attr_dev(div0, "class", "rows bg-dark rounded-full p-2 px-4 mx-2 svelte-z5bal3");
-    			add_location(div0, file$r, 116, 18, 3919);
+    			add_location(div0, file$p, 116, 18, 3919);
     			attr_dev(div1, "class", "w-9/12 svelte-z5bal3");
-    			add_location(div1, file$r, 115, 16, 3880);
+    			add_location(div1, file$p, 115, 16, 3880);
     			attr_dev(input, "type", "string");
     			attr_dev(input, "class", "w-3/4 bg-dark outline-none text-white rounded-full\n                      p-2 px-4 mx-2 svelte-z5bal3");
-    			add_location(input, file$r, 122, 20, 4166);
+    			add_location(input, file$p, 122, 20, 4166);
     			attr_dev(div2, "class", "rows  svelte-z5bal3");
-    			add_location(div2, file$r, 121, 18, 4126);
+    			add_location(div2, file$p, 121, 18, 4126);
     			attr_dev(div3, "class", "w-2/12 svelte-z5bal3");
-    			add_location(div3, file$r, 120, 16, 4087);
+    			add_location(div3, file$p, 120, 16, 4087);
     			attr_dev(button, "class", "w-3/4 bg-dark outline-none text-white rounded-full\n                      p-2 px-4 mx-2 svelte-z5bal3");
-    			add_location(button, file$r, 134, 20, 4663);
+    			add_location(button, file$p, 134, 20, 4663);
     			attr_dev(div4, "class", "rows  svelte-z5bal3");
-    			add_location(div4, file$r, 133, 18, 4623);
+    			add_location(div4, file$p, 133, 18, 4623);
     			attr_dev(div5, "class", "w-1/12 svelte-z5bal3");
-    			add_location(div5, file$r, 132, 16, 4584);
+    			add_location(div5, file$p, 132, 16, 4584);
     			attr_dev(div6, "class", "flex pb-3 svelte-z5bal3");
-    			add_location(div6, file$r, 114, 14, 3840);
+    			add_location(div6, file$p, 114, 14, 3840);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div6, anchor);
@@ -46592,7 +45118,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function create_fragment$v(ctx) {
+    function create_fragment$s(ctx) {
     	let div15;
     	let div13;
     	let div12;
@@ -46671,43 +45197,43 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			button = element("button");
     			button.textContent = "Submit";
     			attr_dev(h10, "class", "labels svelte-z5bal3");
-    			add_location(h10, file$r, 101, 10, 3371);
+    			add_location(h10, file$p, 101, 10, 3371);
     			attr_dev(div0, "class", "mx-auto w-64 mb-4 svelte-z5bal3");
-    			add_location(div0, file$r, 100, 8, 3329);
+    			add_location(div0, file$p, 100, 8, 3329);
     			attr_dev(div1, "class", "rows mx-4 svelte-z5bal3");
-    			add_location(div1, file$r, 106, 14, 3540);
+    			add_location(div1, file$p, 106, 14, 3540);
     			attr_dev(div2, "class", "w-9/12 svelte-z5bal3");
-    			add_location(div2, file$r, 105, 12, 3505);
+    			add_location(div2, file$p, 105, 12, 3505);
     			attr_dev(div3, "class", "rows mx-4 svelte-z5bal3");
-    			add_location(div3, file$r, 109, 14, 3648);
+    			add_location(div3, file$p, 109, 14, 3648);
     			attr_dev(div4, "class", "w-3/12 svelte-z5bal3");
-    			add_location(div4, file$r, 108, 12, 3613);
+    			add_location(div4, file$p, 108, 12, 3613);
     			attr_dev(div5, "class", "flex mb-6 svelte-z5bal3");
-    			add_location(div5, file$r, 104, 10, 3469);
+    			add_location(div5, file$p, 104, 10, 3469);
     			attr_dev(div6, "class", "boxheight2 flex flex-col overflow-auto svelte-z5bal3");
-    			add_location(div6, file$r, 112, 10, 3729);
+    			add_location(div6, file$p, 112, 10, 3729);
     			attr_dev(div7, "class", "flex-col svelte-z5bal3");
-    			add_location(div7, file$r, 103, 8, 3436);
+    			add_location(div7, file$p, 103, 8, 3436);
     			attr_dev(div8, "class", "outer_box flex-col h-full svelte-z5bal3");
-    			add_location(div8, file$r, 99, 6, 3281);
+    			add_location(div8, file$p, 99, 6, 3281);
     			attr_dev(h11, "class", "labels svelte-z5bal3");
-    			add_location(h11, file$r, 151, 10, 5219);
+    			add_location(h11, file$p, 151, 10, 5219);
     			attr_dev(div9, "class", "mx-auto w-64 pb-2 flex flex-col svelte-z5bal3");
-    			add_location(div9, file$r, 150, 8, 5163);
+    			add_location(div9, file$p, 150, 8, 5163);
     			attr_dev(div10, "class", " pb-4 max-w-full boxheight flex flex-col overflow-auto svelte-z5bal3");
-    			add_location(div10, file$r, 153, 8, 5282);
+    			add_location(div10, file$p, 153, 8, 5282);
     			attr_dev(div11, "class", "outer_box flex-wrap h-full svelte-z5bal3");
-    			add_location(div11, file$r, 149, 6, 5114);
+    			add_location(div11, file$p, 149, 6, 5114);
     			attr_dev(div12, "class", "flex mx-3 w-full mb-6 h-full svelte-z5bal3");
-    			add_location(div12, file$r, 98, 4, 3232);
+    			add_location(div12, file$p, 98, 4, 3232);
     			attr_dev(div13, "class", "max-w-full mx-auto flex statement mb-4  svelte-z5bal3");
-    			add_location(div13, file$r, 97, 2, 3174);
+    			add_location(div13, file$p, 97, 2, 3174);
     			attr_dev(button, "class", "bg-dark hover:bg-elight hover:text-edark outline-none text-white\n      font-bold py-4 px-4 text-xl rounded-full svelte-z5bal3");
-    			add_location(button, file$r, 160, 4, 5498);
+    			add_location(button, file$p, 160, 4, 5498);
     			attr_dev(div14, "class", "mt-10 flex justify-center svelte-z5bal3");
-    			add_location(div14, file$r, 159, 2, 5454);
+    			add_location(div14, file$p, 159, 2, 5454);
     			attr_dev(div15, "class", "svelte-z5bal3");
-    			add_location(div15, file$r, 96, 0, 3166);
+    			add_location(div15, file$p, 96, 0, 3166);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -46790,7 +45316,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$v.name,
+    		id: create_fragment$s.name,
     		type: "component",
     		source: "",
     		ctx
@@ -46799,7 +45325,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$r($$self, $$props, $$invalidate) {
+    function instance$o($$self, $$props, $$invalidate) {
     	let $testStore;
     	validate_store(testStore$1, "testStore");
     	component_subscribe($$self, testStore$1, $$value => $$invalidate(1, $testStore = $$value));
@@ -46918,13 +45444,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Select_problems$1 extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$r, create_fragment$v, safe_not_equal, { currentRoute: 5 });
+    		init(this, options, instance$o, create_fragment$s, safe_not_equal, { currentRoute: 5 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Select_problems",
     			options,
-    			id: create_fragment$v.name
+    			id: create_fragment$s.name
     		});
 
     		const { ctx } = this.$$;
@@ -46945,10 +45471,10 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     /* src/routes/update_test/select_page.svelte generated by Svelte v3.18.1 */
-    const file$s = "src/routes/update_test/select_page.svelte";
+    const file$q = "src/routes/update_test/select_page.svelte";
 
     // (9:2) {#if pageNum === 1}
-    function create_if_block_1$6(ctx) {
+    function create_if_block_1$5(ctx) {
     	let current;
     	const testinitials = new Test_initials$1({ $$inline: true });
 
@@ -46976,7 +45502,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_if_block_1$6.name,
+    		id: create_if_block_1$5.name,
     		type: "if",
     		source: "(9:2) {#if pageNum === 1}",
     		ctx
@@ -46986,7 +45512,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (12:2) {#if pageNum === 2}
-    function create_if_block$a(ctx) {
+    function create_if_block$9(ctx) {
     	let current;
 
     	const testproblems = new Select_problems$1({
@@ -47023,7 +45549,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_if_block$a.name,
+    		id: create_if_block$9.name,
     		type: "if",
     		source: "(12:2) {#if pageNum === 2}",
     		ctx
@@ -47032,12 +45558,12 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function create_fragment$w(ctx) {
+    function create_fragment$t(ctx) {
     	let div;
     	let t;
     	let current;
-    	let if_block0 = /*pageNum*/ ctx[0] === 1 && create_if_block_1$6(ctx);
-    	let if_block1 = /*pageNum*/ ctx[0] === 2 && create_if_block$a(ctx);
+    	let if_block0 = /*pageNum*/ ctx[0] === 1 && create_if_block_1$5(ctx);
+    	let if_block1 = /*pageNum*/ ctx[0] === 2 && create_if_block$9(ctx);
 
     	const block = {
     		c: function create() {
@@ -47045,7 +45571,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			if (if_block0) if_block0.c();
     			t = space();
     			if (if_block1) if_block1.c();
-    			add_location(div, file$s, 7, 0, 181);
+    			add_location(div, file$q, 7, 0, 181);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -47060,7 +45586,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		p: function update(ctx, [dirty]) {
     			if (/*pageNum*/ ctx[0] === 1) {
     				if (!if_block0) {
-    					if_block0 = create_if_block_1$6(ctx);
+    					if_block0 = create_if_block_1$5(ctx);
     					if_block0.c();
     					transition_in(if_block0, 1);
     					if_block0.m(div, t);
@@ -47082,7 +45608,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     					if_block1.p(ctx, dirty);
     					transition_in(if_block1, 1);
     				} else {
-    					if_block1 = create_if_block$a(ctx);
+    					if_block1 = create_if_block$9(ctx);
     					if_block1.c();
     					transition_in(if_block1, 1);
     					if_block1.m(div, null);
@@ -47117,7 +45643,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$w.name,
+    		id: create_fragment$t.name,
     		type: "component",
     		source: "",
     		ctx
@@ -47126,7 +45652,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$s($$self, $$props, $$invalidate) {
+    function instance$p($$self, $$props, $$invalidate) {
     	let { pageNum = 1 } = $$props;
     	let { currentRoute } = $$props;
     	const writable_props = ["pageNum", "currentRoute"];
@@ -47155,13 +45681,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Select_page$1 extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$s, create_fragment$w, safe_not_equal, { pageNum: 0, currentRoute: 1 });
+    		init(this, options, instance$p, create_fragment$t, safe_not_equal, { pageNum: 0, currentRoute: 1 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Select_page",
     			options,
-    			id: create_fragment$w.name
+    			id: create_fragment$t.name
     		});
 
     		const { ctx } = this.$$;
@@ -47192,9 +45718,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     /* src/routes/update_test/edit_test.svelte generated by Svelte v3.18.1 */
 
     const { console: console_1$6 } = globals;
-    const file$t = "src/routes/update_test/edit_test.svelte";
+    const file$r = "src/routes/update_test/edit_test.svelte";
 
-    function create_fragment$x(ctx) {
+    function create_fragment$u(ctx) {
     	let div2;
     	let header;
     	let t0;
@@ -47247,25 +45773,25 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			button1 = element("button");
     			button1.textContent = "Next";
     			attr_dev(subheader, "class", "svelte-hwxovh");
-    			add_location(subheader, file$t, 35, 4, 1353);
+    			add_location(subheader, file$r, 35, 4, 1353);
     			attr_dev(header, "class", "svelte-hwxovh");
-    			add_location(header, file$t, 33, 2, 1325);
+    			add_location(header, file$r, 33, 2, 1325);
     			attr_dev(main, "class", " mx-auto w-full flex-grow overflow-auto svelte-hwxovh");
-    			add_location(main, file$t, 39, 2, 1435);
+    			add_location(main, file$r, 39, 2, 1435);
     			attr_dev(button0, "id", "prevbutton");
     			attr_dev(button0, "class", "py-4 px-6 float-left shadow-md no-underline rounded-full bg-dark\n        text-white font-sans font-semibold text-sm border-white btn-primary\n        hover:text-white text-xl hover:bg-elight focus:outline-none\n        active:shadow-none mr-2 svelte-hwxovh");
-    			add_location(button0, file$t, 44, 6, 1651);
+    			add_location(button0, file$r, 44, 6, 1651);
     			attr_dev(div0, "class", "flex-1  svelte-hwxovh");
-    			add_location(div0, file$t, 43, 4, 1623);
+    			add_location(div0, file$r, 43, 4, 1623);
     			attr_dev(button1, "id", "nextbutton");
     			attr_dev(button1, "class", "py-4 px-6 shadow-md text-xl float-right no-underline rounded-full\n        bg-dark text-white font-sans font-semibold text-sm border-white\n        btn-primary hover:text-dark hover:bg-elight focus:outline-none\n        active:shadow-none mr-2 svelte-hwxovh");
-    			add_location(button1, file$t, 61, 6, 2165);
+    			add_location(button1, file$r, 61, 6, 2165);
     			attr_dev(div1, "class", "flex-1 svelte-hwxovh");
-    			add_location(div1, file$t, 60, 4, 2138);
+    			add_location(div1, file$r, 60, 4, 2138);
     			attr_dev(footer, "class", " footer my-8 w-full px-20 mx-auto sticky svelte-hwxovh");
-    			add_location(footer, file$t, 42, 2, 1561);
+    			add_location(footer, file$r, 42, 2, 1561);
     			attr_dev(div2, "class", "w-screen bg-edark h-screen flex flex-col svelte-hwxovh");
-    			add_location(div2, file$t, 32, 0, 1268);
+    			add_location(div2, file$r, 32, 0, 1268);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -47327,7 +45853,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$x.name,
+    		id: create_fragment$u.name,
     		type: "component",
     		source: "",
     		ctx
@@ -47336,7 +45862,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$t($$self, $$props, $$invalidate) {
+    function instance$q($$self, $$props, $$invalidate) {
     	let $test;
     	let $testStore;
     	validate_store(testStore$1, "testStore");
@@ -47420,13 +45946,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Edit_test extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$t, create_fragment$x, safe_not_equal, { currentRoute: 0 });
+    		init(this, options, instance$q, create_fragment$u, safe_not_equal, { currentRoute: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Edit_test",
     			options,
-    			id: create_fragment$x.name
+    			id: create_fragment$u.name
     		});
 
     		const { ctx } = this.$$;
@@ -47448,7 +45974,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     /* src/routes/problem/problem_navbar.svelte generated by Svelte v3.18.1 */
 
-    const file$u = "src/routes/problem/problem_navbar.svelte";
+    const file$s = "src/routes/problem/problem_navbar.svelte";
 
     function get_each_context$c(ctx, list, i) {
     	const child_ctx = ctx.slice();
@@ -47457,7 +45983,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (20:6) {#if index !== content.length}
-    function create_if_block$b(ctx) {
+    function create_if_block$a(ctx) {
     	let div2;
     	let div1;
     	let div0;
@@ -47469,15 +45995,15 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			div1 = element("div");
     			div0 = element("div");
     			attr_dev(div0, "class", " text-xs leading-none py-1 text-center rounded ");
-    			add_location(div0, file$u, 25, 12, 1008);
+    			add_location(div0, file$s, 25, 12, 1008);
 
     			attr_dev(div1, "class", div1_class_value = /*index*/ ctx[4] < /*position*/ ctx[0]
     			? /*activeBar*/ ctx[3]
     			: "w-full text-grey-darkest  bg-light rounded items-center align-middle align-center flex-1");
 
-    			add_location(div1, file$u, 23, 10, 848);
+    			add_location(div1, file$s, 23, 10, 848);
     			attr_dev(div2, "class", "w-1/6 align-center items-center align-middle content-center\n          flex");
-    			add_location(div2, file$u, 20, 8, 739);
+    			add_location(div2, file$s, 20, 8, 739);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div2, anchor);
@@ -47498,7 +46024,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_if_block$b.name,
+    		id: create_if_block$a.name,
     		type: "if",
     		source: "(20:6) {#if index !== content.length}",
     		ctx
@@ -47517,7 +46043,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	let div0_class_value;
     	let t1;
     	let if_block_anchor;
-    	let if_block = /*index*/ ctx[4] !== /*content*/ ctx[1].length && create_if_block$b(ctx);
+    	let if_block = /*index*/ ctx[4] !== /*content*/ ctx[1].length && create_if_block$a(ctx);
 
     	const block = {
     		c: function create() {
@@ -47529,15 +46055,15 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			if (if_block) if_block.c();
     			if_block_anchor = empty();
     			attr_dev(span, "class", "text-center w-full text-2xl");
-    			add_location(span, file$u, 16, 10, 609);
+    			add_location(span, file$s, 16, 10, 609);
 
     			attr_dev(div0, "class", div0_class_value = /*index*/ ctx[4] <= /*position*/ ctx[0]
     			? /*activeCircle*/ ctx[2]
     			: "w-16 h-16  bg-light text-white border-2 mx-auto rounded-full text-lg flex items-center");
 
-    			add_location(div0, file$u, 14, 8, 451);
+    			add_location(div0, file$s, 14, 8, 451);
     			attr_dev(div1, "class", "flex-1");
-    			add_location(div1, file$u, 13, 6, 422);
+    			add_location(div1, file$s, 13, 6, 422);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div1, anchor);
@@ -47576,7 +46102,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function create_fragment$y(ctx) {
+    function create_fragment$v(ctx) {
     	let div8;
     	let div2;
     	let div0;
@@ -47626,23 +46152,23 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			div6 = element("div");
     			div6.textContent = "Test Cases";
     			attr_dev(div0, "class", "flex-1");
-    			add_location(div0, file$u, 11, 4, 364);
+    			add_location(div0, file$s, 11, 4, 364);
     			attr_dev(div1, "class", "flex-1");
-    			add_location(div1, file$u, 31, 4, 1133);
+    			add_location(div1, file$s, 31, 4, 1133);
     			attr_dev(div2, "class", "flex pb-3");
-    			add_location(div2, file$u, 10, 2, 336);
+    			add_location(div2, file$s, 10, 2, 336);
     			attr_dev(div3, "class", "w-1/4 text-xl text-elight ");
-    			add_location(div3, file$u, 35, 4, 1226);
+    			add_location(div3, file$s, 35, 4, 1226);
     			attr_dev(div4, "class", "w-1/4 text-xl text-elight");
-    			add_location(div4, file$u, 37, 4, 1294);
+    			add_location(div4, file$s, 37, 4, 1294);
     			attr_dev(div5, "class", "w-1/4 text-xl text-elight");
-    			add_location(div5, file$u, 39, 4, 1362);
+    			add_location(div5, file$s, 39, 4, 1362);
     			attr_dev(div6, "class", "w-1/4 text-xl text-elight");
-    			add_location(div6, file$u, 41, 4, 1421);
+    			add_location(div6, file$s, 41, 4, 1421);
     			attr_dev(div7, "class", "flex text-xs content-center text-center");
-    			add_location(div7, file$u, 34, 2, 1168);
+    			add_location(div7, file$s, 34, 2, 1168);
     			attr_dev(div8, "class", "max-w-2xl mx-auto py-4 my-4 pb-4");
-    			add_location(div8, file$u, 9, 0, 287);
+    			add_location(div8, file$s, 9, 0, 287);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -47703,7 +46229,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$y.name,
+    		id: create_fragment$v.name,
     		type: "component",
     		source: "",
     		ctx
@@ -47712,7 +46238,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$u($$self, $$props, $$invalidate) {
+    function instance$r($$self, $$props, $$invalidate) {
     	let { position = 1 } = $$props;
     	let content = [1, 2, 3, 4];
     	let activeCircle = "w-16 h-16 text-dark bg-elight  mx-auto rounded-full text-lg flex items-center";
@@ -47752,13 +46278,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Problem_navbar extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$u, create_fragment$y, safe_not_equal, { position: 0 });
+    		init(this, options, instance$r, create_fragment$v, safe_not_equal, { position: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Problem_navbar",
     			options,
-    			id: create_fragment$y.name
+    			id: create_fragment$v.name
     		});
     	}
 
@@ -47773,9 +46299,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     /* src/routes/problem/loader.svelte generated by Svelte v3.18.1 */
 
-    const file$v = "src/routes/problem/loader.svelte";
+    const file$t = "src/routes/problem/loader.svelte";
 
-    function create_fragment$z(ctx) {
+    function create_fragment$w(ctx) {
     	let div3;
     	let div0;
     	let t0;
@@ -47792,13 +46318,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			t1 = space();
     			div2 = element("div");
     			attr_dev(div0, "class", "LoaderBalls__item svelte-5k6xhq");
-    			add_location(div0, file$v, 42, 2, 2497);
+    			add_location(div0, file$t, 42, 2, 2497);
     			attr_dev(div1, "class", "LoaderBalls__item svelte-5k6xhq");
-    			add_location(div1, file$v, 43, 2, 2533);
+    			add_location(div1, file$t, 43, 2, 2533);
     			attr_dev(div2, "class", "LoaderBalls__item svelte-5k6xhq");
-    			add_location(div2, file$v, 44, 2, 2569);
+    			add_location(div2, file$t, 44, 2, 2569);
     			attr_dev(div3, "class", "LoaderBalls svelte-5k6xhq");
-    			add_location(div3, file$v, 41, 0, 2469);
+    			add_location(div3, file$t, 41, 0, 2469);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -47821,7 +46347,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$z.name,
+    		id: create_fragment$w.name,
     		type: "component",
     		source: "",
     		ctx
@@ -47833,13 +46359,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Loader$2 extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, null, create_fragment$z, safe_not_equal, {});
+    		init(this, options, null, create_fragment$w, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Loader",
     			options,
-    			id: create_fragment$z.name
+    			id: create_fragment$w.name
     		});
     	}
     }
@@ -47856,7 +46382,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     });
 
     /* src/routes/problem/problem_initials.svelte generated by Svelte v3.18.1 */
-    const file$w = "src/routes/problem/problem_initials.svelte";
+    const file$u = "src/routes/problem/problem_initials.svelte";
 
     function get_each_context$d(ctx, list, i) {
     	const child_ctx = ctx.slice();
@@ -47866,7 +46392,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (118:10) {#if uniqueNameStatus === 2}
-    function create_if_block_2$4(ctx) {
+    function create_if_block_2$3(ctx) {
     	let current;
     	const loader = new Loader$2({ $$inline: true });
 
@@ -47894,7 +46420,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_if_block_2$4.name,
+    		id: create_if_block_2$3.name,
     		type: "if",
     		source: "(118:10) {#if uniqueNameStatus === 2}",
     		ctx
@@ -47904,7 +46430,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (121:10) {#if uniqueNameStatus === 1}
-    function create_if_block_1$7(ctx) {
+    function create_if_block_1$6(ctx) {
     	let i;
 
     	const block = {
@@ -47912,7 +46438,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			i = element("i");
     			i.textContent = "";
     			attr_dev(i, "class", "material-icons status svelte-cftn61");
-    			add_location(i, file$w, 121, 12, 4019);
+    			add_location(i, file$u, 121, 12, 4019);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, i, anchor);
@@ -47924,7 +46450,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_if_block_1$7.name,
+    		id: create_if_block_1$6.name,
     		type: "if",
     		source: "(121:10) {#if uniqueNameStatus === 1}",
     		ctx
@@ -47934,7 +46460,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (124:10) {#if uniqueNameStatus === 3}
-    function create_if_block$c(ctx) {
+    function create_if_block$b(ctx) {
     	let span;
 
     	const block = {
@@ -47942,7 +46468,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			span = element("span");
     			span.textContent = "clear";
     			attr_dev(span, "class", "status material-icons svelte-cftn61");
-    			add_location(span, file$w, 124, 12, 4132);
+    			add_location(span, file$u, 124, 12, 4132);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, span, anchor);
@@ -47954,7 +46480,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_if_block$c.name,
+    		id: create_if_block$b.name,
     		type: "if",
     		source: "(124:10) {#if uniqueNameStatus === 3}",
     		ctx
@@ -47981,7 +46507,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			attr_dev(option, "name", option_name_value = /*tag*/ ctx[14]);
     			option.__value = option_value_value = /*index*/ ctx[16];
     			option.value = option.__value;
-    			add_location(option, file$w, 166, 16, 5446);
+    			add_location(option, file$u, 166, 16, 5446);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, option, anchor);
@@ -48005,7 +46531,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function create_fragment$A(ctx) {
+    function create_fragment$x(ctx) {
     	let div14;
     	let div13;
     	let div5;
@@ -48051,9 +46577,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	let input3;
     	let current;
     	let dispose;
-    	let if_block0 = /*uniqueNameStatus*/ ctx[2] === 2 && create_if_block_2$4(ctx);
-    	let if_block1 = /*uniqueNameStatus*/ ctx[2] === 1 && create_if_block_1$7(ctx);
-    	let if_block2 = /*uniqueNameStatus*/ ctx[2] === 3 && create_if_block$c(ctx);
+    	let if_block0 = /*uniqueNameStatus*/ ctx[2] === 2 && create_if_block_2$3(ctx);
+    	let if_block1 = /*uniqueNameStatus*/ ctx[2] === 1 && create_if_block_1$6(ctx);
+    	let if_block2 = /*uniqueNameStatus*/ ctx[2] === 3 && create_if_block$b(ctx);
     	let each_value = /*tagList*/ ctx[4];
     	let each_blocks = [];
 
@@ -48123,63 +46649,63 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			t22 = space();
     			input3 = element("input");
     			attr_dev(label0, "class", "text-elight text-2xl my-3");
-    			add_location(label0, file$w, 97, 6, 3232);
+    			add_location(label0, file$u, 97, 6, 3232);
     			attr_dev(input0, "type", "search");
     			attr_dev(input0, "name", "serch");
     			attr_dev(input0, "placeholder", "Search");
     			attr_dev(input0, "class", "bg-elight h-10 px-5 pr-10 rounded-full w-full text-xl\n              tet-edark focus:outline-none");
-    			add_location(input0, file$w, 103, 12, 3432);
+    			add_location(input0, file$u, 103, 12, 3432);
     			attr_dev(div0, "class", "w-full");
-    			add_location(div0, file$w, 102, 10, 3399);
+    			add_location(div0, file$u, 102, 10, 3399);
     			attr_dev(p, "class", "text-white text-sm my-2");
-    			add_location(p, file$w, 113, 12, 3784);
-    			add_location(div1, file$w, 112, 10, 3766);
+    			add_location(p, file$u, 113, 12, 3784);
+    			add_location(div1, file$u, 112, 10, 3766);
     			attr_dev(div2, "class", " flex-col w-full");
-    			add_location(div2, file$w, 101, 8, 3358);
+    			add_location(div2, file$u, 101, 8, 3358);
     			attr_dev(div3, "class", "ml-3");
-    			add_location(div3, file$w, 116, 8, 3871);
+    			add_location(div3, file$u, 116, 8, 3871);
     			attr_dev(div4, "class", "flex");
-    			add_location(div4, file$w, 100, 6, 3331);
-    			add_location(div5, file$w, 96, 4, 3220);
+    			add_location(div4, file$u, 100, 6, 3331);
+    			add_location(div5, file$u, 96, 4, 3220);
     			attr_dev(h2, "class", "labels text-2xl svelte-cftn61");
-    			add_location(h2, file$w, 131, 8, 4318);
-    			add_location(div6, file$w, 130, 6, 4304);
+    			add_location(h2, file$u, 131, 8, 4318);
+    			add_location(div6, file$u, 130, 6, 4304);
     			attr_dev(label1, "class", "labels svelte-cftn61");
-    			add_location(label1, file$w, 135, 10, 4414);
+    			add_location(label1, file$u, 135, 10, 4414);
     			attr_dev(input1, "class", "unitinput svelte-cftn61");
     			attr_dev(input1, "type", "text");
     			attr_dev(input1, "placeholder", "in milli seconds");
-    			add_location(input1, file$w, 136, 10, 4471);
+    			add_location(input1, file$u, 136, 10, 4471);
     			attr_dev(span0, "class", "unit svelte-cftn61");
-    			add_location(span0, file$w, 141, 10, 4637);
-    			add_location(div7, file$w, 134, 8, 4398);
+    			add_location(span0, file$u, 141, 10, 4637);
+    			add_location(div7, file$u, 134, 8, 4398);
     			attr_dev(label2, "class", "labels svelte-cftn61");
-    			add_location(label2, file$w, 144, 10, 4705);
+    			add_location(label2, file$u, 144, 10, 4705);
     			attr_dev(input2, "class", "unitinput svelte-cftn61");
     			attr_dev(input2, "type", "text");
     			attr_dev(input2, "placeholder", "in Mbs");
-    			add_location(input2, file$w, 145, 10, 4764);
+    			add_location(input2, file$u, 145, 10, 4764);
     			attr_dev(span1, "class", "unit svelte-cftn61");
-    			add_location(span1, file$w, 150, 10, 4920);
-    			add_location(div8, file$w, 143, 8, 4689);
+    			add_location(span1, file$u, 150, 10, 4920);
+    			add_location(div8, file$u, 143, 8, 4689);
     			attr_dev(label3, "class", "labels svelte-cftn61");
-    			add_location(label3, file$w, 154, 10, 4989);
+    			add_location(label3, file$u, 154, 10, 4989);
     			attr_dev(select, "class", "unitinput outline-none w-64 svelte-cftn61");
-    			add_location(select, file$w, 156, 12, 5078);
+    			add_location(select, file$u, 156, 12, 5078);
     			attr_dev(input3, "type", "text");
     			attr_dev(input3, "class", "unitinput svelte-cftn61");
     			input3.readOnly = true;
-    			add_location(input3, file$w, 174, 12, 5672);
+    			add_location(input3, file$u, 174, 12, 5672);
     			attr_dev(div9, "class", "flex-col flex");
-    			add_location(div9, file$w, 155, 10, 5038);
-    			add_location(div10, file$w, 153, 8, 4973);
-    			add_location(div11, file$w, 133, 6, 4384);
+    			add_location(div9, file$u, 155, 10, 5038);
+    			add_location(div10, file$u, 153, 8, 4973);
+    			add_location(div11, file$u, 133, 6, 4384);
     			attr_dev(div12, "class", "border-solid border-2 mt-6 border-light p-4");
-    			add_location(div12, file$w, 129, 4, 4240);
+    			add_location(div12, file$u, 129, 4, 4240);
     			attr_dev(div13, "class", "text-edark mx-auto max-w-5xl w-full");
-    			add_location(div13, file$w, 95, 2, 3166);
+    			add_location(div13, file$u, 95, 2, 3166);
     			attr_dev(div14, "class", "mx-auto flex-col flex-grow");
-    			add_location(div14, file$w, 94, 0, 3123);
+    			add_location(div14, file$u, 94, 0, 3123);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -48258,7 +46784,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     			if (/*uniqueNameStatus*/ ctx[2] === 2) {
     				if (!if_block0) {
-    					if_block0 = create_if_block_2$4(ctx);
+    					if_block0 = create_if_block_2$3(ctx);
     					if_block0.c();
     					transition_in(if_block0, 1);
     					if_block0.m(div3, t5);
@@ -48277,7 +46803,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     			if (/*uniqueNameStatus*/ ctx[2] === 1) {
     				if (!if_block1) {
-    					if_block1 = create_if_block_1$7(ctx);
+    					if_block1 = create_if_block_1$6(ctx);
     					if_block1.c();
     					if_block1.m(div3, t6);
     				}
@@ -48288,7 +46814,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     			if (/*uniqueNameStatus*/ ctx[2] === 3) {
     				if (!if_block2) {
-    					if_block2 = create_if_block$c(ctx);
+    					if_block2 = create_if_block$b(ctx);
     					if_block2.c();
     					if_block2.m(div3, null);
     				}
@@ -48353,7 +46879,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$A.name,
+    		id: create_fragment$x.name,
     		type: "component",
     		source: "",
     		ctx
@@ -48362,7 +46888,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$v($$self, $$props, $$invalidate) {
+    function instance$s($$self, $$props, $$invalidate) {
     	let $problemStore;
     	validate_store(problemStore, "problemStore");
     	component_subscribe($$self, problemStore, $$value => $$invalidate(1, $problemStore = $$value));
@@ -48499,21 +47025,21 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Problem_initials extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$v, create_fragment$A, safe_not_equal, {});
+    		init(this, options, instance$s, create_fragment$x, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Problem_initials",
     			options,
-    			id: create_fragment$A.name
+    			id: create_fragment$x.name
     		});
     	}
     }
 
     /* src/routes/problem/problem_statement.svelte generated by Svelte v3.18.1 */
-    const file$x = "src/routes/problem/problem_statement.svelte";
+    const file$v = "src/routes/problem/problem_statement.svelte";
 
-    function create_fragment$B(ctx) {
+    function create_fragment$y(ctx) {
     	let div2;
     	let div1;
     	let div0;
@@ -48532,16 +47058,16 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			t1 = space();
     			textarea = element("textarea");
     			attr_dev(label, "class", " text-2xl text-elight mb-3 my-2");
-    			add_location(label, file$x, 13, 6, 622);
+    			add_location(label, file$v, 13, 6, 622);
     			attr_dev(textarea, "class", " h-full w-full bg-dark text-elight text-2xl border\n        border-gray-200 rounded py-3 px-4 mb-3 leading-tight focus:outline-none\n        focus:border-white h-48 resize-none");
     			attr_dev(textarea, "id", "message");
-    			add_location(textarea, file$x, 16, 6, 731);
+    			add_location(textarea, file$v, 16, 6, 731);
     			attr_dev(div0, "class", "w-full h-full px-3");
-    			add_location(div0, file$x, 12, 4, 583);
+    			add_location(div0, file$v, 12, 4, 583);
     			attr_dev(div1, "class", "flex-col mx-3 w-full mb-6");
-    			add_location(div1, file$x, 11, 2, 539);
+    			add_location(div1, file$v, 11, 2, 539);
     			attr_dev(div2, "class", "max-w-6xl mx-auto flex statement flex-grow  svelte-ah4uim");
-    			add_location(div2, file$x, 10, 0, 479);
+    			add_location(div2, file$v, 10, 0, 479);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -48571,7 +47097,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$B.name,
+    		id: create_fragment$y.name,
     		type: "component",
     		source: "",
     		ctx
@@ -48580,7 +47106,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$w($$self, $$props, $$invalidate) {
+    function instance$t($$self, $$props, $$invalidate) {
     	let $problemStore;
     	validate_store(problemStore, "problemStore");
     	component_subscribe($$self, problemStore, $$value => $$invalidate(0, $problemStore = $$value));
@@ -48604,21 +47130,21 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Problem_statement extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$w, create_fragment$B, safe_not_equal, {});
+    		init(this, options, instance$t, create_fragment$y, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Problem_statement",
     			options,
-    			id: create_fragment$B.name
+    			id: create_fragment$y.name
     		});
     	}
     }
 
     /* src/routes/problem/testcase.svelte generated by Svelte v3.18.1 */
-    const file$y = "src/routes/problem/testcase.svelte";
+    const file$w = "src/routes/problem/testcase.svelte";
 
-    function create_fragment$C(ctx) {
+    function create_fragment$z(ctx) {
     	let div2;
     	let h1;
     	let t1;
@@ -48640,16 +47166,16 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			button = element("button");
     			button.textContent = "Submit";
     			attr_dev(h1, "class", "text-2xl text-elight mt-3 my-2 svelte-ashmvh");
-    			add_location(h1, file$y, 78, 2, 2812);
+    			add_location(h1, file$w, 78, 2, 2812);
     			attr_dev(div0, "id", "editor");
     			attr_dev(div0, "class", "editor mx-60 box-border flex-grow svelte-ashmvh");
-    			add_location(div0, file$y, 80, 2, 2879);
+    			add_location(div0, file$w, 80, 2, 2879);
     			attr_dev(button, "class", "bg-dark hover:bg-elight hover:text-edark outline-none text-white\n      font-bold py-4 px-4 text-xl rounded-full svelte-ashmvh");
-    			add_location(button, file$y, 85, 4, 3019);
+    			add_location(button, file$w, 85, 4, 3019);
     			attr_dev(div1, "class", "my-3 flex justify-center svelte-ashmvh");
-    			add_location(div1, file$y, 84, 2, 2976);
+    			add_location(div1, file$w, 84, 2, 2976);
     			attr_dev(div2, "class", "mx-64 flex-grow editor_window box-border svelte-ashmvh");
-    			add_location(div2, file$y, 77, 0, 2755);
+    			add_location(div2, file$w, 77, 0, 2755);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -48679,7 +47205,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$C.name,
+    		id: create_fragment$z.name,
     		type: "component",
     		source: "",
     		ctx
@@ -48688,7 +47214,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$x($$self, $$props, $$invalidate) {
+    function instance$u($$self, $$props, $$invalidate) {
     	let $problemStore;
     	validate_store(problemStore, "problemStore");
     	component_subscribe($$self, problemStore, $$value => $$invalidate(3, $problemStore = $$value));
@@ -48774,21 +47300,21 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Testcase extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$x, create_fragment$C, safe_not_equal, {});
+    		init(this, options, instance$u, create_fragment$z, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Testcase",
     			options,
-    			id: create_fragment$C.name
+    			id: create_fragment$z.name
     		});
     	}
     }
 
     /* src/routes/problem/problem_solution.svelte generated by Svelte v3.18.1 */
-    const file$z = "src/routes/problem/problem_solution.svelte";
+    const file$x = "src/routes/problem/problem_solution.svelte";
 
-    function create_fragment$D(ctx) {
+    function create_fragment$A(ctx) {
     	let div8;
     	let h1;
     	let t1;
@@ -48838,37 +47364,37 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			button = element("button");
     			button.textContent = "Run";
     			attr_dev(h1, "class", "text-2xl text-elight mt-3 my-2 svelte-1da7xg3");
-    			add_location(h1, file$z, 82, 2, 2798);
+    			add_location(h1, file$x, 82, 2, 2798);
     			attr_dev(div0, "id", "editor");
     			attr_dev(div0, "class", "editor mx-60 box-border flex-grow svelte-1da7xg3");
-    			add_location(div0, file$z, 83, 2, 2863);
+    			add_location(div0, file$x, 83, 2, 2863);
     			attr_dev(h20, "class", "text-xl text-elight my-3 my-2 svelte-1da7xg3");
-    			add_location(h20, file$z, 90, 6, 3076);
+    			add_location(h20, file$x, 90, 6, 3076);
     			attr_dev(div1, "id", "inputeditor");
     			attr_dev(div1, "class", "inputeditor text-xl h-full box-border  svelte-1da7xg3");
-    			add_location(div1, file$z, 92, 8, 3183);
+    			add_location(div1, file$x, 92, 8, 3183);
     			attr_dev(div2, "class", "flex-grow h-48 box-border svelte-1da7xg3");
-    			add_location(div2, file$z, 91, 6, 3135);
+    			add_location(div2, file$x, 91, 6, 3135);
     			attr_dev(div3, "class", "flex-1 mr-4 box-border svelte-1da7xg3");
-    			add_location(div3, file$z, 89, 4, 3033);
+    			add_location(div3, file$x, 89, 4, 3033);
     			attr_dev(h21, "class", "text-xl text-elight my-3 my-2 box-border svelte-1da7xg3");
-    			add_location(h21, file$z, 99, 6, 3366);
+    			add_location(h21, file$x, 99, 6, 3366);
     			attr_dev(textarea, "class", " h-full w-full bg-dark text-elight text-xl box-border\n          border-none rounded py-3 px-4 mb-3 leading-tight focus:outline-none\n          resize-none svelte-1da7xg3");
     			attr_dev(textarea, "id", "message");
     			textarea.readOnly = true;
-    			add_location(textarea, file$z, 101, 8, 3474);
+    			add_location(textarea, file$x, 101, 8, 3474);
     			attr_dev(div4, "class", "flex-grow h-48 svelte-1da7xg3");
-    			add_location(div4, file$z, 100, 6, 3437);
+    			add_location(div4, file$x, 100, 6, 3437);
     			attr_dev(div5, "class", "flex-1 ml-4 svelte-1da7xg3");
-    			add_location(div5, file$z, 98, 4, 3334);
+    			add_location(div5, file$x, 98, 4, 3334);
     			attr_dev(div6, "class", "flex my-4 p-2 border-solid h-64 border-2 border-light svelte-1da7xg3");
-    			add_location(div6, file$z, 88, 2, 2961);
+    			add_location(div6, file$x, 88, 2, 2961);
     			attr_dev(button, "class", "bg-dark hover:bg-elight hover:text-edark outline-none text-white\n      float-right font-bold py-2 px-4 rounded-full svelte-1da7xg3");
-    			add_location(button, file$z, 112, 4, 3776);
+    			add_location(button, file$x, 112, 4, 3776);
     			attr_dev(div7, "class", "svelte-1da7xg3");
-    			add_location(div7, file$z, 111, 2, 3766);
+    			add_location(div7, file$x, 111, 2, 3766);
     			attr_dev(div8, "class", "mx-64 flex-grow editor_window box-border svelte-1da7xg3");
-    			add_location(div8, file$z, 81, 0, 2741);
+    			add_location(div8, file$x, 81, 0, 2741);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -48918,7 +47444,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$D.name,
+    		id: create_fragment$A.name,
     		type: "component",
     		source: "",
     		ctx
@@ -48927,7 +47453,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$y($$self, $$props, $$invalidate) {
+    function instance$v($$self, $$props, $$invalidate) {
     	let $problemStore;
     	validate_store(problemStore, "problemStore");
     	component_subscribe($$self, problemStore, $$value => $$invalidate(5, $problemStore = $$value));
@@ -49036,19 +47562,19 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Problem_solution extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$y, create_fragment$D, safe_not_equal, {});
+    		init(this, options, instance$v, create_fragment$A, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Problem_solution",
     			options,
-    			id: create_fragment$D.name
+    			id: create_fragment$A.name
     		});
     	}
     }
 
     /* src/routes/problem/select_page.svelte generated by Svelte v3.18.1 */
-    const file$A = "src/routes/problem/select_page.svelte";
+    const file$y = "src/routes/problem/select_page.svelte";
 
     // (10:2) {#if pageNum === 1}
     function create_if_block_3(ctx) {
@@ -49089,7 +47615,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (13:2) {#if pageNum === 2}
-    function create_if_block_2$5(ctx) {
+    function create_if_block_2$4(ctx) {
     	let current;
     	const problemstatement = new Problem_statement({ $$inline: true });
 
@@ -49117,7 +47643,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_if_block_2$5.name,
+    		id: create_if_block_2$4.name,
     		type: "if",
     		source: "(13:2) {#if pageNum === 2}",
     		ctx
@@ -49127,7 +47653,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (16:2) {#if pageNum === 3}
-    function create_if_block_1$8(ctx) {
+    function create_if_block_1$7(ctx) {
     	let current;
     	const problemsolution = new Problem_solution({ $$inline: true });
 
@@ -49155,7 +47681,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_if_block_1$8.name,
+    		id: create_if_block_1$7.name,
     		type: "if",
     		source: "(16:2) {#if pageNum === 3}",
     		ctx
@@ -49165,7 +47691,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (19:2) {#if pageNum === 4}
-    function create_if_block$d(ctx) {
+    function create_if_block$c(ctx) {
     	let current;
     	const testcase = new Testcase({ $$inline: true });
 
@@ -49193,7 +47719,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_if_block$d.name,
+    		id: create_if_block$c.name,
     		type: "if",
     		source: "(19:2) {#if pageNum === 4}",
     		ctx
@@ -49202,16 +47728,16 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function create_fragment$E(ctx) {
+    function create_fragment$B(ctx) {
     	let div;
     	let t0;
     	let t1;
     	let t2;
     	let current;
     	let if_block0 = /*pageNum*/ ctx[0] === 1 && create_if_block_3(ctx);
-    	let if_block1 = /*pageNum*/ ctx[0] === 2 && create_if_block_2$5(ctx);
-    	let if_block2 = /*pageNum*/ ctx[0] === 3 && create_if_block_1$8(ctx);
-    	let if_block3 = /*pageNum*/ ctx[0] === 4 && create_if_block$d(ctx);
+    	let if_block1 = /*pageNum*/ ctx[0] === 2 && create_if_block_2$4(ctx);
+    	let if_block2 = /*pageNum*/ ctx[0] === 3 && create_if_block_1$7(ctx);
+    	let if_block3 = /*pageNum*/ ctx[0] === 4 && create_if_block$c(ctx);
 
     	const block = {
     		c: function create() {
@@ -49223,7 +47749,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			if (if_block2) if_block2.c();
     			t2 = space();
     			if (if_block3) if_block3.c();
-    			add_location(div, file$A, 8, 0, 269);
+    			add_location(div, file$y, 8, 0, 269);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -49261,7 +47787,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     			if (/*pageNum*/ ctx[0] === 2) {
     				if (!if_block1) {
-    					if_block1 = create_if_block_2$5(ctx);
+    					if_block1 = create_if_block_2$4(ctx);
     					if_block1.c();
     					transition_in(if_block1, 1);
     					if_block1.m(div, t1);
@@ -49280,7 +47806,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     			if (/*pageNum*/ ctx[0] === 3) {
     				if (!if_block2) {
-    					if_block2 = create_if_block_1$8(ctx);
+    					if_block2 = create_if_block_1$7(ctx);
     					if_block2.c();
     					transition_in(if_block2, 1);
     					if_block2.m(div, t2);
@@ -49299,7 +47825,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     			if (/*pageNum*/ ctx[0] === 4) {
     				if (!if_block3) {
-    					if_block3 = create_if_block$d(ctx);
+    					if_block3 = create_if_block$c(ctx);
     					if_block3.c();
     					transition_in(if_block3, 1);
     					if_block3.m(div, null);
@@ -49342,7 +47868,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$E.name,
+    		id: create_fragment$B.name,
     		type: "component",
     		source: "",
     		ctx
@@ -49351,7 +47877,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$z($$self, $$props, $$invalidate) {
+    function instance$w($$self, $$props, $$invalidate) {
     	let { pageNum = 1 } = $$props;
     	const writable_props = ["pageNum"];
 
@@ -49377,13 +47903,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Select_page$2 extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$z, create_fragment$E, safe_not_equal, { pageNum: 0 });
+    		init(this, options, instance$w, create_fragment$B, safe_not_equal, { pageNum: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Select_page",
     			options,
-    			id: create_fragment$E.name
+    			id: create_fragment$B.name
     		});
     	}
 
@@ -49397,9 +47923,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     /* src/routes/problem/add_problem.svelte generated by Svelte v3.18.1 */
-    const file$B = "src/routes/problem/add_problem.svelte";
+    const file$z = "src/routes/problem/add_problem.svelte";
 
-    function create_fragment$F(ctx) {
+    function create_fragment$C(ctx) {
     	let div2;
     	let header;
     	let t0;
@@ -49455,25 +47981,25 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			button1 = element("button");
     			button1.textContent = "Next";
     			attr_dev(subheader, "class", "svelte-1cw36oz");
-    			add_location(subheader, file$B, 18, 4, 753);
+    			add_location(subheader, file$z, 18, 4, 753);
     			attr_dev(header, "class", "svelte-1cw36oz");
-    			add_location(header, file$B, 15, 2, 709);
+    			add_location(header, file$z, 15, 2, 709);
     			attr_dev(main, "class", " mx-auto w-full flex-grow overflow-auto svelte-1cw36oz");
-    			add_location(main, file$B, 22, 2, 835);
+    			add_location(main, file$z, 22, 2, 835);
     			attr_dev(button0, "id", "prevbutton");
     			attr_dev(button0, "class", "py-4 px-6 float-left shadow-md no-underline rounded-full bg-dark\n        text-white font-sans font-semibold text-sm border-white btn-primary\n        hover:text-white text-xl hover:bg-elight focus:outline-none\n        active:shadow-none mr-2 svelte-1cw36oz");
-    			add_location(button0, file$B, 27, 6, 1036);
+    			add_location(button0, file$z, 27, 6, 1036);
     			attr_dev(div0, "class", "flex-1  svelte-1cw36oz");
-    			add_location(div0, file$B, 26, 4, 1008);
+    			add_location(div0, file$z, 26, 4, 1008);
     			attr_dev(button1, "id", "nextbutton");
     			attr_dev(button1, "class", "py-4 px-6 shadow-md text-xl float-right no-underline rounded-full\n        bg-dark text-white font-sans font-semibold text-sm border-white\n        btn-primary hover:text-dark hover:bg-elight focus:outline-none\n        active:shadow-none mr-2 svelte-1cw36oz");
-    			add_location(button1, file$B, 44, 6, 1550);
+    			add_location(button1, file$z, 44, 6, 1550);
     			attr_dev(div1, "class", "flex-1 svelte-1cw36oz");
-    			add_location(div1, file$B, 43, 4, 1523);
+    			add_location(div1, file$z, 43, 4, 1523);
     			attr_dev(footer, "class", " footer my-8 w-full px-20 mx-auto sticky svelte-1cw36oz");
-    			add_location(footer, file$B, 25, 2, 946);
+    			add_location(footer, file$z, 25, 2, 946);
     			attr_dev(div2, "class", "w-screen bg-edark h-screen flex flex-col svelte-1cw36oz");
-    			add_location(div2, file$B, 14, 0, 652);
+    			add_location(div2, file$z, 14, 0, 652);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -49539,7 +48065,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$F.name,
+    		id: create_fragment$C.name,
     		type: "component",
     		source: "",
     		ctx
@@ -49548,7 +48074,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$A($$self, $$props, $$invalidate) {
+    function instance$x($$self, $$props, $$invalidate) {
     	const click_handler = () => {
     		if (pageNum === 1) {
     			return;
@@ -49583,20 +48109,20 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Add_problem extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$A, create_fragment$F, safe_not_equal, {});
+    		init(this, options, instance$x, create_fragment$C, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Add_problem",
     			options,
-    			id: create_fragment$F.name
+    			id: create_fragment$C.name
     		});
     	}
     }
 
     /* src/routes/update_problem/problem_navbar.svelte generated by Svelte v3.18.1 */
 
-    const file$C = "src/routes/update_problem/problem_navbar.svelte";
+    const file$A = "src/routes/update_problem/problem_navbar.svelte";
 
     function get_each_context$e(ctx, list, i) {
     	const child_ctx = ctx.slice();
@@ -49605,7 +48131,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (20:6) {#if index !== content.length}
-    function create_if_block$e(ctx) {
+    function create_if_block$d(ctx) {
     	let div2;
     	let div1;
     	let div0;
@@ -49617,15 +48143,15 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			div1 = element("div");
     			div0 = element("div");
     			attr_dev(div0, "class", " text-xs leading-none py-1 text-center rounded ");
-    			add_location(div0, file$C, 25, 12, 1008);
+    			add_location(div0, file$A, 25, 12, 1008);
 
     			attr_dev(div1, "class", div1_class_value = /*index*/ ctx[4] < /*position*/ ctx[0]
     			? /*activeBar*/ ctx[3]
     			: "w-full text-grey-darkest  bg-light rounded items-center align-middle align-center flex-1");
 
-    			add_location(div1, file$C, 23, 10, 848);
+    			add_location(div1, file$A, 23, 10, 848);
     			attr_dev(div2, "class", "w-1/6 align-center items-center align-middle content-center\n          flex");
-    			add_location(div2, file$C, 20, 8, 739);
+    			add_location(div2, file$A, 20, 8, 739);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div2, anchor);
@@ -49646,7 +48172,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_if_block$e.name,
+    		id: create_if_block$d.name,
     		type: "if",
     		source: "(20:6) {#if index !== content.length}",
     		ctx
@@ -49665,7 +48191,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	let div0_class_value;
     	let t1;
     	let if_block_anchor;
-    	let if_block = /*index*/ ctx[4] !== /*content*/ ctx[1].length && create_if_block$e(ctx);
+    	let if_block = /*index*/ ctx[4] !== /*content*/ ctx[1].length && create_if_block$d(ctx);
 
     	const block = {
     		c: function create() {
@@ -49677,15 +48203,15 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			if (if_block) if_block.c();
     			if_block_anchor = empty();
     			attr_dev(span, "class", "text-center w-full text-2xl");
-    			add_location(span, file$C, 16, 10, 609);
+    			add_location(span, file$A, 16, 10, 609);
 
     			attr_dev(div0, "class", div0_class_value = /*index*/ ctx[4] <= /*position*/ ctx[0]
     			? /*activeCircle*/ ctx[2]
     			: "w-16 h-16  bg-light text-white border-2 mx-auto rounded-full text-lg flex items-center");
 
-    			add_location(div0, file$C, 14, 8, 451);
+    			add_location(div0, file$A, 14, 8, 451);
     			attr_dev(div1, "class", "flex-1");
-    			add_location(div1, file$C, 13, 6, 422);
+    			add_location(div1, file$A, 13, 6, 422);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div1, anchor);
@@ -49724,7 +48250,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function create_fragment$G(ctx) {
+    function create_fragment$D(ctx) {
     	let div8;
     	let div2;
     	let div0;
@@ -49774,23 +48300,23 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			div6 = element("div");
     			div6.textContent = "Test Cases";
     			attr_dev(div0, "class", "flex-1");
-    			add_location(div0, file$C, 11, 4, 364);
+    			add_location(div0, file$A, 11, 4, 364);
     			attr_dev(div1, "class", "flex-1");
-    			add_location(div1, file$C, 31, 4, 1133);
+    			add_location(div1, file$A, 31, 4, 1133);
     			attr_dev(div2, "class", "flex pb-3");
-    			add_location(div2, file$C, 10, 2, 336);
+    			add_location(div2, file$A, 10, 2, 336);
     			attr_dev(div3, "class", "w-1/4 text-xl text-elight ");
-    			add_location(div3, file$C, 35, 4, 1226);
+    			add_location(div3, file$A, 35, 4, 1226);
     			attr_dev(div4, "class", "w-1/4 text-xl text-elight");
-    			add_location(div4, file$C, 37, 4, 1294);
+    			add_location(div4, file$A, 37, 4, 1294);
     			attr_dev(div5, "class", "w-1/4 text-xl text-elight");
-    			add_location(div5, file$C, 39, 4, 1362);
+    			add_location(div5, file$A, 39, 4, 1362);
     			attr_dev(div6, "class", "w-1/4 text-xl text-elight");
-    			add_location(div6, file$C, 41, 4, 1421);
+    			add_location(div6, file$A, 41, 4, 1421);
     			attr_dev(div7, "class", "flex text-xs content-center text-center");
-    			add_location(div7, file$C, 34, 2, 1168);
+    			add_location(div7, file$A, 34, 2, 1168);
     			attr_dev(div8, "class", "max-w-2xl mx-auto py-4 my-4 pb-4");
-    			add_location(div8, file$C, 9, 0, 287);
+    			add_location(div8, file$A, 9, 0, 287);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -49851,7 +48377,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$G.name,
+    		id: create_fragment$D.name,
     		type: "component",
     		source: "",
     		ctx
@@ -49860,7 +48386,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$B($$self, $$props, $$invalidate) {
+    function instance$y($$self, $$props, $$invalidate) {
     	let { position = 1 } = $$props;
     	let content = [1, 2, 3, 4];
     	let activeCircle = "w-16 h-16 text-dark bg-elight  mx-auto rounded-full text-lg flex items-center";
@@ -49900,13 +48426,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Problem_navbar$1 extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$B, create_fragment$G, safe_not_equal, { position: 0 });
+    		init(this, options, instance$y, create_fragment$D, safe_not_equal, { position: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Problem_navbar",
     			options,
-    			id: create_fragment$G.name
+    			id: create_fragment$D.name
     		});
     	}
 
@@ -49921,9 +48447,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     /* src/routes/update_problem/loader.svelte generated by Svelte v3.18.1 */
 
-    const file$D = "src/routes/update_problem/loader.svelte";
+    const file$B = "src/routes/update_problem/loader.svelte";
 
-    function create_fragment$H(ctx) {
+    function create_fragment$E(ctx) {
     	let div3;
     	let div0;
     	let t0;
@@ -49940,13 +48466,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			t1 = space();
     			div2 = element("div");
     			attr_dev(div0, "class", "LoaderBalls__item svelte-42m7bp");
-    			add_location(div0, file$D, 42, 2, 2513);
+    			add_location(div0, file$B, 42, 2, 2513);
     			attr_dev(div1, "class", "LoaderBalls__item svelte-42m7bp");
-    			add_location(div1, file$D, 43, 2, 2549);
+    			add_location(div1, file$B, 43, 2, 2549);
     			attr_dev(div2, "class", "LoaderBalls__item svelte-42m7bp");
-    			add_location(div2, file$D, 44, 2, 2585);
+    			add_location(div2, file$B, 44, 2, 2585);
     			attr_dev(div3, "class", "LoaderBalls svelte-42m7bp");
-    			add_location(div3, file$D, 41, 0, 2485);
+    			add_location(div3, file$B, 41, 0, 2485);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -49969,7 +48495,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$H.name,
+    		id: create_fragment$E.name,
     		type: "component",
     		source: "",
     		ctx
@@ -49981,13 +48507,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Loader$3 extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, null, create_fragment$H, safe_not_equal, {});
+    		init(this, options, null, create_fragment$E, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Loader",
     			options,
-    			id: create_fragment$H.name
+    			id: create_fragment$E.name
     		});
     	}
     }
@@ -50004,7 +48530,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     });
 
     /* src/routes/update_problem/problem_initials.svelte generated by Svelte v3.18.1 */
-    const file$E = "src/routes/update_problem/problem_initials.svelte";
+    const file$C = "src/routes/update_problem/problem_initials.svelte";
 
     function get_each_context$f(ctx, list, i) {
     	const child_ctx = ctx.slice();
@@ -50014,7 +48540,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (128:10) {#if uniqueNameStatus === 2}
-    function create_if_block_2$6(ctx) {
+    function create_if_block_2$5(ctx) {
     	let current;
     	const loader = new Loader$3({ $$inline: true });
 
@@ -50042,7 +48568,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_if_block_2$6.name,
+    		id: create_if_block_2$5.name,
     		type: "if",
     		source: "(128:10) {#if uniqueNameStatus === 2}",
     		ctx
@@ -50052,7 +48578,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (131:10) {#if uniqueNameStatus === 1}
-    function create_if_block_1$9(ctx) {
+    function create_if_block_1$8(ctx) {
     	let i;
 
     	const block = {
@@ -50060,7 +48586,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			i = element("i");
     			i.textContent = "";
     			attr_dev(i, "class", "material-icons status svelte-1nbk2ow");
-    			add_location(i, file$E, 131, 12, 4321);
+    			add_location(i, file$C, 131, 12, 4321);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, i, anchor);
@@ -50072,7 +48598,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_if_block_1$9.name,
+    		id: create_if_block_1$8.name,
     		type: "if",
     		source: "(131:10) {#if uniqueNameStatus === 1}",
     		ctx
@@ -50082,7 +48608,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (134:10) {#if uniqueNameStatus === 3}
-    function create_if_block$f(ctx) {
+    function create_if_block$e(ctx) {
     	let span;
 
     	const block = {
@@ -50090,7 +48616,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			span = element("span");
     			span.textContent = "clear";
     			attr_dev(span, "class", "status material-icons svelte-1nbk2ow");
-    			add_location(span, file$E, 134, 12, 4434);
+    			add_location(span, file$C, 134, 12, 4434);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, span, anchor);
@@ -50102,7 +48628,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_if_block$f.name,
+    		id: create_if_block$e.name,
     		type: "if",
     		source: "(134:10) {#if uniqueNameStatus === 3}",
     		ctx
@@ -50129,7 +48655,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			attr_dev(option, "name", option_name_value = /*tag*/ ctx[15]);
     			option.__value = option_value_value = /*index*/ ctx[17];
     			option.value = option.__value;
-    			add_location(option, file$E, 176, 16, 5748);
+    			add_location(option, file$C, 176, 16, 5748);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, option, anchor);
@@ -50153,7 +48679,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function create_fragment$I(ctx) {
+    function create_fragment$F(ctx) {
     	let div14;
     	let div13;
     	let div5;
@@ -50199,9 +48725,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	let input3;
     	let current;
     	let dispose;
-    	let if_block0 = /*uniqueNameStatus*/ ctx[0] === 2 && create_if_block_2$6(ctx);
-    	let if_block1 = /*uniqueNameStatus*/ ctx[0] === 1 && create_if_block_1$9(ctx);
-    	let if_block2 = /*uniqueNameStatus*/ ctx[0] === 3 && create_if_block$f(ctx);
+    	let if_block0 = /*uniqueNameStatus*/ ctx[0] === 2 && create_if_block_2$5(ctx);
+    	let if_block1 = /*uniqueNameStatus*/ ctx[0] === 1 && create_if_block_1$8(ctx);
+    	let if_block2 = /*uniqueNameStatus*/ ctx[0] === 3 && create_if_block$e(ctx);
     	let each_value = /*tagList*/ ctx[4];
     	let each_blocks = [];
 
@@ -50271,64 +48797,64 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			t22 = space();
     			input3 = element("input");
     			attr_dev(label0, "class", "text-elight text-2xl my-3");
-    			add_location(label0, file$E, 106, 6, 3511);
+    			add_location(label0, file$C, 106, 6, 3511);
     			attr_dev(input0, "type", "search");
     			attr_dev(input0, "name", "serch");
     			attr_dev(input0, "placeholder", "Search");
     			attr_dev(input0, "class", "bg-elight h-10 px-5 pr-10 rounded-full w-full text-xl\n              tet-edark focus:outline-none");
     			input0.readOnly = true;
-    			add_location(input0, file$E, 112, 12, 3711);
+    			add_location(input0, file$C, 112, 12, 3711);
     			attr_dev(div0, "class", "w-full");
-    			add_location(div0, file$E, 111, 10, 3678);
+    			add_location(div0, file$C, 111, 10, 3678);
     			attr_dev(p, "class", "text-white text-sm my-2");
-    			add_location(p, file$E, 123, 12, 4086);
-    			add_location(div1, file$E, 122, 10, 4068);
+    			add_location(p, file$C, 123, 12, 4086);
+    			add_location(div1, file$C, 122, 10, 4068);
     			attr_dev(div2, "class", " flex-col w-full");
-    			add_location(div2, file$E, 110, 8, 3637);
+    			add_location(div2, file$C, 110, 8, 3637);
     			attr_dev(div3, "class", "ml-3");
-    			add_location(div3, file$E, 126, 8, 4173);
+    			add_location(div3, file$C, 126, 8, 4173);
     			attr_dev(div4, "class", "flex");
-    			add_location(div4, file$E, 109, 6, 3610);
-    			add_location(div5, file$E, 105, 4, 3499);
+    			add_location(div4, file$C, 109, 6, 3610);
+    			add_location(div5, file$C, 105, 4, 3499);
     			attr_dev(h2, "class", "labels text-2xl svelte-1nbk2ow");
-    			add_location(h2, file$E, 141, 8, 4620);
-    			add_location(div6, file$E, 140, 6, 4606);
+    			add_location(h2, file$C, 141, 8, 4620);
+    			add_location(div6, file$C, 140, 6, 4606);
     			attr_dev(label1, "class", "labels svelte-1nbk2ow");
-    			add_location(label1, file$E, 145, 10, 4716);
+    			add_location(label1, file$C, 145, 10, 4716);
     			attr_dev(input1, "class", "unitinput svelte-1nbk2ow");
     			attr_dev(input1, "type", "text");
     			attr_dev(input1, "placeholder", "in milli seconds");
-    			add_location(input1, file$E, 146, 10, 4773);
+    			add_location(input1, file$C, 146, 10, 4773);
     			attr_dev(span0, "class", "unit svelte-1nbk2ow");
-    			add_location(span0, file$E, 151, 10, 4939);
-    			add_location(div7, file$E, 144, 8, 4700);
+    			add_location(span0, file$C, 151, 10, 4939);
+    			add_location(div7, file$C, 144, 8, 4700);
     			attr_dev(label2, "class", "labels svelte-1nbk2ow");
-    			add_location(label2, file$E, 154, 10, 5007);
+    			add_location(label2, file$C, 154, 10, 5007);
     			attr_dev(input2, "class", "unitinput svelte-1nbk2ow");
     			attr_dev(input2, "type", "text");
     			attr_dev(input2, "placeholder", "in Mbs");
-    			add_location(input2, file$E, 155, 10, 5066);
+    			add_location(input2, file$C, 155, 10, 5066);
     			attr_dev(span1, "class", "unit svelte-1nbk2ow");
-    			add_location(span1, file$E, 160, 10, 5222);
-    			add_location(div8, file$E, 153, 8, 4991);
+    			add_location(span1, file$C, 160, 10, 5222);
+    			add_location(div8, file$C, 153, 8, 4991);
     			attr_dev(label3, "class", "labels svelte-1nbk2ow");
-    			add_location(label3, file$E, 164, 10, 5291);
+    			add_location(label3, file$C, 164, 10, 5291);
     			attr_dev(select, "class", "unitinput outline-none w-64 svelte-1nbk2ow");
-    			add_location(select, file$E, 166, 12, 5380);
+    			add_location(select, file$C, 166, 12, 5380);
     			attr_dev(input3, "type", "text");
     			attr_dev(input3, "class", "unitinput svelte-1nbk2ow");
     			input3.readOnly = true;
-    			add_location(input3, file$E, 184, 12, 5974);
+    			add_location(input3, file$C, 184, 12, 5974);
     			attr_dev(div9, "class", "flex-col flex");
-    			add_location(div9, file$E, 165, 10, 5340);
-    			add_location(div10, file$E, 163, 8, 5275);
-    			add_location(div11, file$E, 143, 6, 4686);
+    			add_location(div9, file$C, 165, 10, 5340);
+    			add_location(div10, file$C, 163, 8, 5275);
+    			add_location(div11, file$C, 143, 6, 4686);
     			attr_dev(div12, "class", "border-solid border-2 mt-6 border-light p-4");
-    			add_location(div12, file$E, 139, 4, 4542);
+    			add_location(div12, file$C, 139, 4, 4542);
     			attr_dev(div13, "class", "text-edark mx-auto max-w-5xl w-full");
-    			add_location(div13, file$E, 104, 2, 3445);
+    			add_location(div13, file$C, 104, 2, 3445);
     			attr_dev(div14, "class", "mx-auto flex-col flex-grow");
-    			add_location(div14, file$E, 103, 0, 3402);
+    			add_location(div14, file$C, 103, 0, 3402);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -50407,7 +48933,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     			if (/*uniqueNameStatus*/ ctx[0] === 2) {
     				if (!if_block0) {
-    					if_block0 = create_if_block_2$6(ctx);
+    					if_block0 = create_if_block_2$5(ctx);
     					if_block0.c();
     					transition_in(if_block0, 1);
     					if_block0.m(div3, t5);
@@ -50426,7 +48952,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     			if (/*uniqueNameStatus*/ ctx[0] === 1) {
     				if (!if_block1) {
-    					if_block1 = create_if_block_1$9(ctx);
+    					if_block1 = create_if_block_1$8(ctx);
     					if_block1.c();
     					if_block1.m(div3, t6);
     				}
@@ -50437,7 +48963,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     			if (/*uniqueNameStatus*/ ctx[0] === 3) {
     				if (!if_block2) {
-    					if_block2 = create_if_block$f(ctx);
+    					if_block2 = create_if_block$e(ctx);
     					if_block2.c();
     					if_block2.m(div3, null);
     				}
@@ -50502,7 +49028,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$I.name,
+    		id: create_fragment$F.name,
     		type: "component",
     		source: "",
     		ctx
@@ -50511,7 +49037,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$C($$self, $$props, $$invalidate) {
+    function instance$z($$self, $$props, $$invalidate) {
     	let $problemStore;
     	validate_store(problemStore$1, "problemStore");
     	component_subscribe($$self, problemStore$1, $$value => $$invalidate(2, $problemStore = $$value));
@@ -50676,21 +49202,21 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Problem_initials$1 extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$C, create_fragment$I, safe_not_equal, {});
+    		init(this, options, instance$z, create_fragment$F, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Problem_initials",
     			options,
-    			id: create_fragment$I.name
+    			id: create_fragment$F.name
     		});
     	}
     }
 
     /* src/routes/update_problem/problem_statement.svelte generated by Svelte v3.18.1 */
-    const file$F = "src/routes/update_problem/problem_statement.svelte";
+    const file$D = "src/routes/update_problem/problem_statement.svelte";
 
-    function create_fragment$J(ctx) {
+    function create_fragment$G(ctx) {
     	let div2;
     	let div1;
     	let div0;
@@ -50709,16 +49235,16 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			t1 = space();
     			textarea = element("textarea");
     			attr_dev(label, "class", " text-2xl text-elight mb-3 my-2");
-    			add_location(label, file$F, 13, 6, 638);
+    			add_location(label, file$D, 13, 6, 638);
     			attr_dev(textarea, "class", " h-full w-full bg-dark text-elight text-2xl border\n        border-gray-200 rounded py-3 px-4 mb-3 leading-tight focus:outline-none\n        focus:border-white h-48 resize-none");
     			attr_dev(textarea, "id", "message");
-    			add_location(textarea, file$F, 16, 6, 747);
+    			add_location(textarea, file$D, 16, 6, 747);
     			attr_dev(div0, "class", "w-full h-full px-3");
-    			add_location(div0, file$F, 12, 4, 599);
+    			add_location(div0, file$D, 12, 4, 599);
     			attr_dev(div1, "class", "flex-col mx-3 w-full mb-6");
-    			add_location(div1, file$F, 11, 2, 555);
+    			add_location(div1, file$D, 11, 2, 555);
     			attr_dev(div2, "class", "max-w-6xl mx-auto flex statement flex-grow  svelte-i0x5sn");
-    			add_location(div2, file$F, 10, 0, 495);
+    			add_location(div2, file$D, 10, 0, 495);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -50748,7 +49274,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$J.name,
+    		id: create_fragment$G.name,
     		type: "component",
     		source: "",
     		ctx
@@ -50757,7 +49283,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$D($$self, $$props, $$invalidate) {
+    function instance$A($$self, $$props, $$invalidate) {
     	let $problemStore;
     	validate_store(problemStore$1, "problemStore");
     	component_subscribe($$self, problemStore$1, $$value => $$invalidate(0, $problemStore = $$value));
@@ -50781,13 +49307,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Problem_statement$1 extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$D, create_fragment$J, safe_not_equal, {});
+    		init(this, options, instance$A, create_fragment$G, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Problem_statement",
     			options,
-    			id: create_fragment$J.name
+    			id: create_fragment$G.name
     		});
     	}
     }
@@ -50795,9 +49321,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     /* src/routes/update_problem/testcase.svelte generated by Svelte v3.18.1 */
 
     const { console: console_1$7 } = globals;
-    const file$G = "src/routes/update_problem/testcase.svelte";
+    const file$E = "src/routes/update_problem/testcase.svelte";
 
-    function create_fragment$K(ctx) {
+    function create_fragment$H(ctx) {
     	let div2;
     	let h1;
     	let t1;
@@ -50819,16 +49345,16 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			button = element("button");
     			button.textContent = "Submit";
     			attr_dev(h1, "class", "text-2xl text-elight mt-3 my-2 svelte-1hcojl0");
-    			add_location(h1, file$G, 80, 2, 2902);
+    			add_location(h1, file$E, 80, 2, 2902);
     			attr_dev(div0, "id", "editor");
     			attr_dev(div0, "class", "editor mx-60 box-border flex-grow svelte-1hcojl0");
-    			add_location(div0, file$G, 82, 2, 2969);
+    			add_location(div0, file$E, 82, 2, 2969);
     			attr_dev(button, "class", "bg-dark hover:bg-elight hover:text-edark outline-none text-white\n      font-bold py-4 px-4 text-xl rounded-full svelte-1hcojl0");
-    			add_location(button, file$G, 87, 4, 3109);
+    			add_location(button, file$E, 87, 4, 3109);
     			attr_dev(div1, "class", "my-3 flex justify-center svelte-1hcojl0");
-    			add_location(div1, file$G, 86, 2, 3066);
+    			add_location(div1, file$E, 86, 2, 3066);
     			attr_dev(div2, "class", "mx-64 flex-grow editor_window box-border svelte-1hcojl0");
-    			add_location(div2, file$G, 79, 0, 2845);
+    			add_location(div2, file$E, 79, 0, 2845);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -50858,7 +49384,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$K.name,
+    		id: create_fragment$H.name,
     		type: "component",
     		source: "",
     		ctx
@@ -50867,7 +49393,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$E($$self, $$props, $$invalidate) {
+    function instance$B($$self, $$props, $$invalidate) {
     	let $problemStore;
     	validate_store(problemStore$1, "problemStore");
     	component_subscribe($$self, problemStore$1, $$value => $$invalidate(4, $problemStore = $$value));
@@ -50974,13 +49500,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Testcase$1 extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$E, create_fragment$K, safe_not_equal, { currentRoute: 2 });
+    		init(this, options, instance$B, create_fragment$H, safe_not_equal, { currentRoute: 2 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Testcase",
     			options,
-    			id: create_fragment$K.name
+    			id: create_fragment$H.name
     		});
 
     		const { ctx } = this.$$;
@@ -51001,9 +49527,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     /* src/routes/update_problem/problem_solution.svelte generated by Svelte v3.18.1 */
-    const file$H = "src/routes/update_problem/problem_solution.svelte";
+    const file$F = "src/routes/update_problem/problem_solution.svelte";
 
-    function create_fragment$L(ctx) {
+    function create_fragment$I(ctx) {
     	let div8;
     	let h1;
     	let t1;
@@ -51053,37 +49579,37 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			button = element("button");
     			button.textContent = "Run";
     			attr_dev(h1, "class", "text-2xl text-elight mt-3 my-2 svelte-4b5gef");
-    			add_location(h1, file$H, 81, 2, 2778);
+    			add_location(h1, file$F, 81, 2, 2778);
     			attr_dev(div0, "id", "editor");
     			attr_dev(div0, "class", "editor mx-60 box-border flex-grow svelte-4b5gef");
-    			add_location(div0, file$H, 82, 2, 2843);
+    			add_location(div0, file$F, 82, 2, 2843);
     			attr_dev(h20, "class", "text-xl text-elight my-3 my-2 svelte-4b5gef");
-    			add_location(h20, file$H, 89, 6, 3056);
+    			add_location(h20, file$F, 89, 6, 3056);
     			attr_dev(div1, "id", "inputeditor");
     			attr_dev(div1, "class", "inputeditor text-xl h-full box-border  svelte-4b5gef");
-    			add_location(div1, file$H, 91, 8, 3163);
+    			add_location(div1, file$F, 91, 8, 3163);
     			attr_dev(div2, "class", "flex-grow h-48 box-border svelte-4b5gef");
-    			add_location(div2, file$H, 90, 6, 3115);
+    			add_location(div2, file$F, 90, 6, 3115);
     			attr_dev(div3, "class", "flex-1 mr-4 box-border svelte-4b5gef");
-    			add_location(div3, file$H, 88, 4, 3013);
+    			add_location(div3, file$F, 88, 4, 3013);
     			attr_dev(h21, "class", "text-xl text-elight my-3 my-2 box-border svelte-4b5gef");
-    			add_location(h21, file$H, 98, 6, 3346);
+    			add_location(h21, file$F, 98, 6, 3346);
     			attr_dev(textarea, "class", " h-full w-full bg-dark text-elight text-xl box-border\n          border-none rounded py-3 px-4 mb-3 leading-tight focus:outline-none\n          resize-none svelte-4b5gef");
     			attr_dev(textarea, "id", "message");
     			textarea.readOnly = true;
-    			add_location(textarea, file$H, 100, 8, 3454);
+    			add_location(textarea, file$F, 100, 8, 3454);
     			attr_dev(div4, "class", "flex-grow h-48 svelte-4b5gef");
-    			add_location(div4, file$H, 99, 6, 3417);
+    			add_location(div4, file$F, 99, 6, 3417);
     			attr_dev(div5, "class", "flex-1 ml-4 svelte-4b5gef");
-    			add_location(div5, file$H, 97, 4, 3314);
+    			add_location(div5, file$F, 97, 4, 3314);
     			attr_dev(div6, "class", "flex my-4 p-2 border-solid h-64 border-2 border-light svelte-4b5gef");
-    			add_location(div6, file$H, 87, 2, 2941);
+    			add_location(div6, file$F, 87, 2, 2941);
     			attr_dev(button, "class", "bg-dark hover:bg-elight hover:text-edark outline-none text-white\n      float-right font-bold py-2 px-4 rounded-full svelte-4b5gef");
-    			add_location(button, file$H, 111, 4, 3756);
+    			add_location(button, file$F, 111, 4, 3756);
     			attr_dev(div7, "class", "svelte-4b5gef");
-    			add_location(div7, file$H, 110, 2, 3746);
+    			add_location(div7, file$F, 110, 2, 3746);
     			attr_dev(div8, "class", "mx-64 flex-grow editor_window box-border svelte-4b5gef");
-    			add_location(div8, file$H, 80, 0, 2721);
+    			add_location(div8, file$F, 80, 0, 2721);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -51133,7 +49659,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$L.name,
+    		id: create_fragment$I.name,
     		type: "component",
     		source: "",
     		ctx
@@ -51142,7 +49668,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$F($$self, $$props, $$invalidate) {
+    function instance$C($$self, $$props, $$invalidate) {
     	let $problemStore;
     	validate_store(problemStore$1, "problemStore");
     	component_subscribe($$self, problemStore$1, $$value => $$invalidate(5, $problemStore = $$value));
@@ -51250,19 +49776,19 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Problem_solution$1 extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$F, create_fragment$L, safe_not_equal, {});
+    		init(this, options, instance$C, create_fragment$I, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Problem_solution",
     			options,
-    			id: create_fragment$L.name
+    			id: create_fragment$I.name
     		});
     	}
     }
 
     /* src/routes/update_problem/select_page.svelte generated by Svelte v3.18.1 */
-    const file$I = "src/routes/update_problem/select_page.svelte";
+    const file$G = "src/routes/update_problem/select_page.svelte";
 
     // (12:2) {#if pageNum === 1}
     function create_if_block_3$1(ctx) {
@@ -51303,7 +49829,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (15:2) {#if pageNum === 2}
-    function create_if_block_2$7(ctx) {
+    function create_if_block_2$6(ctx) {
     	let current;
     	const problemstatement = new Problem_statement$1({ $$inline: true });
 
@@ -51331,7 +49857,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_if_block_2$7.name,
+    		id: create_if_block_2$6.name,
     		type: "if",
     		source: "(15:2) {#if pageNum === 2}",
     		ctx
@@ -51341,7 +49867,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (18:2) {#if pageNum === 3}
-    function create_if_block_1$a(ctx) {
+    function create_if_block_1$9(ctx) {
     	let current;
     	const problemsolution = new Problem_solution$1({ $$inline: true });
 
@@ -51369,7 +49895,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_if_block_1$a.name,
+    		id: create_if_block_1$9.name,
     		type: "if",
     		source: "(18:2) {#if pageNum === 3}",
     		ctx
@@ -51379,7 +49905,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (21:2) {#if pageNum === 4}
-    function create_if_block$g(ctx) {
+    function create_if_block$f(ctx) {
     	let current;
 
     	const testcase = new Testcase$1({
@@ -51416,7 +49942,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_if_block$g.name,
+    		id: create_if_block$f.name,
     		type: "if",
     		source: "(21:2) {#if pageNum === 4}",
     		ctx
@@ -51425,16 +49951,16 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function create_fragment$M(ctx) {
+    function create_fragment$J(ctx) {
     	let div;
     	let t0;
     	let t1;
     	let t2;
     	let current;
     	let if_block0 = /*pageNum*/ ctx[0] === 1 && create_if_block_3$1(ctx);
-    	let if_block1 = /*pageNum*/ ctx[0] === 2 && create_if_block_2$7(ctx);
-    	let if_block2 = /*pageNum*/ ctx[0] === 3 && create_if_block_1$a(ctx);
-    	let if_block3 = /*pageNum*/ ctx[0] === 4 && create_if_block$g(ctx);
+    	let if_block1 = /*pageNum*/ ctx[0] === 2 && create_if_block_2$6(ctx);
+    	let if_block2 = /*pageNum*/ ctx[0] === 3 && create_if_block_1$9(ctx);
+    	let if_block3 = /*pageNum*/ ctx[0] === 4 && create_if_block$f(ctx);
 
     	const block = {
     		c: function create() {
@@ -51446,7 +49972,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			if (if_block2) if_block2.c();
     			t2 = space();
     			if (if_block3) if_block3.c();
-    			add_location(div, file$I, 10, 0, 297);
+    			add_location(div, file$G, 10, 0, 297);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -51484,7 +50010,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     			if (/*pageNum*/ ctx[0] === 2) {
     				if (!if_block1) {
-    					if_block1 = create_if_block_2$7(ctx);
+    					if_block1 = create_if_block_2$6(ctx);
     					if_block1.c();
     					transition_in(if_block1, 1);
     					if_block1.m(div, t1);
@@ -51503,7 +50029,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     			if (/*pageNum*/ ctx[0] === 3) {
     				if (!if_block2) {
-    					if_block2 = create_if_block_1$a(ctx);
+    					if_block2 = create_if_block_1$9(ctx);
     					if_block2.c();
     					transition_in(if_block2, 1);
     					if_block2.m(div, t2);
@@ -51525,7 +50051,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     					if_block3.p(ctx, dirty);
     					transition_in(if_block3, 1);
     				} else {
-    					if_block3 = create_if_block$g(ctx);
+    					if_block3 = create_if_block$f(ctx);
     					if_block3.c();
     					transition_in(if_block3, 1);
     					if_block3.m(div, null);
@@ -51566,7 +50092,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$M.name,
+    		id: create_fragment$J.name,
     		type: "component",
     		source: "",
     		ctx
@@ -51575,7 +50101,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$G($$self, $$props, $$invalidate) {
+    function instance$D($$self, $$props, $$invalidate) {
     	let { pageNum = 1 } = $$props;
     	let { currentRoute } = $$props;
     	const writable_props = ["pageNum", "currentRoute"];
@@ -51604,13 +50130,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Select_page$3 extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$G, create_fragment$M, safe_not_equal, { pageNum: 0, currentRoute: 1 });
+    		init(this, options, instance$D, create_fragment$J, safe_not_equal, { pageNum: 0, currentRoute: 1 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Select_page",
     			options,
-    			id: create_fragment$M.name
+    			id: create_fragment$J.name
     		});
 
     		const { ctx } = this.$$;
@@ -51641,9 +50167,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     /* src/routes/update_problem/edit_problem.svelte generated by Svelte v3.18.1 */
 
     const { console: console_1$8 } = globals;
-    const file$J = "src/routes/update_problem/edit_problem.svelte";
+    const file$H = "src/routes/update_problem/edit_problem.svelte";
 
-    function create_fragment$N(ctx) {
+    function create_fragment$K(ctx) {
     	let div2;
     	let header;
     	let t0;
@@ -51696,25 +50222,25 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			button1 = element("button");
     			button1.textContent = "Next";
     			attr_dev(subheader, "class", "svelte-18fkda7");
-    			add_location(subheader, file$J, 37, 4, 1509);
+    			add_location(subheader, file$H, 37, 4, 1509);
     			attr_dev(header, "class", "svelte-18fkda7");
-    			add_location(header, file$J, 35, 2, 1481);
+    			add_location(header, file$H, 35, 2, 1481);
     			attr_dev(main, "class", " mx-auto w-full flex-grow overflow-auto svelte-18fkda7");
-    			add_location(main, file$J, 41, 2, 1591);
+    			add_location(main, file$H, 41, 2, 1591);
     			attr_dev(button0, "id", "prevbutton");
     			attr_dev(button0, "class", "py-4 px-6 float-left shadow-md no-underline rounded-full bg-dark\n        text-white font-sans font-semibold text-sm border-white btn-primary\n        hover:text-white text-xl hover:bg-elight focus:outline-none\n        active:shadow-none mr-2 svelte-18fkda7");
-    			add_location(button0, file$J, 46, 6, 1806);
+    			add_location(button0, file$H, 46, 6, 1806);
     			attr_dev(div0, "class", "flex-1  svelte-18fkda7");
-    			add_location(div0, file$J, 45, 4, 1778);
+    			add_location(div0, file$H, 45, 4, 1778);
     			attr_dev(button1, "id", "nextbutton");
     			attr_dev(button1, "class", "py-4 px-6 shadow-md text-xl float-right no-underline rounded-full\n        bg-dark text-white font-sans font-semibold text-sm border-white\n        btn-primary hover:text-dark hover:bg-elight focus:outline-none\n        active:shadow-none mr-2 svelte-18fkda7");
-    			add_location(button1, file$J, 63, 6, 2320);
+    			add_location(button1, file$H, 63, 6, 2320);
     			attr_dev(div1, "class", "flex-1 svelte-18fkda7");
-    			add_location(div1, file$J, 62, 4, 2293);
+    			add_location(div1, file$H, 62, 4, 2293);
     			attr_dev(footer, "class", " footer my-8 w-full px-20 mx-auto sticky svelte-18fkda7");
-    			add_location(footer, file$J, 44, 2, 1716);
+    			add_location(footer, file$H, 44, 2, 1716);
     			attr_dev(div2, "class", "w-screen bg-edark h-screen flex flex-col svelte-18fkda7");
-    			add_location(div2, file$J, 34, 0, 1424);
+    			add_location(div2, file$H, 34, 0, 1424);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -51776,7 +50302,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$N.name,
+    		id: create_fragment$K.name,
     		type: "component",
     		source: "",
     		ctx
@@ -51785,7 +50311,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$H($$self, $$props, $$invalidate) {
+    function instance$E($$self, $$props, $$invalidate) {
     	let $problem;
     	let $problemStore;
     	validate_store(problemStore$1, "problemStore");
@@ -51876,13 +50402,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Edit_problem extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$H, create_fragment$N, safe_not_equal, { currentRoute: 0 });
+    		init(this, options, instance$E, create_fragment$K, safe_not_equal, { currentRoute: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Edit_problem",
     			options,
-    			id: create_fragment$N.name
+    			id: create_fragment$K.name
     		});
 
     		const { ctx } = this.$$;
@@ -51904,9 +50430,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     /* src/routes/thankyou.svelte generated by Svelte v3.18.1 */
 
-    const file$K = "src/routes/thankyou.svelte";
+    const file$I = "src/routes/thankyou.svelte";
 
-    function create_fragment$O(ctx) {
+    function create_fragment$L(ctx) {
     	let h10;
     	let t1;
     	let h11;
@@ -51923,9 +50449,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			t3 = space();
     			h2 = element("h2");
     			h2.textContent = "We will get back to you";
-    			add_location(h10, file$K, 0, 0, 0);
-    			add_location(h11, file$K, 1, 0, 19);
-    			add_location(h2, file$K, 2, 0, 67);
+    			add_location(h10, file$I, 0, 0, 0);
+    			add_location(h11, file$I, 1, 0, 19);
+    			add_location(h2, file$I, 2, 0, 67);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -51951,7 +50477,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$O.name,
+    		id: create_fragment$L.name,
     		type: "component",
     		source: "",
     		ctx
@@ -51963,20 +50489,482 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Thankyou extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, null, create_fragment$O, safe_not_equal, {});
+    		init(this, options, null, create_fragment$L, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Thankyou",
     			options,
-    			id: create_fragment$O.name
+    			id: create_fragment$L.name
     		});
+    	}
+    }
+
+    /* src/components/editor_navbar.svelte generated by Svelte v3.18.1 */
+
+    const file$J = "src/components/editor_navbar.svelte";
+
+    function create_fragment$M(ctx) {
+    	let link;
+    	let t0;
+    	let nav;
+    	let div2;
+    	let h1;
+    	let t2;
+    	let div1;
+    	let div0;
+    	let button;
+    	let img;
+    	let img_src_value;
+    	let dispose;
+
+    	const block = {
+    		c: function create() {
+    			link = element("link");
+    			t0 = space();
+    			nav = element("nav");
+    			div2 = element("div");
+    			h1 = element("h1");
+    			h1.textContent = "Welcome,";
+    			t2 = space();
+    			div1 = element("div");
+    			div0 = element("div");
+    			button = element("button");
+    			img = element("img");
+    			attr_dev(link, "href", "https://fonts.googleapis.com/css2?family=Jost&display=swap");
+    			attr_dev(link, "rel", "stylesheet");
+    			attr_dev(link, "class", "svelte-pagbfj");
+    			add_location(link, file$J, 55, 0, 2330);
+    			attr_dev(h1, "class", "welcome text-primary svelte-pagbfj");
+    			add_location(h1, file$J, 63, 4, 2577);
+    			attr_dev(img, "alt", "admin");
+    			attr_dev(img, "width", "25");
+    			attr_dev(img, "height", "25");
+    			if (img.src !== (img_src_value = "https://img.icons8.com/carbon-copy/64/000000/user.png")) attr_dev(img, "src", img_src_value);
+    			attr_dev(img, "class", "svelte-pagbfj");
+    			add_location(img, file$J, 76, 10, 3089);
+    			attr_dev(button, "class", "container bg-white flex outline-none flex-row hover:bg-elight text-dark\n          font-semibold hover:text-white py-4 px-6 border border-white-500\n          rounded hover:border-white  rounded-full svelte-pagbfj");
+    			add_location(button, file$J, 67, 8, 2703);
+    			attr_dev(div0, "class", "dropdown svelte-pagbfj");
+    			add_location(div0, file$J, 66, 6, 2672);
+    			attr_dev(div1, "id", "btn");
+    			attr_dev(div1, "class", "flex flex-row svelte-pagbfj");
+    			add_location(div1, file$J, 64, 4, 2628);
+    			attr_dev(div2, "class", "w-full block flex-grow lg:items-right svelte-pagbfj");
+    			add_location(div2, file$J, 62, 2, 2521);
+    			attr_dev(nav, "class", "flex shadow-2xl items-center justify-between flex-wrap bg-dark sticky\n  p-6 svelte-pagbfj");
+    			add_location(nav, file$J, 58, 0, 2426);
+    		},
+    		l: function claim(nodes) {
+    			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, link, anchor);
+    			insert_dev(target, t0, anchor);
+    			insert_dev(target, nav, anchor);
+    			append_dev(nav, div2);
+    			append_dev(div2, h1);
+    			append_dev(div2, t2);
+    			append_dev(div2, div1);
+    			append_dev(div1, div0);
+    			append_dev(div0, button);
+    			append_dev(button, img);
+    			dispose = listen_dev(button, "click", /*click_handler*/ ctx[3], false, false, false);
+    		},
+    		p: noop,
+    		i: noop,
+    		o: noop,
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(link);
+    			if (detaching) detach_dev(t0);
+    			if (detaching) detach_dev(nav);
+    			dispose();
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_fragment$M.name,
+    		type: "component",
+    		source: "",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    function instance$F($$self, $$props, $$invalidate) {
+    	let themes = [
+    		["#1D1F21", "#25282c", "#303030", "#c4c4c4"],
+    		["#1d3e53", "#254b62", "#476d7c", "#77abb7"],
+    		["#1b262c", "#0f4c75", "#3282b8", "#bbe1fa"],
+    		["#071e3d", "#1f4287", "#278ea5", "#21e6c1"],
+    		["#200f21", "#382039", "#5a3d5c", "#f638dc"],
+    		["#2d132c", "#801336", "#c72c41", "#ee4540"]
+    	];
+
+    	let number = 0;
+
+    	function changeTheme(num) {
+    		console.log(themes[num], num);
+    		document.documentElement.style.setProperty("--color-ed", themes[num][0]);
+    		document.documentElement.style.setProperty("--color-d", themes[num][1]);
+    		document.documentElement.style.setProperty("--color-l", themes[num][2]);
+    		document.documentElement.style.setProperty("--color-el", themes[num][3]);
+    	}
+
+    	console.log(number);
+    	changeTheme(number);
+
+    	const click_handler = () => {
+    		$$invalidate(0, number++, number);
+    		let themesize = themes.length;
+    		changeTheme(number % themesize);
+    	};
+
+    	$$self.$capture_state = () => {
+    		return {};
+    	};
+
+    	$$self.$inject_state = $$props => {
+    		if ("themes" in $$props) $$invalidate(1, themes = $$props.themes);
+    		if ("number" in $$props) $$invalidate(0, number = $$props.number);
+    	};
+
+    	return [number, themes, changeTheme, click_handler];
+    }
+
+    class Editor_navbar extends SvelteComponentDev {
+    	constructor(options) {
+    		super(options);
+    		init(this, options, instance$F, create_fragment$M, safe_not_equal, {});
+
+    		dispatch_dev("SvelteRegisterComponent", {
+    			component: this,
+    			tagName: "Editor_navbar",
+    			options,
+    			id: create_fragment$M.name
+    		});
+    	}
+    }
+
+    /* src/routes/introduce_yourself.svelte generated by Svelte v3.18.1 */
+
+    const { console: console_1$9 } = globals;
+    const file$K = "src/routes/introduce_yourself.svelte";
+
+    function create_fragment$N(ctx) {
+    	let div9;
+    	let t0;
+    	let div7;
+    	let div0;
+    	let h1;
+    	let t2;
+    	let div6;
+    	let div1;
+    	let h2;
+    	let t4;
+    	let div5;
+    	let div2;
+    	let label0;
+    	let t6;
+    	let input0;
+    	let t7;
+    	let div3;
+    	let label1;
+    	let t9;
+    	let input1;
+    	let t10;
+    	let div4;
+    	let label2;
+    	let t12;
+    	let input2;
+    	let t13;
+    	let div8;
+    	let button;
+    	let current;
+    	let dispose;
+    	const editornavbar = new Editor_navbar({ $$inline: true });
+
+    	const block = {
+    		c: function create() {
+    			div9 = element("div");
+    			create_component(editornavbar.$$.fragment);
+    			t0 = space();
+    			div7 = element("div");
+    			div0 = element("div");
+    			h1 = element("h1");
+    			h1.textContent = "Sourcefuse Technologies";
+    			t2 = space();
+    			div6 = element("div");
+    			div1 = element("div");
+    			h2 = element("h2");
+    			h2.textContent = "User Details";
+    			t4 = space();
+    			div5 = element("div");
+    			div2 = element("div");
+    			label0 = element("label");
+    			label0.textContent = "Name";
+    			t6 = space();
+    			input0 = element("input");
+    			t7 = space();
+    			div3 = element("div");
+    			label1 = element("label");
+    			label1.textContent = "Registered Email";
+    			t9 = space();
+    			input1 = element("input");
+    			t10 = space();
+    			div4 = element("div");
+    			label2 = element("label");
+    			label2.textContent = "College Name";
+    			t12 = space();
+    			input2 = element("input");
+    			t13 = space();
+    			div8 = element("div");
+    			button = element("button");
+    			button.textContent = "Submit";
+    			attr_dev(h1, "class", "text-elight text-5xl my-10");
+    			add_location(h1, file$K, 76, 6, 2787);
+    			attr_dev(div0, "class", "mx-auto max-w-2xl");
+    			add_location(div0, file$K, 75, 4, 2749);
+    			attr_dev(h2, "class", "labels text-4xl svelte-gmll6w");
+    			add_location(h2, file$K, 81, 8, 2950);
+    			add_location(div1, file$K, 80, 6, 2936);
+    			attr_dev(label0, "class", "labels svelte-gmll6w");
+    			add_location(label0, file$K, 85, 10, 3045);
+    			attr_dev(input0, "class", "unitinput svelte-gmll6w");
+    			attr_dev(input0, "type", "text");
+    			attr_dev(input0, "placeholder", "Enter Name");
+    			add_location(input0, file$K, 86, 10, 3090);
+    			add_location(div2, file$K, 84, 8, 3029);
+    			attr_dev(label1, "class", "labels svelte-gmll6w");
+    			add_location(label1, file$K, 93, 10, 3265);
+    			attr_dev(input1, "class", "unitinput svelte-gmll6w");
+    			attr_dev(input1, "type", "text");
+    			attr_dev(input1, "placeholder", "Email");
+    			add_location(input1, file$K, 94, 10, 3322);
+    			add_location(div3, file$K, 92, 8, 3249);
+    			attr_dev(label2, "class", "labels svelte-gmll6w");
+    			add_location(label2, file$K, 101, 10, 3493);
+    			attr_dev(input2, "class", "unitinput svelte-gmll6w");
+    			attr_dev(input2, "type", "text");
+    			attr_dev(input2, "placeholder", "College Name");
+    			add_location(input2, file$K, 102, 10, 3546);
+    			add_location(div4, file$K, 100, 8, 3477);
+    			add_location(div5, file$K, 83, 6, 3015);
+    			attr_dev(div6, "class", "border-solid border-2 mt-10 border-light p-4");
+    			add_location(div6, file$K, 79, 4, 2871);
+    			attr_dev(div7, "class", "text-edark mx-auto max-w-5xl w-full");
+    			add_location(div7, file$K, 74, 2, 2695);
+    			attr_dev(button, "class", "bg-dark hover:bg-elight hover:text-edark outline-none text-white\n      font-bold py-4 px-4 text-xl rounded-full");
+    			add_location(button, file$K, 112, 4, 3785);
+    			attr_dev(div8, "class", "my-10 flex justify-center");
+    			add_location(div8, file$K, 111, 2, 3741);
+    			attr_dev(div9, "class", "mx-auto flex-col flex-grow w-full h-full bg-edark");
+    			add_location(div9, file$K, 72, 0, 2610);
+    		},
+    		l: function claim(nodes) {
+    			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, div9, anchor);
+    			mount_component(editornavbar, div9, null);
+    			append_dev(div9, t0);
+    			append_dev(div9, div7);
+    			append_dev(div7, div0);
+    			append_dev(div0, h1);
+    			append_dev(div7, t2);
+    			append_dev(div7, div6);
+    			append_dev(div6, div1);
+    			append_dev(div1, h2);
+    			append_dev(div6, t4);
+    			append_dev(div6, div5);
+    			append_dev(div5, div2);
+    			append_dev(div2, label0);
+    			append_dev(div2, t6);
+    			append_dev(div2, input0);
+    			set_input_value(input0, /*user*/ ctx[0].name);
+    			append_dev(div5, t7);
+    			append_dev(div5, div3);
+    			append_dev(div3, label1);
+    			append_dev(div3, t9);
+    			append_dev(div3, input1);
+    			set_input_value(input1, /*user*/ ctx[0].email);
+    			append_dev(div5, t10);
+    			append_dev(div5, div4);
+    			append_dev(div4, label2);
+    			append_dev(div4, t12);
+    			append_dev(div4, input2);
+    			set_input_value(input2, /*user*/ ctx[0].collegeName);
+    			append_dev(div9, t13);
+    			append_dev(div9, div8);
+    			append_dev(div8, button);
+    			current = true;
+
+    			dispose = [
+    				listen_dev(input0, "input", /*input0_input_handler*/ ctx[5]),
+    				listen_dev(input1, "input", /*input1_input_handler*/ ctx[6]),
+    				listen_dev(input2, "input", /*input2_input_handler*/ ctx[7]),
+    				listen_dev(button, "click", /*click_handler*/ ctx[8], false, false, false)
+    			];
+    		},
+    		p: function update(ctx, [dirty]) {
+    			if (dirty & /*user*/ 1 && input0.value !== /*user*/ ctx[0].name) {
+    				set_input_value(input0, /*user*/ ctx[0].name);
+    			}
+
+    			if (dirty & /*user*/ 1 && input1.value !== /*user*/ ctx[0].email) {
+    				set_input_value(input1, /*user*/ ctx[0].email);
+    			}
+
+    			if (dirty & /*user*/ 1 && input2.value !== /*user*/ ctx[0].collegeName) {
+    				set_input_value(input2, /*user*/ ctx[0].collegeName);
+    			}
+    		},
+    		i: function intro(local) {
+    			if (current) return;
+    			transition_in(editornavbar.$$.fragment, local);
+    			current = true;
+    		},
+    		o: function outro(local) {
+    			transition_out(editornavbar.$$.fragment, local);
+    			current = false;
+    		},
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(div9);
+    			destroy_component(editornavbar);
+    			run_all(dispose);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_fragment$N.name,
+    		type: "component",
+    		source: "",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    function instance$G($$self, $$props, $$invalidate) {
+    	let { currentRoute } = $$props;
+
+    	let user = {
+    		name: "",
+    		email: "",
+    		collegeName: "",
+    		testId: ""
+    	};
+
+    	var tokens = currentRoute.namedParams.token.split(".");
+    	console.log(JSON.parse(atob(tokens[1])));
+    	const client = getClient();
+    	user.testId = JSON.parse(atob(tokens[1])).testId;
+
+    	async function submitData() {
+    		if (user.name === "" || user.email === "" || user.collegeName === "") {
+    			return;
+    		}
+
+    		console.log(user);
+
+    		try {
+    			const res = await mutate(client, {
+    				mutation: apolloClient.addUser,
+    				variables: user
+    			});
+
+    			location.replace(`http://localhost:5000/starttest/${res.data.addUser.token}`);
+    			console.log(res);
+    		} catch(err) {
+    			console.log(err);
+    		}
+    	}
+
+    	const writable_props = ["currentRoute"];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$9.warn(`<Introduce_yourself> was created with unknown prop '${key}'`);
+    	});
+
+    	function input0_input_handler() {
+    		user.name = this.value;
+    		$$invalidate(0, user);
+    	}
+
+    	function input1_input_handler() {
+    		user.email = this.value;
+    		$$invalidate(0, user);
+    	}
+
+    	function input2_input_handler() {
+    		user.collegeName = this.value;
+    		$$invalidate(0, user);
+    	}
+
+    	const click_handler = () => submitData();
+
+    	$$self.$set = $$props => {
+    		if ("currentRoute" in $$props) $$invalidate(2, currentRoute = $$props.currentRoute);
+    	};
+
+    	$$self.$capture_state = () => {
+    		return { currentRoute, user, tokens };
+    	};
+
+    	$$self.$inject_state = $$props => {
+    		if ("currentRoute" in $$props) $$invalidate(2, currentRoute = $$props.currentRoute);
+    		if ("user" in $$props) $$invalidate(0, user = $$props.user);
+    		if ("tokens" in $$props) tokens = $$props.tokens;
+    	};
+
+    	return [
+    		user,
+    		submitData,
+    		currentRoute,
+    		tokens,
+    		client,
+    		input0_input_handler,
+    		input1_input_handler,
+    		input2_input_handler,
+    		click_handler
+    	];
+    }
+
+    class Introduce_yourself extends SvelteComponentDev {
+    	constructor(options) {
+    		super(options);
+    		init(this, options, instance$G, create_fragment$N, safe_not_equal, { currentRoute: 2 });
+
+    		dispatch_dev("SvelteRegisterComponent", {
+    			component: this,
+    			tagName: "Introduce_yourself",
+    			options,
+    			id: create_fragment$N.name
+    		});
+
+    		const { ctx } = this.$$;
+    		const props = options.props || {};
+
+    		if (/*currentRoute*/ ctx[2] === undefined && !("currentRoute" in props)) {
+    			console_1$9.warn("<Introduce_yourself> was created without expected prop 'currentRoute'");
+    		}
+    	}
+
+    	get currentRoute() {
+    		throw new Error("<Introduce_yourself>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	set currentRoute(value) {
+    		throw new Error("<Introduce_yourself>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
     	}
     }
 
     /* src/routes/AdminPanel.svelte generated by Svelte v3.18.1 */
 
-    const { console: console_1$9, document: document_1 } = globals;
+    const { console: console_1$a, document: document_1 } = globals;
     const file$L = "src/routes/AdminPanel.svelte";
 
     function get_each_context_2(ctx, list, i) {
@@ -51998,7 +50986,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (166:55) 
-    function create_if_block_2$8(ctx) {
+    function create_if_block_2$7(ctx) {
     	let h1;
     	let t1;
     	let input;
@@ -52130,7 +51118,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_if_block_2$8.name,
+    		id: create_if_block_2$7.name,
     		type: "if",
     		source: "(166:55) ",
     		ctx
@@ -52140,7 +51128,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (127:53) 
-    function create_if_block_1$b(ctx) {
+    function create_if_block_1$a(ctx) {
     	let h1;
     	let t1;
     	let div;
@@ -52277,7 +51265,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_if_block_1$b.name,
+    		id: create_if_block_1$a.name,
     		type: "if",
     		source: "(127:53) ",
     		ctx
@@ -52287,7 +51275,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (89:7) {#if currentRoute.name ==="/showproblems"}
-    function create_if_block$h(ctx) {
+    function create_if_block$g(ctx) {
     	let h1;
     	let t1;
     	let div;
@@ -52314,9 +51302,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		ctx,
     		current: null,
     		token: null,
-    		pending: create_pending_block$6,
-    		then: create_then_block$6,
-    		catch: create_catch_block$6,
+    		pending: create_pending_block$5,
+    		then: create_then_block$5,
+    		catch: create_catch_block$5,
     		value: 10,
     		error: 11
     	};
@@ -52433,7 +51421,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_if_block$h.name,
+    		id: create_if_block$g.name,
     		type: "if",
     		source: "(89:7) {#if currentRoute.name ===\\\"/showproblems\\\"}",
     		ctx
@@ -52939,7 +51927,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (121:6) {:catch err}
-    function create_catch_block$6(ctx) {
+    function create_catch_block$5(ctx) {
     	let td;
 
     	const block = {
@@ -52960,7 +51948,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_catch_block$6.name,
+    		id: create_catch_block$5.name,
     		type: "catch",
     		source: "(121:6) {:catch err}",
     		ctx
@@ -52970,7 +51958,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (112:6) {:then result}
-    function create_then_block$6(ctx) {
+    function create_then_block$5(ctx) {
     	let each_1_anchor;
     	let each_value = /*result*/ ctx[10].data.allProblems;
     	let each_blocks = [];
@@ -53026,7 +52014,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_then_block$6.name,
+    		id: create_then_block$5.name,
     		type: "then",
     		source: "(112:6) {:then result}",
     		ctx
@@ -53128,7 +52116,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (105:22)       <tr class="flex w-full mb-4">        <td class="p-4 w-1/4">loading..</td>        <td class="p-4 w-1/4">loading..</td>        <td class="p-4 w-1/4">loading..</td>        <td class="p-4 w-1/4">loading..</td>      </tr>       {:then result}
-    function create_pending_block$6(ctx) {
+    function create_pending_block$5(ctx) {
     	let tr;
     	let td0;
     	let t1;
@@ -53181,7 +52169,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_pending_block$6.name,
+    		id: create_pending_block$5.name,
     		type: "pending",
     		source: "(105:22)       <tr class=\\\"flex w-full mb-4\\\">        <td class=\\\"p-4 w-1/4\\\">loading..</td>        <td class=\\\"p-4 w-1/4\\\">loading..</td>        <td class=\\\"p-4 w-1/4\\\">loading..</td>        <td class=\\\"p-4 w-1/4\\\">loading..</td>      </tr>       {:then result}",
     		ctx
@@ -53190,7 +52178,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function create_fragment$P(ctx) {
+    function create_fragment$O(ctx) {
     	let script;
     	let script_src_value;
     	let t1;
@@ -53204,9 +52192,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	const sidebar = new Side({ $$inline: true });
 
     	function select_block_type(ctx, dirty) {
-    		if (/*currentRoute*/ ctx[0].name === "/showproblems") return create_if_block$h;
-    		if (/*currentRoute*/ ctx[0].name === "/showtests") return create_if_block_1$b;
-    		if (/*currentRoute*/ ctx[0].name === "/showresults") return create_if_block_2$8;
+    		if (/*currentRoute*/ ctx[0].name === "/showproblems") return create_if_block$g;
+    		if (/*currentRoute*/ ctx[0].name === "/showtests") return create_if_block_1$a;
+    		if (/*currentRoute*/ ctx[0].name === "/showresults") return create_if_block_2$7;
     	}
 
     	let current_block_type = select_block_type(ctx);
@@ -53287,7 +52275,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$P.name,
+    		id: create_fragment$O.name,
     		type: "component",
     		source: "",
     		ctx
@@ -53327,7 +52315,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	}
     }
 
-    function instance$I($$self, $$props, $$invalidate) {
+    function instance$H($$self, $$props, $$invalidate) {
     	let $Problem;
     	let $Test;
     	let $Attempts;
@@ -53346,7 +52334,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	const writable_props = ["currentRoute"];
 
     	Object.keys($$props).forEach(key => {
-    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$9.warn(`<AdminPanel> was created with unknown prop '${key}'`);
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$a.warn(`<AdminPanel> was created with unknown prop '${key}'`);
     	});
 
     	const click_handler = prob => {
@@ -53389,20 +52377,20 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class AdminPanel extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$I, create_fragment$P, safe_not_equal, { currentRoute: 0 });
+    		init(this, options, instance$H, create_fragment$O, safe_not_equal, { currentRoute: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "AdminPanel",
     			options,
-    			id: create_fragment$P.name
+    			id: create_fragment$O.name
     		});
 
     		const { ctx } = this.$$;
     		const props = options.props || {};
 
     		if (/*currentRoute*/ ctx[0] === undefined && !("currentRoute" in props)) {
-    			console_1$9.warn("<AdminPanel> was created without expected prop 'currentRoute'");
+    			console_1$a.warn("<AdminPanel> was created without expected prop 'currentRoute'");
     		}
     	}
 
@@ -53415,70 +52403,71 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	}
     }
 
-    const routes = [{
-            name: '/',
-            component: Login,
-        },
-        {
-            name: '/newtest',
-            component: Add_test,
-        },
-        {
-            name: '/newProblem',
-            component: Add_problem,
-        },
-        {
-            name: '/editProblem/:id',
-            component: Edit_problem,
-        },
-        {
-            name: '/editTest/:id',
-            component: Edit_test,
-        },
-        {
-            name: '/admin',
-            component: Admin,
-        },
-        {
-            name: '/test/:id',
-            component: Tests,
-        },
-        {
-            name: '/problem/:id',
-            component: Problems,
-        },
-        {
-            name: '/sendtest/:id',
-            component: Send_test,
-        },
-        {
-            name: '/givetest/:token',
-            component: Home,
-        },
-        {
-            name: '/thankyou',
-            component: Thankyou,
-        },
-        {
-            name: '/pubnub',
-            component: Pubnub,
-        },
-        {
-            name: '/home',
-            component: Home,
-        },
-        {
-            name: '/showproblems',
-            component: AdminPanel,
-        },
-        {
-            name: '/showtests',
-            component: AdminPanel,
-        },
-        {
-            name: '/showresults',
-            component: AdminPanel,
-        },
+    const routes = [
+      {
+        name: '/',
+        component: Login,
+      },
+      {
+        name: '/newtest',
+        component: Add_test,
+      },
+      {
+        name: '/newProblem',
+        component: Add_problem,
+      },
+      {
+        name: '/editProblem/:id',
+        component: Edit_problem,
+      },
+      {
+        name: '/editTest/:id',
+        component: Edit_test,
+      },
+      {
+        name: '/admin',
+        component: Admin,
+      },
+      {
+        name: '/test/:id',
+        component: Tests,
+      },
+      {
+        name: '/problem/:id',
+        component: Problems,
+      },
+      {
+        name: '/sendtest/:id',
+        component: Send_test,
+      },
+      {
+        name: '/givetest/:token',
+        component: Introduce_yourself,
+      },
+      {
+        name: '/thankyou',
+        component: Thankyou,
+      },
+      {
+        name: '/pubnub',
+        component: Pubnub,
+      },
+      {
+        name: '/starttest/:token',
+        component: Home,
+      },
+      {
+        name: '/showproblems',
+        component: AdminPanel,
+      },
+      {
+        name: '/showtests',
+        component: AdminPanel,
+      },
+      {
+        name: '/showresults',
+        component: AdminPanel,
+      },
     ];
 
     var Observable_1 = createCommonjsModule(function (module, exports) {
@@ -58862,7 +57851,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     /* src/App.svelte generated by Svelte v3.18.1 */
 
-    function create_fragment$Q(ctx) {
+    function create_fragment$P(ctx) {
     	let current;
 
     	const router = new src_6({
@@ -58905,7 +57894,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$Q.name,
+    		id: create_fragment$P.name,
     		type: "component",
     		source: "",
     		ctx
@@ -58914,7 +57903,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$J($$self, $$props, $$invalidate) {
+    function instance$I($$self, $$props, $$invalidate) {
     	const client = new DefaultClient({ uri: "http://localhost:3000/graphql" });
     	setClient(client);
     	let { currentRoute } = $$props;
@@ -58945,13 +57934,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class App extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$J, create_fragment$Q, safe_not_equal, { currentRoute: 0 });
+    		init(this, options, instance$I, create_fragment$P, safe_not_equal, { currentRoute: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "App",
     			options,
-    			id: create_fragment$Q.name
+    			id: create_fragment$P.name
     		});
 
     		const { ctx } = this.$$;
