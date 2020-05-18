@@ -21,15 +21,23 @@
   };
 </script>
 
+<style>
+  ::-webkit-scrollbar {
+    width: 0px;
+  }
+</style>
+
 <link
   href="https://unpkg.com/tailwindcss@^1.0/dist/tailwind.min.css"
   rel="stylesheet" />
 
 <body>
-  <header>
-    <Navbar />
-    <Sidebar />
-  </header>
-  <Pubnub />
+  <div class="w-screen bg-edark h-screen flex flex-col">
+    <header>
+      <Navbar />
+      <Sidebar />
+    </header>
+    <Pubnub />
+  </div>
 
 </body>
