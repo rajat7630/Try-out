@@ -205,7 +205,6 @@
 <body>
 
   {#await $problems}
-    {pubbie()}
     <h1>Test is being loaded...</h1>
   {:then result}
     <div class="flex flex-col w-full">
