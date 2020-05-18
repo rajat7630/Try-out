@@ -1,8 +1,8 @@
 import PubNub from 'pubnub';
 
 const pubnub = new PubNub({
-  subscribeKey: 'sub-c-c4482926-7984-11ea-9770-0a12e0cf0d6e',
-  publishKey: 'pub-c-766f0388-8e3c-4b8a-952e-9679734077e8',
+  subscribeKey: 'sub-c-89808d60-77cc-11ea-9e80-76ec259d9e4f',
+  publishKey: 'pub-c-ef9257aa-4007-40b4-b2b8-41db8ac1f880',
   ssl: true,
 });
 
