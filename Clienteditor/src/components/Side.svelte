@@ -17,6 +17,7 @@
   width: 250px;
   height: 100%;
   padding: 60px;
+  padding-top: 150px;
   position: fixed;
 }
 
@@ -61,14 +62,7 @@
 </style>
     <div class="sidebar">
         <ul>
-            <li><a href="/admin" class="active">
-                <span class ="icon">
-                 <Icon icon="home"/>
-                 </span>
-                 <div class ="name">Home</div>
-                </a>
-            </li>
-            <li><a href="/showproblems">
+            <li><a href="/admin">
                  <span class ="icon">
                  <Icon icon="server"/>
                  </span>
