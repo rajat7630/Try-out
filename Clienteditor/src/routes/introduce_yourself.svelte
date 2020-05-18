@@ -19,6 +19,7 @@
       return;
     }
     console.log(user);
+    cookieHandler.setCookie("access_email", user.email);
     try {
       const res = await mutate(client, {
         mutation: apolloClient.addUser,

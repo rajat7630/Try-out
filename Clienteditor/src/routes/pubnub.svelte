@@ -6,7 +6,7 @@
   } from "../../pubnubClient.js";
   import pubnub from "../../pubnubinit.js";
   let hasJoinedChat = false;
-  let channels = [""];
+  let channels = [];
   let username = "";
   let newMessage = "";
   let messages = "";
@@ -260,7 +260,7 @@
             alt="ChitChat Logo" />
         </div>
         <div class="chat-notification-content">
-          <h4 class="chat-notification-title">User Chat</h4>
+          <h4 class="chat-notification-title">User Support</h4>
         </div>
       </div>
     </div>
