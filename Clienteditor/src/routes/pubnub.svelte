@@ -170,7 +170,11 @@
               on:click={changeChannel({ channel })}>
               <div class="ml-4 flex-1 border-b border-grey-lighter py-4">
                 <div class="flex items-bottom justify-between">
-                  <p class="text-grey-darkest">{channel}</p>
+                  {#if channel == 'channel.' + userName}
+                    <p class="text-grey-darkest">Private</p>
+                  {:else}
+                    <p class="text-grey-darkest">{channel}</p>
+                  {/if}
                 </div>
               </div>
             </div>
@@ -185,10 +189,13 @@
           rounded-lg">
           <div class="ml-4 flex-1 border-b border-grey-lighter py-4">
             <div class="flex items-bottom justify-between">
-              <p class="text-grey-darkest">{channelName}</p>
+              {#if channelName == 'channel.' + userName}
+                <p class="text-grey-darkest">Private</p>
+              {:else}
+                <p class="text-grey-darkest">{channelName}</p>
+              {/if}
             </div>
             <p class="text-grey-dark mt-1 text-sm">{comment}</p>
-
           </div>
         </div>
         <!-- message box -->

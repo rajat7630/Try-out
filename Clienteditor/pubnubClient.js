@@ -8,18 +8,17 @@ export const subscribe = (email) => {
   fetchmessages(`channel.${email}`);
 };
 export const fetchmessages = (channelName) => {
-  pubnub.history({
-    channel: channelName,
-    callback: function (messages) {
-      var arr = messages[0];
-      var newArr = [];
-      arr.forEach(function (o) {
-        newArr.push(o.text);
-      });
-      console.log(newArr);
+  pubnub.history(
+    {
+      channel: channelName,
+      count: 100, // how many items to fetch
+      stringifiedTimeToken: true, // false is the default
     },
-    count: 50,
-  });
+    function (status, response) {
+      console.log(status);
+      console.log(response);
+    }
+  );
 };
 export const wildcardsubscription = () => {
   pubnub.subscribe({

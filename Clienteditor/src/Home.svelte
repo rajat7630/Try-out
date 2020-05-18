@@ -17,7 +17,6 @@
     query: apolloClient.testByToken,
     variables: { token: currentRoute.namedParams.token }
   });
-
   $problems.then(res => {
     console.log(res);
   });
@@ -29,7 +28,6 @@
     cookieHandler.setCookie("test_id", res.data.testByToken.id);
     dataStore.updateStore(res.data.testByToken.problems);
   });
-
   let hasJoinedChat = false;
   let is_joined = false;
   let channel = "";
@@ -37,15 +35,14 @@
   let newMessage = "";
   let messages = "";
   let output = [];
-  let comment;
-
+  let comment = "Offline";
   function updateStore(result) {
     console.log(result);
   }
   function joined() {
     hasJoinedChat = true;
     if (is_joined === false) {
-      pubbie();
+      userInit();
     }
     is_joined = true;
   }
@@ -57,10 +54,7 @@
       output = [...output, m];
       newMessage = "";
       console.log(output);
-    }
-  });
-
-  pubnub.addListener({
+    },
     presence: function(p) {
       console.log(p);
       if (p.occupancy >= 1) {
@@ -70,7 +64,6 @@
       }
     }
   });
-
   let userName = "kumar.adarshluv99";
   async function email() {
     function getCookie(name) {
@@ -81,16 +74,14 @@
     }
     const userEmail = getCookie("access_email");
     console.log(userEmail);
-
     let sEmails = userEmail.split("@");
     userName = sEmails[0];
     return userName;
   }
-  async function pubbie() {
+  async function userInit() {
     // cookieHandler.setCookie("username",userName);
     const usern = await email();
     console.log(usern);
-
     const users = {
       id: Math.floor(Math.random() * 10) + 1,
       email: usern,
@@ -99,10 +90,8 @@
       ttl: 1440,
       profileUrl: null
     };
-
     grantPermissions(users);
   }
-
   //subscribe("newUserr.com");
 </script>
 
@@ -112,7 +101,6 @@
     margin-bottom: 20px;
     padding: 10px;
   }
-
   .btm {
     position: fixed;
     right: 3%;
@@ -124,7 +112,6 @@
     --color-l: #303030;
     --color-el: #c4c4c4;
   }
-
   .chat {
     position: fixed;
     background-color: #fff;
@@ -136,7 +123,6 @@
     width: 300px;
     border: 1px solid #dcc;
   }
-
   /* chit chat */
   .chat-notification {
     display: flex;
@@ -163,6 +149,11 @@
     color: #1a202c;
     font-size: 1.25rem;
     line-height: 1;
+  }
+  .chat-notification-message {
+    color: #718096;
+    font-size: 1rem;
+    line-height: 1.5;
   }
 </style>
 
@@ -198,7 +189,6 @@
     }
   }} /> -->
 <body>
-
   {#await $problems}
     <h1>Test is being loaded...</h1>
   {:then result}
@@ -210,11 +200,9 @@
   {:catch err}
     <h1>Error :- Contact Admin</h1>
   {/await}
-
   <div class="container">
     {#if hasJoinedChat}
       <div class="chat shadow-xl rounded-lg">
-
         <!-- //header -->
         <div
           class="px-3 flex items-center bg-grey-light cursor-pointer rounded-lg">
@@ -231,14 +219,12 @@
             <p class="text-grey-dark mt-1 text-sm">{comment}</p>
           </div>
         </div>
-
         <!-- message box -->
         <div
           class="container mx-auto overflow-auto margin-bottom:10%;"
           style=" bottom: 120px; right: 55px; height: 280px; width: 295px;">
           <div class="message-form">
             <div class="flex-1 overflow-auto">
-
               {#each output as temp}
                 {#if temp.publisher == userName}
                   <div class="flex justify-end mb-2">
@@ -252,7 +238,6 @@
                   <div class="ml-4 flex-1 rounded py-4">
                     <div class="flex items-bottom justify-between">
                       <p class="text-grey-darkest">Admin</p>
-
                     </div>
                     <p class="text-grey-dark mt-1 text-sm">{temp.message}</p>
                   </div>
@@ -261,9 +246,7 @@
             </div>
           </div>
         </div>
-
         <!-- message box end -->
-
         <!-- bottom container -->
         <div class="container block" style=" position: absolute; bottom: 0;">
           <div class="relative text-gray-600">
@@ -276,18 +259,12 @@
                 placeholder="Type Message and Press Enter"
                 class="bg-white h-10 px-5 pr-10 rounded-full text-sm
                 focus:outline-none" />
-
             </form>
-
           </div>
         </div>
-
       </div>
-
       <!-- chat end -->
-
       <!-- header end -->
-
       <!-- button half -->
       <div class="btm" on:click={close}>
         <div class="chat-notification">
