@@ -30812,16 +30812,8 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     const deleteTest = src$1`
   mutation deleteTest($id: ID) {
     deleteTest(id: $id) {
-      id
-      testName
-      difficultyLevel
-      problems {
-        id
-        problemName
-        problemTests
-        description
-        email
-      }
+      success
+      message
     }
   }
 `;
@@ -34740,6 +34732,21 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
         channels: [`channel.${email}`],
         withPresence: true,
       });
+      fetchmessages(`channel.${email}`);
+    };
+    const fetchmessages = (channelName) => {
+      pubnub.history({
+        channel: channelName,
+        callback: function (messages) {
+          var arr = messages[0];
+          var newArr = [];
+          arr.forEach(function (o) {
+            newArr.push(o.text);
+          });
+          console.log(newArr);
+        },
+        count: 50,
+      });
     };
     const wildcardsubscription = () => {
       pubnub.subscribe({
@@ -38632,18 +38639,18 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     function get_each_context$2(ctx, list, i) {
     	const child_ctx = ctx.slice();
-    	child_ctx[15] = list[i];
+    	child_ctx[17] = list[i];
     	return child_ctx;
     }
 
     function get_each_context_1(ctx, list, i) {
     	const child_ctx = ctx.slice();
-    	child_ctx[18] = list[i];
+    	child_ctx[20] = list[i];
     	return child_ctx;
     }
 
-    // (289:2) {:else}
-    function create_else_block$1(ctx) {
+    // (265:2) {:else}
+    function create_else_block_1$1(ctx) {
     	let div3;
     	let div2;
     	let div0;
@@ -38664,20 +38671,20 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			div1 = element("div");
     			h4 = element("h4");
     			h4.textContent = "User Chat";
-    			attr_dev(img, "class", "chat-notification-logo svelte-1ue8m0r");
+    			attr_dev(img, "class", "chat-notification-logo svelte-15kyrb4");
     			if (img.src !== (img_src_value = "https://img.icons8.com/cotton/50/000000/filled-chat.png")) attr_dev(img, "src", img_src_value);
     			attr_dev(img, "alt", "ChitChat Logo");
-    			add_location(img, file$8, 292, 10, 9944);
-    			attr_dev(div0, "class", "chat-notification-logo-wrapper svelte-1ue8m0r");
-    			add_location(div0, file$8, 291, 8, 9889);
-    			attr_dev(h4, "class", "chat-notification-title svelte-1ue8m0r");
-    			add_location(h4, file$8, 298, 10, 10174);
-    			attr_dev(div1, "class", "chat-notification-content svelte-1ue8m0r");
-    			add_location(div1, file$8, 297, 8, 10124);
-    			attr_dev(div2, "class", "chat-notification svelte-1ue8m0r");
-    			add_location(div2, file$8, 290, 6, 9849);
-    			attr_dev(div3, "class", "btm svelte-1ue8m0r");
-    			add_location(div3, file$8, 289, 4, 9807);
+    			add_location(img, file$8, 268, 10, 9577);
+    			attr_dev(div0, "class", "chat-notification-logo-wrapper svelte-15kyrb4");
+    			add_location(div0, file$8, 267, 8, 9522);
+    			attr_dev(h4, "class", "chat-notification-title svelte-15kyrb4");
+    			add_location(h4, file$8, 274, 10, 9807);
+    			attr_dev(div1, "class", "chat-notification-content svelte-15kyrb4");
+    			add_location(div1, file$8, 273, 8, 9757);
+    			attr_dev(div2, "class", "chat-notification svelte-15kyrb4");
+    			add_location(div2, file$8, 266, 6, 9482);
+    			attr_dev(div3, "class", "btm svelte-15kyrb4");
+    			add_location(div3, file$8, 265, 4, 9440);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div3, anchor);
@@ -38687,7 +38694,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			append_dev(div2, t0);
     			append_dev(div2, div1);
     			append_dev(div1, h4);
-    			dispose = listen_dev(div3, "click", /*joined*/ ctx[5], false, false, false);
+    			dispose = listen_dev(div3, "click", /*joined*/ ctx[6], false, false, false);
     		},
     		p: noop,
     		d: function destroy(detaching) {
@@ -38698,18 +38705,18 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_else_block$1.name,
+    		id: create_else_block_1$1.name,
     		type: "else",
-    		source: "(289:2) {:else}",
+    		source: "(265:2) {:else}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (171:2) {#if hasJoinedChat}
+    // (164:2) {#if hasJoinedChat}
     function create_if_block$2(ctx) {
-    	let div15;
+    	let div13;
     	let div3;
     	let div1;
     	let div0;
@@ -38717,7 +38724,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	let t1;
     	let div2;
     	let t2;
-    	let div14;
+    	let div12;
     	let div6;
     	let div5;
     	let div4;
@@ -38725,25 +38732,20 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	let t3;
     	let t4;
     	let p2;
+    	let t5;
     	let t6;
-    	let div11;
-    	let div10;
     	let div9;
     	let div8;
     	let div7;
-    	let p3;
-    	let t8;
-    	let p4;
-    	let t10;
-    	let t11;
-    	let div13;
-    	let div12;
+    	let t7;
+    	let div11;
+    	let div10;
     	let form;
     	let input;
-    	let t12;
-    	let div18;
-    	let div17;
+    	let t8;
     	let div16;
+    	let div15;
+    	let div14;
     	let img;
     	let img_src_value;
     	let dispose;
@@ -38763,12 +38765,12 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	const block = {
     		c: function create() {
-    			div15 = element("div");
+    			div13 = element("div");
     			div3 = element("div");
     			div1 = element("div");
     			div0 = element("div");
     			p0 = element("p");
-    			p0.textContent = "Active User";
+    			p0.textContent = "Acitve Channel";
     			t1 = space();
     			div2 = element("div");
 
@@ -38777,109 +38779,94 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			}
 
     			t2 = space();
-    			div14 = element("div");
+    			div12 = element("div");
     			div6 = element("div");
     			div5 = element("div");
     			div4 = element("div");
     			p1 = element("p");
-    			t3 = text(/*channelName*/ ctx[4]);
+    			t3 = text(/*channelName*/ ctx[5]);
     			t4 = space();
     			p2 = element("p");
-    			p2.textContent = "User Assitant";
+    			t5 = text(/*comment*/ ctx[4]);
     			t6 = space();
-    			div11 = element("div");
-    			div10 = element("div");
     			div9 = element("div");
     			div8 = element("div");
     			div7 = element("div");
-    			p3 = element("p");
-    			p3.textContent = "Admin";
-    			t8 = space();
-    			p4 = element("p");
-    			p4.textContent = "Hey! if you need any help,Please message me";
-    			t10 = space();
 
     			for (let i = 0; i < each_blocks.length; i += 1) {
     				each_blocks[i].c();
     			}
 
-    			t11 = space();
-    			div13 = element("div");
-    			div12 = element("div");
+    			t7 = space();
+    			div11 = element("div");
+    			div10 = element("div");
     			form = element("form");
     			input = element("input");
-    			t12 = space();
-    			div18 = element("div");
-    			div17 = element("div");
+    			t8 = space();
     			div16 = element("div");
+    			div15 = element("div");
+    			div14 = element("div");
     			img = element("img");
-    			add_location(p0, file$8, 181, 12, 6492);
+    			attr_dev(p0, "class", "text-grey-darkest");
+    			add_location(p0, file$8, 172, 12, 5963);
     			attr_dev(div0, "class", "flex");
-    			add_location(div0, file$8, 179, 10, 6460);
+    			add_location(div0, file$8, 171, 10, 5932);
     			attr_dev(div1, "class", "py-2 px-3 bg-grey-lighter flex flex-row justify-between\n          items-center");
-    			add_location(div1, file$8, 176, 8, 6347);
+    			add_location(div1, file$8, 168, 8, 5819);
     			attr_dev(div2, "class", "bg-grey-lighter flex-1 overflow-auto");
-    			add_location(div2, file$8, 186, 8, 6578);
+    			add_location(div2, file$8, 176, 8, 6077);
     			attr_dev(div3, "class", "w-1/3 border flex flex-col");
-    			add_location(div3, file$8, 173, 6, 6273);
+    			add_location(div3, file$8, 166, 6, 5746);
     			attr_dev(p1, "class", "text-grey-darkest");
-    			add_location(p1, file$8, 217, 14, 7523);
+    			add_location(p1, file$8, 199, 14, 7014);
     			attr_dev(div4, "class", "flex items-bottom justify-between");
-    			add_location(div4, file$8, 216, 12, 7461);
+    			add_location(div4, file$8, 198, 12, 6952);
     			attr_dev(p2, "class", "text-grey-dark mt-1 text-sm");
-    			add_location(p2, file$8, 219, 12, 7601);
+    			add_location(p2, file$8, 201, 12, 7092);
     			attr_dev(div5, "class", "ml-4 flex-1 border-b border-grey-lighter py-4");
-    			add_location(div5, file$8, 215, 10, 7389);
+    			add_location(div5, file$8, 197, 10, 6880);
     			attr_dev(div6, "class", "px-3 flex-row items-center bg-grey-light cursor-pointer\n          rounded-lg");
-    			add_location(div6, file$8, 212, 8, 7278);
-    			attr_dev(p3, "class", "text-grey-darkest");
-    			add_location(p3, file$8, 231, 18, 8119);
-    			attr_dev(div7, "class", "flex items-bottom justify-between");
-    			add_location(div7, file$8, 230, 16, 8053);
-    			attr_dev(p4, "class", "text-grey-dark mt-1 text-sm");
-    			add_location(p4, file$8, 234, 16, 8198);
-    			attr_dev(div8, "class", "ml-4 flex-1 border-b border-grey-lighter py-4");
-    			add_location(div8, file$8, 229, 14, 7977);
-    			attr_dev(div9, "class", "flex-1 overflow-auto");
-    			add_location(div9, file$8, 228, 12, 7928);
-    			attr_dev(div10, "class", "message-form");
-    			add_location(div10, file$8, 227, 10, 7889);
-    			attr_dev(div11, "class", "container mx-auto overflow-auto margin-bottom:10%;");
-    			set_style(div11, "bottom", "120px");
-    			set_style(div11, "right", "55px");
-    			set_style(div11, "height", "380px");
-    			set_style(div11, "width", "390px");
-    			add_location(div11, file$8, 224, 8, 7728);
+    			add_location(div6, file$8, 194, 8, 6769);
+    			attr_dev(div7, "class", "flex-1 overflow-auto");
+    			add_location(div7, file$8, 210, 12, 7415);
+    			attr_dev(div8, "class", "message-form");
+    			add_location(div8, file$8, 209, 10, 7376);
+    			attr_dev(div9, "class", "container mx-auto overflow-auto margin-bottom:10%;");
+    			set_style(div9, "bottom", "120px");
+    			set_style(div9, "right", "55px");
+    			set_style(div9, "height", "380px");
+    			set_style(div9, "width", "390px");
+    			add_location(div9, file$8, 206, 8, 7215);
     			attr_dev(input, "type", "search");
     			attr_dev(input, "name", "serch");
     			attr_dev(input, "placeholder", "Type Message and Press Enter");
-    			attr_dev(input, "class", "bg-white h-10 px-5 pr-10 rounded-full text-sm\n                focus:outline-none svelte-1ue8m0r");
-    			add_location(input, file$8, 257, 14, 9024);
-    			add_location(form, file$8, 256, 12, 8943);
-    			attr_dev(div12, "class", "relative text-gray-600");
-    			add_location(div12, file$8, 255, 10, 8894);
-    			attr_dev(div13, "class", "container block");
-    			set_style(div13, "position", "absolute");
-    			set_style(div13, "bottom", "0");
-    			add_location(div13, file$8, 254, 8, 8814);
-    			attr_dev(div14, "class", "w-2/3 border flex flex-col");
-    			add_location(div14, file$8, 208, 6, 7201);
-    			attr_dev(div15, "class", "chat flex flex-row shadow-xl rounded-lg svelte-1ue8m0r");
-    			add_location(div15, file$8, 171, 4, 6194);
-    			attr_dev(img, "class", "chat-notification-logo svelte-1ue8m0r");
+    			attr_dev(input, "class", "bg-white h-10 px-5 pr-10 rounded-full text-sm\n                focus:outline-none svelte-15kyrb4");
+    			add_location(input, file$8, 239, 14, 8663);
+    			add_location(form, file$8, 238, 12, 8591);
+    			attr_dev(div10, "class", "relative text-gray-600");
+    			add_location(div10, file$8, 237, 10, 8542);
+    			attr_dev(div11, "class", "container block");
+    			set_style(div11, "position", "absolute");
+    			set_style(div11, "bottom", "0");
+    			add_location(div11, file$8, 236, 8, 8462);
+    			attr_dev(div12, "class", "w-2/3 border flex flex-col");
+    			add_location(div12, file$8, 192, 6, 6694);
+    			attr_dev(div13, "class", "chat flex flex-row shadow-xl rounded-lg svelte-15kyrb4");
+    			add_location(div13, file$8, 164, 4, 5667);
+    			attr_dev(img, "class", "chat-notification-logo svelte-15kyrb4");
     			if (img.src !== (img_src_value = "https://img.icons8.com/cute-clipart/50/000000/close-window.png")) attr_dev(img, "src", img_src_value);
     			attr_dev(img, "alt", "ChitChat Logo");
-    			add_location(img, file$8, 281, 10, 9590);
-    			attr_dev(div16, "class", "chat-notification-logo-wrapper svelte-1ue8m0r");
-    			add_location(div16, file$8, 280, 8, 9535);
-    			attr_dev(div17, "class", "chat-notification svelte-1ue8m0r");
-    			add_location(div17, file$8, 279, 6, 9495);
-    			attr_dev(div18, "class", "btm svelte-1ue8m0r");
-    			add_location(div18, file$8, 278, 4, 9454);
+    			add_location(img, file$8, 257, 10, 9223);
+    			attr_dev(div14, "class", "chat-notification-logo-wrapper svelte-15kyrb4");
+    			add_location(div14, file$8, 256, 8, 9168);
+    			attr_dev(div15, "class", "chat-notification svelte-15kyrb4");
+    			add_location(div15, file$8, 255, 6, 9128);
+    			attr_dev(div16, "class", "btm svelte-15kyrb4");
+    			add_location(div16, file$8, 254, 4, 9087);
     		},
     		m: function mount(target, anchor) {
-    			insert_dev(target, div15, anchor);
-    			append_dev(div15, div3);
+    			insert_dev(target, div13, anchor);
+    			append_dev(div13, div3);
     			append_dev(div3, div1);
     			append_dev(div1, div0);
     			append_dev(div0, p0);
@@ -38890,61 +38877,56 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     				each_blocks_1[i].m(div2, null);
     			}
 
-    			append_dev(div15, t2);
-    			append_dev(div15, div14);
-    			append_dev(div14, div6);
+    			append_dev(div13, t2);
+    			append_dev(div13, div12);
+    			append_dev(div12, div6);
     			append_dev(div6, div5);
     			append_dev(div5, div4);
     			append_dev(div4, p1);
     			append_dev(p1, t3);
     			append_dev(div5, t4);
     			append_dev(div5, p2);
-    			append_dev(div14, t6);
-    			append_dev(div14, div11);
-    			append_dev(div11, div10);
-    			append_dev(div10, div9);
+    			append_dev(p2, t5);
+    			append_dev(div12, t6);
+    			append_dev(div12, div9);
     			append_dev(div9, div8);
     			append_dev(div8, div7);
-    			append_dev(div7, p3);
-    			append_dev(div8, t8);
-    			append_dev(div8, p4);
-    			append_dev(div9, t10);
 
     			for (let i = 0; i < each_blocks.length; i += 1) {
-    				each_blocks[i].m(div9, null);
+    				each_blocks[i].m(div7, null);
     			}
 
-    			append_dev(div14, t11);
-    			append_dev(div14, div13);
-    			append_dev(div13, div12);
-    			append_dev(div12, form);
+    			append_dev(div12, t7);
+    			append_dev(div12, div11);
+    			append_dev(div11, div10);
+    			append_dev(div10, form);
     			append_dev(form, input);
     			set_input_value(input, /*newMessage*/ ctx[2]);
-    			insert_dev(target, t12, anchor);
-    			insert_dev(target, div18, anchor);
-    			append_dev(div18, div17);
-    			append_dev(div17, div16);
-    			append_dev(div16, img);
+    			insert_dev(target, t8, anchor);
+    			insert_dev(target, div16, anchor);
+    			append_dev(div16, div15);
+    			append_dev(div15, div14);
+    			append_dev(div14, img);
 
     			dispose = [
-    				listen_dev(input, "input", /*input_input_handler*/ ctx[14]),
+    				listen_dev(input, "input", /*input_input_handler*/ ctx[16]),
     				listen_dev(
     					form,
     					"submit",
     					prevent_default(function () {
-    						if (is_function(publish(/*newMessage*/ ctx[2], /*channelName*/ ctx[4]))) publish(/*newMessage*/ ctx[2], /*channelName*/ ctx[4]).apply(this, arguments);
+    						if (is_function(/*sendMessage*/ ctx[9](/*newMessage*/ ctx[2]))) /*sendMessage*/ ctx[9](/*newMessage*/ ctx[2]).apply(this, arguments);
     					}),
     					false,
     					true,
     					false
     				),
-    				listen_dev(div18, "click", /*close*/ ctx[6], false, false, false)
+    				listen_dev(div16, "click", /*close*/ ctx[7], false, false, false)
     			];
     		},
     		p: function update(new_ctx, dirty) {
     			ctx = new_ctx;
 
-    			if (dirty & /*changeChannel, channels*/ 130) {
+    			if (dirty & /*changeChannel, channels*/ 1026) {
     				each_value_1 = /*channels*/ ctx[1];
     				let i;
 
@@ -38967,9 +38949,10 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     				each_blocks_1.length = each_value_1.length;
     			}
 
-    			if (dirty & /*channelName*/ 16) set_data_dev(t3, /*channelName*/ ctx[4]);
+    			if (dirty & /*channelName*/ 32) set_data_dev(t3, /*channelName*/ ctx[5]);
+    			if (dirty & /*comment*/ 16) set_data_dev(t5, /*comment*/ ctx[4]);
 
-    			if (dirty & /*output*/ 8) {
+    			if (dirty & /*output, userName, channelName*/ 296) {
     				each_value = /*output*/ ctx[3];
     				let i;
 
@@ -38981,7 +38964,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     					} else {
     						each_blocks[i] = create_each_block$2(child_ctx);
     						each_blocks[i].c();
-    						each_blocks[i].m(div9, null);
+    						each_blocks[i].m(div7, null);
     					}
     				}
 
@@ -38997,11 +38980,11 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			}
     		},
     		d: function destroy(detaching) {
-    			if (detaching) detach_dev(div15);
+    			if (detaching) detach_dev(div13);
     			destroy_each(each_blocks_1, detaching);
     			destroy_each(each_blocks, detaching);
-    			if (detaching) detach_dev(t12);
-    			if (detaching) detach_dev(div18);
+    			if (detaching) detach_dev(t8);
+    			if (detaching) detach_dev(div16);
     			run_all(dispose);
     		}
     	};
@@ -39010,20 +38993,20 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_if_block$2.name,
     		type: "if",
-    		source: "(171:2) {#if hasJoinedChat}",
+    		source: "(164:2) {#if hasJoinedChat}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (189:10) {#each channels as channel}
+    // (178:10) {#each channels as channel}
     function create_each_block_1(ctx) {
     	let div2;
     	let div1;
     	let div0;
     	let p;
-    	let t0_value = /*channel*/ ctx[18] + "";
+    	let t0_value = /*channel*/ ctx[20] + "";
     	let t0;
     	let t1;
     	let dispose;
@@ -39037,13 +39020,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			t0 = text(t0_value);
     			t1 = space();
     			attr_dev(p, "class", "text-grey-darkest");
-    			add_location(p, file$8, 196, 18, 7018);
+    			add_location(p, file$8, 184, 18, 6515);
     			attr_dev(div0, "class", "flex items-bottom justify-between");
-    			add_location(div0, file$8, 195, 16, 6952);
+    			add_location(div0, file$8, 183, 16, 6449);
     			attr_dev(div1, "class", "ml-4 flex-1 border-b border-grey-lighter py-4");
-    			add_location(div1, file$8, 194, 14, 6876);
+    			add_location(div1, file$8, 182, 14, 6373);
     			attr_dev(div2, "class", "bg-white hover:bg-gray-400 px-3 flex items-center\n              hover:bg-grey-lighter cursor-pointer");
-    			add_location(div2, file$8, 189, 12, 6680);
+    			add_location(div2, file$8, 178, 12, 6178);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div2, anchor);
@@ -39057,7 +39040,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     				div2,
     				"click",
     				function () {
-    					if (is_function(/*changeChannel*/ ctx[7]({ channel: /*channel*/ ctx[18] }))) /*changeChannel*/ ctx[7]({ channel: /*channel*/ ctx[18] }).apply(this, arguments);
+    					if (is_function(/*changeChannel*/ ctx[10]({ channel: /*channel*/ ctx[20] }))) /*changeChannel*/ ctx[10]({ channel: /*channel*/ ctx[20] }).apply(this, arguments);
     				},
     				false,
     				false,
@@ -39066,7 +39049,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		},
     		p: function update(new_ctx, dirty) {
     			ctx = new_ctx;
-    			if (dirty & /*channels*/ 2 && t0_value !== (t0_value = /*channel*/ ctx[18] + "")) set_data_dev(t0, t0_value);
+    			if (dirty & /*channels*/ 2 && t0_value !== (t0_value = /*channel*/ ctx[20] + "")) set_data_dev(t0, t0_value);
     		},
     		d: function destroy(detaching) {
     			if (detaching) detach_dev(div2);
@@ -39078,19 +39061,132 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_each_block_1.name,
     		type: "each",
-    		source: "(189:10) {#each channels as channel}",
+    		source: "(178:10) {#each channels as channel}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (239:14) {#each output as message}
-    function create_each_block$2(ctx) {
+    // (213:16) {#if temp.channel == channelName}
+    function create_if_block_1$2(ctx) {
+    	let if_block_anchor;
+
+    	function select_block_type_1(ctx, dirty) {
+    		if (/*temp*/ ctx[17].publisher == /*userName*/ ctx[8]) return create_if_block_2$1;
+    		return create_else_block$1;
+    	}
+
+    	let current_block_type = select_block_type_1(ctx);
+    	let if_block = current_block_type(ctx);
+
+    	const block = {
+    		c: function create() {
+    			if_block.c();
+    			if_block_anchor = empty();
+    		},
+    		m: function mount(target, anchor) {
+    			if_block.m(target, anchor);
+    			insert_dev(target, if_block_anchor, anchor);
+    		},
+    		p: function update(ctx, dirty) {
+    			if (current_block_type === (current_block_type = select_block_type_1(ctx)) && if_block) {
+    				if_block.p(ctx, dirty);
+    			} else {
+    				if_block.d(1);
+    				if_block = current_block_type(ctx);
+
+    				if (if_block) {
+    					if_block.c();
+    					if_block.m(if_block_anchor.parentNode, if_block_anchor);
+    				}
+    			}
+    		},
+    		d: function destroy(detaching) {
+    			if_block.d(detaching);
+    			if (detaching) detach_dev(if_block_anchor);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_if_block_1$2.name,
+    		type: "if",
+    		source: "(213:16) {#if temp.channel == channelName}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (222:18) {:else}
+    function create_else_block$1(ctx) {
+    	let div1;
+    	let div0;
+    	let p0;
+    	let t0_value = /*temp*/ ctx[17].publisher + "";
+    	let t0;
+    	let t1;
+    	let p1;
+    	let t2_value = /*temp*/ ctx[17].message + "";
+    	let t2;
+    	let t3;
+
+    	const block = {
+    		c: function create() {
+    			div1 = element("div");
+    			div0 = element("div");
+    			p0 = element("p");
+    			t0 = text(t0_value);
+    			t1 = space();
+    			p1 = element("p");
+    			t2 = text(t2_value);
+    			t3 = space();
+    			attr_dev(p0, "class", "text-grey-darkest");
+    			add_location(p0, file$8, 224, 24, 8082);
+    			attr_dev(div0, "class", "flex items-bottom justify-between");
+    			add_location(div0, file$8, 223, 22, 8010);
+    			attr_dev(p1, "class", "text-grey-dark mt-1 text-sm");
+    			add_location(p1, file$8, 226, 22, 8183);
+    			attr_dev(div1, "class", "ml-4 flex-1 rounded py-4");
+    			add_location(div1, file$8, 222, 20, 7949);
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, div1, anchor);
+    			append_dev(div1, div0);
+    			append_dev(div0, p0);
+    			append_dev(p0, t0);
+    			append_dev(div1, t1);
+    			append_dev(div1, p1);
+    			append_dev(p1, t2);
+    			append_dev(div1, t3);
+    		},
+    		p: function update(ctx, dirty) {
+    			if (dirty & /*output*/ 8 && t0_value !== (t0_value = /*temp*/ ctx[17].publisher + "")) set_data_dev(t0, t0_value);
+    			if (dirty & /*output*/ 8 && t2_value !== (t2_value = /*temp*/ ctx[17].message + "")) set_data_dev(t2, t2_value);
+    		},
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(div1);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_else_block$1.name,
+    		type: "else",
+    		source: "(222:18) {:else}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (214:18) {#if temp.publisher == userName}
+    function create_if_block_2$1(ctx) {
     	let div1;
     	let div0;
     	let p;
-    	let t0_value = /*message*/ ctx[15] + "";
+    	let t0_value = /*temp*/ ctx[17].message + "";
     	let t0;
     	let t1;
 
@@ -39102,12 +39198,12 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			t0 = text(t0_value);
     			t1 = space();
     			attr_dev(p, "class", "text-sm mt-1");
-    			add_location(p, file$8, 243, 20, 8578);
+    			add_location(p, file$8, 218, 24, 7804);
     			attr_dev(div0, "class", "rounded py-2 px-3");
     			set_style(div0, "background-color", "#E2F7CB");
-    			add_location(div0, file$8, 240, 18, 8452);
+    			add_location(div0, file$8, 215, 22, 7666);
     			attr_dev(div1, "class", "flex justify-end mb-2");
-    			add_location(div1, file$8, 239, 16, 8398);
+    			add_location(div1, file$8, 214, 20, 7608);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div1, anchor);
@@ -39117,7 +39213,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			append_dev(div1, t1);
     		},
     		p: function update(ctx, dirty) {
-    			if (dirty & /*output*/ 8 && t0_value !== (t0_value = /*message*/ ctx[15] + "")) set_data_dev(t0, t0_value);
+    			if (dirty & /*output*/ 8 && t0_value !== (t0_value = /*temp*/ ctx[17].message + "")) set_data_dev(t0, t0_value);
     		},
     		d: function destroy(detaching) {
     			if (detaching) detach_dev(div1);
@@ -39126,9 +39222,54 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
+    		id: create_if_block_2$1.name,
+    		type: "if",
+    		source: "(214:18) {#if temp.publisher == userName}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (212:14) {#each output as temp}
+    function create_each_block$2(ctx) {
+    	let if_block_anchor;
+    	let if_block = /*temp*/ ctx[17].channel == /*channelName*/ ctx[5] && create_if_block_1$2(ctx);
+
+    	const block = {
+    		c: function create() {
+    			if (if_block) if_block.c();
+    			if_block_anchor = empty();
+    		},
+    		m: function mount(target, anchor) {
+    			if (if_block) if_block.m(target, anchor);
+    			insert_dev(target, if_block_anchor, anchor);
+    		},
+    		p: function update(ctx, dirty) {
+    			if (/*temp*/ ctx[17].channel == /*channelName*/ ctx[5]) {
+    				if (if_block) {
+    					if_block.p(ctx, dirty);
+    				} else {
+    					if_block = create_if_block_1$2(ctx);
+    					if_block.c();
+    					if_block.m(if_block_anchor.parentNode, if_block_anchor);
+    				}
+    			} else if (if_block) {
+    				if_block.d(1);
+    				if_block = null;
+    			}
+    		},
+    		d: function destroy(detaching) {
+    			if (if_block) if_block.d(detaching);
+    			if (detaching) detach_dev(if_block_anchor);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
     		id: create_each_block$2.name,
     		type: "each",
-    		source: "(239:14) {#each output as message}",
+    		source: "(212:14) {#each output as temp}",
     		ctx
     	});
 
@@ -39142,7 +39283,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	function select_block_type(ctx, dirty) {
     		if (/*hasJoinedChat*/ ctx[0]) return create_if_block$2;
-    		return create_else_block$1;
+    		return create_else_block_1$1;
     	}
 
     	let current_block_type = select_block_type(ctx);
@@ -39156,9 +39297,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			if_block.c();
     			attr_dev(link, "href", "https://unpkg.com/tailwindcss@^1.0/dist/tailwind.min.css");
     			attr_dev(link, "rel", "stylesheet");
-    			add_location(link, file$8, 165, 0, 6049);
+    			add_location(link, file$8, 159, 0, 5523);
     			attr_dev(div, "class", "container");
-    			add_location(div, file$8, 169, 0, 6144);
+    			add_location(div, file$8, 162, 0, 5617);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -39214,7 +39355,8 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	let username = "";
     	let newMessage = "";
     	let messages = "";
-    	let output = [""];
+    	let output = [];
+    	let comment = "Offline";
 
     	function joined() {
     		$$invalidate(0, hasJoinedChat = true);
@@ -39224,7 +39366,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		$$invalidate(0, hasJoinedChat = false);
     	}
 
+    	//Pubnub User Initialize
     	const userEmail = getCookie$1("access_email");
+
     	let sEmails = userEmail.split("%");
     	let userName = sEmails[0];
 
@@ -39237,9 +39381,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		profileUrl: null
     	};
 
+    	grantPermissions(user);
     	let channelName = "channel." + userName;
-    	console.log(channelName);
 
+    	var sendMessage = Message => {
+    		publish(Message, channelName);
+    	};
+
+    	//console.log(channelName);
     	pubnub.addListener({
     		message(m) {
     			let flag = true;
@@ -39255,21 +39404,29 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     			if (flag) {
     				console.log("different channel");
-    				$$invalidate(3, output = [m.message]);
+    				$$invalidate(3, output = [...output, m]);
     				$$invalidate(1, channels = [...channels, m.channel]);
     				$$invalidate(2, newMessage = "");
     			} else {
-    				$$invalidate(3, output = [...output, m.message]);
+    				$$invalidate(3, output = [...output, m]);
     				$$invalidate(2, newMessage = "");
+    			}
+
+    			console.log(output);
+    		},
+    		presence(p) {
+    			console.log(p);
+
+    			if (p.occupancy >= 1) {
+    				$$invalidate(4, comment = "Online");
     			}
     		}
     	});
 
-    	grantPermissions(user);
-
     	//subscribe("newUserr.com");
     	const changeChannel = m => {
-    		$$invalidate(4, channelName = m.channel);
+    		$$invalidate(5, channelName = m.channel);
+    		fetchmessages(channelName);
     	};
 
     	function input_input_handler() {
@@ -39288,9 +39445,11 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		if ("newMessage" in $$props) $$invalidate(2, newMessage = $$props.newMessage);
     		if ("messages" in $$props) messages = $$props.messages;
     		if ("output" in $$props) $$invalidate(3, output = $$props.output);
+    		if ("comment" in $$props) $$invalidate(4, comment = $$props.comment);
     		if ("sEmails" in $$props) sEmails = $$props.sEmails;
-    		if ("userName" in $$props) userName = $$props.userName;
-    		if ("channelName" in $$props) $$invalidate(4, channelName = $$props.channelName);
+    		if ("userName" in $$props) $$invalidate(8, userName = $$props.userName);
+    		if ("channelName" in $$props) $$invalidate(5, channelName = $$props.channelName);
+    		if ("sendMessage" in $$props) $$invalidate(9, sendMessage = $$props.sendMessage);
     	};
 
     	return [
@@ -39298,15 +39457,17 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		channels,
     		newMessage,
     		output,
+    		comment,
     		channelName,
     		joined,
     		close,
+    		userName,
+    		sendMessage,
     		changeChannel,
     		username,
     		messages,
     		userEmail,
     		sEmails,
-    		userName,
     		user,
     		input_input_handler
     	];
@@ -40305,51 +40466,51 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			}
 
     			attr_dev(div0, "class", "font-bold text-2xl text-elight mx-auto");
-    			add_location(div0, file$c, 88, 10, 3024);
+    			add_location(div0, file$c, 88, 10, 3026);
     			attr_dev(div1, "class", " text-xl text-elight mx-auto");
-    			add_location(div1, file$c, 91, 10, 3148);
+    			add_location(div1, file$c, 91, 10, 3150);
     			attr_dev(div2, "class", " text-xl text-elight mx-auto");
-    			add_location(div2, file$c, 94, 10, 3280);
+    			add_location(div2, file$c, 94, 10, 3282);
     			attr_dev(div3, "class", "mx-auto mt-8 max-w-full flex flex-col");
-    			add_location(div3, file$c, 87, 8, 2962);
+    			add_location(div3, file$c, 87, 8, 2964);
     			attr_dev(h1, "class", "labels");
-    			add_location(h1, file$c, 102, 14, 3582);
+    			add_location(h1, file$c, 102, 14, 3584);
     			attr_dev(div4, "class", "mx-auto mb-4 w-32");
-    			add_location(div4, file$c, 101, 12, 3536);
+    			add_location(div4, file$c, 101, 12, 3538);
     			attr_dev(div5, "class", "rows mx-4");
-    			add_location(div5, file$c, 107, 18, 3763);
+    			add_location(div5, file$c, 107, 18, 3765);
     			attr_dev(div6, "class", "w-10/12");
-    			add_location(div6, file$c, 106, 16, 3723);
+    			add_location(div6, file$c, 106, 16, 3725);
     			attr_dev(div7, "class", "rows mx-4");
-    			add_location(div7, file$c, 110, 18, 3883);
+    			add_location(div7, file$c, 110, 18, 3885);
     			attr_dev(div8, "class", "w-2/12");
-    			add_location(div8, file$c, 109, 16, 3844);
+    			add_location(div8, file$c, 109, 16, 3846);
     			attr_dev(div9, "class", "flex mb-6");
-    			add_location(div9, file$c, 105, 14, 3683);
+    			add_location(div9, file$c, 105, 14, 3685);
     			attr_dev(div10, "class", "boxheight2 flex flex-col flex-grow overflow-auto");
-    			add_location(div10, file$c, 113, 14, 3976);
+    			add_location(div10, file$c, 113, 14, 3978);
     			attr_dev(div11, "class", "flex-col");
-    			add_location(div11, file$c, 104, 12, 3646);
+    			add_location(div11, file$c, 104, 12, 3648);
     			attr_dev(div12, "class", "outer_box flex-col h-full");
-    			add_location(div12, file$c, 100, 10, 3484);
+    			add_location(div12, file$c, 100, 10, 3486);
     			attr_dev(div13, "class", "bg-dark max-w-full mt-12 mx-64");
-    			add_location(div13, file$c, 98, 8, 3428);
+    			add_location(div13, file$c, 98, 8, 3430);
     			attr_dev(button0, "class", "savebutton hover:bg-white hover:text-edark font-bold py-2\n              px-4 border rounded");
-    			add_location(button0, file$c, 142, 12, 5196);
+    			add_location(button0, file$c, 142, 12, 5198);
     			attr_dev(button1, "class", "savebutton hover:bg-white hover:text-edark font-bold py-2\n              px-4 border rounded");
-    			add_location(button1, file$c, 150, 12, 5520);
+    			add_location(button1, file$c, 150, 12, 5522);
     			attr_dev(button2, "class", "savebutton hover:bg-white hover:text-edark font-bold py-2\n              px-4 border rounded");
-    			add_location(button2, file$c, 156, 12, 5741);
+    			add_location(button2, file$c, 156, 12, 5743);
     			attr_dev(div14, "class", "float-right ");
-    			add_location(div14, file$c, 141, 10, 5157);
+    			add_location(div14, file$c, 141, 10, 5159);
     			attr_dev(div15, "class", "max-w-6xl my-4 mb-32 flex flex-col mx-auto");
-    			add_location(div15, file$c, 140, 8, 5090);
+    			add_location(div15, file$c, 140, 8, 5092);
     			attr_dev(div16, "class", "bg-edark flex flex-col max-w-full overflow-auto");
-    			add_location(div16, file$c, 86, 6, 2892);
+    			add_location(div16, file$c, 86, 6, 2894);
     			attr_dev(div17, "class", "flex bottom-0 absolute w-auto");
-    			add_location(div17, file$c, 168, 8, 6170);
+    			add_location(div17, file$c, 168, 8, 6172);
     			attr_dev(div18, "class", " flex-grow align-bottom relative mx-64");
-    			add_location(div18, file$c, 167, 6, 6109);
+    			add_location(div18, file$c, 167, 6, 6111);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div16, anchor);
@@ -40511,20 +40672,20 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			t3 = space();
     			attr_dev(a, "href", a_href_value = "http://localhost:5000/problem/" + /*prob*/ ctx[12].problem.id);
     			attr_dev(a, "class", "no-underline px-3 text-elight");
-    			add_location(a, file$c, 118, 24, 4298);
+    			add_location(a, file$c, 118, 24, 4300);
     			attr_dev(div0, "class", "rows bg-edark rounded-full p-2 px-4 mx-2");
-    			add_location(div0, file$c, 117, 22, 4219);
+    			add_location(div0, file$c, 117, 22, 4221);
     			attr_dev(div1, "class", "w-10/12");
-    			add_location(div1, file$c, 116, 20, 4175);
+    			add_location(div1, file$c, 116, 20, 4177);
     			attr_dev(div2, "type", "string");
     			attr_dev(div2, "class", " mx-auto w-10 outline-none text-white p-2");
-    			add_location(div2, file$c, 127, 24, 4713);
+    			add_location(div2, file$c, 127, 24, 4715);
     			attr_dev(div3, "class", "rows bg-edark rounded-full");
-    			add_location(div3, file$c, 126, 22, 4648);
+    			add_location(div3, file$c, 126, 22, 4650);
     			attr_dev(div4, "class", "w-2/12");
-    			add_location(div4, file$c, 125, 20, 4605);
+    			add_location(div4, file$c, 125, 20, 4607);
     			attr_dev(div5, "class", "flex pb-3");
-    			add_location(div5, file$c, 115, 18, 4131);
+    			add_location(div5, file$c, 115, 18, 4133);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div5, anchor);
@@ -40577,7 +40738,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			t0 = text(t0_value);
     			t1 = space();
     			attr_dev(div, "class", "text-white border-solid border-2 mr-4 mb-10 border-white\n                rounded-full p-2 px-4 ");
-    			add_location(div, file$c, 171, 14, 6327);
+    			add_location(div, file$c, 171, 14, 6329);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div, anchor);
@@ -40710,15 +40871,15 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			info.block.c();
     			attr_dev(link0, "href", "https://unpkg.com/tailwindcss@^1.0/dist/tailwind.min.css");
     			attr_dev(link0, "rel", "stylesheet");
-    			add_location(link0, file$c, 27, 0, 742);
-    			add_location(style, file$c, 31, 2, 845);
+    			add_location(link0, file$c, 27, 0, 744);
+    			add_location(style, file$c, 31, 2, 847);
     			attr_dev(link1, "href", "https://unpkg.com/tailwindcss@^1.0/dist/tailwind.min.css");
     			attr_dev(link1, "rel", "stylesheet");
-    			add_location(link1, file$c, 75, 2, 2631);
-    			add_location(header, file$c, 80, 4, 2791);
+    			add_location(link1, file$c, 75, 2, 2633);
+    			add_location(header, file$c, 80, 4, 2793);
     			attr_dev(div, "class", "bg-edark h-full flex flex-col box-border");
-    			add_location(div, file$c, 79, 2, 2732);
-    			add_location(body, file$c, 30, 0, 836);
+    			add_location(div, file$c, 79, 2, 2734);
+    			add_location(body, file$c, 30, 0, 838);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -40807,10 +40968,10 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     				mutation: apolloClient.deleteTest,
     				variables: { id: currentRoute.namedParams.id }
     			});
+
+    			location.replace("http://localhost:5000/admin");
     		} catch(err) {
     		}
-
-    		location.replace("http://localhost:5000/admin");
     	}
 
     	const writable_props = ["currentRoute"];
@@ -41569,7 +41730,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (114:10) {#if uniqueNameStatus === 2}
-    function create_if_block_2$1(ctx) {
+    function create_if_block_2$2(ctx) {
     	let current;
     	const loader = new Loader({ $$inline: true });
 
@@ -41597,7 +41758,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_if_block_2$1.name,
+    		id: create_if_block_2$2.name,
     		type: "if",
     		source: "(114:10) {#if uniqueNameStatus === 2}",
     		ctx
@@ -41607,7 +41768,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (117:10) {#if uniqueNameStatus === 1}
-    function create_if_block_1$2(ctx) {
+    function create_if_block_1$3(ctx) {
     	let i;
 
     	const block = {
@@ -41627,7 +41788,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_if_block_1$2.name,
+    		id: create_if_block_1$3.name,
     		type: "if",
     		source: "(117:10) {#if uniqueNameStatus === 1}",
     		ctx
@@ -41763,8 +41924,8 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	let input5;
     	let current;
     	let dispose;
-    	let if_block0 = /*uniqueNameStatus*/ ctx[1] === 2 && create_if_block_2$1(ctx);
-    	let if_block1 = /*uniqueNameStatus*/ ctx[1] === 1 && create_if_block_1$2(ctx);
+    	let if_block0 = /*uniqueNameStatus*/ ctx[1] === 2 && create_if_block_2$2(ctx);
+    	let if_block1 = /*uniqueNameStatus*/ ctx[1] === 1 && create_if_block_1$3(ctx);
     	let if_block2 = /*uniqueNameStatus*/ ctx[1] === 3 && create_if_block$5(ctx);
     	let each_value = /*tagList*/ ctx[3];
     	let each_blocks = [];
@@ -42014,7 +42175,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     			if (/*uniqueNameStatus*/ ctx[1] === 2) {
     				if (!if_block0) {
-    					if_block0 = create_if_block_2$1(ctx);
+    					if_block0 = create_if_block_2$2(ctx);
     					if_block0.c();
     					transition_in(if_block0, 1);
     					if_block0.m(div3, t5);
@@ -42033,7 +42194,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     			if (/*uniqueNameStatus*/ ctx[1] === 1) {
     				if (!if_block1) {
-    					if_block1 = create_if_block_1$2(ctx);
+    					if_block1 = create_if_block_1$3(ctx);
     					if_block1.c();
     					if_block1.m(div3, t6);
     				}
@@ -43094,7 +43255,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     const file$j = "src/routes/test/select_page.svelte";
 
     // (8:2) {#if pageNum === 1}
-    function create_if_block_1$3(ctx) {
+    function create_if_block_1$4(ctx) {
     	let current;
     	const testinitials = new Test_initials({ $$inline: true });
 
@@ -43122,7 +43283,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_if_block_1$3.name,
+    		id: create_if_block_1$4.name,
     		type: "if",
     		source: "(8:2) {#if pageNum === 1}",
     		ctx
@@ -43173,7 +43334,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	let div;
     	let t;
     	let current;
-    	let if_block0 = /*pageNum*/ ctx[0] === 1 && create_if_block_1$3(ctx);
+    	let if_block0 = /*pageNum*/ ctx[0] === 1 && create_if_block_1$4(ctx);
     	let if_block1 = /*pageNum*/ ctx[0] === 2 && create_if_block$6(ctx);
 
     	const block = {
@@ -43197,7 +43358,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		p: function update(ctx, [dirty]) {
     			if (/*pageNum*/ ctx[0] === 1) {
     				if (!if_block0) {
-    					if_block0 = create_if_block_1$3(ctx);
+    					if_block0 = create_if_block_1$4(ctx);
     					if_block0.c();
     					transition_in(if_block0, 1);
     					if_block0.m(div, t);
@@ -43896,7 +44057,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (125:10) {#if uniqueNameStatus === 2}
-    function create_if_block_2$2(ctx) {
+    function create_if_block_2$3(ctx) {
     	let current;
     	const loader = new Loader$1({ $$inline: true });
 
@@ -43924,7 +44085,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_if_block_2$2.name,
+    		id: create_if_block_2$3.name,
     		type: "if",
     		source: "(125:10) {#if uniqueNameStatus === 2}",
     		ctx
@@ -43934,7 +44095,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (128:10) {#if uniqueNameStatus === 1}
-    function create_if_block_1$4(ctx) {
+    function create_if_block_1$5(ctx) {
     	let i;
 
     	const block = {
@@ -43954,7 +44115,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_if_block_1$4.name,
+    		id: create_if_block_1$5.name,
     		type: "if",
     		source: "(128:10) {#if uniqueNameStatus === 1}",
     		ctx
@@ -44090,8 +44251,8 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	let input5;
     	let current;
     	let dispose;
-    	let if_block0 = /*uniqueNameStatus*/ ctx[1] === 2 && create_if_block_2$2(ctx);
-    	let if_block1 = /*uniqueNameStatus*/ ctx[1] === 1 && create_if_block_1$4(ctx);
+    	let if_block0 = /*uniqueNameStatus*/ ctx[1] === 2 && create_if_block_2$3(ctx);
+    	let if_block1 = /*uniqueNameStatus*/ ctx[1] === 1 && create_if_block_1$5(ctx);
     	let if_block2 = /*uniqueNameStatus*/ ctx[1] === 3 && create_if_block$8(ctx);
     	let each_value = /*tagList*/ ctx[3];
     	let each_blocks = [];
@@ -44341,7 +44502,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     			if (/*uniqueNameStatus*/ ctx[1] === 2) {
     				if (!if_block0) {
-    					if_block0 = create_if_block_2$2(ctx);
+    					if_block0 = create_if_block_2$3(ctx);
     					if_block0.c();
     					transition_in(if_block0, 1);
     					if_block0.m(div3, t5);
@@ -44360,7 +44521,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     			if (/*uniqueNameStatus*/ ctx[1] === 1) {
     				if (!if_block1) {
-    					if_block1 = create_if_block_1$4(ctx);
+    					if_block1 = create_if_block_1$5(ctx);
     					if_block1.c();
     					if_block1.m(div3, t6);
     				}
@@ -45481,7 +45642,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     const file$q = "src/routes/update_test/select_page.svelte";
 
     // (9:2) {#if pageNum === 1}
-    function create_if_block_1$5(ctx) {
+    function create_if_block_1$6(ctx) {
     	let current;
     	const testinitials = new Test_initials$1({ $$inline: true });
 
@@ -45509,7 +45670,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_if_block_1$5.name,
+    		id: create_if_block_1$6.name,
     		type: "if",
     		source: "(9:2) {#if pageNum === 1}",
     		ctx
@@ -45569,7 +45730,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	let div;
     	let t;
     	let current;
-    	let if_block0 = /*pageNum*/ ctx[0] === 1 && create_if_block_1$5(ctx);
+    	let if_block0 = /*pageNum*/ ctx[0] === 1 && create_if_block_1$6(ctx);
     	let if_block1 = /*pageNum*/ ctx[0] === 2 && create_if_block$9(ctx);
 
     	const block = {
@@ -45593,7 +45754,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		p: function update(ctx, [dirty]) {
     			if (/*pageNum*/ ctx[0] === 1) {
     				if (!if_block0) {
-    					if_block0 = create_if_block_1$5(ctx);
+    					if_block0 = create_if_block_1$6(ctx);
     					if_block0.c();
     					transition_in(if_block0, 1);
     					if_block0.m(div, t);
@@ -46399,7 +46560,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (118:10) {#if uniqueNameStatus === 2}
-    function create_if_block_2$3(ctx) {
+    function create_if_block_2$4(ctx) {
     	let current;
     	const loader = new Loader$2({ $$inline: true });
 
@@ -46427,7 +46588,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_if_block_2$3.name,
+    		id: create_if_block_2$4.name,
     		type: "if",
     		source: "(118:10) {#if uniqueNameStatus === 2}",
     		ctx
@@ -46437,7 +46598,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (121:10) {#if uniqueNameStatus === 1}
-    function create_if_block_1$6(ctx) {
+    function create_if_block_1$7(ctx) {
     	let i;
 
     	const block = {
@@ -46457,7 +46618,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_if_block_1$6.name,
+    		id: create_if_block_1$7.name,
     		type: "if",
     		source: "(121:10) {#if uniqueNameStatus === 1}",
     		ctx
@@ -46584,8 +46745,8 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	let input3;
     	let current;
     	let dispose;
-    	let if_block0 = /*uniqueNameStatus*/ ctx[2] === 2 && create_if_block_2$3(ctx);
-    	let if_block1 = /*uniqueNameStatus*/ ctx[2] === 1 && create_if_block_1$6(ctx);
+    	let if_block0 = /*uniqueNameStatus*/ ctx[2] === 2 && create_if_block_2$4(ctx);
+    	let if_block1 = /*uniqueNameStatus*/ ctx[2] === 1 && create_if_block_1$7(ctx);
     	let if_block2 = /*uniqueNameStatus*/ ctx[2] === 3 && create_if_block$b(ctx);
     	let each_value = /*tagList*/ ctx[4];
     	let each_blocks = [];
@@ -46791,7 +46952,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     			if (/*uniqueNameStatus*/ ctx[2] === 2) {
     				if (!if_block0) {
-    					if_block0 = create_if_block_2$3(ctx);
+    					if_block0 = create_if_block_2$4(ctx);
     					if_block0.c();
     					transition_in(if_block0, 1);
     					if_block0.m(div3, t5);
@@ -46810,7 +46971,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     			if (/*uniqueNameStatus*/ ctx[2] === 1) {
     				if (!if_block1) {
-    					if_block1 = create_if_block_1$6(ctx);
+    					if_block1 = create_if_block_1$7(ctx);
     					if_block1.c();
     					if_block1.m(div3, t6);
     				}
@@ -47622,7 +47783,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (13:2) {#if pageNum === 2}
-    function create_if_block_2$4(ctx) {
+    function create_if_block_2$5(ctx) {
     	let current;
     	const problemstatement = new Problem_statement({ $$inline: true });
 
@@ -47650,7 +47811,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_if_block_2$4.name,
+    		id: create_if_block_2$5.name,
     		type: "if",
     		source: "(13:2) {#if pageNum === 2}",
     		ctx
@@ -47660,7 +47821,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (16:2) {#if pageNum === 3}
-    function create_if_block_1$7(ctx) {
+    function create_if_block_1$8(ctx) {
     	let current;
     	const problemsolution = new Problem_solution({ $$inline: true });
 
@@ -47688,7 +47849,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_if_block_1$7.name,
+    		id: create_if_block_1$8.name,
     		type: "if",
     		source: "(16:2) {#if pageNum === 3}",
     		ctx
@@ -47742,8 +47903,8 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	let t2;
     	let current;
     	let if_block0 = /*pageNum*/ ctx[0] === 1 && create_if_block_3(ctx);
-    	let if_block1 = /*pageNum*/ ctx[0] === 2 && create_if_block_2$4(ctx);
-    	let if_block2 = /*pageNum*/ ctx[0] === 3 && create_if_block_1$7(ctx);
+    	let if_block1 = /*pageNum*/ ctx[0] === 2 && create_if_block_2$5(ctx);
+    	let if_block2 = /*pageNum*/ ctx[0] === 3 && create_if_block_1$8(ctx);
     	let if_block3 = /*pageNum*/ ctx[0] === 4 && create_if_block$c(ctx);
 
     	const block = {
@@ -47794,7 +47955,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     			if (/*pageNum*/ ctx[0] === 2) {
     				if (!if_block1) {
-    					if_block1 = create_if_block_2$4(ctx);
+    					if_block1 = create_if_block_2$5(ctx);
     					if_block1.c();
     					transition_in(if_block1, 1);
     					if_block1.m(div, t1);
@@ -47813,7 +47974,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     			if (/*pageNum*/ ctx[0] === 3) {
     				if (!if_block2) {
-    					if_block2 = create_if_block_1$7(ctx);
+    					if_block2 = create_if_block_1$8(ctx);
     					if_block2.c();
     					transition_in(if_block2, 1);
     					if_block2.m(div, t2);
@@ -48547,7 +48708,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (128:10) {#if uniqueNameStatus === 2}
-    function create_if_block_2$5(ctx) {
+    function create_if_block_2$6(ctx) {
     	let current;
     	const loader = new Loader$3({ $$inline: true });
 
@@ -48575,7 +48736,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_if_block_2$5.name,
+    		id: create_if_block_2$6.name,
     		type: "if",
     		source: "(128:10) {#if uniqueNameStatus === 2}",
     		ctx
@@ -48585,7 +48746,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (131:10) {#if uniqueNameStatus === 1}
-    function create_if_block_1$8(ctx) {
+    function create_if_block_1$9(ctx) {
     	let i;
 
     	const block = {
@@ -48605,7 +48766,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_if_block_1$8.name,
+    		id: create_if_block_1$9.name,
     		type: "if",
     		source: "(131:10) {#if uniqueNameStatus === 1}",
     		ctx
@@ -48732,8 +48893,8 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	let input3;
     	let current;
     	let dispose;
-    	let if_block0 = /*uniqueNameStatus*/ ctx[0] === 2 && create_if_block_2$5(ctx);
-    	let if_block1 = /*uniqueNameStatus*/ ctx[0] === 1 && create_if_block_1$8(ctx);
+    	let if_block0 = /*uniqueNameStatus*/ ctx[0] === 2 && create_if_block_2$6(ctx);
+    	let if_block1 = /*uniqueNameStatus*/ ctx[0] === 1 && create_if_block_1$9(ctx);
     	let if_block2 = /*uniqueNameStatus*/ ctx[0] === 3 && create_if_block$e(ctx);
     	let each_value = /*tagList*/ ctx[4];
     	let each_blocks = [];
@@ -48940,7 +49101,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     			if (/*uniqueNameStatus*/ ctx[0] === 2) {
     				if (!if_block0) {
-    					if_block0 = create_if_block_2$5(ctx);
+    					if_block0 = create_if_block_2$6(ctx);
     					if_block0.c();
     					transition_in(if_block0, 1);
     					if_block0.m(div3, t5);
@@ -48959,7 +49120,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     			if (/*uniqueNameStatus*/ ctx[0] === 1) {
     				if (!if_block1) {
-    					if_block1 = create_if_block_1$8(ctx);
+    					if_block1 = create_if_block_1$9(ctx);
     					if_block1.c();
     					if_block1.m(div3, t6);
     				}
@@ -49836,7 +49997,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (15:2) {#if pageNum === 2}
-    function create_if_block_2$6(ctx) {
+    function create_if_block_2$7(ctx) {
     	let current;
     	const problemstatement = new Problem_statement$1({ $$inline: true });
 
@@ -49864,7 +50025,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_if_block_2$6.name,
+    		id: create_if_block_2$7.name,
     		type: "if",
     		source: "(15:2) {#if pageNum === 2}",
     		ctx
@@ -49874,7 +50035,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (18:2) {#if pageNum === 3}
-    function create_if_block_1$9(ctx) {
+    function create_if_block_1$a(ctx) {
     	let current;
     	const problemsolution = new Problem_solution$1({ $$inline: true });
 
@@ -49902,7 +50063,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_if_block_1$9.name,
+    		id: create_if_block_1$a.name,
     		type: "if",
     		source: "(18:2) {#if pageNum === 3}",
     		ctx
@@ -49965,8 +50126,8 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	let t2;
     	let current;
     	let if_block0 = /*pageNum*/ ctx[0] === 1 && create_if_block_3$1(ctx);
-    	let if_block1 = /*pageNum*/ ctx[0] === 2 && create_if_block_2$6(ctx);
-    	let if_block2 = /*pageNum*/ ctx[0] === 3 && create_if_block_1$9(ctx);
+    	let if_block1 = /*pageNum*/ ctx[0] === 2 && create_if_block_2$7(ctx);
+    	let if_block2 = /*pageNum*/ ctx[0] === 3 && create_if_block_1$a(ctx);
     	let if_block3 = /*pageNum*/ ctx[0] === 4 && create_if_block$f(ctx);
 
     	const block = {
@@ -50017,7 +50178,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     			if (/*pageNum*/ ctx[0] === 2) {
     				if (!if_block1) {
-    					if_block1 = create_if_block_2$6(ctx);
+    					if_block1 = create_if_block_2$7(ctx);
     					if_block1.c();
     					transition_in(if_block1, 1);
     					if_block1.m(div, t1);
@@ -50036,7 +50197,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     			if (/*pageNum*/ ctx[0] === 3) {
     				if (!if_block2) {
-    					if_block2 = create_if_block_1$9(ctx);
+    					if_block2 = create_if_block_1$a(ctx);
     					if_block2.c();
     					transition_in(if_block2, 1);
     					if_block2.m(div, t2);
@@ -50452,13 +50613,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			h10.textContent = "Thank You";
     			t1 = space();
     			h11 = element("h1");
-    			h11.textContent = "You Response is submitted Successfully";
+    			h11.textContent = "Your Response is submitted Successfully";
     			t3 = space();
     			h2 = element("h2");
     			h2.textContent = "We will get back to you";
     			add_location(h10, file$I, 0, 0, 0);
     			add_location(h11, file$I, 1, 0, 19);
-    			add_location(h2, file$I, 2, 0, 67);
+    			add_location(h2, file$I, 2, 0, 68);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -50993,7 +51154,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (166:55) 
-    function create_if_block_2$7(ctx) {
+    function create_if_block_2$8(ctx) {
     	let h1;
     	let t1;
     	let input;
@@ -51125,7 +51286,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_if_block_2$7.name,
+    		id: create_if_block_2$8.name,
     		type: "if",
     		source: "(166:55) ",
     		ctx
@@ -51135,7 +51296,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     // (127:53) 
-    function create_if_block_1$a(ctx) {
+    function create_if_block_1$b(ctx) {
     	let h1;
     	let t1;
     	let div;
@@ -51272,7 +51433,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_if_block_1$a.name,
+    		id: create_if_block_1$b.name,
     		type: "if",
     		source: "(127:53) ",
     		ctx
@@ -52200,8 +52361,8 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	function select_block_type(ctx, dirty) {
     		if (/*currentRoute*/ ctx[0].name === "/showproblems") return create_if_block$g;
-    		if (/*currentRoute*/ ctx[0].name === "/showtests") return create_if_block_1$a;
-    		if (/*currentRoute*/ ctx[0].name === "/showresults") return create_if_block_2$7;
+    		if (/*currentRoute*/ ctx[0].name === "/showtests") return create_if_block_1$b;
+    		if (/*currentRoute*/ ctx[0].name === "/showresults") return create_if_block_2$8;
     	}
 
     	let current_block_type = select_block_type(ctx);
@@ -52454,10 +52615,6 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
       {
         name: '/thankyou',
         component: Thankyou,
-      },
-      {
-        name: '/pubnub',
-        component: Pubnub,
       },
       {
         name: '/starttest/:token',

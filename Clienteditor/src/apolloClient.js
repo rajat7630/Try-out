@@ -183,16 +183,8 @@ const addTest = gql`
 const deleteTest = gql`
   mutation deleteTest($id: ID) {
     deleteTest(id: $id) {
-      id
-      testName
-      difficultyLevel
-      problems {
-        id
-        problemName
-        problemTests
-        description
-        email
-      }
+      success
+      message
     }
   }
 `;

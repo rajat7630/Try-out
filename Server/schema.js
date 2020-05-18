@@ -69,12 +69,16 @@ const typeDefs = gql`
     addAttempt(data: addAttemptInput): addAttemptOutput
     updateProblem(id: ID!, data: updateProblemInputs): updateProblemOutput!
     addTest(data: addTestInputs): addTestOutput!
-    deleteTest(id: ID): Test
+    deleteTest(id: ID): deleteTestOutput
     updateTest(id: ID, data: updateTestInputs): updateTestOutput!
     addUser(data: addUserInputs): userDetail
     sendMail(linktime: String, test_id: String, email: String): mailSent
     addTestProblem(data: addTestProblemsInputs): testProblemOutput!
     updateAttempt(data: updateAttemptInput): updateAttemptOutput
+  }
+  type deleteTestOutput{
+    success:Boolean
+    message:String
   }
   input updateAttemptInput {
     id: ID
