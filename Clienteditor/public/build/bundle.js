@@ -67,7 +67,10 @@ var app = (function () {
     function get_slot_changes(definition, $$scope, dirty, fn) {
         if (definition[2] && fn) {
             const lets = definition[2](fn(dirty));
-            if (typeof $$scope.dirty === 'object') {
+            if ($$scope.dirty === undefined) {
+                return lets;
+            }
+            if (typeof lets === 'object') {
                 const merged = [];
                 const len = Math.max($$scope.dirty.length, lets.length);
                 for (let i = 0; i < len; i += 1) {
@@ -192,6 +195,9 @@ var app = (function () {
             throw new Error(`Function called outside component initialization`);
         return current_component;
     }
+    function beforeUpdate(fn) {
+        get_current_component().$$.before_update.push(fn);
+    }
     function onMount(fn) {
         get_current_component().$$.on_mount.push(fn);
     }
@@ -229,16 +235,21 @@ var app = (function () {
     function add_render_callback(fn) {
         render_callbacks.push(fn);
     }
+    let flushing = false;
     const seen_callbacks = new Set();
     function flush() {
+        if (flushing)
+            return;
+        flushing = true;
         do {
             // first, call beforeUpdate functions
             // and update components
-            while (dirty_components.length) {
-                const component = dirty_components.shift();
+            for (let i = 0; i < dirty_components.length; i += 1) {
+                const component = dirty_components[i];
                 set_current_component(component);
                 update(component.$$);
             }
+            dirty_components.length = 0;
             while (binding_callbacks.length)
                 binding_callbacks.pop()();
             // then, once components are updated, call
@@ -258,6 +269,7 @@ var app = (function () {
             flush_callbacks.pop()();
         }
         update_scheduled = false;
+        flushing = false;
         seen_callbacks.clear();
     }
     function update($$) {
@@ -457,8 +469,10 @@ var app = (function () {
         $$.fragment = create_fragment ? create_fragment($$.ctx) : false;
         if (options.target) {
             if (options.hydrate) {
+                const nodes = children(options.target);
                 // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-                $$.fragment && $$.fragment.l(children(options.target));
+                $$.fragment && $$.fragment.l(nodes);
+                nodes.forEach(detach);
             }
             else {
                 // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
@@ -491,7 +505,7 @@ var app = (function () {
     }
 
     function dispatch_dev(type, detail) {
-        document.dispatchEvent(custom_event(type, Object.assign({ version: '3.18.1' }, detail)));
+        document.dispatchEvent(custom_event(type, Object.assign({ version: '3.20.1' }, detail)));
     }
     function append_dev(target, node) {
         dispatch_dev("SvelteDOMInsert", { target, node });
@@ -536,6 +550,22 @@ var app = (function () {
         dispatch_dev("SvelteDOMSetData", { node: text, data });
         text.data = data;
     }
+    function validate_each_argument(arg) {
+        if (typeof arg !== 'string' && !(arg && typeof arg === 'object' && 'length' in arg)) {
+            let msg = '{#each} only iterates over array-like objects.';
+            if (typeof Symbol === 'function' && arg && Symbol.iterator in arg) {
+                msg += ' You can use a spread to convert this iterable into an array.';
+            }
+            throw new Error(msg);
+        }
+    }
+    function validate_slots(name, slot, keys) {
+        for (const slot_key of Object.keys(slot)) {
+            if (!~keys.indexOf(slot_key)) {
+                console.warn(`<${name}> received an unexpected slot "${slot_key}".`);
+            }
+        }
+    }
     class SvelteComponentDev extends SvelteComponent {
         constructor(options) {
             if (!options || (!options.target && !options.$$inline)) {
@@ -549,6 +579,8 @@ var app = (function () {
                 console.warn(`Component was already destroyed`); // eslint-disable-line no-console
             };
         }
+        $capture_state() { }
+        $inject_state() { }
     }
 
     const subscriber_queue = [];
@@ -1001,6 +1033,15 @@ var app = (function () {
     }
 
     /**
+     * Return the path name excluding query params
+     * @param name
+     **/
+    function pathWithoutQueryParams(currentRoute) {
+      const path = currentRoute.path.split('?');
+      return path[0]
+    }
+
+    /**
      * Return the path name including query params
      * @param name
      **/
@@ -1141,6 +1182,7 @@ var app = (function () {
       getPathNames,
       nameToPath,
       pathWithQueryParams,
+      pathWithoutQueryParams,
       removeExtraPaths,
       removeSlash,
       routeNameLocalised,
@@ -1192,6 +1234,7 @@ var app = (function () {
       function pushActiveRoute(newRoute) {
         if (typeof window !== 'undefined') {
           const pathAndSearch = pathWithQueryParams$1(newRoute);
+          //if (window.history && window.history.state && window.history.state.page !== pathAndSearch) {
           window.history.pushState({ page: pathAndSearch }, '', pathAndSearch);
           if (trackPageview) {
             gaTracking(pathAndSearch);
@@ -1368,24 +1411,25 @@ var app = (function () {
     const { RouterRedirect: RouterRedirect$1 } = redirect;
     const { RouterRoute: RouterRoute$1 } = route;
     const { RouterPath: RouterPath$1 } = path;
-    const { anyEmptyNestedRoutes: anyEmptyNestedRoutes$1, pathWithQueryParams: pathWithQueryParams$2 } = utils;
+    const { anyEmptyNestedRoutes: anyEmptyNestedRoutes$1, pathWithoutQueryParams: pathWithoutQueryParams$1 } = utils;
 
     const NotFoundPage = '/404.html';
 
-    function RouterFinder(routes, currentUrl, language, convert) {
+    function RouterFinder({ routes, currentUrl, routerOptions, convert }) {
+      const defaultLanguage = routerOptions.defaultLanguage;
+      const urlParser = UrlParser$4(currentUrl);
       let redirectTo = '';
       let routeNamedParams = {};
-      const urlParser = UrlParser$4(currentUrl);
 
       function findActiveRoute() {
-        let searchActiveRoute = searchActiveRoutes(routes, '', urlParser.pathNames, language, convert);
+        let searchActiveRoute = searchActiveRoutes(routes, '', urlParser.pathNames, routerOptions.lang, convert);
 
         if (!searchActiveRoute || !Object.keys(searchActiveRoute).length || anyEmptyNestedRoutes$1(searchActiveRoute)) {
           if (typeof window !== 'undefined') {
             searchActiveRoute = { name: '404', component: '', path: '404', redirectTo: NotFoundPage };
           }
         } else {
-          searchActiveRoute.path = pathWithQueryParams$2(searchActiveRoute);
+          searchActiveRoute.path = pathWithoutQueryParams$1(searchActiveRoute);
         }
 
         return searchActiveRoute
@@ -1463,7 +1507,7 @@ var app = (function () {
           path: routePath,
           routeNamedParams,
           namedPath,
-          language: routeLanguage
+          language: routeLanguage || defaultLanguage
         });
         routeNamedParams = routerRoute.namedParams();
 
@@ -1511,7 +1555,7 @@ var app = (function () {
           convert = true;
         }
 
-        return RouterFinder$1(routes, currentUrl, routerOptions.lang, convert).findActiveRoute()
+        return RouterFinder$1({ routes, currentUrl, routerOptions, convert }).findActiveRoute()
       }
 
       /**
@@ -1570,9 +1614,8 @@ var app = (function () {
       if (language) {
         routerOptions.langConvertTo = language;
       }
-      const activeRoute = SpaRouter(userDefinedRoutes, 'http://fake.com/' + pathName, routerOptions).setActiveRoute();
 
-      return activeRoute
+      return SpaRouter(userDefinedRoutes, 'http://fake.com/' + pathName, routerOptions).setActiveRoute()
     }
 
     /**
@@ -1605,7 +1648,7 @@ var app = (function () {
     var spa_router_3 = spa_router.navigateTo;
     var spa_router_4 = spa_router.routeIsActive;
 
-    /* node_modules/svelte-router-spa/src/components/route.svelte generated by Svelte v3.18.1 */
+    /* home/princekumar/Desktop/newfolder/tryout/node_modules/.pnpm/registry.npmjs.org/svelte-router-spa/5.5.0_svelte@3.20.1/node_modules/svelte-router-spa/src/components/route.svelte generated by Svelte v3.20.1 */
 
     // (10:34) 
     function create_if_block_2(ctx) {
@@ -1949,19 +1992,24 @@ var app = (function () {
     		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<Route> was created with unknown prop '${key}'`);
     	});
 
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Route", $$slots, []);
+
     	$$self.$set = $$props => {
     		if ("currentRoute" in $$props) $$invalidate(0, currentRoute = $$props.currentRoute);
     		if ("params" in $$props) $$invalidate(1, params = $$props.params);
     	};
 
-    	$$self.$capture_state = () => {
-    		return { currentRoute, params };
-    	};
+    	$$self.$capture_state = () => ({ currentRoute, params });
 
     	$$self.$inject_state = $$props => {
     		if ("currentRoute" in $$props) $$invalidate(0, currentRoute = $$props.currentRoute);
     		if ("params" in $$props) $$invalidate(1, params = $$props.params);
     	};
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
 
     	return [currentRoute, params];
     }
@@ -2001,7 +2049,7 @@ var app = (function () {
         'default': Route
     });
 
-    /* node_modules/svelte-router-spa/src/components/router.svelte generated by Svelte v3.18.1 */
+    /* home/princekumar/Desktop/newfolder/tryout/node_modules/.pnpm/registry.npmjs.org/svelte-router-spa/5.5.0_svelte@3.20.1/node_modules/svelte-router-spa/src/components/router.svelte generated by Svelte v3.20.1 */
 
     function create_fragment$1(ctx) {
     	let current;
@@ -2069,20 +2117,32 @@ var app = (function () {
     		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<Router> was created with unknown prop '${key}'`);
     	});
 
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Router", $$slots, []);
+
     	$$self.$set = $$props => {
     		if ("routes" in $$props) $$invalidate(1, routes = $$props.routes);
     		if ("options" in $$props) $$invalidate(2, options = $$props.options);
     	};
 
-    	$$self.$capture_state = () => {
-    		return { routes, options, $activeRoute };
-    	};
+    	$$self.$capture_state = () => ({
+    		onMount,
+    		SpaRouter: spa_router_1,
+    		Route,
+    		activeRoute: store_1,
+    		routes,
+    		options,
+    		$activeRoute
+    	});
 
     	$$self.$inject_state = $$props => {
     		if ("routes" in $$props) $$invalidate(1, routes = $$props.routes);
     		if ("options" in $$props) $$invalidate(2, options = $$props.options);
-    		if ("$activeRoute" in $$props) store_1.set($activeRoute = $$props.$activeRoute);
     	};
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
 
     	return [$activeRoute, routes, options];
     }
@@ -2122,8 +2182,8 @@ var app = (function () {
         'default': Router
     });
 
-    /* node_modules/svelte-router-spa/src/components/navigate.svelte generated by Svelte v3.18.1 */
-    const file = "node_modules/svelte-router-spa/src/components/navigate.svelte";
+    /* home/princekumar/Desktop/newfolder/tryout/node_modules/.pnpm/registry.npmjs.org/svelte-router-spa/5.5.0_svelte@3.20.1/node_modules/svelte-router-spa/src/components/navigate.svelte generated by Svelte v3.20.1 */
+    const file = "home/princekumar/Desktop/newfolder/tryout/node_modules/.pnpm/registry.npmjs.org/svelte-router-spa/5.5.0_svelte@3.20.1/node_modules/svelte-router-spa/src/components/navigate.svelte";
 
     function create_fragment$2(ctx) {
     	let a;
@@ -2145,7 +2205,7 @@ var app = (function () {
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, a, anchor);
 
     			if (default_slot) {
@@ -2153,11 +2213,14 @@ var app = (function () {
     			}
 
     			current = true;
+    			if (remount) dispose();
     			dispose = listen_dev(a, "click", /*navigate*/ ctx[3], false, false, false);
     		},
     		p: function update(ctx, [dirty]) {
-    			if (default_slot && default_slot.p && dirty & /*$$scope*/ 32) {
-    				default_slot.p(get_slot_context(default_slot_template, ctx, /*$$scope*/ ctx[5], null), get_slot_changes(default_slot_template, /*$$scope*/ ctx[5], dirty, null));
+    			if (default_slot) {
+    				if (default_slot.p && dirty & /*$$scope*/ 32) {
+    					default_slot.p(get_slot_context(default_slot_template, ctx, /*$$scope*/ ctx[5], null), get_slot_changes(default_slot_template, /*$$scope*/ ctx[5], dirty, null));
+    				}
     			}
 
     			if (!current || dirty & /*to*/ 1) {
@@ -2232,6 +2295,7 @@ var app = (function () {
     	});
 
     	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Navigate", $$slots, ['default']);
 
     	$$self.$set = $$props => {
     		if ("to" in $$props) $$invalidate(0, to = $$props.to);
@@ -2241,9 +2305,17 @@ var app = (function () {
     		if ("$$scope" in $$props) $$invalidate(5, $$scope = $$props.$$scope);
     	};
 
-    	$$self.$capture_state = () => {
-    		return { to, title, styles, lang };
-    	};
+    	$$self.$capture_state = () => ({
+    		onMount,
+    		localisedRoute: spa_router_2,
+    		navigateTo: spa_router_3,
+    		routeIsActive: spa_router_4,
+    		to,
+    		title,
+    		styles,
+    		lang,
+    		navigate
+    	});
 
     	$$self.$inject_state = $$props => {
     		if ("to" in $$props) $$invalidate(0, to = $$props.to);
@@ -2251,6 +2323,10 @@ var app = (function () {
     		if ("styles" in $$props) $$invalidate(2, styles = $$props.styles);
     		if ("lang" in $$props) $$invalidate(4, lang = $$props.lang);
     	};
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
 
     	return [to, title, styles, navigate, lang, $$scope, $$slots];
     }
@@ -3580,7 +3656,8 @@ var app = (function () {
 
             KEY_MODS: {
                 "ctrl": 1, "alt": 2, "option" : 2, "shift": 4,
-                "super": 8, "meta": 8, "command": 8, "cmd": 8
+                "super": 8, "meta": 8, "command": 8, "cmd": 8, 
+                "control": 1
             },
 
             FUNCTION_KEYS : {
@@ -4462,6 +4539,7 @@ var app = (function () {
     var MODS = KEYS.KEY_MODS;
     var isIOS = useragent.isIOS;
     var valueResetRegex = isIOS ? /\s/ : /\n/;
+    var isMobile = useragent.isMobile;
 
     var TextInput = function(parentNode, host) {
         var text = dom.createElement("textarea");
@@ -4481,7 +4559,7 @@ var app = (function () {
         var sendingText = false;
         var tempStyle = '';
         
-        if (!useragent.isMobile)
+        if (!isMobile)
             text.style.fontSize = "1px";
 
         var commandMode = false;
@@ -4611,6 +4689,11 @@ var app = (function () {
                 selectionEnd += line.length + 1;
                 line = line + "\n" + nextLine;
             }
+            else if (isMobile) {
+                line = "\n" + line;
+                selectionEnd += 1;
+                selectionStart += 1;
+            }
 
             if (line.length > MAX_LINE_LENGTH) {
                 if (selectionStart < MAX_LINE_LENGTH && selectionEnd < MAX_LINE_LENGTH) {
@@ -4662,6 +4745,8 @@ var app = (function () {
                 copied = false;
             } else if (isAllSelected(text)) {
                 host.selectAll();
+                resetSelection();
+            } else if (isMobile && text.selectionStart != lastSelectionStart) {
                 resetSelection();
             }
         };
@@ -4741,8 +4826,13 @@ var app = (function () {
             }
             var data = text.value;
             var inserted = sendText(data, true);
-            if (data.length > MAX_LINE_LENGTH + 100 || valueResetRegex.test(inserted))
+            if (
+                data.length > MAX_LINE_LENGTH + 100 
+                || valueResetRegex.test(inserted)
+                || isMobile && lastSelectionStart < 1 && lastSelectionStart == lastSelectionEnd
+            ) {
                 resetSelection();
+            }
         };
         
         var handleClipboardData = function(e, data, forceIEMime) {
@@ -6265,7 +6355,6 @@ var app = (function () {
                 showContextMenu();
             } else if (mode == "scroll") {
                 animate();
-                e.preventDefault();
                 hideContextMenu();
             } else {
                 showContextMenu();
@@ -6833,7 +6922,7 @@ var app = (function () {
         return str.replace(/-(.)/g, function(m, m1) { return m1.toUpperCase(); });
     }
 
-    exports.version = "1.4.8";
+    exports.version = "1.4.9";
 
     });
 
@@ -7299,7 +7388,7 @@ var app = (function () {
     			if(condPos == -1){
     				condPos = ix;
     			}
-    		}else{
+    		}else {
     			if (condPos > -1){
     				for(i = condPos; i < ix; i++){
     					levels[i] = newLevel;
@@ -7319,7 +7408,7 @@ var app = (function () {
     				for(var j = i - 1; j >= 0; j--){
     					if(charTypes[j] == WS){
     						levels[j] = dir;
-    					}else{
+    					}else {
     						break;
     					}
     				}
@@ -10300,6 +10389,16 @@ var app = (function () {
             }
         };
         
+        this.$safeApplyDelta = function(delta) {
+            var docLength = this.$lines.length;
+            if (
+                delta.action == "remove" && delta.start.row < docLength && delta.end.row < docLength
+                || delta.action == "insert" && delta.start.row <= docLength
+            ) {
+                this.applyDelta(delta);
+            }
+        };
+        
         this.$splitAndapplyLargeDelta = function(delta, MAX) {
             var lines = delta.lines;
             var l = lines.length - MAX + 1;
@@ -10322,7 +10421,7 @@ var app = (function () {
             this.applyDelta(delta, true);
         };
         this.revertDelta = function(delta) {
-            this.applyDelta({
+            this.$safeApplyDelta({
                 start: this.clonePos(delta.start),
                 end: this.clonePos(delta.end),
                 action: (delta.action == "insert" ? "remove" : "insert"),
@@ -12747,7 +12846,7 @@ var app = (function () {
             for (var i = 0; i < deltas.length; i++) {
                 var delta = deltas[i];
                 if (delta.action == "insert" || delta.action == "remove") {
-                    this.doc.applyDelta(delta);
+                    this.doc.$safeApplyDelta(delta);
                 }
             }
 
@@ -15159,6 +15258,13 @@ var app = (function () {
         multiSelectAction: "forEach",
         scrollIntoView: "cursor"
     }, {
+        name: "autoindent",
+        description: "Auto Indent",
+        bindKey: bindKey(null, null),
+        exec: function(editor) { editor.autoIndent(); },
+        multiSelectAction: "forEachLine",
+        scrollIntoView: "animate"
+    }, {
         name: "expandtoline",
         description: "Expand to line",
         bindKey: bindKey("Ctrl-Shift-L", "Command-Shift-L"),
@@ -15404,7 +15510,7 @@ var app = (function () {
 
         this.endOperation = function(e) {
             if (this.curOp) {
-                if (e && e.returnValue === false)
+                if (e && e.returnValue === false || !this.session)
                     return (this.curOp = null);
                 if (e == true && this.curOp.command && this.curOp.command.name == "mouse")
                     return;
@@ -16085,15 +16191,61 @@ var app = (function () {
                                   transform.selection[3]));
                 }
             }
+            if (this.$enableAutoIndent) {
+                if (session.getDocument().isNewLine(text)) {
+                    var lineIndent = mode.getNextLineIndent(lineState, line.slice(0, cursor.column), session.getTabString());
 
-            if (session.getDocument().isNewLine(text)) {
-                var lineIndent = mode.getNextLineIndent(lineState, line.slice(0, cursor.column), session.getTabString());
-
-                session.insert({row: cursor.row+1, column: 0}, lineIndent);
+                    session.insert({row: cursor.row+1, column: 0}, lineIndent);
+                }
+                if (shouldOutdent)
+                    mode.autoOutdent(lineState, session, cursor.row);
             }
-            if (shouldOutdent)
-                mode.autoOutdent(lineState, session, cursor.row);
         };
+
+        this.autoIndent = function () {
+            var session = this.session;
+            var mode = session.getMode();
+
+            var startRow, endRow;
+            if (this.selection.isEmpty()) {
+                startRow = 0;
+                endRow = session.doc.getLength() - 1;
+            } else {
+                var selectedRange = this.getSelectionRange();
+
+                startRow = selectedRange.start.row;
+                endRow = selectedRange.end.row;
+            }
+
+            var prevLineState = "";
+            var prevLine = "";
+            var lineIndent = "";
+            var line, currIndent, range;
+            var tab = session.getTabString();
+
+            for (var row = startRow; row <= endRow; row++) {
+                if (row > 0) {
+                    prevLineState = session.getState(row - 1);
+                    prevLine = session.getLine(row - 1);
+                    lineIndent = mode.getNextLineIndent(prevLineState, prevLine, tab);
+                }
+
+                line = session.getLine(row);
+                currIndent = mode.$getIndent(line);
+                if (lineIndent !== currIndent) {
+                    if (currIndent.length > 0) {
+                        range = new Range(row, 0, row, currIndent.length);
+                        session.remove(range);
+                    }
+                    if (lineIndent.length > 0) {
+                        session.insert({row: row, column: 0}, lineIndent);
+                    }
+                }
+
+                mode.autoOutdent(prevLineState, session, row);
+            }
+        };
+
 
         this.onTextInput = function(text, composition) {
             if (!composition)
@@ -16113,6 +16265,10 @@ var app = (function () {
                 var r = this.selection.getRange();
                 r.start.column -= composition.extendLeft;
                 r.end.column += composition.extendRight;
+                if (r.start.column < 0) {
+                    r.start.row--;
+                    r.start.column += this.session.getLine(r.start.row).length + 1;
+                }
                 this.selection.setRange(r);
                 if (!text && !r.isEmpty())
                     this.remove();
@@ -17240,6 +17396,7 @@ var app = (function () {
         },
         behavioursEnabled: {initialValue: true},
         wrapBehavioursEnabled: {initialValue: true},
+        enableAutoIndent: {initialValue: true},
         autoScrollEditorIntoView: {
             set: function(val) {this.setAutoScrollEditorIntoView(val);}
         },
@@ -17284,7 +17441,7 @@ var app = (function () {
             set: function(message) {
                 if (!this.$updatePlaceholder) {
                     this.$updatePlaceholder = function() {
-                        var value = this.renderer.$composition || this.getValue();
+                        var value = this.session && (this.renderer.$composition || this.getValue());
                         if (value && this.renderer.placeholderNode) {
                             this.renderer.off("afterRender", this.$updatePlaceholder);
                             dom.removeCssClass(this.container, "ace_hasPlaceholder");
@@ -17298,6 +17455,8 @@ var app = (function () {
                             el.textContent = this.$placeholder || "";
                             this.renderer.placeholderNode = el;
                             this.renderer.content.appendChild(this.renderer.placeholderNode);
+                        } else if (!value && this.renderer.placeholderNode) {
+                            this.renderer.placeholderNode.textContent = this.$placeholder || "";
                         }
                     }.bind(this);
                     this.on("input", this.$updatePlaceholder);
@@ -17471,25 +17630,6 @@ var app = (function () {
             if (to == null) to = this.$rev + 1;
             
         };
-
-        this.validateDeltaBoundaries = function(deltaSet, docLength, invertAction) {
-            if (!deltaSet) {
-                return false;
-            }
-            return deltaSet.every(function(delta) {
-                var action = delta.action;
-                if (invertAction && delta.action === "insert") action = "remove";
-                if (invertAction && delta.action === "remove") action = "insert";
-                switch(action) {
-                    case "insert":
-                        return delta.start.row <= docLength;
-                    case "remove":
-                        return delta.start.row < docLength && delta.end.row < docLength;
-                    default:
-                        return true;
-                }
-            });
-        };
         this.undo = function(session, dontSelect) {
             this.lastDeltas = null;
             var stack = this.$undoStack;
@@ -17507,7 +17647,7 @@ var app = (function () {
             
             var deltaSet = stack.pop();
             var undoSelectionRange = null;
-            if (this.validateDeltaBoundaries(deltaSet, session.getLength(), true)) {
+            if (deltaSet) {
                 undoSelectionRange = session.undoChanges(deltaSet, dontSelect);
                 this.$redoStack.push(deltaSet);
                 this.$syncRev();
@@ -17535,7 +17675,7 @@ var app = (function () {
             var deltaSet = this.$redoStack.pop();
             var redoSelectionRange = null;
             
-            if (this.validateDeltaBoundaries(deltaSet, session.getLength(), false)) {
+            if (deltaSet) {
                 redoSelectionRange = session.redoChanges(deltaSet, dontSelect);
                 this.$undoStack.push(deltaSet);
                 this.$syncRev();
@@ -18679,11 +18819,21 @@ var app = (function () {
         };
 
         this.showInvisibles = false;
+        this.showSpaces = false;
+        this.showTabs = false;
+        this.showEOL = false;
         this.setShowInvisibles = function(showInvisibles) {
             if (this.showInvisibles == showInvisibles)
                 return false;
 
             this.showInvisibles = showInvisibles;
+            if (typeof showInvisibles == "string") {
+                this.showSpaces = /tab/i.test(showInvisibles);
+                this.showTabs = /space/i.test(showInvisibles);
+                this.showEOL = /eol/i.test(showInvisibles);
+            } else {
+                this.showSpaces = this.showTabs = this.showEOL = showInvisibles;
+            }
             this.$computeTabString();
             return true;
         };
@@ -18705,7 +18855,7 @@ var app = (function () {
             this.tabSize = tabSize;
             var tabStr = this.$tabStrings = [0];
             for (var i = 1; i < tabSize + 1; i++) {
-                if (this.showInvisibles) {
+                if (this.showTabs) {
                     var span = this.dom.createElement("span");
                     span.className = "ace_invisible ace_invisible_tab";
                     span.textContent = lang.stringRepeat(this.TAB_CHAR, i);
@@ -18717,18 +18867,15 @@ var app = (function () {
             if (this.displayIndentGuides) {
                 this.$indentGuideRe =  /\s\S| \t|\t |\s$/;
                 var className = "ace_indent-guide";
-                var spaceClass = "";
-                var tabClass = "";
-                if (this.showInvisibles) {
-                    className += " ace_invisible";
-                    spaceClass = " ace_invisible_space";
-                    tabClass = " ace_invisible_tab";
-                    var spaceContent = lang.stringRepeat(this.SPACE_CHAR, this.tabSize);
-                    var tabContent = lang.stringRepeat(this.TAB_CHAR, this.tabSize);
-                } else {
-                    var spaceContent = lang.stringRepeat(" ", this.tabSize);
-                    var tabContent = spaceContent;
-                }
+                var spaceClass = this.showSpaces ? " ace_invisible ace_invisible_space" : "";
+                var spaceContent = this.showSpaces
+                    ? lang.stringRepeat(this.SPACE_CHAR, this.tabSize)
+                    : lang.stringRepeat(" ", this.tabSize);
+
+                var tabClass = this.showTabs ? " ace_invisible ace_invisible_tab" : "";
+                var tabContent = this.showTabs 
+                    ? lang.stringRepeat(this.TAB_CHAR, this.tabSize)
+                    : spaceContent;
 
                 var span = this.dom.createElement("span");
                 span.className = className + spaceClass;
@@ -18921,7 +19068,7 @@ var app = (function () {
                 var cjkSpace = m[4];
                 var cjk = m[5];
                 
-                if (!self.showInvisibles && simpleSpace)
+                if (!self.showSpaces && simpleSpace)
                     continue;
 
                 var before = i != m.index ? value.slice(i, m.index) : "";
@@ -18937,7 +19084,7 @@ var app = (function () {
                     valueFragment.appendChild(self.$tabStrings[tabSize].cloneNode(true));
                     screenColumn += tabSize - 1;
                 } else if (simpleSpace) {
-                    if (self.showInvisibles) {
+                    if (self.showSpaces) {
                         var span = this.dom.createElement("span");
                         span.className = "ace_invisible ace_invisible_space";
                         span.textContent = lang.stringRepeat(self.SPACE_CHAR, simpleSpace.length);
@@ -18955,8 +19102,8 @@ var app = (function () {
                     
                     var span = this.dom.createElement("span");
                     span.style.width = (self.config.characterWidth * 2) + "px";
-                    span.className = self.showInvisibles ? "ace_cjk ace_invisible ace_invisible_space" : "ace_cjk";
-                    span.textContent = self.showInvisibles ? self.SPACE_CHAR : cjkSpace;
+                    span.className = self.showSpaces ? "ace_cjk ace_invisible ace_invisible_space" : "ace_cjk";
+                    span.textContent = self.showSpaces ? self.SPACE_CHAR : cjkSpace;
                     valueFragment.appendChild(span);
                 } else if (cjk) {
                     screenColumn += 1;
@@ -19125,7 +19272,7 @@ var app = (function () {
                 parent.appendChild(lastLineEl);
             }
 
-            if (this.showInvisibles && lastLineEl) {
+            if (this.showEOL && lastLineEl) {
                 if (foldLine)
                     row = foldLine.end.row;
 
@@ -19653,7 +19800,7 @@ var app = (function () {
         this.el.appendChild(this.$measureNode);
         parentEl.appendChild(this.el);
         
-        this.$measureNode.innerHTML = lang.stringRepeat("X", CHAR_COUNT);
+        this.$measureNode.textContent = lang.stringRepeat("X", CHAR_COUNT);
         
         this.$characterSize = {width: 0, height: 0};
         
@@ -19742,7 +19889,7 @@ var app = (function () {
         };
 
         this.$measureCharWidth = function(ch) {
-            this.$main.innerHTML = lang.stringRepeat(ch, CHAR_COUNT);
+            this.$main.textContent = lang.stringRepeat(ch, CHAR_COUNT);
             var rect = this.$main.getBoundingClientRect();
             return rect.width / CHAR_COUNT;
         };
@@ -19858,6 +20005,7 @@ var app = (function () {
 .ace_editor {\
 position: relative;\
 overflow: hidden;\
+padding: 0;\
 font: 12px/normal 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', 'source-code-pro', monospace;\
 direction: ltr;\
 text-align: left;\
@@ -24657,6 +24805,12 @@ background: url(\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZ
                 }
                 snippetMap[scope].push(s);
 
+                if (s.prefix)
+                    s.tabTrigger = s.prefix;
+
+                if (!s.content && s.body)
+                    s.content = Array.isArray(s.body) ? s.body.join("\n") : s.body;
+
                 if (s.tabTrigger && !s.trigger) {
                     if (!s.guard && /^\w/.test(s.tabTrigger))
                         s.guard = "\\b";
@@ -24673,10 +24827,13 @@ background: url(\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZ
                 s.endTriggerRe = new RegExp(s.endTrigger);
             }
 
-            if (snippets && snippets.content)
-                addSnippet(snippets);
-            else if (Array.isArray(snippets))
+            if (Array.isArray(snippets)) {
                 snippets.forEach(addSnippet);
+            } else {
+                Object.keys(snippets).forEach(function(key) {
+                    addSnippet(snippets[key]);
+                });
+            }
             
             this._signal("registerSnippets", {scope: scope});
         };
@@ -24726,7 +24883,7 @@ background: url(\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZ
                         snippet.tabTrigger = val.match(/^\S*/)[0];
                         if (!snippet.name)
                             snippet.name = val;
-                    } else {
+                    } else if (key) {
                         snippet[key] = val;
                     }
                 }
@@ -26070,31 +26227,33 @@ background: url(\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZ
     };
 
     var loadSnippetsForMode = function(mode) {
-        var id = mode.$id;
+        if (typeof mode == "string")
+            mode = config.$modes[mode];
+        if (!mode)
+            return;
         if (!snippetManager.files)
             snippetManager.files = {};
-        loadSnippetFile(id);
+        
+        loadSnippetFile(mode.$id, mode.snippetFileId);
         if (mode.modes)
             mode.modes.forEach(loadSnippetsForMode);
     };
 
-    var loadSnippetFile = function(id) {
-        if (!id || snippetManager.files[id])
+    var loadSnippetFile = function(id, snippetFilePath) {
+        if (!snippetFilePath || !id || snippetManager.files[id])
             return;
-        var snippetFilePath = id.replace("mode", "snippets");
         snippetManager.files[id] = {};
         config.loadModule(snippetFilePath, function(m) {
-            if (m) {
-                snippetManager.files[id] = m;
-                if (!m.snippets && m.snippetText)
-                    m.snippets = snippetManager.parseSnippetFile(m.snippetText);
-                snippetManager.register(m.snippets || [], m.scope);
-                if (m.includeScopes) {
-                    snippetManager.snippetMap[m.scope].includeScopes = m.includeScopes;
-                    m.includeScopes.forEach(function(x) {
-                        loadSnippetFile("ace/mode/" + x);
-                    });
-                }
+            if (!m) return;
+            snippetManager.files[id] = m;
+            if (!m.snippets && m.snippetText)
+                m.snippets = snippetManager.parseSnippetFile(m.snippetText);
+            snippetManager.register(m.snippets || [], m.scope);
+            if (m.includeScopes) {
+                snippetManager.snippetMap[m.scope].includeScopes = m.includeScopes;
+                m.includeScopes.forEach(function(x) {
+                    loadSnippetsForMode("ace/mode/" + x);
+                });
             }
         });
     };
@@ -27172,6 +27331,7 @@ guard ^\\s*\n\
         };
 
         this.$id = "ace/mode/javascript";
+        this.snippetFileId = "ace/snippets/javascript";
     }).call(Mode.prototype);
 
     exports.Mode = Mode;
@@ -27496,7 +27656,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
       $dataStore.find(({ active }) => active)
     );
 
-    /* src/EditorWindow.svelte generated by Svelte v3.18.1 */
+    /* src/EditorWindow.svelte generated by Svelte v3.20.1 */
     const file$1 = "src/EditorWindow.svelte";
 
     function create_fragment$3(ctx) {
@@ -27513,8 +27673,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, div, anchor);
+    			if (remount) dispose();
     			dispose = listen_dev(div, "keydown", /*onInput*/ ctx[0], false, false, false);
     		},
     		p: noop,
@@ -27580,14 +27741,33 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		};
     	})();
 
-    	$$self.$capture_state = () => {
-    		return {};
-    	};
+    	const writable_props = [];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<EditorWindow> was created with unknown prop '${key}'`);
+    	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("EditorWindow", $$slots, []);
+
+    	$$self.$capture_state = () => ({
+    		onMount,
+    		afterUpdate,
+    		beforeUpdate,
+    		dataStore,
+    		currentTab,
+    		editor,
+    		onInput,
+    		$currentTab
+    	});
 
     	$$self.$inject_state = $$props => {
     		if ("editor" in $$props) editor = $$props.editor;
-    		if ("$currentTab" in $$props) currentTab.set($currentTab = $$props.$currentTab);
     	};
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
 
     	return [onInput];
     }
@@ -30629,7 +30809,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     var src$1 = gql;
 
-    const getProblems = src$1`
+    const getProblems = src$1 `
   query getAllProblems {
     allProblems {
       id
@@ -30644,7 +30824,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
   }
 `;
 
-    const problemsByAuthor = src$1`
+    const problemsByAuthor = src$1 `
   query problemsByAuthor($email: String) {
     problemsByAuthor(email: $email) {
       id
@@ -30657,7 +30837,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
   }
 `;
 
-    const getToken = src$1`
+    const getToken = src$1 `
   query getToken($id: ID!) {
     getToken(id: $id) {
       token
@@ -30665,7 +30845,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
   }
 `;
 
-    const allTests = src$1`
+    const allTests = src$1 `
   query getTest {
     allTests {
       id
@@ -30680,7 +30860,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
   }
 `;
 
-    const testsByAuthor = src$1`
+    const testsByAuthor = src$1 `
   query testsByAuthor($email: String) {
     testsByAuthor(email: $email) {
       id
@@ -30690,7 +30870,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
   }
 `;
 
-    const testByToken = src$1`
+    const testByToken = src$1 `
   query getTest($token: String) {
     testByToken(token: $token) {
       id
@@ -30699,7 +30879,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
   }
 `;
 
-    const sendMail = src$1`
+    const sendMail = src$1 `
   mutation mailSender($linktime: String, $email: String, $test_id: String) {
     sendMail(linktime: $linktime, test_id: $test_id, email: $email) {
       success
@@ -30708,7 +30888,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
   }
 `;
 
-    const addProblem = src$1`
+    const addProblem = src$1 `
   mutation addNewProblem(
     $problemName: String
     $description: String
@@ -30744,7 +30924,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
   }
 `;
 
-    const deleteProblem = src$1`
+    const deleteProblem = src$1 `
   mutation deleteProblem($id: ID) {
     deleteProblem(id: $id) {
       id
@@ -30755,7 +30935,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
   }
 `;
 
-    const updateProblem = src$1`
+    const updateProblem = src$1 `
   mutation updateProblem(
     $id: ID!
     $problemName: String
@@ -30784,7 +30964,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
   }
 `;
 
-    const addTest = src$1`
+    const addTest = src$1 `
   mutation addNewTest(
     $testName: String
     $difficultyLevel: String
@@ -30809,7 +30989,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
   }
 `;
 
-    const deleteTest = src$1`
+    const deleteTest = src$1 `
   mutation deleteTest($id: ID) {
     deleteTest(id: $id) {
       success
@@ -30817,7 +30997,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
   }
 `;
-    const updateTest = src$1`
+    const updateTest = src$1 `
   mutation updateTest(
     $id: ID
     $testName: String
@@ -30842,7 +31022,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
   }
 `;
 
-    const addUser = src$1`
+    const addUser = src$1 `
   mutation addNewUser(
     $name: String
     $email: String
@@ -30863,7 +31043,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
   }
 `;
-    const addTestProblem = src$1`
+    const addTestProblem = src$1 `
   mutation addTestProblem($t_id: Int, $p_id: Int) {
     addTestProblem(data: { t_id: $t_id, p_id: $p_id }) {
       success
@@ -30884,7 +31064,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
   }
 `;
 
-    const getProblemById = src$1`
+    const getProblemById = src$1 `
   query getProblemById($id: ID!) {
     problemById(id: $id) {
       id
@@ -30900,7 +31080,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
   }
 `;
 
-    const getTestById = src$1`
+    const getTestById = src$1 `
   query getTestById($id: ID!) {
     testById(id: $id) {
       id
@@ -30915,7 +31095,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
   }
 `;
 
-    const getAttempts = src$1`
+    const getAttempts = src$1 `
   query getAttempts($id: ID) {
     getAttempt(id: $id) {
       id
@@ -30929,13 +31109,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
         id
         testName
         difficultyLevel
-        problems {
-          id
-          problemName
-          problemTests
-          description
-          email
-        }
+        problems
       }
       solutions
       attemptTime
@@ -30944,7 +31118,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
   }
 `;
 
-    const getAllAttempts = src$1`
+    const getAllAttempts = src$1 `
   query getAllAttempts {
     getAllAttempt {
       id
@@ -30958,13 +31132,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
         id
         testName
         difficultyLevel
-        problems {
-          id
-          problemName
-          problemTests
-          description
-          email
-        }
+        problems
       }
       solutions
       attemptTime
@@ -30972,7 +31140,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
   }
 `;
-    const updateAttempt = src$1`
+    const updateAttempt = src$1 `
   mutation updateAttempt($id: ID, $u_id: ID, $solutions: JSON) {
     updateAttempt(data: { u_id: $u_id, id: $id, solutions: $solutions }) {
       success
@@ -30980,7 +31148,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
   }
 `;
-    const addAttempt = src$1`
+    const addAttempt = src$1 `
   mutation addAttempt($u_id: ID, $t_id: ID, $solutions: JSON) {
     addAttempt(data: { u_id: $u_id, t_id: $t_id, solutions: $solutions }) {
       success
@@ -30990,7 +31158,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
   }
 `;
 
-    const checkIfAvailable = src$1`
+    const checkIfAvailable = src$1 `
   mutation checkIfAvailable($problemName: String) {
     checkProblemIfExists(problemName: $problemName) {
       success
@@ -30998,7 +31166,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
   }
 `;
-    const checkTestIfAvailable = src$1`
+    const checkTestIfAvailable = src$1 `
   mutation checkTestIfAvailable($testName: String) {
     checkTestIfExists(testName: $testName) {
       success
@@ -31007,29 +31175,29 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
   }
 `;
     const apolloClient = {
-      checkTestIfAvailable,
-      checkIfAvailable,
-      getAttempts,
-      getAllAttempts,
-      updateAttempt,
-      addAttempt,
-      sendMail,
-      getTestById,
-      getProblems,
-      getProblemById,
-      testsByAuthor,
-      deleteProblem,
-      updateProblem,
-      updateTest,
-      allTests,
-      problemsByAuthor,
-      addProblem,
-      addTest,
-      addTestProblem,
-      deleteTest,
-      addUser,
-      getToken,
-      testByToken,
+        checkTestIfAvailable,
+        checkIfAvailable,
+        getAttempts,
+        getAllAttempts,
+        updateAttempt,
+        addAttempt,
+        sendMail,
+        getTestById,
+        getProblems,
+        getProblemById,
+        testsByAuthor,
+        deleteProblem,
+        updateProblem,
+        updateTest,
+        allTests,
+        problemsByAuthor,
+        addProblem,
+        addTest,
+        addTestProblem,
+        deleteTest,
+        addUser,
+        getToken,
+        testByToken,
     };
 
     var QueryDocumentKeys = {
@@ -31410,10 +31578,11 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     function __awaiter(thisArg, _arguments, P, generator) {
+        function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
         return new (P || (P = Promise))(function (resolve, reject) {
             function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
             function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
-            function step(result) { result.done ? resolve(result.value) : new P(function (resolve) { resolve(result.value); }).then(fulfilled, rejected); }
+            function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
             step((generator = generator.apply(thisArg, _arguments || [])).next());
         });
     }
@@ -32611,7 +32780,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
     //# sourceMappingURL=svelte-apollo.es.js.map
 
-    /* src/EditorArea.svelte generated by Svelte v3.18.1 */
+    /* src/EditorArea.svelte generated by Svelte v3.20.1 */
+
+    const { console: console_1 } = globals;
 
     const file$2 = "src/EditorArea.svelte";
 
@@ -32682,7 +32853,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, div4, anchor);
     			append_dev(div4, h1);
     			append_dev(h1, t0);
@@ -32700,6 +32871,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			append_dev(div3, t9);
     			append_dev(div3, div2);
     			current = true;
+    			if (remount) run_all(dispose);
 
     			dispose = [
     				listen_dev(window, "keydown", /*keydown_handler*/ ctx[8], false, false, false),
@@ -32742,6 +32914,10 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	return block;
     }
+
+    function runHandler() {
+    	
+    } // fetch("http://localhost:5000/result/" + $currentTab.id, {
     //   method:"GET"
 
     function instance$4($$self, $$props, $$invalidate) {
@@ -32785,6 +32961,15 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		}
     	}
 
+    	const writable_props = [];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1.warn(`<EditorArea> was created with unknown prop '${key}'`);
+    	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("EditorArea", $$slots, []);
+
     	const keydown_handler = e => {
     		if (!e.altKey || e.key !== "r") {
     			return;
@@ -32812,20 +32997,38 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		$$invalidate(0, dragging = false);
     	};
 
-    	$$self.$capture_state = () => {
-    		return {};
-    	};
+    	$$self.$capture_state = () => ({
+    		EditorWindow,
+    		dataStore,
+    		cookieHandler,
+    		apolloClient,
+    		mutate,
+    		getClient,
+    		currentTab,
+    		outputData,
+    		outputCheck,
+    		dragging,
+    		client,
+    		runHandler,
+    		sendSolution,
+    		height,
+    		$currentTab,
+    		$dataStore
+    	});
 
     	$$self.$inject_state = $$props => {
     		if ("outputData" in $$props) $$invalidate(4, outputData = $$props.outputData);
     		if ("outputCheck" in $$props) $$invalidate(5, outputCheck = $$props.outputCheck);
     		if ("dragging" in $$props) $$invalidate(0, dragging = $$props.dragging);
     		if ("height" in $$props) $$invalidate(1, height = $$props.height);
-    		if ("$currentTab" in $$props) currentTab.set($currentTab = $$props.$currentTab);
-    		if ("$dataStore" in $$props) dataStore.set($dataStore = $$props.$dataStore);
     	};
 
     	let height;
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
+
     	 $$invalidate(1, height = "40vh");
 
     	return [
@@ -32859,7 +33062,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	}
     }
 
-    /* src/Tabs.svelte generated by Svelte v3.18.1 */
+    /* src/Tabs.svelte generated by Svelte v3.20.1 */
     const file$3 = "src/Tabs.svelte";
 
     function get_each_context(ctx, list, i) {
@@ -32896,12 +33099,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			attr_dev(div, "class", "flex-grow flex parentDiv svelte-1ph5tii");
     			add_location(div, file$3, 78, 4, 3551);
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, div, anchor);
     			append_dev(div, li);
     			append_dev(li, t0);
     			append_dev(li, t1);
     			append_dev(div, t2);
+    			if (remount) dispose();
     			dispose = listen_dev(li, "click", click_handler, false, false, false);
     		},
     		p: function update(new_ctx, dirty) {
@@ -32931,6 +33135,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     function create_fragment$5(ctx) {
     	let ul;
     	let each_value = /*$dataStore*/ ctx[0];
+    	validate_each_argument(each_value);
     	let each_blocks = [];
 
     	for (let i = 0; i < each_value.length; i += 1) {
@@ -32961,6 +33166,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		p: function update(ctx, [dirty]) {
     			if (dirty & /*$dataStore, dataStore*/ 1) {
     				each_value = /*$dataStore*/ ctx[0];
+    				validate_each_argument(each_value);
     				let i;
 
     				for (i = 0; i < each_value.length; i += 1) {
@@ -33005,16 +33211,16 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	let $dataStore;
     	validate_store(dataStore, "dataStore");
     	component_subscribe($$self, dataStore, $$value => $$invalidate(0, $dataStore = $$value));
+    	const writable_props = [];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<Tabs> was created with unknown prop '${key}'`);
+    	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Tabs", $$slots, []);
     	const click_handler = tab => dataStore.activate(tab.id);
-
-    	$$self.$capture_state = () => {
-    		return {};
-    	};
-
-    	$$self.$inject_state = $$props => {
-    		if ("$dataStore" in $$props) dataStore.set($dataStore = $$props.$dataStore);
-    	};
-
+    	$$self.$capture_state = () => ({ dataStore, $dataStore });
     	return [$dataStore, click_handler];
     }
 
@@ -33032,9 +33238,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	}
     }
 
-    /* src/components/timer.svelte generated by Svelte v3.18.1 */
+    /* src/components/timer.svelte generated by Svelte v3.20.1 */
 
-    const { console: console_1 } = globals;
+    const { console: console_1$1 } = globals;
     const file$4 = "src/components/timer.svelte";
 
     function create_fragment$6(ctx) {
@@ -33199,28 +33405,40 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	const writable_props = ["expireTime"];
 
     	Object.keys($$props).forEach(key => {
-    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1.warn(`<Timer> was created with unknown prop '${key}'`);
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$1.warn(`<Timer> was created with unknown prop '${key}'`);
     	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Timer", $$slots, []);
 
     	$$self.$set = $$props => {
     		if ("expireTime" in $$props) $$invalidate(1, expireTime = $$props.expireTime);
     	};
 
-    	$$self.$capture_state = () => {
-    		return {
-    			expireTime,
-    			timer,
-    			timeCounter,
-    			$dataStore
-    		};
-    	};
+    	$$self.$capture_state = () => ({
+    		dataStore,
+    		cookieHandler,
+    		apolloClient,
+    		mutate,
+    		getClient,
+    		expireTime,
+    		timer,
+    		client,
+    		sendSolution,
+    		InitializeTimer,
+    		timeCounter,
+    		$dataStore
+    	});
 
     	$$self.$inject_state = $$props => {
     		if ("expireTime" in $$props) $$invalidate(1, expireTime = $$props.expireTime);
     		if ("timer" in $$props) $$invalidate(0, timer = $$props.timer);
     		if ("timeCounter" in $$props) timeCounter = $$props.timeCounter;
-    		if ("$dataStore" in $$props) dataStore.set($dataStore = $$props.$dataStore);
     	};
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
 
     	return [timer, expireTime];
     }
@@ -33241,7 +33459,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		const props = options.props || {};
 
     		if (/*expireTime*/ ctx[1] === undefined && !("expireTime" in props)) {
-    			console_1.warn("<Timer> was created without expected prop 'expireTime'");
+    			console_1$1.warn("<Timer> was created without expected prop 'expireTime'");
     		}
     	}
 
@@ -34679,7 +34897,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     var axios$1 = axios_1;
 
     var pubnub_min = createCommonjsModule(function (module, exports) {
-    !function(e,t){module.exports=t();}(window,function(){return r={},i.m=n=[function(e,t,n){e.exports={};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.default=void 0;t.default={PNTimeOperation:"PNTimeOperation",PNHistoryOperation:"PNHistoryOperation",PNDeleteMessagesOperation:"PNDeleteMessagesOperation",PNFetchMessagesOperation:"PNFetchMessagesOperation",PNMessageCounts:"PNMessageCountsOperation",PNSubscribeOperation:"PNSubscribeOperation",PNUnsubscribeOperation:"PNUnsubscribeOperation",PNPublishOperation:"PNPublishOperation",PNSignalOperation:"PNSignalOperation",PNAddMessageActionOperation:"PNAddActionOperation",PNRemoveMessageActionOperation:"PNRemoveMessageActionOperation",PNGetMessageActionsOperation:"PNGetMessageActionsOperation",PNCreateUserOperation:"PNCreateUserOperation",PNUpdateUserOperation:"PNUpdateUserOperation",PNDeleteUserOperation:"PNDeleteUserOperation",PNGetUserOperation:"PNGetUsersOperation",PNGetUsersOperation:"PNGetUsersOperation",PNCreateSpaceOperation:"PNCreateSpaceOperation",PNUpdateSpaceOperation:"PNUpdateSpaceOperation",PNDeleteSpaceOperation:"PNDeleteSpaceOperation",PNGetSpaceOperation:"PNGetSpacesOperation",PNGetSpacesOperation:"PNGetSpacesOperation",PNGetMembersOperation:"PNGetMembersOperation",PNUpdateMembersOperation:"PNUpdateMembersOperation",PNGetMembershipsOperation:"PNGetMembershipsOperation",PNUpdateMembershipsOperation:"PNUpdateMembershipsOperation",PNPushNotificationEnabledChannelsOperation:"PNPushNotificationEnabledChannelsOperation",PNRemoveAllPushNotificationsOperation:"PNRemoveAllPushNotificationsOperation",PNWhereNowOperation:"PNWhereNowOperation",PNSetStateOperation:"PNSetStateOperation",PNHereNowOperation:"PNHereNowOperation",PNGetStateOperation:"PNGetStateOperation",PNHeartbeatOperation:"PNHeartbeatOperation",PNChannelGroupsOperation:"PNChannelGroupsOperation",PNRemoveGroupOperation:"PNRemoveGroupOperation",PNChannelsForGroupOperation:"PNChannelsForGroupOperation",PNAddChannelsToGroupOperation:"PNAddChannelsToGroupOperation",PNRemoveChannelsFromGroupOperation:"PNRemoveChannelsFromGroupOperation",PNAccessManagerGrant:"PNAccessManagerGrant",PNAccessManagerGrantToken:"PNAccessManagerGrantToken",PNAccessManagerAudit:"PNAccessManagerAudit"},e.exports=t.default;},function(e,t,n){function r(e){return encodeURIComponent(e).replace(/[!~*'()]/g,function(e){return "%".concat(e.charCodeAt(0).toString(16).toUpperCase())})}function i(e){return function(e){var t=[];return Object.keys(e).forEach(function(e){return t.push(e)}),t}(e).sort()}e.exports={signPamFromParams:function(t){return i(t).map(function(e){return "".concat(e,"=").concat(r(t[e]))}).join("&")},endsWith:function(e,t){return -1!==e.indexOf(t,this.length-t.length)},createPromise:function(){var n,r;return {promise:new Promise(function(e,t){n=e,r=t;}),reject:r,fulfill:n}},encodeString:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.default=void 0;var r,i=(r=n(5))&&r.__esModule?r:{default:r};n(0);function o(e,t){for(var n=0;n<t.length;n++){var r=t[n];r.enumerable=r.enumerable||!1,r.configurable=!0,"value"in r&&(r.writable=!0),Object.defineProperty(e,r.key,r);}}function s(e,t,n){return t in e?Object.defineProperty(e,t,{value:n,enumerable:!0,configurable:!0,writable:!0}):e[t]=n,e}var a,u,f=(a=l,(u=[{key:"getAuthKey",value:function(){return this.authKey}},{key:"setAuthKey",value:function(e){return this.authKey=e,this}},{key:"setCipherKey",value:function(e){return this.cipherKey=e,this}},{key:"getUUID",value:function(){return this.UUID}},{key:"setUUID",value:function(e){return this._db&&this._db.set&&this._db.set("".concat(this.subscribeKey,"uuid"),e),this.UUID=e,this}},{key:"getFilterExpression",value:function(){return this.filterExpression}},{key:"setFilterExpression",value:function(e){return this.filterExpression=e,this}},{key:"getPresenceTimeout",value:function(){return this._presenceTimeout}},{key:"setPresenceTimeout",value:function(e){return 20<=e?this._presenceTimeout=e:(this._presenceTimeout=20,console.log("WARNING: Presence timeout is less than the minimum. Using minimum value: ",this._presenceTimeout)),this.setHeartbeatInterval(this._presenceTimeout/2-1),this}},{key:"setProxy",value:function(e){this.proxy=e;}},{key:"getHeartbeatInterval",value:function(){return this._heartbeatInterval}},{key:"setHeartbeatInterval",value:function(e){return this._heartbeatInterval=e,this}},{key:"getSubscribeTimeout",value:function(){return this._subscribeRequestTimeout}},{key:"setSubscribeTimeout",value:function(e){return this._subscribeRequestTimeout=e,this}},{key:"getTransactionTimeout",value:function(){return this._transactionalRequestTimeout}},{key:"setTransactionTimeout",value:function(e){return this._transactionalRequestTimeout=e,this}},{key:"isSendBeaconEnabled",value:function(){return this._useSendBeacon}},{key:"setSendBeaconConfig",value:function(e){return this._useSendBeacon=e,this}},{key:"getVersion",value:function(){return "4.27.3"}},{key:"_addPnsdkSuffix",value:function(e,t){this._PNSDKSuffix[e]=t;}},{key:"_getPnsdkSuffix",value:function(n){var r=this;return Object.keys(this._PNSDKSuffix).reduce(function(e,t){return e+n+r._PNSDKSuffix[t]},"")}},{key:"_decideUUID",value:function(e){return e||(this._db&&this._db.get&&this._db.get("".concat(this.subscribeKey,"uuid"))?this._db.get("".concat(this.subscribeKey,"uuid")):"pn-".concat(i.default.createUUID()))}}])&&o(a.prototype,u),l);function l(e){var t=e.setup,n=e.db;!function(e,t){if(!(e instanceof t))throw new TypeError("Cannot call a class as a function")}(this,l),s(this,"_db",void 0),s(this,"subscribeKey",void 0),s(this,"publishKey",void 0),s(this,"secretKey",void 0),s(this,"cipherKey",void 0),s(this,"authKey",void 0),s(this,"UUID",void 0),s(this,"proxy",void 0),s(this,"instanceId",void 0),s(this,"sdkName",void 0),s(this,"sdkFamily",void 0),s(this,"partnerId",void 0),s(this,"filterExpression",void 0),s(this,"suppressLeaveEvents",void 0),s(this,"secure",void 0),s(this,"origin",void 0),s(this,"logVerbosity",void 0),s(this,"useInstanceId",void 0),s(this,"useRequestId",void 0),s(this,"keepAlive",void 0),s(this,"keepAliveSettings",void 0),s(this,"autoNetworkDetection",void 0),s(this,"announceSuccessfulHeartbeats",void 0),s(this,"announceFailedHeartbeats",void 0),s(this,"_presenceTimeout",void 0),s(this,"_heartbeatInterval",void 0),s(this,"_subscribeRequestTimeout",void 0),s(this,"_transactionalRequestTimeout",void 0),s(this,"_useSendBeacon",void 0),s(this,"_PNSDKSuffix",void 0),s(this,"requestMessageCountThreshold",void 0),s(this,"restore",void 0),s(this,"dedupeOnSubscribe",void 0),s(this,"maximumCacheSize",void 0),s(this,"customEncrypt",void 0),s(this,"customDecrypt",void 0),this._PNSDKSuffix={},this._db=n,this.instanceId="pn-".concat(i.default.createUUID()),this.secretKey=t.secretKey||t.secret_key,this.subscribeKey=t.subscribeKey||t.subscribe_key,this.publishKey=t.publishKey||t.publish_key,this.sdkName=t.sdkName,this.sdkFamily=t.sdkFamily,this.partnerId=t.partnerId,this.setAuthKey(t.authKey),this.setCipherKey(t.cipherKey),this.setFilterExpression(t.filterExpression),this.origin=t.origin||"ps.pndsn.com",this.secure=t.ssl||!1,this.restore=t.restore||!1,this.proxy=t.proxy,this.keepAlive=t.keepAlive,this.keepAliveSettings=t.keepAliveSettings,this.autoNetworkDetection=t.autoNetworkDetection||!1,this.dedupeOnSubscribe=t.dedupeOnSubscribe||!1,this.maximumCacheSize=t.maximumCacheSize||100,this.customEncrypt=t.customEncrypt,this.customDecrypt=t.customDecrypt,"undefined"!=typeof location&&"https:"===location.protocol&&(this.secure=!0),this.logVerbosity=t.logVerbosity||!1,this.suppressLeaveEvents=t.suppressLeaveEvents||!1,this.announceFailedHeartbeats=t.announceFailedHeartbeats||!0,this.announceSuccessfulHeartbeats=t.announceSuccessfulHeartbeats||!1,this.useInstanceId=t.useInstanceId||!1,this.useRequestId=t.useRequestId||!1,this.requestMessageCountThreshold=t.requestMessageCountThreshold,this.setTransactionTimeout(t.transactionalRequestTimeout||15e3),this.setSubscribeTimeout(t.subscribeRequestTimeout||31e4),this.setSendBeaconConfig(t.useSendBeacon||!0),t.presenceTimeout?this.setPresenceTimeout(t.presenceTimeout):this._presenceTimeout=300,null!=t.heartbeatInterval&&this.setHeartbeatInterval(t.heartbeatInterval),this.setUUID(this._decideUUID(t.uuid));}t.default=f,e.exports=t.default;},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.default=void 0;t.default={PNNetworkUpCategory:"PNNetworkUpCategory",PNNetworkDownCategory:"PNNetworkDownCategory",PNNetworkIssuesCategory:"PNNetworkIssuesCategory",PNTimeoutCategory:"PNTimeoutCategory",PNBadRequestCategory:"PNBadRequestCategory",PNAccessDeniedCategory:"PNAccessDeniedCategory",PNUnknownCategory:"PNUnknownCategory",PNReconnectedCategory:"PNReconnectedCategory",PNConnectedCategory:"PNConnectedCategory",PNRequestMessageCountExceededCategory:"PNRequestMessageCountExceededCategory"},e.exports=t.default;},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.default=void 0;var r,i=(r=n(13))&&r.__esModule?r:{default:r};var o={createUUID:function(){return i.default.uuid?i.default.uuid():(0, i.default)()}};t.default=o,e.exports=t.default;},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.default=void 0;r(n(3));var u=r(n(14));function r(e){return e&&e.__esModule?e:{default:e}}function i(e,t){for(var n=0;n<t.length;n++){var r=t[n];r.enumerable=r.enumerable||!1,r.configurable=!0,"value"in r&&(r.writable=!0),Object.defineProperty(e,r.key,r);}}function o(e,t,n){return t in e?Object.defineProperty(e,t,{value:n,enumerable:!0,configurable:!0,writable:!0}):e[t]=n,e}var s,a,f=(s=l,(a=[{key:"HMACSHA256",value:function(e){return u.default.HmacSHA256(e,this._config.secretKey).toString(u.default.enc.Base64)}},{key:"SHA256",value:function(e){return u.default.SHA256(e).toString(u.default.enc.Hex)}},{key:"_parseOptions",value:function(e){var t=e||{};return t.hasOwnProperty("encryptKey")||(t.encryptKey=this._defaultOptions.encryptKey),t.hasOwnProperty("keyEncoding")||(t.keyEncoding=this._defaultOptions.keyEncoding),t.hasOwnProperty("keyLength")||(t.keyLength=this._defaultOptions.keyLength),t.hasOwnProperty("mode")||(t.mode=this._defaultOptions.mode),-1===this._allowedKeyEncodings.indexOf(t.keyEncoding.toLowerCase())&&(t.keyEncoding=this._defaultOptions.keyEncoding),-1===this._allowedKeyLengths.indexOf(parseInt(t.keyLength,10))&&(t.keyLength=this._defaultOptions.keyLength),-1===this._allowedModes.indexOf(t.mode.toLowerCase())&&(t.mode=this._defaultOptions.mode),t}},{key:"_decodeKey",value:function(e,t){return "base64"===t.keyEncoding?u.default.enc.Base64.parse(e):"hex"===t.keyEncoding?u.default.enc.Hex.parse(e):e}},{key:"_getPaddedKey",value:function(e,t){return e=this._decodeKey(e,t),t.encryptKey?u.default.enc.Utf8.parse(this.SHA256(e).slice(0,32)):e}},{key:"_getMode",value:function(e){return "ecb"===e.mode?u.default.mode.ECB:u.default.mode.CBC}},{key:"_getIV",value:function(e){return "cbc"===e.mode?u.default.enc.Utf8.parse(this._iv):null}},{key:"encrypt",value:function(e,t,n){return this._config.customEncrypt?this._config.customEncrypt(e):this.pnEncrypt(e,t,n)}},{key:"decrypt",value:function(e,t,n){return this._config.customDecrypt?this._config.customDecrypt(e):this.pnDecrypt(e,t,n)}},{key:"pnEncrypt",value:function(e,t,n){if(!t&&!this._config.cipherKey)return e;n=this._parseOptions(n);var r=this._getIV(n),i=this._getMode(n),o=this._getPaddedKey(t||this._config.cipherKey,n);return u.default.AES.encrypt(e,o,{iv:r,mode:i}).ciphertext.toString(u.default.enc.Base64)||e}},{key:"pnDecrypt",value:function(e,t,n){if(!t&&!this._config.cipherKey)return e;n=this._parseOptions(n);var r=this._getIV(n),i=this._getMode(n),o=this._getPaddedKey(t||this._config.cipherKey,n);try{var s=u.default.enc.Base64.parse(e),a=u.default.AES.decrypt({ciphertext:s},o,{iv:r,mode:i}).toString(u.default.enc.Utf8);return JSON.parse(a)}catch(e){return null}}}])&&i(s.prototype,a),l);function l(e){var t=e.config;!function(e,t){if(!(e instanceof t))throw new TypeError("Cannot call a class as a function")}(this,l),o(this,"_config",void 0),o(this,"_iv",void 0),o(this,"_allowedKeyEncodings",void 0),o(this,"_allowedKeyLengths",void 0),o(this,"_allowedModes",void 0),o(this,"_defaultOptions",void 0),this._config=t,this._iv="0123456789012345",this._allowedKeyEncodings=["hex","utf8","base64","binary"],this._allowedKeyLengths=[128,256],this._allowedModes=["ecb","cbc"],this._defaultOptions={encryptKey:!0,keyEncoding:"utf8",keyLength:256,mode:"cbc"};}t.default=f,e.exports=t.default;},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.default=void 0;n(0);var r,i=(r=n(4))&&r.__esModule?r:{default:r};function o(e,t){for(var n=0;n<t.length;n++){var r=t[n];r.enumerable=r.enumerable||!1,r.configurable=!0,"value"in r&&(r.writable=!0),Object.defineProperty(e,r.key,r);}}var s,a,c=(s=f,(a=[{key:"addListener",value:function(e){this._listeners.push(e);}},{key:"removeListener",value:function(t){var n=[];this._listeners.forEach(function(e){e!==t&&n.push(e);}),this._listeners=n;}},{key:"removeAllListeners",value:function(){this._listeners=[];}},{key:"announcePresence",value:function(t){this._listeners.forEach(function(e){e.presence&&e.presence(t);});}},{key:"announceStatus",value:function(t){this._listeners.forEach(function(e){e.status&&e.status(t);});}},{key:"announceMessage",value:function(t){this._listeners.forEach(function(e){e.message&&e.message(t);});}},{key:"announceSignal",value:function(t){this._listeners.forEach(function(e){e.signal&&e.signal(t);});}},{key:"announceMessageAction",value:function(t){this._listeners.forEach(function(e){e.messageAction&&e.messageAction(t);});}},{key:"announceUser",value:function(t){this._listeners.forEach(function(e){e.user&&e.user(t);});}},{key:"announceSpace",value:function(t){this._listeners.forEach(function(e){e.space&&e.space(t);});}},{key:"announceMembership",value:function(t){this._listeners.forEach(function(e){e.membership&&e.membership(t);});}},{key:"announceNetworkUp",value:function(){var e={};e.category=i.default.PNNetworkUpCategory,this.announceStatus(e);}},{key:"announceNetworkDown",value:function(){var e={};e.category=i.default.PNNetworkDownCategory,this.announceStatus(e);}}])&&o(s.prototype,a),f);function f(){!function(e,t){if(!(e instanceof t))throw new TypeError("Cannot call a class as a function")}(this,f),function(e,t,n){t in e?Object.defineProperty(e,t,{value:n,enumerable:!0,configurable:!0,writable:!0}):e[t]=n;}(this,"_listeners",void 0),this._listeners=[];}t.default=c,e.exports=t.default;},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNTimeOperation},t.getURL=function(){return "/time/0"},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.prepareParams=function(){return {}},t.isAuthSupported=function(){return !1},t.handleResponse=function(e,t){return {timetoken:t[0]}},t.validateParams=function(){};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,I,D){(function(e){var r=D(71),o=D(72),s=D(73);function n(){return l.TYPED_ARRAY_SUPPORT?2147483647:1073741823}function a(e,t){if(n()<t)throw new RangeError("Invalid typed array length");return l.TYPED_ARRAY_SUPPORT?(e=new Uint8Array(t)).__proto__=l.prototype:(null===e&&(e=new l(t)),e.length=t),e}function l(e,t,n){if(!(l.TYPED_ARRAY_SUPPORT||this instanceof l))return new l(e,t,n);if("number"!=typeof e)return i(this,e,t,n);if("string"==typeof t)throw new Error("If encoding is specified then the first argument must be a string");return c(this,e)}function i(e,t,n,r){if("number"==typeof t)throw new TypeError('"value" argument must not be a number');return "undefined"!=typeof ArrayBuffer&&t instanceof ArrayBuffer?function(e,t,n,r){if(t.byteLength,n<0||t.byteLength<n)throw new RangeError("'offset' is out of bounds");if(t.byteLength<n+(r||0))throw new RangeError("'length' is out of bounds");t=void 0===n&&void 0===r?new Uint8Array(t):void 0===r?new Uint8Array(t,n):new Uint8Array(t,n,r);l.TYPED_ARRAY_SUPPORT?(e=t).__proto__=l.prototype:e=f(e,t);return e}(e,t,n,r):"string"==typeof t?function(e,t,n){"string"==typeof n&&""!==n||(n="utf8");if(!l.isEncoding(n))throw new TypeError('"encoding" must be a valid string encoding');var r=0|p(t,n),i=(e=a(e,r)).write(t,n);i!==r&&(e=e.slice(0,i));return e}(e,t,n):function(e,t){if(l.isBuffer(t)){var n=0|h(t.length);return 0===(e=a(e,n)).length||t.copy(e,0,0,n),e}if(t){if("undefined"!=typeof ArrayBuffer&&t.buffer instanceof ArrayBuffer||"length"in t)return "number"!=typeof t.length||function(e){return e!=e}(t.length)?a(e,0):f(e,t);if("Buffer"===t.type&&s(t.data))return f(e,t.data)}throw new TypeError("First argument must be a string, Buffer, ArrayBuffer, Array, or array-like object.")}(e,t)}function u(e){if("number"!=typeof e)throw new TypeError('"size" argument must be a number');if(e<0)throw new RangeError('"size" argument must not be negative')}function c(e,t){if(u(t),e=a(e,t<0?0:0|h(t)),!l.TYPED_ARRAY_SUPPORT)for(var n=0;n<t;++n)e[n]=0;return e}function f(e,t){var n=t.length<0?0:0|h(t.length);e=a(e,n);for(var r=0;r<n;r+=1)e[r]=255&t[r];return e}function h(e){if(e>=n())throw new RangeError("Attempt to allocate Buffer larger than maximum size: 0x"+n().toString(16)+" bytes");return 0|e}function p(e,t){if(l.isBuffer(e))return e.length;if("undefined"!=typeof ArrayBuffer&&"function"==typeof ArrayBuffer.isView&&(ArrayBuffer.isView(e)||e instanceof ArrayBuffer))return e.byteLength;"string"!=typeof e&&(e=""+e);var n=e.length;if(0===n)return 0;for(var r=!1;;)switch(t){case"ascii":case"latin1":case"binary":return n;case"utf8":case"utf-8":case void 0:return x(e).length;case"ucs2":case"ucs-2":case"utf16le":case"utf-16le":return 2*n;case"hex":return n>>>1;case"base64":return U(e).length;default:if(r)return x(e).length;t=(""+t).toLowerCase(),r=!0;}}function d(e,t,n){var r=e[t];e[t]=e[n],e[n]=r;}function g(e,t,n,r,i){if(0===e.length)return -1;if("string"==typeof n?(r=n,n=0):2147483647<n?n=2147483647:n<-2147483648&&(n=-2147483648),n=+n,isNaN(n)&&(n=i?0:e.length-1),n<0&&(n=e.length+n),n>=e.length){if(i)return -1;n=e.length-1;}else if(n<0){if(!i)return -1;n=0;}if("string"==typeof t&&(t=l.from(t,r)),l.isBuffer(t))return 0===t.length?-1:y(e,t,n,r,i);if("number"==typeof t)return t&=255,l.TYPED_ARRAY_SUPPORT&&"function"==typeof Uint8Array.prototype.indexOf?i?Uint8Array.prototype.indexOf.call(e,t,n):Uint8Array.prototype.lastIndexOf.call(e,t,n):y(e,[t],n,r,i);throw new TypeError("val must be string, number or Buffer")}function y(e,t,n,r,i){var o,s=1,a=e.length,u=t.length;if(void 0!==r&&("ucs2"===(r=String(r).toLowerCase())||"ucs-2"===r||"utf16le"===r||"utf-16le"===r)){if(e.length<2||t.length<2)return -1;a/=s=2,u/=2,n/=2;}function c(e,t){return 1===s?e[t]:e.readUInt16BE(t*s)}if(i){var f=-1;for(o=n;o<a;o++)if(c(e,o)===c(t,-1===f?0:o-f)){if(-1===f&&(f=o),o-f+1===u)return f*s}else-1!==f&&(o-=o-f),f=-1;}else for(a<n+u&&(n=a-u),o=n;0<=o;o--){for(var l=!0,h=0;h<u;h++)if(c(e,o+h)!==c(t,h)){l=!1;break}if(l)return o}return -1}function v(e,t,n,r){n=Number(n)||0;var i=e.length-n;r?i<(r=Number(r))&&(r=i):r=i;var o=t.length;if(o%2!=0)throw new TypeError("Invalid hex string");o/2<r&&(r=o/2);for(var s=0;s<r;++s){var a=parseInt(t.substr(2*s,2),16);if(isNaN(a))return s;e[n+s]=a;}return s}function b(e,t,n,r){return B(function(e){for(var t=[],n=0;n<e.length;++n)t.push(255&e.charCodeAt(n));return t}(t),e,n,r)}function m(e,t,n){return 0===t&&n===e.length?r.fromByteArray(e):r.fromByteArray(e.slice(t,n))}function _(e,t,n){n=Math.min(e.length,n);for(var r=[],i=t;i<n;){var o,s,a,u,c=e[i],f=null,l=239<c?4:223<c?3:191<c?2:1;if(i+l<=n)switch(l){case 1:c<128&&(f=c);break;case 2:128==(192&(o=e[i+1]))&&127<(u=(31&c)<<6|63&o)&&(f=u);break;case 3:o=e[i+1],s=e[i+2],128==(192&o)&&128==(192&s)&&2047<(u=(15&c)<<12|(63&o)<<6|63&s)&&(u<55296||57343<u)&&(f=u);break;case 4:o=e[i+1],s=e[i+2],a=e[i+3],128==(192&o)&&128==(192&s)&&128==(192&a)&&65535<(u=(15&c)<<18|(63&o)<<12|(63&s)<<6|63&a)&&u<1114112&&(f=u);}null===f?(f=65533,l=1):65535<f&&(f-=65536,r.push(f>>>10&1023|55296),f=56320|1023&f),r.push(f),i+=l;}return function(e){var t=e.length;if(t<=k)return String.fromCharCode.apply(String,e);var n="",r=0;for(;r<t;)n+=String.fromCharCode.apply(String,e.slice(r,r+=k));return n}(r)}I.Buffer=l,I.SlowBuffer=function(e){+e!=e&&(e=0);return l.alloc(+e)},I.INSPECT_MAX_BYTES=50,l.TYPED_ARRAY_SUPPORT=void 0!==e.TYPED_ARRAY_SUPPORT?e.TYPED_ARRAY_SUPPORT:function(){try{var e=new Uint8Array(1);return e.__proto__={__proto__:Uint8Array.prototype,foo:function(){return 42}},42===e.foo()&&"function"==typeof e.subarray&&0===e.subarray(1,1).byteLength}catch(e){return !1}}(),I.kMaxLength=n(),l.poolSize=8192,l._augment=function(e){return e.__proto__=l.prototype,e},l.from=function(e,t,n){return i(null,e,t,n)},l.TYPED_ARRAY_SUPPORT&&(l.prototype.__proto__=Uint8Array.prototype,l.__proto__=Uint8Array,"undefined"!=typeof Symbol&&Symbol.species&&l[Symbol.species]===l&&Object.defineProperty(l,Symbol.species,{value:null,configurable:!0})),l.alloc=function(e,t,n){return function(e,t,n,r){return u(t),t<=0?a(e,t):void 0!==n?"string"==typeof r?a(e,t).fill(n,r):a(e,t).fill(n):a(e,t)}(null,e,t,n)},l.allocUnsafe=function(e){return c(null,e)},l.allocUnsafeSlow=function(e){return c(null,e)},l.isBuffer=function(e){return !(null==e||!e._isBuffer)},l.compare=function(e,t){if(!l.isBuffer(e)||!l.isBuffer(t))throw new TypeError("Arguments must be Buffers");if(e===t)return 0;for(var n=e.length,r=t.length,i=0,o=Math.min(n,r);i<o;++i)if(e[i]!==t[i]){n=e[i],r=t[i];break}return n<r?-1:r<n?1:0},l.isEncoding=function(e){switch(String(e).toLowerCase()){case"hex":case"utf8":case"utf-8":case"ascii":case"latin1":case"binary":case"base64":case"ucs2":case"ucs-2":case"utf16le":case"utf-16le":return !0;default:return !1}},l.concat=function(e,t){if(!s(e))throw new TypeError('"list" argument must be an Array of Buffers');if(0===e.length)return l.alloc(0);var n;if(void 0===t)for(n=t=0;n<e.length;++n)t+=e[n].length;var r=l.allocUnsafe(t),i=0;for(n=0;n<e.length;++n){var o=e[n];if(!l.isBuffer(o))throw new TypeError('"list" argument must be an Array of Buffers');o.copy(r,i),i+=o.length;}return r},l.byteLength=p,l.prototype._isBuffer=!0,l.prototype.swap16=function(){var e=this.length;if(e%2!=0)throw new RangeError("Buffer size must be a multiple of 16-bits");for(var t=0;t<e;t+=2)d(this,t,t+1);return this},l.prototype.swap32=function(){var e=this.length;if(e%4!=0)throw new RangeError("Buffer size must be a multiple of 32-bits");for(var t=0;t<e;t+=4)d(this,t,t+3),d(this,t+1,t+2);return this},l.prototype.swap64=function(){var e=this.length;if(e%8!=0)throw new RangeError("Buffer size must be a multiple of 64-bits");for(var t=0;t<e;t+=8)d(this,t,t+7),d(this,t+1,t+6),d(this,t+2,t+5),d(this,t+3,t+4);return this},l.prototype.toString=function(){var e=0|this.length;return 0==e?"":0===arguments.length?_(this,0,e):function(e,t,n){var r=!1;if((void 0===t||t<0)&&(t=0),t>this.length)return "";if((void 0===n||n>this.length)&&(n=this.length),n<=0)return "";if((n>>>=0)<=(t>>>=0))return "";for(e=e||"utf8";;)switch(e){case"hex":return T(this,t,n);case"utf8":case"utf-8":return _(this,t,n);case"ascii":return P(this,t,n);case"latin1":case"binary":return w(this,t,n);case"base64":return m(this,t,n);case"ucs2":case"ucs-2":case"utf16le":case"utf-16le":return O(this,t,n);default:if(r)throw new TypeError("Unknown encoding: "+e);e=(e+"").toLowerCase(),r=!0;}}.apply(this,arguments)},l.prototype.equals=function(e){if(!l.isBuffer(e))throw new TypeError("Argument must be a Buffer");return this===e||0===l.compare(this,e)},l.prototype.inspect=function(){var e="",t=I.INSPECT_MAX_BYTES;return 0<this.length&&(e=this.toString("hex",0,t).match(/.{2}/g).join(" "),this.length>t&&(e+=" ... ")),"<Buffer "+e+">"},l.prototype.compare=function(e,t,n,r,i){if(!l.isBuffer(e))throw new TypeError("Argument must be a Buffer");if(void 0===t&&(t=0),void 0===n&&(n=e?e.length:0),void 0===r&&(r=0),void 0===i&&(i=this.length),t<0||n>e.length||r<0||i>this.length)throw new RangeError("out of range index");if(i<=r&&n<=t)return 0;if(i<=r)return -1;if(n<=t)return 1;if(this===e)return 0;for(var o=(i>>>=0)-(r>>>=0),s=(n>>>=0)-(t>>>=0),a=Math.min(o,s),u=this.slice(r,i),c=e.slice(t,n),f=0;f<a;++f)if(u[f]!==c[f]){o=u[f],s=c[f];break}return o<s?-1:s<o?1:0},l.prototype.includes=function(e,t,n){return -1!==this.indexOf(e,t,n)},l.prototype.indexOf=function(e,t,n){return g(this,e,t,n,!0)},l.prototype.lastIndexOf=function(e,t,n){return g(this,e,t,n,!1)},l.prototype.write=function(e,t,n,r){if(void 0===t)r="utf8",n=this.length,t=0;else if(void 0===n&&"string"==typeof t)r=t,n=this.length,t=0;else{if(!isFinite(t))throw new Error("Buffer.write(string, encoding, offset[, length]) is no longer supported");t|=0,isFinite(n)?(n|=0,void 0===r&&(r="utf8")):(r=n,n=void 0);}var i=this.length-t;if((void 0===n||i<n)&&(n=i),0<e.length&&(n<0||t<0)||t>this.length)throw new RangeError("Attempt to write outside buffer bounds");r=r||"utf8";for(var o,s,a,u,c,f,l,h,p,d=!1;;)switch(r){case"hex":return v(this,e,t,n);case"utf8":case"utf-8":return h=t,p=n,B(x(e,(l=this).length-h),l,h,p);case"ascii":return b(this,e,t,n);case"latin1":case"binary":return b(this,e,t,n);case"base64":return u=this,c=t,f=n,B(U(e),u,c,f);case"ucs2":case"ucs-2":case"utf16le":case"utf-16le":return s=t,a=n,B(function(e,t){for(var n,r,i,o=[],s=0;s<e.length&&!((t-=2)<0);++s)n=e.charCodeAt(s),r=n>>8,i=n%256,o.push(i),o.push(r);return o}(e,(o=this).length-s),o,s,a);default:if(d)throw new TypeError("Unknown encoding: "+r);r=(""+r).toLowerCase(),d=!0;}},l.prototype.toJSON=function(){return {type:"Buffer",data:Array.prototype.slice.call(this._arr||this,0)}};var k=4096;function P(e,t,n){var r="";n=Math.min(e.length,n);for(var i=t;i<n;++i)r+=String.fromCharCode(127&e[i]);return r}function w(e,t,n){var r="";n=Math.min(e.length,n);for(var i=t;i<n;++i)r+=String.fromCharCode(e[i]);return r}function T(e,t,n){var r=e.length;(!t||t<0)&&(t=0),(!n||n<0||r<n)&&(n=r);for(var i="",o=t;o<n;++o)i+=N(e[o]);return i}function O(e,t,n){for(var r=e.slice(t,n),i="",o=0;o<r.length;o+=2)i+=String.fromCharCode(r[o]+256*r[o+1]);return i}function S(e,t,n){if(e%1!=0||e<0)throw new RangeError("offset is not uint");if(n<e+t)throw new RangeError("Trying to access beyond buffer length")}function M(e,t,n,r,i,o){if(!l.isBuffer(e))throw new TypeError('"buffer" argument must be a Buffer instance');if(i<t||t<o)throw new RangeError('"value" argument is out of bounds');if(n+r>e.length)throw new RangeError("Index out of range")}function E(e,t,n,r){t<0&&(t=65535+t+1);for(var i=0,o=Math.min(e.length-n,2);i<o;++i)e[n+i]=(t&255<<8*(r?i:1-i))>>>8*(r?i:1-i);}function A(e,t,n,r){t<0&&(t=4294967295+t+1);for(var i=0,o=Math.min(e.length-n,4);i<o;++i)e[n+i]=t>>>8*(r?i:3-i)&255;}function C(e,t,n,r){if(n+r>e.length)throw new RangeError("Index out of range");if(n<0)throw new RangeError("Index out of range")}function R(e,t,n,r,i){return i||C(e,0,n,4),o.write(e,t,n,r,23,4),n+4}function j(e,t,n,r,i){return i||C(e,0,n,8),o.write(e,t,n,r,52,8),n+8}l.prototype.slice=function(e,t){var n,r=this.length;if((e=~~e)<0?(e+=r)<0&&(e=0):r<e&&(e=r),(t=void 0===t?r:~~t)<0?(t+=r)<0&&(t=0):r<t&&(t=r),t<e&&(t=e),l.TYPED_ARRAY_SUPPORT)(n=this.subarray(e,t)).__proto__=l.prototype;else{var i=t-e;n=new l(i,void 0);for(var o=0;o<i;++o)n[o]=this[o+e];}return n},l.prototype.readUIntLE=function(e,t,n){e|=0,t|=0,n||S(e,t,this.length);for(var r=this[e],i=1,o=0;++o<t&&(i*=256);)r+=this[e+o]*i;return r},l.prototype.readUIntBE=function(e,t,n){e|=0,t|=0,n||S(e,t,this.length);for(var r=this[e+--t],i=1;0<t&&(i*=256);)r+=this[e+--t]*i;return r},l.prototype.readUInt8=function(e,t){return t||S(e,1,this.length),this[e]},l.prototype.readUInt16LE=function(e,t){return t||S(e,2,this.length),this[e]|this[e+1]<<8},l.prototype.readUInt16BE=function(e,t){return t||S(e,2,this.length),this[e]<<8|this[e+1]},l.prototype.readUInt32LE=function(e,t){return t||S(e,4,this.length),(this[e]|this[e+1]<<8|this[e+2]<<16)+16777216*this[e+3]},l.prototype.readUInt32BE=function(e,t){return t||S(e,4,this.length),16777216*this[e]+(this[e+1]<<16|this[e+2]<<8|this[e+3])},l.prototype.readIntLE=function(e,t,n){e|=0,t|=0,n||S(e,t,this.length);for(var r=this[e],i=1,o=0;++o<t&&(i*=256);)r+=this[e+o]*i;return (i*=128)<=r&&(r-=Math.pow(2,8*t)),r},l.prototype.readIntBE=function(e,t,n){e|=0,t|=0,n||S(e,t,this.length);for(var r=t,i=1,o=this[e+--r];0<r&&(i*=256);)o+=this[e+--r]*i;return (i*=128)<=o&&(o-=Math.pow(2,8*t)),o},l.prototype.readInt8=function(e,t){return t||S(e,1,this.length),128&this[e]?-1*(255-this[e]+1):this[e]},l.prototype.readInt16LE=function(e,t){t||S(e,2,this.length);var n=this[e]|this[e+1]<<8;return 32768&n?4294901760|n:n},l.prototype.readInt16BE=function(e,t){t||S(e,2,this.length);var n=this[e+1]|this[e]<<8;return 32768&n?4294901760|n:n},l.prototype.readInt32LE=function(e,t){return t||S(e,4,this.length),this[e]|this[e+1]<<8|this[e+2]<<16|this[e+3]<<24},l.prototype.readInt32BE=function(e,t){return t||S(e,4,this.length),this[e]<<24|this[e+1]<<16|this[e+2]<<8|this[e+3]},l.prototype.readFloatLE=function(e,t){return t||S(e,4,this.length),o.read(this,e,!0,23,4)},l.prototype.readFloatBE=function(e,t){return t||S(e,4,this.length),o.read(this,e,!1,23,4)},l.prototype.readDoubleLE=function(e,t){return t||S(e,8,this.length),o.read(this,e,!0,52,8)},l.prototype.readDoubleBE=function(e,t){return t||S(e,8,this.length),o.read(this,e,!1,52,8)},l.prototype.writeUIntLE=function(e,t,n,r){e=+e,t|=0,n|=0,r||M(this,e,t,n,Math.pow(2,8*n)-1,0);var i=1,o=0;for(this[t]=255&e;++o<n&&(i*=256);)this[t+o]=e/i&255;return t+n},l.prototype.writeUIntBE=function(e,t,n,r){e=+e,t|=0,n|=0,r||M(this,e,t,n,Math.pow(2,8*n)-1,0);var i=n-1,o=1;for(this[t+i]=255&e;0<=--i&&(o*=256);)this[t+i]=e/o&255;return t+n},l.prototype.writeUInt8=function(e,t,n){return e=+e,t|=0,n||M(this,e,t,1,255,0),l.TYPED_ARRAY_SUPPORT||(e=Math.floor(e)),this[t]=255&e,t+1},l.prototype.writeUInt16LE=function(e,t,n){return e=+e,t|=0,n||M(this,e,t,2,65535,0),l.TYPED_ARRAY_SUPPORT?(this[t]=255&e,this[t+1]=e>>>8):E(this,e,t,!0),t+2},l.prototype.writeUInt16BE=function(e,t,n){return e=+e,t|=0,n||M(this,e,t,2,65535,0),l.TYPED_ARRAY_SUPPORT?(this[t]=e>>>8,this[t+1]=255&e):E(this,e,t,!1),t+2},l.prototype.writeUInt32LE=function(e,t,n){return e=+e,t|=0,n||M(this,e,t,4,4294967295,0),l.TYPED_ARRAY_SUPPORT?(this[t+3]=e>>>24,this[t+2]=e>>>16,this[t+1]=e>>>8,this[t]=255&e):A(this,e,t,!0),t+4},l.prototype.writeUInt32BE=function(e,t,n){return e=+e,t|=0,n||M(this,e,t,4,4294967295,0),l.TYPED_ARRAY_SUPPORT?(this[t]=e>>>24,this[t+1]=e>>>16,this[t+2]=e>>>8,this[t+3]=255&e):A(this,e,t,!1),t+4},l.prototype.writeIntLE=function(e,t,n,r){if(e=+e,t|=0,!r){var i=Math.pow(2,8*n-1);M(this,e,t,n,i-1,-i);}var o=0,s=1,a=0;for(this[t]=255&e;++o<n&&(s*=256);)e<0&&0===a&&0!==this[t+o-1]&&(a=1),this[t+o]=(e/s>>0)-a&255;return t+n},l.prototype.writeIntBE=function(e,t,n,r){if(e=+e,t|=0,!r){var i=Math.pow(2,8*n-1);M(this,e,t,n,i-1,-i);}var o=n-1,s=1,a=0;for(this[t+o]=255&e;0<=--o&&(s*=256);)e<0&&0===a&&0!==this[t+o+1]&&(a=1),this[t+o]=(e/s>>0)-a&255;return t+n},l.prototype.writeInt8=function(e,t,n){return e=+e,t|=0,n||M(this,e,t,1,127,-128),l.TYPED_ARRAY_SUPPORT||(e=Math.floor(e)),e<0&&(e=255+e+1),this[t]=255&e,t+1},l.prototype.writeInt16LE=function(e,t,n){return e=+e,t|=0,n||M(this,e,t,2,32767,-32768),l.TYPED_ARRAY_SUPPORT?(this[t]=255&e,this[t+1]=e>>>8):E(this,e,t,!0),t+2},l.prototype.writeInt16BE=function(e,t,n){return e=+e,t|=0,n||M(this,e,t,2,32767,-32768),l.TYPED_ARRAY_SUPPORT?(this[t]=e>>>8,this[t+1]=255&e):E(this,e,t,!1),t+2},l.prototype.writeInt32LE=function(e,t,n){return e=+e,t|=0,n||M(this,e,t,4,2147483647,-2147483648),l.TYPED_ARRAY_SUPPORT?(this[t]=255&e,this[t+1]=e>>>8,this[t+2]=e>>>16,this[t+3]=e>>>24):A(this,e,t,!0),t+4},l.prototype.writeInt32BE=function(e,t,n){return e=+e,t|=0,n||M(this,e,t,4,2147483647,-2147483648),e<0&&(e=4294967295+e+1),l.TYPED_ARRAY_SUPPORT?(this[t]=e>>>24,this[t+1]=e>>>16,this[t+2]=e>>>8,this[t+3]=255&e):A(this,e,t,!1),t+4},l.prototype.writeFloatLE=function(e,t,n){return R(this,e,t,!0,n)},l.prototype.writeFloatBE=function(e,t,n){return R(this,e,t,!1,n)},l.prototype.writeDoubleLE=function(e,t,n){return j(this,e,t,!0,n)},l.prototype.writeDoubleBE=function(e,t,n){return j(this,e,t,!1,n)},l.prototype.copy=function(e,t,n,r){if(n=n||0,r||0===r||(r=this.length),t>=e.length&&(t=e.length),t=t||0,0<r&&r<n&&(r=n),r===n)return 0;if(0===e.length||0===this.length)return 0;if(t<0)throw new RangeError("targetStart out of bounds");if(n<0||n>=this.length)throw new RangeError("sourceStart out of bounds");if(r<0)throw new RangeError("sourceEnd out of bounds");r>this.length&&(r=this.length),e.length-t<r-n&&(r=e.length-t+n);var i,o=r-n;if(this===e&&n<t&&t<r)for(i=o-1;0<=i;--i)e[i+t]=this[i+n];else if(o<1e3||!l.TYPED_ARRAY_SUPPORT)for(i=0;i<o;++i)e[i+t]=this[i+n];else Uint8Array.prototype.set.call(e,this.subarray(n,n+o),t);return o},l.prototype.fill=function(e,t,n,r){if("string"==typeof e){if("string"==typeof t?(r=t,t=0,n=this.length):"string"==typeof n&&(r=n,n=this.length),1===e.length){var i=e.charCodeAt(0);i<256&&(e=i);}if(void 0!==r&&"string"!=typeof r)throw new TypeError("encoding must be a string");if("string"==typeof r&&!l.isEncoding(r))throw new TypeError("Unknown encoding: "+r)}else"number"==typeof e&&(e&=255);if(t<0||this.length<t||this.length<n)throw new RangeError("Out of range index");if(n<=t)return this;var o;if(t>>>=0,n=void 0===n?this.length:n>>>0,"number"==typeof(e=e||0))for(o=t;o<n;++o)this[o]=e;else{var s=l.isBuffer(e)?e:x(new l(e,r).toString()),a=s.length;for(o=0;o<n-t;++o)this[o+t]=s[o%a];}return this};var t=/[^+\/0-9A-Za-z-_]/g;function N(e){return e<16?"0"+e.toString(16):e.toString(16)}function x(e,t){var n;t=t||1/0;for(var r=e.length,i=null,o=[],s=0;s<r;++s){if(55295<(n=e.charCodeAt(s))&&n<57344){if(!i){if(56319<n){-1<(t-=3)&&o.push(239,191,189);continue}if(s+1===r){-1<(t-=3)&&o.push(239,191,189);continue}i=n;continue}if(n<56320){-1<(t-=3)&&o.push(239,191,189),i=n;continue}n=65536+(i-55296<<10|n-56320);}else i&&-1<(t-=3)&&o.push(239,191,189);if(i=null,n<128){if((t-=1)<0)break;o.push(n);}else if(n<2048){if((t-=2)<0)break;o.push(n>>6|192,63&n|128);}else if(n<65536){if((t-=3)<0)break;o.push(n>>12|224,n>>6&63|128,63&n|128);}else{if(!(n<1114112))throw new Error("Invalid code point");if((t-=4)<0)break;o.push(n>>18|240,n>>12&63|128,n>>6&63|128,63&n|128);}}return o}function U(e){return r.toByteArray(function(e){if((e=function(e){return e.trim?e.trim():e.replace(/^\s+|\s+$/g,"")}(e).replace(t,"")).length<2)return "";for(;e.length%4!=0;)e+="=";return e}(e))}function B(e,t,n,r){for(var i=0;i<r&&!(i+n>=t.length||i>=e.length);++i)t[i+n]=e[i];return i}}).call(this,D(70));},function(e,t,n){e.exports=function(e){return null!==e&&"object"==typeof e};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.default=void 0;var r=u(n(12)),i=u(n(67)),o=u(n(68)),s=u(n(69)),a=n(75);n(0);function u(e){return e&&e.__esModule?e:{default:e}}function c(e){return (c="function"==typeof Symbol&&"symbol"==typeof Symbol.iterator?function(e){return typeof e}:function(e){return e&&"function"==typeof Symbol&&e.constructor===Symbol&&e!==Symbol.prototype?"symbol":typeof e})(e)}function f(e,t){return !t||"object"!==c(t)&&"function"!=typeof t?function(e){if(void 0!==e)return e;throw new ReferenceError("this hasn't been initialised - super() hasn't been called")}(e):t}function l(e){return (l=Object.setPrototypeOf?Object.getPrototypeOf:function(e){return e.__proto__||Object.getPrototypeOf(e)})(e)}function h(e,t){return (h=Object.setPrototypeOf||function(e,t){return e.__proto__=t,e})(e,t)}function p(e){if(!navigator||!navigator.sendBeacon)return !1;navigator.sendBeacon(e);}var d=(function(e,t){if("function"!=typeof t&&null!==t)throw new TypeError("Super expression must either be null or a function");e.prototype=Object.create(t&&t.prototype,{constructor:{value:e,writable:!0,configurable:!0}}),t&&h(e,t);}(g,r.default),g);function g(e){var t;!function(e,t){if(!(e instanceof t))throw new TypeError("Cannot call a class as a function")}(this,g);var n=e.listenToBrowserNetworkEvents,r=void 0===n||n;return e.db=o.default,e.cbor=new s.default,e.sdkFamily="Web",e.networking=new i.default({del:a.del,get:a.get,post:a.post,patch:a.patch,sendBeacon:p}),t=f(this,l(g).call(this,e)),r&&(window.addEventListener("offline",function(){t.networkDownDetected();}),window.addEventListener("online",function(){t.networkUpDetected();})),t}t.default=d,e.exports=t.default;},function(e,t,n){function s(e){return (s="function"==typeof Symbol&&"symbol"==typeof Symbol.iterator?function(e){return typeof e}:function(e){return e&&"function"==typeof Symbol&&e.constructor===Symbol&&e!==Symbol.prototype?"symbol":typeof e})(e)}Object.defineProperty(t,"__esModule",{value:!0}),t.default=void 0;var y=f(n(3)),v=f(n(6)),b=f(n(15)),r=f(n(18)),m=f(n(7)),_=f(n(19)),k=f(n(20)),P=c(n(21)),w=c(n(22)),T=c(n(23)),O=c(n(24)),S=c(n(25)),M=c(n(26)),E=c(n(27)),A=c(n(28)),C=c(n(29)),R=c(n(30)),j=c(n(31)),N=c(n(32)),x=c(n(33)),U=c(n(34)),B=c(n(35)),I=c(n(36)),D=c(n(37)),K=c(n(38)),L=c(n(39)),F=c(n(40)),G=c(n(41)),H=c(n(42)),q=c(n(43)),z=c(n(44)),Y=c(n(45)),$=c(n(46)),W=c(n(47)),J=c(n(48)),X=c(n(49)),V=c(n(50)),Q=c(n(51)),Z=c(n(52)),ee=c(n(53)),te=c(n(54)),ne=c(n(55)),re=c(n(56)),ie=c(n(57)),oe=c(n(58)),se=c(n(59)),ae=c(n(60)),ue=c(n(61)),ce=c(n(62)),fe=c(n(63)),le=c(n(64)),he=c(n(65)),pe=c(n(8)),de=c(n(66)),i=f(n(1)),o=f(n(4)),a=(n(0),f(n(5)));function u(){if("function"!=typeof WeakMap)return null;var e=new WeakMap;return u=function(){return e},e}function c(e){if(e&&e.__esModule)return e;if(null===e||"object"!==s(e)&&"function"!=typeof e)return {default:e};var t=u();if(t&&t.has(e))return t.get(e);var n={},r=Object.defineProperty&&Object.getOwnPropertyDescriptor;for(var i in e)if(Object.prototype.hasOwnProperty.call(e,i)){var o=r?Object.getOwnPropertyDescriptor(e,i):null;o&&(o.get||o.set)?Object.defineProperty(n,i,o):n[i]=e[i];}return n.default=e,t&&t.set(e,n),n}function f(e){return e&&e.__esModule?e:{default:e}}function l(e,t){for(var n=0;n<t.length;n++){var r=t[n];r.enumerable=r.enumerable||!1,r.configurable=!0,"value"in r&&(r.writable=!0),Object.defineProperty(e,r.key,r);}}function ge(e,t,n){return t in e?Object.defineProperty(e,t,{value:n,enumerable:!0,configurable:!0,writable:!0}):e[t]=n,e}var h,p,d,g=(h=ye,d=[{key:"notificationPayload",value:function(e,t){return new r.default(e,t)}},{key:"generateUUID",value:function(){return a.default.createUUID()}}],(p=[{key:"getVersion",value:function(){return this._config.getVersion()}},{key:"_addPnsdkSuffix",value:function(e,t){this._config._addPnsdkSuffix(e,t);}},{key:"networkDownDetected",value:function(){this._listenerManager.announceNetworkDown(),this._config.restore?this.disconnect():this.destroy(!0);}},{key:"networkUpDetected",value:function(){this._listenerManager.announceNetworkUp(),this.reconnect();}}])&&l(h.prototype,p),void(d&&l(h,d)),ye);function ye(e){var n=this;!function(e,t){if(!(e instanceof t))throw new TypeError("Cannot call a class as a function")}(this,ye),ge(this,"_config",void 0),ge(this,"_listenerManager",void 0),ge(this,"_tokenManager",void 0),ge(this,"time",void 0),ge(this,"publish",void 0),ge(this,"fire",void 0),ge(this,"history",void 0),ge(this,"deleteMessages",void 0),ge(this,"messageCounts",void 0),ge(this,"fetchMessages",void 0),ge(this,"channelGroups",void 0),ge(this,"push",void 0),ge(this,"hereNow",void 0),ge(this,"whereNow",void 0),ge(this,"getState",void 0),ge(this,"setState",void 0),ge(this,"grant",void 0),ge(this,"grantToken",void 0),ge(this,"audit",void 0),ge(this,"subscribe",void 0),ge(this,"signal",void 0),ge(this,"presence",void 0),ge(this,"unsubscribe",void 0),ge(this,"unsubscribeAll",void 0),ge(this,"addMessageAction",void 0),ge(this,"removeMessageAction",void 0),ge(this,"getMessageActions",void 0),ge(this,"createUser",void 0),ge(this,"updateUser",void 0),ge(this,"deleteUser",void 0),ge(this,"getUser",void 0),ge(this,"getUsers",void 0),ge(this,"createSpace",void 0),ge(this,"updateSpace",void 0),ge(this,"deleteSpace",void 0),ge(this,"getSpaces",void 0),ge(this,"getSpace",void 0),ge(this,"getMembers",void 0),ge(this,"addMembers",void 0),ge(this,"updateMembers",void 0),ge(this,"removeMembers",void 0),ge(this,"getMemberships",void 0),ge(this,"joinSpaces",void 0),ge(this,"updateMemberships",void 0),ge(this,"leaveSpaces",void 0),ge(this,"disconnect",void 0),ge(this,"reconnect",void 0),ge(this,"destroy",void 0),ge(this,"stop",void 0),ge(this,"getSubscribedChannels",void 0),ge(this,"getSubscribedChannelGroups",void 0),ge(this,"addListener",void 0),ge(this,"removeListener",void 0),ge(this,"removeAllListeners",void 0),ge(this,"parseToken",void 0),ge(this,"setToken",void 0),ge(this,"setTokens",void 0),ge(this,"getToken",void 0),ge(this,"getTokens",void 0),ge(this,"clearTokens",void 0),ge(this,"getAuthKey",void 0),ge(this,"setAuthKey",void 0),ge(this,"setCipherKey",void 0),ge(this,"setUUID",void 0),ge(this,"getUUID",void 0),ge(this,"getFilterExpression",void 0),ge(this,"setFilterExpression",void 0),ge(this,"setHeartbeatInterval",void 0),ge(this,"setProxy",void 0),ge(this,"encrypt",void 0),ge(this,"decrypt",void 0);var t=e.db,r=e.networking,i=e.cbor,o=this._config=new y.default({setup:e,db:t}),s=new v.default({config:o});r.init(o);var a=this._tokenManager=new _.default(o,i),u={config:o,networking:r,crypto:s,tokenManager:a},c=k.default.bind(this,u,pe),f=k.default.bind(this,u,R),l=k.default.bind(this,u,N),h=k.default.bind(this,u,U),p=k.default.bind(this,u,de),d=this._listenerManager=new m.default,g=new b.default({timeEndpoint:c,leaveEndpoint:f,heartbeatEndpoint:l,setStateEndpoint:h,subscribeEndpoint:p,crypto:u.crypto,config:u.config,listenerManager:d});this.addListener=d.addListener.bind(d),this.removeListener=d.removeListener.bind(d),this.removeAllListeners=d.removeAllListeners.bind(d),this.parseToken=a.parseToken.bind(a),this.setToken=a.setToken.bind(a),this.setTokens=a.setTokens.bind(a),this.getToken=a.getToken.bind(a),this.getTokens=a.getTokens.bind(a),this.clearTokens=a.clearTokens.bind(a),this.channelGroups={listGroups:k.default.bind(this,u,O),listChannels:k.default.bind(this,u,S),addChannels:k.default.bind(this,u,P),removeChannels:k.default.bind(this,u,w),deleteGroup:k.default.bind(this,u,T)},this.push={addChannels:k.default.bind(this,u,M),removeChannels:k.default.bind(this,u,E),deleteDevice:k.default.bind(this,u,C),listChannels:k.default.bind(this,u,A)},this.hereNow=k.default.bind(this,u,B),this.whereNow=k.default.bind(this,u,j),this.getState=k.default.bind(this,u,x),this.setState=g.adaptStateChange.bind(g),this.grant=k.default.bind(this,u,oe),this.grantToken=k.default.bind(this,u,se),this.audit=k.default.bind(this,u,ie),this.publish=k.default.bind(this,u,ae),this.fire=function(e,t){return e.replicate=!1,e.storeInHistory=!1,n.publish(e,t)},this.signal=k.default.bind(this,u,ue),this.history=k.default.bind(this,u,ce),this.deleteMessages=k.default.bind(this,u,fe),this.messageCounts=k.default.bind(this,u,le),this.fetchMessages=k.default.bind(this,u,he),this.addMessageAction=k.default.bind(this,u,I),this.removeMessageAction=k.default.bind(this,u,D),this.getMessageActions=k.default.bind(this,u,K),this.createUser=k.default.bind(this,u,L),this.updateUser=k.default.bind(this,u,F),this.deleteUser=k.default.bind(this,u,G),this.getUser=k.default.bind(this,u,H),this.getUsers=k.default.bind(this,u,q),this.createSpace=k.default.bind(this,u,z),this.updateSpace=k.default.bind(this,u,Y),this.deleteSpace=k.default.bind(this,u,$),this.getSpaces=k.default.bind(this,u,W),this.getSpace=k.default.bind(this,u,J),this.addMembers=k.default.bind(this,u,V),this.updateMembers=k.default.bind(this,u,Q),this.removeMembers=k.default.bind(this,u,Z),this.getMembers=k.default.bind(this,u,X),this.getMemberships=k.default.bind(this,u,ee),this.joinSpaces=k.default.bind(this,u,ne),this.updateMemberships=k.default.bind(this,u,te),this.leaveSpaces=k.default.bind(this,u,re),this.time=c,this.subscribe=g.adaptSubscribeChange.bind(g),this.presence=g.adaptPresenceChange.bind(g),this.unsubscribe=g.adaptUnsubscribeChange.bind(g),this.disconnect=g.disconnect.bind(g),this.reconnect=g.reconnect.bind(g),this.destroy=function(e){g.unsubscribeAll(e),g.disconnect();},this.stop=this.destroy,this.unsubscribeAll=g.unsubscribeAll.bind(g),this.getSubscribedChannels=g.getSubscribedChannels.bind(g),this.getSubscribedChannelGroups=g.getSubscribedChannelGroups.bind(g),this.encrypt=s.encrypt.bind(s),this.decrypt=s.decrypt.bind(s),this.getAuthKey=u.config.getAuthKey.bind(u.config),this.setAuthKey=u.config.setAuthKey.bind(u.config),this.setCipherKey=u.config.setCipherKey.bind(u.config),this.getUUID=u.config.getUUID.bind(u.config),this.setUUID=u.config.setUUID.bind(u.config),this.getFilterExpression=u.config.getFilterExpression.bind(u.config),this.setFilterExpression=u.config.setFilterExpression.bind(u.config),this.setHeartbeatInterval=u.config.setHeartbeatInterval.bind(u.config),r.hasModule("proxy")&&(this.setProxy=function(e){u.config.setProxy(e),n.reconnect();});}ge(t.default=g,"OPERATIONS",i.default),ge(g,"CATEGORIES",o.default),e.exports=t.default;},function(e,t,n){var r,i,o;i=[t],void 0===(o="function"==typeof(r=function(e){var r={3:/^[0-9A-F]{8}-[0-9A-F]{4}-3[0-9A-F]{3}-[0-9A-F]{4}-[0-9A-F]{12}$/i,4:/^[0-9A-F]{8}-[0-9A-F]{4}-4[0-9A-F]{3}-[89AB][0-9A-F]{3}-[0-9A-F]{12}$/i,5:/^[0-9A-F]{8}-[0-9A-F]{4}-5[0-9A-F]{3}-[89AB][0-9A-F]{3}-[0-9A-F]{12}$/i,all:/^[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}$/i};function t(){var e,t,n="";for(e=0;e<32;e++)t=16*Math.random()|0,8!==e&&12!==e&&16!==e&&20!==e||(n+="-"),n+=(12===e?4:16===e?3&t|8:t).toString(16);return n}function n(e,t){var n=r[t||"all"];return n&&n.test(e)||!1}t.isUUID=n,t.VERSION="0.1.0",e.uuid=t,e.isUUID=n;})?r.apply(t,i):r)||(e.exports=o);},function(e,t,n){var r,c,i,u,o,s,a,f,l,h,E=E||function(a){function n(){}var e={},t=e.lib={},r=t.Base={extend:function(e){n.prototype=this;var t=new n;return e&&t.mixIn(e),t.hasOwnProperty("init")||(t.init=function(){t.$super.init.apply(this,arguments);}),(t.init.prototype=t).$super=this,t},create:function(){var e=this.extend();return e.init.apply(e,arguments),e},init:function(){},mixIn:function(e){for(var t in e)e.hasOwnProperty(t)&&(this[t]=e[t]);e.hasOwnProperty("toString")&&(this.toString=e.toString);},clone:function(){return this.init.prototype.extend(this)}},u=t.WordArray=r.extend({init:function(e,t){e=this.words=e||[],this.sigBytes=null!=t?t:4*e.length;},toString:function(e){return (e||o).stringify(this)},concat:function(e){var t=this.words,n=e.words,r=this.sigBytes;if(e=e.sigBytes,this.clamp(),r%4)for(var i=0;i<e;i++)t[r+i>>>2]|=(n[i>>>2]>>>24-i%4*8&255)<<24-(r+i)%4*8;else if(65535<n.length)for(i=0;i<e;i+=4)t[r+i>>>2]=n[i>>>2];else t.push.apply(t,n);return this.sigBytes+=e,this},clamp:function(){var e=this.words,t=this.sigBytes;e[t>>>2]&=4294967295<<32-t%4*8,e.length=a.ceil(t/4);},clone:function(){var e=r.clone.call(this);return e.words=this.words.slice(0),e},random:function(e){for(var t=[],n=0;n<e;n+=4)t.push(4294967296*a.random()|0);return new u.init(t,e)}}),i=e.enc={},o=i.Hex={stringify:function(e){var t=e.words;e=e.sigBytes;for(var n=[],r=0;r<e;r++){var i=t[r>>>2]>>>24-r%4*8&255;n.push((i>>>4).toString(16)),n.push((15&i).toString(16));}return n.join("")},parse:function(e){for(var t=e.length,n=[],r=0;r<t;r+=2)n[r>>>3]|=parseInt(e.substr(r,2),16)<<24-r%8*4;return new u.init(n,t/2)}},s=i.Latin1={stringify:function(e){var t=e.words;e=e.sigBytes;for(var n=[],r=0;r<e;r++)n.push(String.fromCharCode(t[r>>>2]>>>24-r%4*8&255));return n.join("")},parse:function(e){for(var t=e.length,n=[],r=0;r<t;r++)n[r>>>2]|=(255&e.charCodeAt(r))<<24-r%4*8;return new u.init(n,t)}},c=i.Utf8={stringify:function(e){try{return decodeURIComponent(escape(s.stringify(e)))}catch(e){throw Error("Malformed UTF-8 data")}},parse:function(e){return s.parse(unescape(encodeURIComponent(e)))}},f=t.BufferedBlockAlgorithm=r.extend({reset:function(){this._data=new u.init,this._nDataBytes=0;},_append:function(e){"string"==typeof e&&(e=c.parse(e)),this._data.concat(e),this._nDataBytes+=e.sigBytes;},_process:function(e){var t=this._data,n=t.words,r=t.sigBytes,i=this.blockSize,o=r/(4*i);if(e=(o=e?a.ceil(o):a.max((0|o)-this._minBufferSize,0))*i,r=a.min(4*e,r),e){for(var s=0;s<e;s+=i)this._doProcessBlock(n,s);s=n.splice(0,e),t.sigBytes-=r;}return new u.init(s,r)},clone:function(){var e=r.clone.call(this);return e._data=this._data.clone(),e},_minBufferSize:0});t.Hasher=f.extend({cfg:r.extend(),init:function(e){this.cfg=this.cfg.extend(e),this.reset();},reset:function(){f.reset.call(this),this._doReset();},update:function(e){return this._append(e),this._process(),this},finalize:function(e){return e&&this._append(e),this._doFinalize()},blockSize:16,_createHelper:function(n){return function(e,t){return new n.init(t).finalize(e)}},_createHmacHelper:function(n){return function(e,t){return new l.HMAC.init(n,t).finalize(e)}}});var l=e.algo={};return e}(Math);!function(i){for(var e=E,t=(r=e.lib).WordArray,n=r.Hasher,r=e.algo,o=[],d=[],s=function(e){return 4294967296*(e-(0|e))|0},a=2,u=0;u<64;){var c;e:{c=a;for(var f=i.sqrt(c),l=2;l<=f;l++)if(!(c%l)){c=!1;break e}c=!0;}c&&(u<8&&(o[u]=s(i.pow(a,.5))),d[u]=s(i.pow(a,1/3)),u++),a++;}var g=[];r=r.SHA256=n.extend({_doReset:function(){this._hash=new t.init(o.slice(0));},_doProcessBlock:function(e,t){for(var n=this._hash.words,r=n[0],i=n[1],o=n[2],s=n[3],a=n[4],u=n[5],c=n[6],f=n[7],l=0;l<64;l++){if(l<16)g[l]=0|e[t+l];else{var h=g[l-15],p=g[l-2];g[l]=((h<<25|h>>>7)^(h<<14|h>>>18)^h>>>3)+g[l-7]+((p<<15|p>>>17)^(p<<13|p>>>19)^p>>>10)+g[l-16];}h=f+((a<<26|a>>>6)^(a<<21|a>>>11)^(a<<7|a>>>25))+(a&u^~a&c)+d[l]+g[l],p=((r<<30|r>>>2)^(r<<19|r>>>13)^(r<<10|r>>>22))+(r&i^r&o^i&o),f=c,c=u,u=a,a=s+h|0,s=o,o=i,i=r,r=h+p|0;}n[0]=n[0]+r|0,n[1]=n[1]+i|0,n[2]=n[2]+o|0,n[3]=n[3]+s|0,n[4]=n[4]+a|0,n[5]=n[5]+u|0,n[6]=n[6]+c|0,n[7]=n[7]+f|0;},_doFinalize:function(){var e=this._data,t=e.words,n=8*this._nDataBytes,r=8*e.sigBytes;return t[r>>>5]|=128<<24-r%32,t[14+(64+r>>>9<<4)]=i.floor(n/4294967296),t[15+(64+r>>>9<<4)]=n,e.sigBytes=4*t.length,this._process(),this._hash},clone:function(){var e=n.clone.call(this);return e._hash=this._hash.clone(),e}});e.SHA256=n._createHelper(r),e.HmacSHA256=n._createHmacHelper(r);}(Math),c=(r=E).enc.Utf8,r.algo.HMAC=r.lib.Base.extend({init:function(e,t){e=this._hasher=new e.init,"string"==typeof t&&(t=c.parse(t));var n=e.blockSize,r=4*n;t.sigBytes>r&&(t=e.finalize(t)),t.clamp();for(var i=this._oKey=t.clone(),o=this._iKey=t.clone(),s=i.words,a=o.words,u=0;u<n;u++)s[u]^=1549556828,a[u]^=909522486;i.sigBytes=o.sigBytes=r,this.reset();},reset:function(){var e=this._hasher;e.reset(),e.update(this._iKey);},update:function(e){return this._hasher.update(e),this},finalize:function(e){var t=this._hasher;return e=t.finalize(e),t.reset(),t.finalize(this._oKey.clone().concat(e))}}),u=(i=E).lib.WordArray,i.enc.Base64={stringify:function(e){var t=e.words,n=e.sigBytes,r=this._map;e.clamp(),e=[];for(var i=0;i<n;i+=3)for(var o=(t[i>>>2]>>>24-i%4*8&255)<<16|(t[i+1>>>2]>>>24-(i+1)%4*8&255)<<8|t[i+2>>>2]>>>24-(i+2)%4*8&255,s=0;s<4&&i+.75*s<n;s++)e.push(r.charAt(o>>>6*(3-s)&63));if(t=r.charAt(64))for(;e.length%4;)e.push(t);return e.join("")},parse:function(e){var t=e.length,n=this._map;!(r=n.charAt(64))||-1!=(r=e.indexOf(r))&&(t=r);for(var r=[],i=0,o=0;o<t;o++)if(o%4){var s=n.indexOf(e.charAt(o-1))<<o%4*2,a=n.indexOf(e.charAt(o))>>>6-o%4*2;r[i>>>2]|=(s|a)<<24-i%4*8,i++;}return u.create(r,i)},_map:"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/="},function(o){function w(e,t,n,r,i,o,s){return ((e=e+(t&n|~t&r)+i+s)<<o|e>>>32-o)+t}function T(e,t,n,r,i,o,s){return ((e=e+(t&r|n&~r)+i+s)<<o|e>>>32-o)+t}function O(e,t,n,r,i,o,s){return ((e=e+(t^n^r)+i+s)<<o|e>>>32-o)+t}function S(e,t,n,r,i,o,s){return ((e=e+(n^(t|~r))+i+s)<<o|e>>>32-o)+t}for(var e=E,t=(r=e.lib).WordArray,n=r.Hasher,r=e.algo,M=[],i=0;i<64;i++)M[i]=4294967296*o.abs(o.sin(i+1))|0;r=r.MD5=n.extend({_doReset:function(){this._hash=new t.init([1732584193,4023233417,2562383102,271733878]);},_doProcessBlock:function(e,t){for(var n=0;n<16;n++){var r=e[s=t+n];e[s]=16711935&(r<<8|r>>>24)|4278255360&(r<<24|r>>>8);}n=this._hash.words;var i,o,s=e[t+0],a=(r=e[t+1],e[t+2]),u=e[t+3],c=e[t+4],f=e[t+5],l=e[t+6],h=e[t+7],p=e[t+8],d=e[t+9],g=e[t+10],y=e[t+11],v=e[t+12],b=e[t+13],m=e[t+14],_=e[t+15],k=n[0],P=S(P=S(P=S(P=S(P=O(P=O(P=O(P=O(P=T(P=T(P=T(P=T(P=w(P=w(P=w(P=w(P=n[1],o=w(o=n[2],i=w(i=n[3],k=w(k,P,o,i,s,7,M[0]),P,o,r,12,M[1]),k,P,a,17,M[2]),i,k,u,22,M[3]),o=w(o,i=w(i,k=w(k,P,o,i,c,7,M[4]),P,o,f,12,M[5]),k,P,l,17,M[6]),i,k,h,22,M[7]),o=w(o,i=w(i,k=w(k,P,o,i,p,7,M[8]),P,o,d,12,M[9]),k,P,g,17,M[10]),i,k,y,22,M[11]),o=w(o,i=w(i,k=w(k,P,o,i,v,7,M[12]),P,o,b,12,M[13]),k,P,m,17,M[14]),i,k,_,22,M[15]),o=T(o,i=T(i,k=T(k,P,o,i,r,5,M[16]),P,o,l,9,M[17]),k,P,y,14,M[18]),i,k,s,20,M[19]),o=T(o,i=T(i,k=T(k,P,o,i,f,5,M[20]),P,o,g,9,M[21]),k,P,_,14,M[22]),i,k,c,20,M[23]),o=T(o,i=T(i,k=T(k,P,o,i,d,5,M[24]),P,o,m,9,M[25]),k,P,u,14,M[26]),i,k,p,20,M[27]),o=T(o,i=T(i,k=T(k,P,o,i,b,5,M[28]),P,o,a,9,M[29]),k,P,h,14,M[30]),i,k,v,20,M[31]),o=O(o,i=O(i,k=O(k,P,o,i,f,4,M[32]),P,o,p,11,M[33]),k,P,y,16,M[34]),i,k,m,23,M[35]),o=O(o,i=O(i,k=O(k,P,o,i,r,4,M[36]),P,o,c,11,M[37]),k,P,h,16,M[38]),i,k,g,23,M[39]),o=O(o,i=O(i,k=O(k,P,o,i,b,4,M[40]),P,o,s,11,M[41]),k,P,u,16,M[42]),i,k,l,23,M[43]),o=O(o,i=O(i,k=O(k,P,o,i,d,4,M[44]),P,o,v,11,M[45]),k,P,_,16,M[46]),i,k,a,23,M[47]),o=S(o,i=S(i,k=S(k,P,o,i,s,6,M[48]),P,o,h,10,M[49]),k,P,m,15,M[50]),i,k,f,21,M[51]),o=S(o,i=S(i,k=S(k,P,o,i,v,6,M[52]),P,o,u,10,M[53]),k,P,g,15,M[54]),i,k,r,21,M[55]),o=S(o,i=S(i,k=S(k,P,o,i,p,6,M[56]),P,o,_,10,M[57]),k,P,l,15,M[58]),i,k,b,21,M[59]),o=S(o,i=S(i,k=S(k,P,o,i,c,6,M[60]),P,o,y,10,M[61]),k,P,a,15,M[62]),i,k,d,21,M[63]);n[0]=n[0]+k|0,n[1]=n[1]+P|0,n[2]=n[2]+o|0,n[3]=n[3]+i|0;},_doFinalize:function(){var e=this._data,t=e.words,n=8*this._nDataBytes,r=8*e.sigBytes;t[r>>>5]|=128<<24-r%32;var i=o.floor(n/4294967296);for(t[15+(r+64>>>9<<4)]=16711935&(i<<8|i>>>24)|4278255360&(i<<24|i>>>8),t[14+(r+64>>>9<<4)]=16711935&(n<<8|n>>>24)|4278255360&(n<<24|n>>>8),e.sigBytes=4*(t.length+1),this._process(),t=(e=this._hash).words,n=0;n<4;n++)r=t[n],t[n]=16711935&(r<<8|r>>>24)|4278255360&(r<<24|r>>>8);return e},clone:function(){var e=n.clone.call(this);return e._hash=this._hash.clone(),e}}),e.MD5=n._createHelper(r),e.HmacMD5=n._createHmacHelper(r);}(Math),a=(o=(s=E).lib).Base,f=o.WordArray,l=(o=s.algo).EvpKDF=a.extend({cfg:a.extend({keySize:4,hasher:o.MD5,iterations:1}),init:function(e){this.cfg=this.cfg.extend(e);},compute:function(e,t){for(var n=(s=this.cfg).hasher.create(),r=f.create(),i=r.words,o=s.keySize,s=s.iterations;i.length<o;){a&&n.update(a);var a=n.update(e).finalize(t);n.reset();for(var u=1;u<s;u++)a=n.finalize(a),n.reset();r.concat(a);}return r.sigBytes=4*o,r}}),s.EvpKDF=function(e,t,n){return l.create(n).compute(e,t)},E.lib.Cipher||function(){var e=(h=E).lib,t=e.Base,s=e.WordArray,n=e.BufferedBlockAlgorithm,r=h.enc.Base64,i=h.algo.EvpKDF,o=e.Cipher=n.extend({cfg:t.extend(),createEncryptor:function(e,t){return this.create(this._ENC_XFORM_MODE,e,t)},createDecryptor:function(e,t){return this.create(this._DEC_XFORM_MODE,e,t)},init:function(e,t,n){this.cfg=this.cfg.extend(n),this._xformMode=e,this._key=t,this.reset();},reset:function(){n.reset.call(this),this._doReset();},process:function(e){return this._append(e),this._process()},finalize:function(e){return e&&this._append(e),this._doFinalize()},keySize:4,ivSize:4,_ENC_XFORM_MODE:1,_DEC_XFORM_MODE:2,_createHelper:function(r){return {encrypt:function(e,t,n){return ("string"==typeof t?p:l).encrypt(r,e,t,n)},decrypt:function(e,t,n){return ("string"==typeof t?p:l).decrypt(r,e,t,n)}}}});e.StreamCipher=o.extend({_doFinalize:function(){return this._process(!0)},blockSize:1});function a(e,t,n){var r=this._iv;r?this._iv=void 0:r=this._prevBlock;for(var i=0;i<n;i++)e[t+i]^=r[i];}var u=h.mode={},c=(e.BlockCipherMode=t.extend({createEncryptor:function(e,t){return this.Encryptor.create(e,t)},createDecryptor:function(e,t){return this.Decryptor.create(e,t)},init:function(e,t){this._cipher=e,this._iv=t;}})).extend();c.Encryptor=c.extend({processBlock:function(e,t){var n=this._cipher,r=n.blockSize;a.call(this,e,t,r),n.encryptBlock(e,t),this._prevBlock=e.slice(t,t+r);}}),c.Decryptor=c.extend({processBlock:function(e,t){var n=this._cipher,r=n.blockSize,i=e.slice(t,t+r);n.decryptBlock(e,t),a.call(this,e,t,r),this._prevBlock=i;}}),u=u.CBC=c,c=(h.pad={}).Pkcs7={pad:function(e,t){for(var n,r=(n=(n=4*t)-e.sigBytes%n)<<24|n<<16|n<<8|n,i=[],o=0;o<n;o+=4)i.push(r);n=s.create(i,n),e.concat(n);},unpad:function(e){e.sigBytes-=255&e.words[e.sigBytes-1>>>2];}},e.BlockCipher=o.extend({cfg:o.cfg.extend({mode:u,padding:c}),reset:function(){o.reset.call(this);var e=(t=this.cfg).iv,t=t.mode;if(this._xformMode==this._ENC_XFORM_MODE)var n=t.createEncryptor;else n=t.createDecryptor,this._minBufferSize=1;this._mode=n.call(t,this,e&&e.words);},_doProcessBlock:function(e,t){this._mode.processBlock(e,t);},_doFinalize:function(){var e=this.cfg.padding;if(this._xformMode==this._ENC_XFORM_MODE){e.pad(this._data,this.blockSize);var t=this._process(!0);}else t=this._process(!0),e.unpad(t);return t},blockSize:4});var f=e.CipherParams=t.extend({init:function(e){this.mixIn(e);},toString:function(e){return (e||this.formatter).stringify(this)}}),l=(u=(h.format={}).OpenSSL={stringify:function(e){var t=e.ciphertext;return ((e=e.salt)?s.create([1398893684,1701076831]).concat(e).concat(t):t).toString(r)},parse:function(e){var t=(e=r.parse(e)).words;if(1398893684==t[0]&&1701076831==t[1]){var n=s.create(t.slice(2,4));t.splice(0,4),e.sigBytes-=16;}return f.create({ciphertext:e,salt:n})}},e.SerializableCipher=t.extend({cfg:t.extend({format:u}),encrypt:function(e,t,n,r){r=this.cfg.extend(r);var i=e.createEncryptor(n,r);return t=i.finalize(t),i=i.cfg,f.create({ciphertext:t,key:n,iv:i.iv,algorithm:e,mode:i.mode,padding:i.padding,blockSize:e.blockSize,formatter:r.format})},decrypt:function(e,t,n,r){return r=this.cfg.extend(r),t=this._parse(t,r.format),e.createDecryptor(n,r).finalize(t.ciphertext)},_parse:function(e,t){return "string"==typeof e?t.parse(e,this):e}})),h=(h.kdf={}).OpenSSL={execute:function(e,t,n,r){return r=r||s.random(8),e=i.create({keySize:t+n}).compute(e,r),n=s.create(e.words.slice(t),4*n),e.sigBytes=4*t,f.create({key:e,iv:n,salt:r})}},p=e.PasswordBasedCipher=l.extend({cfg:l.cfg.extend({kdf:h}),encrypt:function(e,t,n,r){return n=(r=this.cfg.extend(r)).kdf.execute(n,e.keySize,e.ivSize),r.iv=n.iv,(e=l.encrypt.call(this,e,t,n.key,r)).mixIn(n),e},decrypt:function(e,t,n,r){return r=this.cfg.extend(r),t=this._parse(t,r.format),n=r.kdf.execute(n,e.keySize,e.ivSize,t.salt),r.iv=n.iv,l.decrypt.call(this,e,t,n.key,r)}});}(),function(){for(var e=E,t=e.lib.BlockCipher,n=e.algo,s=[],r=[],i=[],o=[],a=[],u=[],c=[],f=[],l=[],h=[],p=[],d=0;d<256;d++)p[d]=d<128?d<<1:d<<1^283;var g=0,y=0;for(d=0;d<256;d++){var v=(v=y^y<<1^y<<2^y<<3^y<<4)>>>8^255&v^99;s[g]=v;var b=p[r[v]=g],m=p[b],_=p[m],k=257*p[v]^16843008*v;i[g]=k<<24|k>>>8,o[g]=k<<16|k>>>16,a[g]=k<<8|k>>>24,u[g]=k,k=16843009*_^65537*m^257*b^16843008*g,c[v]=k<<24|k>>>8,f[v]=k<<16|k>>>16,l[v]=k<<8|k>>>24,h[v]=k,g?(g=b^p[p[p[_^b]]],y^=p[p[y]]):g=y=1;}var P=[0,1,2,4,8,16,32,64,128,27,54];n=n.AES=t.extend({_doReset:function(){for(var e=(n=this._key).words,t=n.sigBytes/4,n=4*((this._nRounds=t+6)+1),r=this._keySchedule=[],i=0;i<n;i++)if(i<t)r[i]=e[i];else{var o=r[i-1];i%t?6<t&&4==i%t&&(o=s[o>>>24]<<24|s[o>>>16&255]<<16|s[o>>>8&255]<<8|s[255&o]):(o=s[(o=o<<8|o>>>24)>>>24]<<24|s[o>>>16&255]<<16|s[o>>>8&255]<<8|s[255&o],o^=P[i/t|0]<<24),r[i]=r[i-t]^o;}for(e=this._invKeySchedule=[],t=0;t<n;t++)i=n-t,o=t%4?r[i]:r[i-4],e[t]=t<4||i<=4?o:c[s[o>>>24]]^f[s[o>>>16&255]]^l[s[o>>>8&255]]^h[s[255&o]];},encryptBlock:function(e,t){this._doCryptBlock(e,t,this._keySchedule,i,o,a,u,s);},decryptBlock:function(e,t){var n=e[t+1];e[t+1]=e[t+3],e[t+3]=n,this._doCryptBlock(e,t,this._invKeySchedule,c,f,l,h,r),n=e[t+1],e[t+1]=e[t+3],e[t+3]=n;},_doCryptBlock:function(e,t,n,r,i,o,s,a){for(var u=this._nRounds,c=e[t]^n[0],f=e[t+1]^n[1],l=e[t+2]^n[2],h=e[t+3]^n[3],p=4,d=1;d<u;d++){var g=r[c>>>24]^i[f>>>16&255]^o[l>>>8&255]^s[255&h]^n[p++],y=r[f>>>24]^i[l>>>16&255]^o[h>>>8&255]^s[255&c]^n[p++],v=r[l>>>24]^i[h>>>16&255]^o[c>>>8&255]^s[255&f]^n[p++];h=r[h>>>24]^i[c>>>16&255]^o[f>>>8&255]^s[255&l]^n[p++],c=g,f=y,l=v;}g=(a[c>>>24]<<24|a[f>>>16&255]<<16|a[l>>>8&255]<<8|a[255&h])^n[p++],y=(a[f>>>24]<<24|a[l>>>16&255]<<16|a[h>>>8&255]<<8|a[255&c])^n[p++],v=(a[l>>>24]<<24|a[h>>>16&255]<<16|a[c>>>8&255]<<8|a[255&f])^n[p++],h=(a[h>>>24]<<24|a[c>>>16&255]<<16|a[f>>>8&255]<<8|a[255&l])^n[p++],e[t]=g,e[t+1]=y,e[t+2]=v,e[t+3]=h;},keySize:8});e.AES=t._createHelper(n);}(),E.mode.ECB=((h=E.lib.BlockCipherMode.extend()).Encryptor=h.extend({processBlock:function(e,t){this._cipher.encryptBlock(e,t);}}),h.Decryptor=h.extend({processBlock:function(e,t){this._cipher.decryptBlock(e,t);}}),h),e.exports=E;},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.default=void 0;r(n(6)),r(n(3)),r(n(7));var c=r(n(16)),f=r(n(17)),l=r(n(2)),a=(n(0),r(n(4)));function r(e){return e&&e.__esModule?e:{default:e}}function i(e,t){for(var n=0;n<t.length;n++){var r=t[n];r.enumerable=r.enumerable||!1,r.configurable=!0,"value"in r&&(r.writable=!0),Object.defineProperty(e,r.key,r);}}function h(e,t,n){return t in e?Object.defineProperty(e,t,{value:n,enumerable:!0,configurable:!0,writable:!0}):e[t]=n,e}var o,s,p=(o=d,(s=[{key:"adaptStateChange",value:function(e,t){var n=this,r=e.state,i=e.channels,o=void 0===i?[]:i,s=e.channelGroups,a=void 0===s?[]:s;return o.forEach(function(e){e in n._channels&&(n._channels[e].state=r);}),a.forEach(function(e){e in n._channelGroups&&(n._channelGroups[e].state=r);}),this._setStateEndpoint({state:r,channels:o,channelGroups:a},t)}},{key:"adaptPresenceChange",value:function(e){var t=this,n=e.connected,r=e.channels,i=void 0===r?[]:r,o=e.channelGroups,s=void 0===o?[]:o;n?(i.forEach(function(e){t._heartbeatChannels[e]={state:{}};}),s.forEach(function(e){t._heartbeatChannelGroups[e]={state:{}};})):(i.forEach(function(e){e in t._heartbeatChannels&&delete t._heartbeatChannels[e];}),s.forEach(function(e){e in t._heartbeatChannelGroups&&delete t._heartbeatChannelGroups[e];}),!1===this._config.suppressLeaveEvents&&this._leaveEndpoint({channels:i,channelGroups:s},function(e){t._listenerManager.announceStatus(e);})),this.reconnect();}},{key:"adaptSubscribeChange",value:function(e){var t=this,n=e.timetoken,r=e.channels,i=void 0===r?[]:r,o=e.channelGroups,s=void 0===o?[]:o,a=e.withPresence,u=void 0!==a&&a,c=e.withHeartbeats,f=void 0!==c&&c;this._config.subscribeKey&&""!==this._config.subscribeKey?(n&&(this._lastTimetoken=this._currentTimetoken,this._currentTimetoken=n),"0"!==this._currentTimetoken&&0!==this._currentTimetoken&&(this._storedTimetoken=this._currentTimetoken,this._currentTimetoken=0),i.forEach(function(e){t._channels[e]={state:{}},u&&(t._presenceChannels[e]={}),(f||t._config.getHeartbeatInterval())&&(t._heartbeatChannels[e]={}),t._pendingChannelSubscriptions.push(e);}),s.forEach(function(e){t._channelGroups[e]={state:{}},u&&(t._presenceChannelGroups[e]={}),(f||t._config.getHeartbeatInterval())&&(t._heartbeatChannelGroups[e]={}),t._pendingChannelGroupSubscriptions.push(e);}),this._subscriptionStatusAnnounced=!1,this.reconnect()):console&&console.log&&console.log("subscribe key missing; aborting subscribe");}},{key:"adaptUnsubscribeChange",value:function(e,t){var n=this,r=e.channels,i=void 0===r?[]:r,o=e.channelGroups,s=void 0===o?[]:o,a=[],u=[];i.forEach(function(e){e in n._channels&&(delete n._channels[e],a.push(e),e in n._heartbeatChannels&&delete n._heartbeatChannels[e]),e in n._presenceChannels&&(delete n._presenceChannels[e],a.push(e));}),s.forEach(function(e){e in n._channelGroups&&(delete n._channelGroups[e],u.push(e),e in n._heartbeatChannelGroups&&delete n._heartbeatChannelGroups[e]),e in n._presenceChannelGroups&&(delete n._channelGroups[e],u.push(e));}),0===a.length&&0===u.length||(!1!==this._config.suppressLeaveEvents||t||this._leaveEndpoint({channels:a,channelGroups:u},function(e){e.affectedChannels=a,e.affectedChannelGroups=u,e.currentTimetoken=n._currentTimetoken,e.lastTimetoken=n._lastTimetoken,n._listenerManager.announceStatus(e);}),0===Object.keys(this._channels).length&&0===Object.keys(this._presenceChannels).length&&0===Object.keys(this._channelGroups).length&&0===Object.keys(this._presenceChannelGroups).length&&(this._lastTimetoken=0,this._currentTimetoken=0,this._storedTimetoken=null,this._region=null,this._reconnectionManager.stopPolling()),this.reconnect());}},{key:"unsubscribeAll",value:function(e){this.adaptUnsubscribeChange({channels:this.getSubscribedChannels(),channelGroups:this.getSubscribedChannelGroups()},e);}},{key:"getHeartbeatChannels",value:function(){return Object.keys(this._heartbeatChannels)}},{key:"getHeartbeatChannelGroups",value:function(){return Object.keys(this._heartbeatChannelGroups)}},{key:"getSubscribedChannels",value:function(){return Object.keys(this._channels)}},{key:"getSubscribedChannelGroups",value:function(){return Object.keys(this._channelGroups)}},{key:"reconnect",value:function(){this._startSubscribeLoop(),this._registerHeartbeatTimer();}},{key:"disconnect",value:function(){this._stopSubscribeLoop(),this._stopHeartbeatTimer(),this._reconnectionManager.stopPolling();}},{key:"_registerHeartbeatTimer",value:function(){this._stopHeartbeatTimer(),0!==this._config.getHeartbeatInterval()&&(this._performHeartbeatLoop(),this._heartbeatTimer=setInterval(this._performHeartbeatLoop.bind(this),1e3*this._config.getHeartbeatInterval()));}},{key:"_stopHeartbeatTimer",value:function(){this._heartbeatTimer&&(clearInterval(this._heartbeatTimer),this._heartbeatTimer=null);}},{key:"_performHeartbeatLoop",value:function(){var n=this,e=this.getHeartbeatChannels(),t=this.getHeartbeatChannelGroups(),r={};0===e.length&&0===t.length||(this.getSubscribedChannels().forEach(function(e){var t=n._channels[e].state;Object.keys(t).length&&(r[e]=t);}),this.getSubscribedChannelGroups().forEach(function(e){var t=n._channelGroups[e].state;Object.keys(t).length&&(r[e]=t);}),this._heartbeatEndpoint({channels:e,channelGroups:t,state:r},function(e){e.error&&n._config.announceFailedHeartbeats&&n._listenerManager.announceStatus(e),e.error&&n._config.autoNetworkDetection&&n._isOnline&&(n._isOnline=!1,n.disconnect(),n._listenerManager.announceNetworkDown(),n.reconnect()),!e.error&&n._config.announceSuccessfulHeartbeats&&n._listenerManager.announceStatus(e);}.bind(this)));}},{key:"_startSubscribeLoop",value:function(){var n=this;this._stopSubscribeLoop();var r={},i=[],o=[];if(Object.keys(this._channels).forEach(function(e){var t=n._channels[e].state;Object.keys(t).length&&(r[e]=t),i.push(e);}),Object.keys(this._presenceChannels).forEach(function(e){i.push("".concat(e,"-pnpres"));}),Object.keys(this._channelGroups).forEach(function(e){var t=n._channelGroups[e].state;Object.keys(t).length&&(r[e]=t),o.push(e);}),Object.keys(this._presenceChannelGroups).forEach(function(e){o.push("".concat(e,"-pnpres"));}),0!==i.length||0!==o.length){var e={channels:i,channelGroups:o,state:r,timetoken:this._currentTimetoken,filterExpression:this._config.filterExpression,region:this._region};this._subscribeCall=this._subscribeEndpoint(e,this._processSubscribeResponse.bind(this));}}},{key:"_processSubscribeResponse",value:function(t,e){var c=this;if(t.error)t.category===a.default.PNTimeoutCategory?this._startSubscribeLoop():(t.category===a.default.PNNetworkIssuesCategory?(this.disconnect(),t.error&&this._config.autoNetworkDetection&&this._isOnline&&(this._isOnline=!1,this._listenerManager.announceNetworkDown()),this._reconnectionManager.onReconnection(function(){c._config.autoNetworkDetection&&!c._isOnline&&(c._isOnline=!0,c._listenerManager.announceNetworkUp()),c.reconnect(),c._subscriptionStatusAnnounced=!0;var e={category:a.default.PNReconnectedCategory,operation:t.operation,lastTimetoken:c._lastTimetoken,currentTimetoken:c._currentTimetoken};c._listenerManager.announceStatus(e);}),this._reconnectionManager.startPolling()):t.category===a.default.PNBadRequestCategory&&this._stopHeartbeatTimer(),this._listenerManager.announceStatus(t));else{if(this._storedTimetoken?(this._currentTimetoken=this._storedTimetoken,this._storedTimetoken=null):(this._lastTimetoken=this._currentTimetoken,this._currentTimetoken=e.metadata.timetoken),!this._subscriptionStatusAnnounced){var n={};n.category=a.default.PNConnectedCategory,n.operation=t.operation,n.affectedChannels=this._pendingChannelSubscriptions,n.subscribedChannels=this.getSubscribedChannels(),n.affectedChannelGroups=this._pendingChannelGroupSubscriptions,n.lastTimetoken=this._lastTimetoken,n.currentTimetoken=this._currentTimetoken,this._subscriptionStatusAnnounced=!0,this._listenerManager.announceStatus(n),this._pendingChannelSubscriptions=[],this._pendingChannelGroupSubscriptions=[];}var r=e.messages||[],i=this._config,o=i.requestMessageCountThreshold,f=i.dedupeOnSubscribe;if(o&&r.length>=o){var s={};s.category=a.default.PNRequestMessageCountExceededCategory,s.operation=t.operation,this._listenerManager.announceStatus(s);}r.forEach(function(e){var t=e.channel,n=e.subscriptionMatch,r=e.publishMetaData;if(t===n&&(n=null),f){if(c._dedupingManager.isDuplicate(e))return;c._dedupingManager.addEntry(e);}if(l.default.endsWith(e.channel,"-pnpres")){var i={channel:null,subscription:null};i.actualChannel=null!=n?t:null,i.subscribedChannel=null!=n?n:t,t&&(i.channel=t.substring(0,t.lastIndexOf("-pnpres"))),n&&(i.subscription=n.substring(0,n.lastIndexOf("-pnpres"))),i.action=e.payload.action,i.state=e.payload.data,i.timetoken=r.publishTimetoken,i.occupancy=e.payload.occupancy,i.uuid=e.payload.uuid,i.timestamp=e.payload.timestamp,e.payload.join&&(i.join=e.payload.join),e.payload.leave&&(i.leave=e.payload.leave),e.payload.timeout&&(i.timeout=e.payload.timeout),c._listenerManager.announcePresence(i);}else if(1===e.messageType){var o={channel:null,subscription:null};o.channel=t,o.subscription=n,o.timetoken=r.publishTimetoken,o.publisher=e.issuingClientId,e.userMetadata&&(o.userMetadata=e.userMetadata),o.message=e.payload,c._listenerManager.announceSignal(o);}else if(2===e.messageType){var s={channel:null,subscription:null};s.channel=t,s.subscription=n,s.timetoken=r.publishTimetoken,s.publisher=e.issuingClientId,e.userMetadata&&(s.userMetadata=e.userMetadata),s.message={event:e.payload.event,type:e.payload.type,data:e.payload.data},"user"===e.payload.type?c._listenerManager.announceUser(s):"space"===e.payload.type?c._listenerManager.announceSpace(s):"membership"===e.payload.type&&c._listenerManager.announceMembership(s);}else if(3===e.messageType){var a={};a.channel=t,a.subscription=n,a.timetoken=r.publishTimetoken,a.publisher=e.issuingClientId,a.data={messageTimetoken:e.payload.data.messageTimetoken,actionTimetoken:e.payload.data.actionTimetoken,type:e.payload.data.type,uuid:e.issuingClientId,value:e.payload.data.value},a.event=e.payload.event,c._listenerManager.announceMessageAction(a);}else{var u={channel:null,subscription:null};u.actualChannel=null!=n?t:null,u.subscribedChannel=null!=n?n:t,u.channel=t,u.subscription=n,u.timetoken=r.publishTimetoken,u.publisher=e.issuingClientId,e.userMetadata&&(u.userMetadata=e.userMetadata),c._config.cipherKey?u.message=c._crypto.decrypt(e.payload):u.message=e.payload,c._listenerManager.announceMessage(u);}}),this._region=e.metadata.region,this._startSubscribeLoop();}}},{key:"_stopSubscribeLoop",value:function(){this._subscribeCall&&("function"==typeof this._subscribeCall.abort&&this._subscribeCall.abort(),this._subscribeCall=null);}}])&&i(o.prototype,s),d);function d(e){var t=e.subscribeEndpoint,n=e.leaveEndpoint,r=e.heartbeatEndpoint,i=e.setStateEndpoint,o=e.timeEndpoint,s=e.config,a=e.crypto,u=e.listenerManager;!function(e,t){if(!(e instanceof t))throw new TypeError("Cannot call a class as a function")}(this,d),h(this,"_crypto",void 0),h(this,"_config",void 0),h(this,"_listenerManager",void 0),h(this,"_reconnectionManager",void 0),h(this,"_leaveEndpoint",void 0),h(this,"_heartbeatEndpoint",void 0),h(this,"_setStateEndpoint",void 0),h(this,"_subscribeEndpoint",void 0),h(this,"_channels",void 0),h(this,"_presenceChannels",void 0),h(this,"_heartbeatChannels",void 0),h(this,"_heartbeatChannelGroups",void 0),h(this,"_channelGroups",void 0),h(this,"_presenceChannelGroups",void 0),h(this,"_currentTimetoken",void 0),h(this,"_lastTimetoken",void 0),h(this,"_storedTimetoken",void 0),h(this,"_region",void 0),h(this,"_subscribeCall",void 0),h(this,"_heartbeatTimer",void 0),h(this,"_subscriptionStatusAnnounced",void 0),h(this,"_autoNetworkDetection",void 0),h(this,"_isOnline",void 0),h(this,"_pendingChannelSubscriptions",void 0),h(this,"_pendingChannelGroupSubscriptions",void 0),h(this,"_dedupingManager",void 0),this._listenerManager=u,this._config=s,this._leaveEndpoint=n,this._heartbeatEndpoint=r,this._setStateEndpoint=i,this._subscribeEndpoint=t,this._crypto=a,this._channels={},this._presenceChannels={},this._heartbeatChannels={},this._heartbeatChannelGroups={},this._channelGroups={},this._presenceChannelGroups={},this._pendingChannelSubscriptions=[],this._pendingChannelGroupSubscriptions=[],this._currentTimetoken=0,this._lastTimetoken=0,this._storedTimetoken=null,this._subscriptionStatusAnnounced=!1,this._isOnline=!0,this._reconnectionManager=new c.default({timeEndpoint:o}),this._dedupingManager=new f.default({config:s});}t.default=p,e.exports=t.default;},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.default=void 0;var r;(r=n(8))&&r.__esModule,n(0);function i(e,t){for(var n=0;n<t.length;n++){var r=t[n];r.enumerable=r.enumerable||!1,r.configurable=!0,"value"in r&&(r.writable=!0),Object.defineProperty(e,r.key,r);}}function o(e,t,n){return t in e?Object.defineProperty(e,t,{value:n,enumerable:!0,configurable:!0,writable:!0}):e[t]=n,e}var s,a,c=(s=f,(a=[{key:"onReconnection",value:function(e){this._reconnectionCallback=e;}},{key:"startPolling",value:function(){this._timeTimer=setInterval(this._performTimeLoop.bind(this),3e3);}},{key:"stopPolling",value:function(){clearInterval(this._timeTimer);}},{key:"_performTimeLoop",value:function(){var t=this;this._timeEndpoint(function(e){e.error||(clearInterval(t._timeTimer),t._reconnectionCallback());});}}])&&i(s.prototype,a),f);function f(e){var t=e.timeEndpoint;!function(e,t){if(!(e instanceof t))throw new TypeError("Cannot call a class as a function")}(this,f),o(this,"_reconnectionCallback",void 0),o(this,"_timeEndpoint",void 0),o(this,"_timeTimer",void 0),this._timeEndpoint=t;}t.default=c,e.exports=t.default;},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.default=void 0;var r;(r=n(3))&&r.__esModule,n(0);function i(e,t){for(var n=0;n<t.length;n++){var r=t[n];r.enumerable=r.enumerable||!1,r.configurable=!0,"value"in r&&(r.writable=!0),Object.defineProperty(e,r.key,r);}}function o(e,t,n){return t in e?Object.defineProperty(e,t,{value:n,enumerable:!0,configurable:!0,writable:!0}):e[t]=n,e}var s,a,c=(s=f,(a=[{key:"getKey",value:function(e){var t=function(e){var t=0;if(0===e.length)return t;for(var n=0;n<e.length;n+=1)t=(t<<5)-t+e.charCodeAt(n),t&=t;return t}(JSON.stringify(e.payload)).toString(),n=e.publishMetaData.publishTimetoken;return "".concat(n,"-").concat(t)}},{key:"isDuplicate",value:function(e){return this.hashHistory.includes(this.getKey(e))}},{key:"addEntry",value:function(e){this.hashHistory.length>=this._config.maximumCacheSize&&this.hashHistory.shift(),this.hashHistory.push(this.getKey(e));}},{key:"clearHistory",value:function(){this.hashHistory=[];}}])&&i(s.prototype,a),f);function f(e){var t=e.config;!function(e,t){if(!(e instanceof t))throw new TypeError("Cannot call a class as a function")}(this,f),o(this,"_config",void 0),o(this,"hashHistory",void 0),this.hashHistory=[],this._config=t;}t.default=c,e.exports=t.default;},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.default=t.FCMNotificationPayload=t.MPNSNotificationPayload=t.APNSNotificationPayload=void 0;n(0);function r(e){return (r="function"==typeof Symbol&&"symbol"==typeof Symbol.iterator?function(e){return typeof e}:function(e){return e&&"function"==typeof Symbol&&e.constructor===Symbol&&e!==Symbol.prototype?"symbol":typeof e})(e)}function i(e,t){if(null==e)return {};var n,r,i=function(e,t){if(null==e)return {};var n,r,i={},o=Object.keys(e);for(r=0;r<o.length;r++)n=o[r],0<=t.indexOf(n)||(i[n]=e[n]);return i}(e,t);if(Object.getOwnPropertySymbols){var o=Object.getOwnPropertySymbols(e);for(r=0;r<o.length;r++)n=o[r],0<=t.indexOf(n)||Object.prototype.propertyIsEnumerable.call(e,n)&&(i[n]=e[n]);}return i}function o(t,e){var n=Object.keys(t);if(Object.getOwnPropertySymbols){var r=Object.getOwnPropertySymbols(t);e&&(r=r.filter(function(e){return Object.getOwnPropertyDescriptor(t,e).enumerable})),n.push.apply(n,r);}return n}function s(t){for(var e=1;e<arguments.length;e++){var n=null!=arguments[e]?arguments[e]:{};e%2?o(Object(n),!0).forEach(function(e){g(t,e,n[e]);}):Object.getOwnPropertyDescriptors?Object.defineProperties(t,Object.getOwnPropertyDescriptors(n)):o(Object(n)).forEach(function(e){Object.defineProperty(t,e,Object.getOwnPropertyDescriptor(n,e));});}return t}function a(e,t){return !t||"object"!==r(t)&&"function"!=typeof t?c(e):t}function u(e){return (u=Object.setPrototypeOf?Object.getPrototypeOf:function(e){return e.__proto__||Object.getPrototypeOf(e)})(e)}function c(e){if(void 0===e)throw new ReferenceError("this hasn't been initialised - super() hasn't been called");return e}function f(e,t){if("function"!=typeof t&&null!==t)throw new TypeError("Super expression must either be null or a function");e.prototype=Object.create(t&&t.prototype,{constructor:{value:e,writable:!0,configurable:!0}}),t&&l(e,t);}function l(e,t){return (l=Object.setPrototypeOf||function(e,t){return e.__proto__=t,e})(e,t)}function h(e,t){if(!(e instanceof t))throw new TypeError("Cannot call a class as a function")}function p(e,t){for(var n=0;n<t.length;n++){var r=t[n];r.enumerable=r.enumerable||!1,r.configurable=!0,"value"in r&&(r.writable=!0),Object.defineProperty(e,r.key,r);}}function d(e,t,n){return t&&p(e.prototype,t),n&&p(e,n),e}function g(e,t,n){return t in e?Object.defineProperty(e,t,{value:n,enumerable:!0,configurable:!0,writable:!0}):e[t]=n,e}var y=(d(v,[{key:"payload",get:function(){return this._payload}},{key:"title",set:function(e){this._title=e;}},{key:"subtitle",set:function(e){this._subtitle=e;}},{key:"body",set:function(e){this._body=e;}},{key:"badge",set:function(e){this._badge=e;}},{key:"sound",set:function(e){this._sound=e;}}]),d(v,[{key:"_setDefaultPayloadStructure",value:function(){}},{key:"toObject",value:function(){return {}}}]),v);function v(e,t,n){h(this,v),g(this,"_subtitle",void 0),g(this,"_payload",void 0),g(this,"_badge",void 0),g(this,"_sound",void 0),g(this,"_title",void 0),g(this,"_body",void 0),this._payload=e,this._setDefaultPayloadStructure(),this.title=t,this.body=n;}var b=(f(m,y),d(m,[{key:"_setDefaultPayloadStructure",value:function(){this._payload.aps={alert:{}};}},{key:"toObject",value:function(){var t=this,e=s({},this._payload),n=e.aps,r=n.alert;if(this._isSilent&&(n["content-available"]=1),"apns2"===this._apnsPushType){if(!this._configurations||!this._configurations.length)throw new ReferenceError("APNS2 configuration is missing");var i=[];this._configurations.forEach(function(e){i.push(t._objectFromAPNS2Configuration(e));}),i.length&&(e.pn_push=i);}return r&&Object.keys(r).length||delete n.alert,this._isSilent&&(delete n.alert,delete n.badge,delete n.sound,r={}),this._isSilent||Object.keys(r).length?e:null}},{key:"_objectFromAPNS2Configuration",value:function(e){var t=this;if(!e.targets||!e.targets.length)throw new ReferenceError("At least one APNS2 target should be provided");var n=[];e.targets.forEach(function(e){n.push(t._objectFromAPNSTarget(e));});var r=e.collapseId,i=e.expirationDate,o={auth_method:"token",targets:n,version:"v2"};return r&&r.length&&(o.collapse_id=r),i&&(o.expiration=i.toISOString()),o}},{key:"_objectFromAPNSTarget",value:function(e){if(!e.topic||!e.topic.length)throw new TypeError("Target 'topic' undefined.");var t=e.topic,n=e.environment,r=void 0===n?"development":n,i=e.excludedDevices,o=void 0===i?[]:i,s={topic:t,environment:r};return o.length&&(s.excluded_devices=o),s}},{key:"configurations",set:function(e){e&&e.length&&(this._configurations=e);}},{key:"notification",get:function(){return this._payload.aps}},{key:"title",get:function(){return this._title},set:function(e){e&&e.length&&(this._payload.aps.alert.title=e,this._title=e);}},{key:"subtitle",get:function(){return this._subtitle},set:function(e){e&&e.length&&(this._payload.aps.alert.subtitle=e,this._subtitle=e);}},{key:"body",get:function(){return this._body},set:function(e){e&&e.length&&(this._payload.aps.alert.body=e,this._body=e);}},{key:"badge",get:function(){return this._badge},set:function(e){null!=e&&(this._payload.aps.badge=e,this._badge=e);}},{key:"sound",get:function(){return this._sound},set:function(e){e&&e.length&&(this._payload.aps.sound=e,this._sound=e);}},{key:"silent",set:function(e){this._isSilent=e;}}]),m);function m(){var e,t;h(this,m);for(var n=arguments.length,r=new Array(n),i=0;i<n;i++)r[i]=arguments[i];return g(c(t=a(this,(e=u(m)).call.apply(e,[this].concat(r)))),"_configurations",void 0),g(c(t),"_apnsPushType",void 0),g(c(t),"_isSilent",void 0),t}t.APNSNotificationPayload=b;var _=(f(k,y),d(k,[{key:"toObject",value:function(){return Object.keys(this._payload).length?s({},this._payload):null}},{key:"backContent",get:function(){return this._backContent},set:function(e){e&&e.length&&(this._payload.back_content=e,this._backContent=e);}},{key:"backTitle",get:function(){return this._backTitle},set:function(e){e&&e.length&&(this._payload.back_title=e,this._backTitle=e);}},{key:"count",get:function(){return this._count},set:function(e){null!=e&&(this._payload.count=e,this._count=e);}},{key:"title",get:function(){return this._title},set:function(e){e&&e.length&&(this._payload.title=e,this._title=e);}},{key:"type",get:function(){return this._type},set:function(e){e&&e.length&&(this._payload.type=e,this._type=e);}},{key:"subtitle",get:function(){return this.backTitle},set:function(e){this.backTitle=e;}},{key:"body",get:function(){return this.backContent},set:function(e){this.backContent=e;}},{key:"badge",get:function(){return this.count},set:function(e){this.count=e;}}]),k);function k(){var e,t;h(this,k);for(var n=arguments.length,r=new Array(n),i=0;i<n;i++)r[i]=arguments[i];return g(c(t=a(this,(e=u(k)).call.apply(e,[this].concat(r)))),"_backContent",void 0),g(c(t),"_backTitle",void 0),g(c(t),"_count",void 0),g(c(t),"_type",void 0),t}t.MPNSNotificationPayload=_;var P=(f(w,y),d(w,[{key:"_setDefaultPayloadStructure",value:function(){this._payload.notification={},this._payload.data={};}},{key:"toObject",value:function(){var e=s({},this._payload.data),t=null,n={};if(2<Object.keys(this._payload).length){var r=this._payload;r.notification,r.data,e=s({},e,{},i(r,["notification","data"]));}return this._isSilent?e.notification=this._payload.notification:t=this._payload.notification,Object.keys(e).length&&(n.data=e),t&&Object.keys(t).length&&(n.notification=t),Object.keys(n).length?n:null}},{key:"notification",get:function(){return this._payload.notification}},{key:"data",get:function(){return this._payload.data}},{key:"title",get:function(){return this._title},set:function(e){e&&e.length&&(this._payload.notification.title=e,this._title=e);}},{key:"body",get:function(){return this._body},set:function(e){e&&e.length&&(this._payload.notification.body=e,this._body=e);}},{key:"sound",get:function(){return this._sound},set:function(e){e&&e.length&&(this._payload.notification.sound=e,this._sound=e);}},{key:"icon",get:function(){return this._icon},set:function(e){e&&e.length&&(this._payload.notification.icon=e,this._icon=e);}},{key:"tag",get:function(){return this._tag},set:function(e){e&&e.length&&(this._payload.notification.tag=e,this._tag=e);}},{key:"silent",set:function(e){this._isSilent=e;}}]),w);function w(){var e,t;h(this,w);for(var n=arguments.length,r=new Array(n),i=0;i<n;i++)r[i]=arguments[i];return g(c(t=a(this,(e=u(w)).call.apply(e,[this].concat(r)))),"_isSilent",void 0),g(c(t),"_icon",void 0),g(c(t),"_tag",void 0),t}function T(e,t){h(this,T),g(this,"_payload",void 0),g(this,"_debugging",void 0),g(this,"_subtitle",void 0),g(this,"_badge",void 0),g(this,"_sound",void 0),g(this,"_title",void 0),g(this,"_body",void 0),g(this,"apns",void 0),g(this,"mpns",void 0),g(this,"fcm",void 0),this._payload={apns:{},mpns:{},fcm:{}},this._title=e,this._body=t,this.apns=new b(this._payload.apns,e,t),this.mpns=new _(this._payload.mpns,e,t),this.fcm=new P(this._payload.fcm,e,t);}t.FCMNotificationPayload=P;var O=(d(T,[{key:"debugging",set:function(e){this._debugging=e;}},{key:"title",get:function(){return this._title}},{key:"body",get:function(){return this._body}},{key:"subtitle",get:function(){return this._subtitle},set:function(e){this._subtitle=e,this.apns.subtitle=e,this.mpns.subtitle=e,this.fcm.subtitle=e;}},{key:"badge",get:function(){return this._badge},set:function(e){this._badge=e,this.apns.badge=e,this.mpns.badge=e,this.fcm.badge=e;}},{key:"sound",get:function(){return this._sound},set:function(e){this._sound=e,this.apns.sound=e,this.mpns.sound=e,this.fcm.sound=e;}}]),d(T,[{key:"buildPayload",value:function(e){var t={};if(e.includes("apns")||e.includes("apns2")){this.apns._apnsPushType=e.includes("apns")?"apns":"apns2";var n=this.apns.toObject();n&&Object.keys(n).length&&(t.pn_apns=n);}if(e.includes("mpns")){var r=this.mpns.toObject();r&&Object.keys(r).length&&(t.pn_mpns=r);}if(e.includes("fcm")){var i=this.fcm.toObject();i&&Object.keys(i).length&&(t.pn_gcm=i);}return Object.keys(t).length&&this._debugging&&(t.pn_debug=!0),t}}]),T);t.default=O;},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.default=void 0;var r;(r=n(3))&&r.__esModule,n(0);function i(e){return (i="function"==typeof Symbol&&"symbol"==typeof Symbol.iterator?function(e){return typeof e}:function(e){return e&&"function"==typeof Symbol&&e.constructor===Symbol&&e!==Symbol.prototype?"symbol":typeof e})(e)}function o(e,t){for(var n=0;n<t.length;n++){var r=t[n];r.enumerable=r.enumerable||!1,r.configurable=!0,"value"in r&&(r.writable=!0),Object.defineProperty(e,r.key,r);}}function s(e,t,n){return t in e?Object.defineProperty(e,t,{value:n,enumerable:!0,configurable:!0,writable:!0}):e[t]=n,e}var a,u,f=(a=l,(u=[{key:"_initializeTokens",value:function(){this._userTokens={},this._spaceTokens={},this._userToken=void 0,this._spaceToken=void 0;}},{key:"_setToken",value:function(t){var n=this,e=this.parseToken(t);e&&e.resources&&(e.resources.users&&Object.keys(e.resources.users).forEach(function(e){n._userTokens[e]=t;}),e.resources.spaces&&Object.keys(e.resources.spaces).forEach(function(e){n._spaceTokens[e]=t;})),e&&e.patterns&&(e.patterns.users&&0<Object.keys(e.patterns.users).length&&(this._userToken=t),e.patterns.spaces&&0<Object.keys(e.patterns.spaces).length&&(this._spaceToken=t));}},{key:"setToken",value:function(e){e&&0<e.length&&this._setToken(e);}},{key:"setTokens",value:function(e){var t=this;e&&e.length&&"object"===i(e)&&e.forEach(function(e){t.setToken(e);});}},{key:"getTokens",value:function(e){var t=this,n={users:{},spaces:{}};return e?(e.user&&(n.user=this._userToken),e.space&&(n.space=this._spaceToken),e.users&&e.users.forEach(function(e){n.users[e]=t._userTokens[e];}),e.space&&e.spaces.forEach(function(e){n.spaces[e]=t._spaceTokens[e];})):(this._userToken&&(n.user=this._userToken),this._spaceToken&&(n.space=this._spaceToken),Object.keys(this._userTokens).forEach(function(e){n.users[e]=t._userTokens[e];}),Object.keys(this._spaceTokens).forEach(function(e){n.spaces[e]=t._spaceTokens[e];})),n}},{key:"getToken",value:function(e,t){var n;return t?"user"===e?n=this._userTokens[t]:"space"===e&&(n=this._spaceTokens[t]):"user"===e?n=this._userToken:"space"===e&&(n=this._spaceToken),n}},{key:"extractPermissions",value:function(e){var t={create:!1,read:!1,write:!1,manage:!1,delete:!1};return 16==(16&e)&&(t.create=!0),8==(8&e)&&(t.delete=!0),4==(4&e)&&(t.manage=!0),2==(2&e)&&(t.write=!0),1==(1&e)&&(t.read=!0),t}},{key:"parseToken",value:function(e){var t=this,n=this._cbor.decodeToken(e);if(void 0!==n){var r=Object.keys(n.res.usr),i=Object.keys(n.res.spc),o=Object.keys(n.pat.usr),s=Object.keys(n.pat.spc),a={version:n.v,timestamp:n.t,ttl:n.ttl},u=0<r.length,c=0<i.length;(u||c)&&(a.resources={},u&&(a.resources.users={},r.forEach(function(e){a.resources.users[e]=t.extractPermissions(n.res.usr[e]);})),c&&(a.resources.spaces={},i.forEach(function(e){a.resources.spaces[e]=t.extractPermissions(n.res.spc[e]);})));var f=0<o.length,l=0<s.length;return (f||l)&&(a.patterns={},f&&(a.patterns.users={},o.forEach(function(e){a.patterns.users[e]=t.extractPermissions(n.pat.usr[e]);})),l&&(a.patterns.spaces={},s.forEach(function(e){a.patterns.spaces[e]=t.extractPermissions(n.pat.spc[e]);}))),0<Object.keys(n.meta).length&&(a.meta=n.meta),a.signature=n.sig,a}}},{key:"clearTokens",value:function(){this._initializeTokens();}}])&&o(a.prototype,u),l);function l(e,t){!function(e,t){if(!(e instanceof t))throw new TypeError("Cannot call a class as a function")}(this,l),s(this,"_config",void 0),s(this,"_cbor",void 0),s(this,"_userTokens",void 0),s(this,"_spaceTokens",void 0),s(this,"_userToken",void 0),s(this,"_spaceToken",void 0),this._config=e,this._cbor=t,this._initializeTokens();}t.default=f,e.exports=t.default;},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.default=function(r,i){var e=r.networking,t=r.config,o=null,s=null,a={};o=i.getOperation()===b.default.PNTimeOperation||i.getOperation()===b.default.PNChannelGroupsOperation?arguments.length<=2?void 0:arguments[2]:(a=arguments.length<=2?void 0:arguments[2],arguments.length<=3?void 0:arguments[3]);"undefined"==typeof Promise||o||(s=v.default.createPromise());var n=i.validateParams(r,a);if(n)return o?o(_(n)):s?(s.reject(new m("Validation failed, check status for details",_(n))),s.promise):void 0;var u,c=i.prepareParams(r,a),f=function(e,t,n){return e.usePost&&e.usePost(t,n)?e.postURL(t,n):e.usePatch&&e.usePatch(t,n)?e.patchURL(t,n):e.getURL(t,n)}(i,r,a),l={url:f,operation:i.getOperation(),timeout:i.getRequestTimeout(r),headers:i.getRequestHeaders?i.getRequestHeaders():{}};c.uuid=t.UUID,c.pnsdk=function(e){if(e.sdkName)return e.sdkName;var t="PubNub-JS-".concat(e.sdkFamily);e.partnerId&&(t+="-".concat(e.partnerId));t+="/".concat(e.getVersion());var n=e._getPnsdkSuffix(" ");0<n.length&&(t+=n);return t}(t),t.useInstanceId&&(c.instanceid=t.instanceId);t.useRequestId&&(c.requestid=y.default.createUUID());if(i.isAuthSupported()){var h=function(e,t,n){var r;e.getAuthToken&&(r=e.getAuthToken(t,n));return r}(i,r,a)||t.getAuthKey();h&&(c.auth=h);}t.secretKey&&function(e,t,n,r,i){var o=e.config,s=e.crypto,a=k(e,i,r);n.timestamp=Math.floor((new Date).getTime()/1e3);var u="".concat(a,"\n").concat(o.publishKey,"\n").concat(t,"\n").concat(v.default.signPamFromParams(n),"\n");if("POST"===a){var c=i.postPayload(e,r);u+="string"==typeof c?c:JSON.stringify(c);}else if("PATCH"===a){var f=i.patchPayload(e,r);u+="string"==typeof f?f:JSON.stringify(f);}var l="v2.".concat(s.HMACSHA256(u));l=(l=(l=l.replace(/\+/g,"-")).replace(/\//g,"_")).replace(/=+$/,""),n.signature=l;}(r,f,c,a,i);function p(e,t){if(e.error)o?o(e):s&&s.reject(new m("PubNub call failed, check status for details",e));else{var n=i.handleResponse(r,t,a);o?o(e,n):s&&s.fulfill(n);}}if("POST"===k(r,i,a)){var d=i.postPayload(r,a);u=e.POST(c,d,l,p);}else if("PATCH"===k(r,i,a)){var g=i.patchPayload(r,a);u=e.PATCH(c,g,l,p);}else u="DELETE"===k(r,i,a)?e.DELETE(c,l,p):e.GET(c,l,p);if(i.getOperation()===b.default.PNSubscribeOperation)return u;if(s)return s.promise};var y=r(n(5)),v=(n(0),r(n(2))),b=(r(n(3)),r(n(1)));function r(e){return e&&e.__esModule?e:{default:e}}function i(e){return (i="function"==typeof Symbol&&"symbol"==typeof Symbol.iterator?function(e){return typeof e}:function(e){return e&&"function"==typeof Symbol&&e.constructor===Symbol&&e!==Symbol.prototype?"symbol":typeof e})(e)}function o(e,t){return !t||"object"!==i(t)&&"function"!=typeof t?function(e){if(void 0!==e)return e;throw new ReferenceError("this hasn't been initialised - super() hasn't been called")}(e):t}function s(e){var n="function"==typeof Map?new Map:void 0;return (s=function(e){if(null===e||!function(e){return -1!==Function.toString.call(e).indexOf("[native code]")}(e))return e;if("function"!=typeof e)throw new TypeError("Super expression must either be null or a function");if(void 0!==n){if(n.has(e))return n.get(e);n.set(e,t);}function t(){return a(e,arguments,c(this).constructor)}return t.prototype=Object.create(e.prototype,{constructor:{value:t,enumerable:!1,writable:!0,configurable:!0}}),u(t,e)})(e)}function a(e,t,n){return (a=function(){if("undefined"==typeof Reflect||!Reflect.construct)return !1;if(Reflect.construct.sham)return !1;if("function"==typeof Proxy)return !0;try{return Date.prototype.toString.call(Reflect.construct(Date,[],function(){})),!0}catch(e){return !1}}()?Reflect.construct:function(e,t,n){var r=[null];r.push.apply(r,t);var i=new(Function.bind.apply(e,r));return n&&u(i,n.prototype),i}).apply(null,arguments)}function u(e,t){return (u=Object.setPrototypeOf||function(e,t){return e.__proto__=t,e})(e,t)}function c(e){return (c=Object.setPrototypeOf?Object.getPrototypeOf:function(e){return e.__proto__||Object.getPrototypeOf(e)})(e)}var m=(function(e,t){if("function"!=typeof t&&null!==t)throw new TypeError("Super expression must either be null or a function");e.prototype=Object.create(t&&t.prototype,{constructor:{value:e,writable:!0,configurable:!0}}),t&&u(e,t);}(f,s(Error)),f);function f(e,t){var n;return function(e,t){if(!(e instanceof t))throw new TypeError("Cannot call a class as a function")}(this,f),(n=o(this,c(f).call(this,e))).name=n.constructor.name,n.status=t,n.message=e,n}function _(e){return function(e,t){return e.type=t,e.error=!0,e}({message:e},"validationError")}function k(e,t,n){return t.usePost&&t.usePost(e,n)?"POST":t.usePatch&&t.usePatch(e,n)?"PATCH":t.useDelete&&t.useDelete(e,n)?"DELETE":"GET"}e.exports=t.default;},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return r.default.PNAddChannelsToGroupOperation},t.validateParams=function(e,t){var n=t.channels,r=t.channelGroup,i=e.config;if(!r)return "Missing Channel Group";if(!n||0===n.length)return "Missing Channels";if(!i.subscribeKey)return "Missing Subscribe Key"},t.getURL=function(e,t){var n=t.channelGroup,r=e.config;return "/v1/channel-registration/sub-key/".concat(r.subscribeKey,"/channel-group/").concat(i.default.encodeString(n))},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(e,t){var n=t.channels;return {add:(void 0===n?[]:n).join(",")}},t.handleResponse=function(){return {}};n(0);var r=o(n(1)),i=o(n(2));function o(e){return e&&e.__esModule?e:{default:e}}},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return r.default.PNRemoveChannelsFromGroupOperation},t.validateParams=function(e,t){var n=t.channels,r=t.channelGroup,i=e.config;if(!r)return "Missing Channel Group";if(!n||0===n.length)return "Missing Channels";if(!i.subscribeKey)return "Missing Subscribe Key"},t.getURL=function(e,t){var n=t.channelGroup,r=e.config;return "/v1/channel-registration/sub-key/".concat(r.subscribeKey,"/channel-group/").concat(i.default.encodeString(n))},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(e,t){var n=t.channels;return {remove:(void 0===n?[]:n).join(",")}},t.handleResponse=function(){return {}};n(0);var r=o(n(1)),i=o(n(2));function o(e){return e&&e.__esModule?e:{default:e}}},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return r.default.PNRemoveGroupOperation},t.validateParams=function(e,t){var n=t.channelGroup,r=e.config;if(!n)return "Missing Channel Group";if(!r.subscribeKey)return "Missing Subscribe Key"},t.getURL=function(e,t){var n=t.channelGroup,r=e.config;return "/v1/channel-registration/sub-key/".concat(r.subscribeKey,"/channel-group/").concat(i.default.encodeString(n),"/remove")},t.isAuthSupported=function(){return !0},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.prepareParams=function(){return {}},t.handleResponse=function(){return {}};n(0);var r=o(n(1)),i=o(n(2));function o(e){return e&&e.__esModule?e:{default:e}}},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNChannelGroupsOperation},t.validateParams=function(e){if(!e.config.subscribeKey)return "Missing Subscribe Key"},t.getURL=function(e){var t=e.config;return "/v1/channel-registration/sub-key/".concat(t.subscribeKey,"/channel-group")},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(){return {}},t.handleResponse=function(e,t){return {groups:t.payload.groups}};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return r.default.PNChannelsForGroupOperation},t.validateParams=function(e,t){var n=t.channelGroup,r=e.config;if(!n)return "Missing Channel Group";if(!r.subscribeKey)return "Missing Subscribe Key"},t.getURL=function(e,t){var n=t.channelGroup,r=e.config;return "/v1/channel-registration/sub-key/".concat(r.subscribeKey,"/channel-group/").concat(i.default.encodeString(n))},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(){return {}},t.handleResponse=function(e,t){return {channels:t.payload.channels}};n(0);var r=o(n(1)),i=o(n(2));function o(e){return e&&e.__esModule?e:{default:e}}},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNPushNotificationEnabledChannelsOperation},t.validateParams=function(e,t){var n=t.device,r=t.pushGateway,i=t.channels,o=t.topic,s=e.config;if(!n)return "Missing Device ID (device)";if(!r)return "Missing GW Type (pushGateway: gcm, apns or apns2)";if("apns2"===r&&!o)return "Missing APNS2 topic";if(!i||0===i.length)return "Missing Channels";if(!s.subscribeKey)return "Missing Subscribe Key"},t.getURL=function(e,t){var n=t.device,r=t.pushGateway,i=e.config;return "apns2"!==r?"/v1/push/sub-key/".concat(i.subscribeKey,"/devices/").concat(n):"/v2/push/sub-key/".concat(i.subscribeKey,"/devices-apns2/").concat(n)},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(e,t){var n=t.pushGateway,r=t.channels,i=void 0===r?[]:r,o=t.environment,s=void 0===o?"development":o,a=t.topic,u={type:n,add:i.join(",")};"apns2"===n&&delete(u=Object.assign({},u,{environment:s,topic:a})).type;return u},t.handleResponse=function(){return {}};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNPushNotificationEnabledChannelsOperation},t.validateParams=function(e,t){var n=t.device,r=t.pushGateway,i=t.channels,o=t.topic,s=e.config;if(!n)return "Missing Device ID (device)";if(!r)return "Missing GW Type (pushGateway: gcm, apns or apns2)";if("apns2"===r&&!o)return "Missing APNS2 topic";if(!i||0===i.length)return "Missing Channels";if(!s.subscribeKey)return "Missing Subscribe Key"},t.getURL=function(e,t){var n=t.device,r=t.pushGateway,i=e.config;return "apns2"!==r?"/v1/push/sub-key/".concat(i.subscribeKey,"/devices/").concat(n):"/v2/push/sub-key/".concat(i.subscribeKey,"/devices-apns2/").concat(n)},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(e,t){var n=t.pushGateway,r=t.channels,i=void 0===r?[]:r,o=t.environment,s=void 0===o?"development":o,a=t.topic,u={type:n,remove:i.join(",")};"apns2"===n&&delete(u=Object.assign({},u,{environment:s,topic:a})).type;return u},t.handleResponse=function(){return {}};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNPushNotificationEnabledChannelsOperation},t.validateParams=function(e,t){var n=t.device,r=t.pushGateway,i=t.topic,o=e.config;if(!n)return "Missing Device ID (device)";if(!r)return "Missing GW Type (pushGateway: gcm, apns or apns2)";if("apns2"===r&&!i)return "Missing APNS2 topic";if(!o.subscribeKey)return "Missing Subscribe Key"},t.getURL=function(e,t){var n=t.device,r=t.pushGateway,i=e.config;return "apns2"!==r?"/v1/push/sub-key/".concat(i.subscribeKey,"/devices/").concat(n):"/v2/push/sub-key/".concat(i.subscribeKey,"/devices-apns2/").concat(n)},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(e,t){var n=t.pushGateway,r=t.environment,i=void 0===r?"development":r,o=t.topic,s={type:n};"apns2"===n&&delete(s=Object.assign({},s,{environment:i,topic:o})).type;return s},t.handleResponse=function(e,t){return {channels:t}};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNRemoveAllPushNotificationsOperation},t.validateParams=function(e,t){var n=t.device,r=t.pushGateway,i=t.topic,o=e.config;if(!n)return "Missing Device ID (device)";if(!r)return "Missing GW Type (pushGateway: gcm, apns or apns2)";if("apns2"===r&&!i)return "Missing APNS2 topic";if(!o.subscribeKey)return "Missing Subscribe Key"},t.getURL=function(e,t){var n=t.device,r=t.pushGateway,i=e.config;return "apns2"!==r?"/v1/push/sub-key/".concat(i.subscribeKey,"/devices/").concat(n,"/remove"):"/v2/push/sub-key/".concat(i.subscribeKey,"/devices-apns2/").concat(n,"/remove")},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(e,t){var n=t.pushGateway,r=t.environment,i=void 0===r?"development":r,o=t.topic,s={type:n};"apns2"===n&&delete(s=Object.assign({},s,{environment:i,topic:o})).type;return s},t.handleResponse=function(){return {}};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return r.default.PNUnsubscribeOperation},t.validateParams=function(e){if(!e.config.subscribeKey)return "Missing Subscribe Key"},t.getURL=function(e,t){var n=e.config,r=t.channels,i=void 0===r?[]:r,o=0<i.length?i.join(","):",";return "/v2/presence/sub-key/".concat(n.subscribeKey,"/channel/").concat(s.default.encodeString(o),"/leave")},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(e,t){var n=t.channelGroups,r=void 0===n?[]:n,i={};0<r.length&&(i["channel-group"]=r.join(","));return i},t.handleResponse=function(){return {}};n(0);var r=i(n(1)),s=i(n(2));function i(e){return e&&e.__esModule?e:{default:e}}},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNWhereNowOperation},t.validateParams=function(e){if(!e.config.subscribeKey)return "Missing Subscribe Key"},t.getURL=function(e,t){var n=e.config,r=t.uuid,i=void 0===r?n.UUID:r;return "/v2/presence/sub-key/".concat(n.subscribeKey,"/uuid/").concat(i)},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(){return {}},t.handleResponse=function(e,t){return t.payload?{channels:t.payload.channels}:{channels:[]}};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return r.default.PNHeartbeatOperation},t.validateParams=function(e){if(!e.config.subscribeKey)return "Missing Subscribe Key"},t.getURL=function(e,t){var n=e.config,r=t.channels,i=void 0===r?[]:r,o=0<i.length?i.join(","):",";return "/v2/presence/sub-key/".concat(n.subscribeKey,"/channel/").concat(s.default.encodeString(o),"/heartbeat")},t.isAuthSupported=function(){return !0},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.prepareParams=function(e,t){var n=t.channelGroups,r=void 0===n?[]:n,i=t.state,o=void 0===i?{}:i,s=e.config,a={};0<r.length&&(a["channel-group"]=r.join(","));return a.state=JSON.stringify(o),a.heartbeat=s.getPresenceTimeout(),a},t.handleResponse=function(){return {}};n(0);var r=i(n(1)),s=i(n(2));function i(e){return e&&e.__esModule?e:{default:e}}},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return r.default.PNGetStateOperation},t.validateParams=function(e){if(!e.config.subscribeKey)return "Missing Subscribe Key"},t.getURL=function(e,t){var n=e.config,r=t.uuid,i=void 0===r?n.UUID:r,o=t.channels,s=void 0===o?[]:o,a=0<s.length?s.join(","):",";return "/v2/presence/sub-key/".concat(n.subscribeKey,"/channel/").concat(u.default.encodeString(a),"/uuid/").concat(i)},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(e,t){var n=t.channelGroups,r=void 0===n?[]:n,i={};0<r.length&&(i["channel-group"]=r.join(","));return i},t.handleResponse=function(e,t,n){var r=n.channels,i=void 0===r?[]:r,o=n.channelGroups,s=void 0===o?[]:o,a={};1===i.length&&0===s.length?a[i[0]]=t.payload:a=t.payload;return {channels:a}};n(0);var r=i(n(1)),u=i(n(2));function i(e){return e&&e.__esModule?e:{default:e}}},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return r.default.PNSetStateOperation},t.validateParams=function(e,t){var n=e.config,r=t.state,i=t.channels,o=void 0===i?[]:i,s=t.channelGroups,a=void 0===s?[]:s;if(!r)return "Missing State";if(!n.subscribeKey)return "Missing Subscribe Key";if(0===o.length&&0===a.length)return "Please provide a list of channels and/or channel-groups"},t.getURL=function(e,t){var n=e.config,r=t.channels,i=void 0===r?[]:r,o=0<i.length?i.join(","):",";return "/v2/presence/sub-key/".concat(n.subscribeKey,"/channel/").concat(s.default.encodeString(o),"/uuid/").concat(n.UUID,"/data")},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(e,t){var n=t.state,r=t.channelGroups,i=void 0===r?[]:r,o={};o.state=JSON.stringify(n),0<i.length&&(o["channel-group"]=i.join(","));return o},t.handleResponse=function(e,t){return {state:t.payload}};n(0);var r=i(n(1)),s=i(n(2));function i(e){return e&&e.__esModule?e:{default:e}}},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return r.default.PNHereNowOperation},t.validateParams=function(e){if(!e.config.subscribeKey)return "Missing Subscribe Key"},t.getURL=function(e,t){var n=e.config,r=t.channels,i=void 0===r?[]:r,o=t.channelGroups,s=void 0===o?[]:o,a="/v2/presence/sub-key/".concat(n.subscribeKey);if(0<i.length||0<s.length){var u=0<i.length?i.join(","):",";a+="/channel/".concat(c.default.encodeString(u));}return a},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(e,t){var n=t.channelGroups,r=void 0===n?[]:n,i=t.includeUUIDs,o=void 0===i||i,s=t.includeState,a=void 0!==s&&s,u={};o||(u.disable_uuids=1);a&&(u.state=1);0<r.length&&(u["channel-group"]=r.join(","));return u},t.handleResponse=function(e,i,t){var n,r=t.channels,o=void 0===r?[]:r,s=t.channelGroups,a=void 0===s?[]:s,u=t.includeUUIDs,c=void 0===u||u,f=t.includeState,l=void 0!==f&&f;n=1<o.length||0<a.length||0===a.length&&0===o.length?function(){var r={};return r.totalChannels=i.payload.total_channels,r.totalOccupancy=i.payload.total_occupancy,r.channels={},Object.keys(i.payload.channels).forEach(function(e){var t=i.payload.channels[e],n=[];return r.channels[e]={occupants:n,name:e,occupancy:t.occupancy},c&&t.uuids.forEach(function(e){l?n.push({state:e.state,uuid:e.uuid}):n.push({state:null,uuid:e});}),r}),r}():function(){var e={},t=[];return e.totalChannels=1,e.totalOccupancy=i.occupancy,e.channels={},e.channels[o[0]]={occupants:t,name:o[0],occupancy:i.occupancy},c&&i.uuids&&i.uuids.forEach(function(e){l?t.push({state:e.state,uuid:e.uuid}):t.push({state:null,uuid:e});}),e}();return n};n(0);var r=i(n(1)),c=i(n(2));function i(e){return e&&e.__esModule?e:{default:e}}},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNAddMessageActionOperation},t.validateParams=function(e,t){var n=e.config,r=t.action,i=t.channel;if(!t.messageTimetoken)return "Missing message timetoken";if(!n.subscribeKey)return "Missing Subscribe Key";if(!i)return "Missing message channel";if(!r)return "Missing Action";if(!r.value)return "Missing Action.value";if(!r.type)return "Missing Action.type";if(15<r.type.length)return "Action.type value exceed maximum length of 15"},t.usePost=function(){return !0},t.postURL=function(e,t){var n=e.config,r=t.channel,i=t.messageTimetoken;return "/v1/message-actions/".concat(n.subscribeKey,"/channel/").concat(r,"/message/").concat(i)},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.getRequestHeaders=function(){return {"Content-Type":"application/json"}},t.isAuthSupported=function(){return !0},t.prepareParams=function(){return {}},t.postPayload=function(e,t){return t.action},t.handleResponse=function(e,t){return {data:t.data}};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNRemoveMessageActionOperation},t.validateParams=function(e,t){var n=e.config,r=t.channel,i=t.actionTimetoken;if(!t.messageTimetoken)return "Missing message timetoken";if(!i)return "Missing action timetoken";if(!n.subscribeKey)return "Missing Subscribe Key";if(!r)return "Missing message channel"},t.useDelete=function(){return !0},t.getURL=function(e,t){var n=e.config,r=t.channel,i=t.actionTimetoken,o=t.messageTimetoken;return "/v1/message-actions/".concat(n.subscribeKey,"/channel/").concat(r,"/message/").concat(o,"/action/").concat(i)},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(){return {}},t.handleResponse=function(e,t){return {data:t.data}};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNGetMessageActionsOperation},t.validateParams=function(e,t){var n=e.config,r=t.channel;if(!n.subscribeKey)return "Missing Subscribe Key";if(!r)return "Missing message channel"},t.getURL=function(e,t){var n=e.config,r=t.channel;return "/v1/message-actions/".concat(n.subscribeKey,"/channel/").concat(r)},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(e,t){var n=t.limit,r=t.start,i=t.end,o={};n&&(o.limit=n);r&&(o.start=r);i&&(o.end=i);return o},t.handleResponse=function(e,t){var n={data:t.data,start:null,end:null};n.data.length&&(n.end=n.data[n.data.length-1].actionTimetoken,n.start=n.data[0].actionTimetoken);return n};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNCreateUserOperation},t.validateParams=function(e,t){var n=e.config,r=t.id,i=t.name,o=t.custom;if(!r)return "Missing User.id";if(!i)return "Missing User.name";if(!n.subscribeKey)return "Missing Subscribe Key";if(o&&!Object.values(o).every(function(e){return "string"==typeof e||"number"==typeof e||"boolean"==typeof e}))return "Invalid custom type, only string, number and boolean values are allowed."},t.usePost=function(){return !0},t.getURL=function(e){var t=e.config;return "/v1/objects/".concat(t.subscribeKey,"/users")},t.postURL=function(e){var t=e.config;return "/v1/objects/".concat(t.subscribeKey,"/users")},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.getAuthToken=function(e,t){return e.tokenManager.getToken("user",t.id)||e.tokenManager.getToken("user")},t.prepareParams=function(e,t){var n=t.include,r={};n?void 0===n.customFields&&(n.customFields=!0):n={customFields:!0};if(n){var i=[];n.customFields&&i.push("custom");var o=i.join(",");0<o.length&&(r.include=o);}return r},t.postPayload=function(e,t){return function(e,t){return t}(0,t)},t.handleResponse=function(e,t){return t};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNUpdateUserOperation},t.validateParams=function(e,t){var n=e.config,r=t.id,i=t.name,o=t.custom;if(!r)return "Missing User.id";if(!i)return "Missing User.name";if(!n.subscribeKey)return "Missing Subscribe Key";if(o&&!Object.values(o).every(function(e){return "string"==typeof e||"number"==typeof e||"boolean"==typeof e}))return "Invalid custom type, only string, number and boolean values are allowed."},t.usePatch=function(){return !0},t.getURL=function(e,t){var n=e.config,r=t.id;return "/v1/objects/".concat(n.subscribeKey,"/users/").concat(r)},t.patchURL=function(e,t){var n=e.config,r=t.id;return "/v1/objects/".concat(n.subscribeKey,"/users/").concat(r)},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.getAuthToken=function(e,t){return e.tokenManager.getToken("user",t.id)||e.tokenManager.getToken("user")},t.prepareParams=function(e,t){var n=t.include,r={};n?void 0===n.customFields&&(n.customFields=!0):n={customFields:!0};if(n){var i=[];n.customFields&&i.push("custom");var o=i.join(",");0<o.length&&(r.include=o);}return r},t.patchPayload=function(e,t){return function(e,t){return t}(0,t)},t.handleResponse=function(e,t){return t};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNDeleteUserOperation},t.validateParams=function(e,t){var n=e.config;if(!t)return "Missing UserId";if(!n.subscribeKey)return "Missing Subscribe Key"},t.useDelete=function(){return !0},t.getURL=function(e,t){var n=e.config;return "/v1/objects/".concat(n.subscribeKey,"/users/").concat(t)},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.getAuthToken=function(e,t){return e.tokenManager.getToken("user",t)||e.tokenManager.getToken("user")},t.prepareParams=function(){return {}},t.handleResponse=function(e,t){return t};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNGetUserOperation},t.validateParams=function(e,t){if(!t.userId)return "Missing userId"},t.getURL=function(e,t){var n=e.config;return "/v1/objects/".concat(n.subscribeKey,"/users/").concat(t.userId)},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.getAuthToken=function(e,t){return e.tokenManager.getToken("user",t.userId)||e.tokenManager.getToken("user")},t.prepareParams=function(e,t){var n=t.include,r={};n?void 0===n.customFields&&(n.customFields=!0):n={customFields:!0};if(n){var i=[];n.customFields&&i.push("custom");var o=i.join(",");0<o.length&&(r.include=o);}return r},t.handleResponse=function(e,t){return t};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNGetUsersOperation},t.validateParams=function(){},t.getURL=function(e){var t=e.config;return "/v1/objects/".concat(t.subscribeKey,"/users")},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.getAuthToken=function(e){return e.tokenManager.getToken("user")},t.prepareParams=function(e,t){var n=t.include,r=t.limit,i=t.page,o={};r&&(o.limit=r);if(n){var s=[];n.totalCount&&(o.count=!0),n.customFields&&s.push("custom");var a=s.join(",");0<a.length&&(o.include=a);}i&&(i.next&&(o.start=i.next),i.prev&&(o.end=i.prev));return o},t.handleResponse=function(e,t){return t};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNCreateSpaceOperation},t.validateParams=function(e,t){var n=e.config,r=t.id,i=t.name,o=t.custom;if(!r)return "Missing Space.id";if(!i)return "Missing Space.name";if(!n.subscribeKey)return "Missing Subscribe Key";if(o&&!Object.values(o).every(function(e){return "string"==typeof e||"number"==typeof e||"boolean"==typeof e}))return "Invalid custom type, only string, number and boolean values are allowed."},t.usePost=function(){return !0},t.getURL=function(e){var t=e.config;return "/v1/objects/".concat(t.subscribeKey,"/spaces")},t.postURL=function(e){var t=e.config;return "/v1/objects/".concat(t.subscribeKey,"/spaces")},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.getAuthToken=function(e,t){return e.tokenManager.getToken("space",t.id)||e.tokenManager.getToken("space")},t.prepareParams=function(e,t){var n=t.include,r={};n?void 0===n.customFields&&(n.customFields=!0):n={customFields:!0};if(n){var i=[];n.customFields&&i.push("custom");var o=i.join(",");0<o.length&&(r.include=o);}return r},t.postPayload=function(e,t){return function(e,t){return t}(0,t)},t.handleResponse=function(e,t){return t};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNUpdateSpaceOperation},t.validateParams=function(e,t){var n=e.config,r=t.id,i=t.name,o=t.custom;if(!r)return "Missing Space.id";if(!i)return "Missing Space.name";if(!n.subscribeKey)return "Missing Subscribe Key";if(o&&!Object.values(o).every(function(e){return "string"==typeof e||"number"==typeof e||"boolean"==typeof e}))return "Invalid custom type, only string, number and boolean values are allowed."},t.usePatch=function(){return !0},t.getURL=function(e,t){var n=e.config,r=t.id;return "/v1/objects/".concat(n.subscribeKey,"/spaces/").concat(r)},t.patchURL=function(e,t){var n=e.config,r=t.id;return "/v1/objects/".concat(n.subscribeKey,"/spaces/").concat(r)},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.getAuthToken=function(e,t){return e.tokenManager.getToken("space",t.id)||e.tokenManager.getToken("space")},t.prepareParams=function(e,t){var n=t.include,r={};n?void 0===n.customFields&&(n.customFields=!0):n={customFields:!0};if(n){var i=[];n.customFields&&i.push("custom");var o=i.join(",");0<o.length&&(r.include=o);}return r},t.patchPayload=function(e,t){return function(e,t){return t}(0,t)},t.handleResponse=function(e,t){return t};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNDeleteSpaceOperation},t.validateParams=function(e,t){var n=e.config;if(!t)return "Missing SpaceId";if(!n.subscribeKey)return "Missing Subscribe Key"},t.useDelete=function(){return !0},t.getURL=function(e,t){var n=e.config;return "/v1/objects/".concat(n.subscribeKey,"/spaces/").concat(t)},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.getAuthToken=function(e,t){return e.tokenManager.getToken("space",t)||e.tokenManager.getToken("space")},t.prepareParams=function(){return {}},t.handleResponse=function(e,t){return t};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNGetSpacesOperation},t.validateParams=function(){},t.getURL=function(e){var t=e.config;return "/v1/objects/".concat(t.subscribeKey,"/spaces")},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.getAuthToken=function(e){return e.tokenManager.getToken("space")},t.prepareParams=function(e,t){var n=t.include,r=t.limit,i=t.page,o={};r&&(o.limit=r);if(n){var s=[];n.totalCount&&(o.count=!0),n.customFields&&s.push("custom");var a=s.join(",");0<a.length&&(o.include=a);}i&&(i.next&&(o.start=i.next),i.prev&&(o.end=i.prev));return o},t.handleResponse=function(e,t){return t};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNGetSpaceOperation},t.validateParams=function(e,t){if(!t.spaceId)return "Missing spaceId"},t.getURL=function(e,t){var n=e.config;return "/v1/objects/".concat(n.subscribeKey,"/spaces/").concat(t.spaceId)},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.getAuthToken=function(e,t){return e.tokenManager.getToken("space",t.spaceId)||e.tokenManager.getToken("space")},t.prepareParams=function(e,t){var n=t.include,r={};n?void 0===n.customFields&&(n.customFields=!0):n={customFields:!0};if(n){var i=[];n.customFields&&i.push("custom");var o=i.join(",");0<o.length&&(r.include=o);}return r},t.handleResponse=function(e,t){return t};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNGetMembersOperation},t.validateParams=function(e,t){if(!t.spaceId)return "Missing spaceId"},t.getURL=function(e,t){var n=e.config;return "/v1/objects/".concat(n.subscribeKey,"/spaces/").concat(t.spaceId,"/users")},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.getAuthToken=function(e,t){return e.tokenManager.getToken("space",t.spaceId)||e.tokenManager.getToken("space")},t.prepareParams=function(e,t){var n=t.include,r=t.limit,i=t.page,o={};r&&(o.limit=r);if(n){var s=[];n.totalCount&&(o.count=!0),n.customFields&&s.push("custom"),n.userFields&&s.push("user"),n.customUserFields&&s.push("user.custom");var a=s.join(",");0<a.length&&(o.include=a);}i&&(i.next&&(o.start=i.next),i.prev&&(o.end=i.prev));return o},t.handleResponse=function(e,t){return t};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNUpdateMembersOperation},t.validateParams=function(e,t){var n=t.spaceId,r=t.users;if(!n)return "Missing spaceId";if(!r)return "Missing users"},t.getURL=function(e,t){var n=e.config;return "/v1/objects/".concat(n.subscribeKey,"/spaces/").concat(t.spaceId,"/users")},t.patchURL=function(e,t){var n=e.config;return "/v1/objects/".concat(n.subscribeKey,"/spaces/").concat(t.spaceId,"/users")},t.usePatch=function(){return !0},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.getAuthToken=function(e,t){return e.tokenManager.getToken("space",t.spaceId)||e.tokenManager.getToken("space")},t.prepareParams=function(e,t){var n=t.include,r=t.limit,i=t.page,o={};r&&(o.limit=r);if(n){var s=[];n.totalCount&&(o.count=!0),n.customFields&&s.push("custom"),n.spaceFields&&s.push("space"),n.customSpaceFields&&s.push("space.custom");var a=s.join(",");0<a.length&&(o.include=a);}i&&(i.next&&(o.start=i.next),i.prev&&(o.end=i.prev));return o},t.patchPayload=function(e,t){return function(e,t){var n=t.users,r={};n&&0<n.length&&(r.add=[],n.forEach(function(e){var t={id:e.id};e.custom&&(t.custom=e.custom),r.add.push(t);}));return r}(0,t)},t.handleResponse=function(e,t){return t};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNUpdateMembersOperation},t.validateParams=function(e,t){var n=t.spaceId,r=t.users;if(!n)return "Missing spaceId";if(!r)return "Missing users"},t.getURL=function(e,t){var n=e.config;return "/v1/objects/".concat(n.subscribeKey,"/spaces/").concat(t.spaceId,"/users")},t.patchURL=function(e,t){var n=e.config;return "/v1/objects/".concat(n.subscribeKey,"/spaces/").concat(t.spaceId,"/users")},t.usePatch=function(){return !0},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.getAuthToken=function(e,t){return e.tokenManager.getToken("space",t.spaceId)||e.tokenManager.getToken("space")},t.prepareParams=function(e,t){var n=t.include,r=t.limit,i=t.page,o={};r&&(o.limit=r);if(n){var s=[];n.totalCount&&(o.count=!0),n.customFields&&s.push("custom"),n.spaceFields&&s.push("space"),n.customSpaceFields&&s.push("space.custom");var a=s.join(",");0<a.length&&(o.include=a);}i&&(i.next&&(o.start=i.next),i.prev&&(o.end=i.prev));return o},t.patchPayload=function(e,t){return function(e,t){var n=t.addMembers,r=t.updateMembers,i=t.removeMembers,o=t.users,s={};n&&0<n.length&&(s.add=[],n.forEach(function(e){var t={id:e.id};e.custom&&(t.custom=e.custom),s.add.push(t);}));r&&0<r.length&&(s.update=[],r.forEach(function(e){var t={id:e.id};e.custom&&(t.custom=e.custom),s.update.push(t);}));o&&0<o.length&&(s.update=s.update||[],o.forEach(function(e){var t={id:e.id};e.custom&&(t.custom=e.custom),s.update.push(t);}));i&&0<i.length&&(s.remove=[],i.forEach(function(e){s.remove.push({id:e});}));return s}(0,t)},t.handleResponse=function(e,t){return t};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNUpdateMembersOperation},t.validateParams=function(e,t){var n=t.spaceId,r=t.users;if(!n)return "Missing spaceId";if(!r)return "Missing users"},t.getURL=function(e,t){var n=e.config;return "/v1/objects/".concat(n.subscribeKey,"/spaces/").concat(t.spaceId,"/users")},t.patchURL=function(e,t){var n=e.config;return "/v1/objects/".concat(n.subscribeKey,"/spaces/").concat(t.spaceId,"/users")},t.usePatch=function(){return !0},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.getAuthToken=function(e,t){return e.tokenManager.getToken("space",t.spaceId)||e.tokenManager.getToken("space")},t.prepareParams=function(e,t){var n=t.include,r=t.limit,i=t.page,o={};r&&(o.limit=r);if(n){var s=[];n.totalCount&&(o.count=!0),n.customFields&&s.push("custom"),n.spaceFields&&s.push("space"),n.customSpaceFields&&s.push("space.custom");var a=s.join(",");0<a.length&&(o.include=a);}i&&(i.next&&(o.start=i.next),i.prev&&(o.end=i.prev));return o},t.patchPayload=function(e,t){return function(e,t){var n=t.users,r={};n&&0<n.length&&(r.remove=[],n.forEach(function(e){r.remove.push({id:e});}));return r}(0,t)},t.handleResponse=function(e,t){return t};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNGetMembershipsOperation},t.validateParams=function(e,t){if(!t.userId)return "Missing userId"},t.getURL=function(e,t){var n=e.config;return "/v1/objects/".concat(n.subscribeKey,"/users/").concat(t.userId,"/spaces")},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.getAuthToken=function(e,t){return e.tokenManager.getToken("user",t.userId)||e.tokenManager.getToken("user")},t.prepareParams=function(e,t){var n=t.include,r=t.limit,i=t.page,o={};r&&(o.limit=r);if(n){var s=[];n.totalCount&&(o.count=!0),n.customFields&&s.push("custom"),n.spaceFields&&s.push("space"),n.customSpaceFields&&s.push("space.custom");var a=s.join(",");0<a.length&&(o.include=a);}i&&(i.next&&(o.start=i.next),i.prev&&(o.end=i.prev));return o},t.handleResponse=function(e,t){return t};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNUpdateMembershipsOperation},t.validateParams=function(e,t){var n=t.userId,r=t.spaces;if(!n)return "Missing userId";if(!r)return "Missing spaces"},t.getURL=function(e,t){var n=e.config;return "/v1/objects/".concat(n.subscribeKey,"/users/").concat(t.userId,"/spaces")},t.patchURL=function(e,t){var n=e.config;return "/v1/objects/".concat(n.subscribeKey,"/users/").concat(t.userId,"/spaces")},t.usePatch=function(){return !0},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.getAuthToken=function(e,t){return e.tokenManager.getToken("user",t.userId)||e.tokenManager.getToken("user")},t.prepareParams=function(e,t){var n=t.include,r=t.limit,i=t.page,o={};r&&(o.limit=r);if(n){var s=[];n.totalCount&&(o.count=!0),n.customFields&&s.push("custom"),n.spaceFields&&s.push("space"),n.customSpaceFields&&s.push("space.custom");var a=s.join(",");0<a.length&&(o.include=a);}i&&(i.next&&(o.start=i.next),i.prev&&(o.end=i.prev));return o},t.patchPayload=function(e,t){return function(e,t){var n=t.addMemberships,r=t.updateMemberships,i=t.removeMemberships,o=t.spaces,s={};n&&0<n.length&&(s.add=[],n.forEach(function(e){var t={id:e.id};e.custom&&(t.custom=e.custom),s.add.push(t);}));r&&0<r.length&&(s.update=[],r.forEach(function(e){var t={id:e.id};e.custom&&(t.custom=e.custom),s.update.push(t);}));o&&0<o.length&&(s.update=s.update||[],o.forEach(function(e){var t={id:e.id};e.custom&&(t.custom=e.custom),s.update.push(t);}));i&&0<i.length&&(s.remove=[],i.forEach(function(e){s.remove.push({id:e});}));return s}(0,t)},t.handleResponse=function(e,t){return t};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNUpdateMembershipsOperation},t.validateParams=function(e,t){var n=t.userId,r=t.spaces;if(!n)return "Missing userId";if(!r)return "Missing spaces"},t.getURL=function(e,t){var n=e.config;return "/v1/objects/".concat(n.subscribeKey,"/users/").concat(t.userId,"/spaces")},t.patchURL=function(e,t){var n=e.config;return "/v1/objects/".concat(n.subscribeKey,"/users/").concat(t.userId,"/spaces")},t.usePatch=function(){return !0},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.getAuthToken=function(e,t){return e.tokenManager.getToken("user",t.userId)||e.tokenManager.getToken("user")},t.prepareParams=function(e,t){var n=t.include,r=t.limit,i=t.page,o={};r&&(o.limit=r);if(n){var s=[];n.totalCount&&(o.count=!0),n.customFields&&s.push("custom"),n.spaceFields&&s.push("space"),n.customSpaceFields&&s.push("space.custom");var a=s.join(",");0<a.length&&(o.include=a);}i&&(i.next&&(o.start=i.next),i.prev&&(o.end=i.prev));return o},t.patchPayload=function(e,t){return function(e,t){var n=t.spaces,r={};n&&0<n.length&&(r.add=[],n.forEach(function(e){var t={id:e.id};e.custom&&(t.custom=e.custom),r.add.push(t);}));return r}(0,t)},t.handleResponse=function(e,t){return t};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNUpdateMembershipsOperation},t.validateParams=function(e,t){var n=t.userId,r=t.spaces;if(!n)return "Missing userId";if(!r)return "Missing spaces"},t.getURL=function(e,t){var n=e.config;return "/v1/objects/".concat(n.subscribeKey,"/users/").concat(t.userId,"/spaces")},t.patchURL=function(e,t){var n=e.config;return "/v1/objects/".concat(n.subscribeKey,"/users/").concat(t.userId,"/spaces")},t.usePatch=function(){return !0},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.getAuthToken=function(e,t){return e.tokenManager.getToken("user",t.userId)||e.tokenManager.getToken("user")},t.prepareParams=function(e,t){var n=t.include,r=t.limit,i=t.page,o={};r&&(o.limit=r);if(n){var s=[];n.totalCount&&(o.count=!0),n.customFields&&s.push("custom"),n.spaceFields&&s.push("space"),n.customSpaceFields&&s.push("space.custom");var a=s.join(",");0<a.length&&(o.include=a);}i&&(i.next&&(o.start=i.next),i.prev&&(o.end=i.prev));return o},t.patchPayload=function(e,t){return function(e,t){var n=t.spaces,r={};n&&0<n.length&&(r.remove=[],n.forEach(function(e){r.remove.push({id:e});}));return r}(0,t)},t.handleResponse=function(e,t){return t};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNAccessManagerAudit},t.validateParams=function(e){if(!e.config.subscribeKey)return "Missing Subscribe Key"},t.getURL=function(e){var t=e.config;return "/v2/auth/audit/sub-key/".concat(t.subscribeKey)},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !1},t.prepareParams=function(e,t){var n=t.channel,r=t.channelGroup,i=t.authKeys,o=void 0===i?[]:i,s={};n&&(s.channel=n);r&&(s["channel-group"]=r);0<o.length&&(s.auth=o.join(","));return s},t.handleResponse=function(e,t){return t.payload};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNAccessManagerGrant},t.validateParams=function(e){var t=e.config;if(!t.subscribeKey)return "Missing Subscribe Key";if(!t.publishKey)return "Missing Publish Key";if(!t.secretKey)return "Missing Secret Key"},t.getURL=function(e){var t=e.config;return "/v2/auth/grant/sub-key/".concat(t.subscribeKey)},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !1},t.prepareParams=function(e,t){var n=t.channels,r=void 0===n?[]:n,i=t.channelGroups,o=void 0===i?[]:i,s=t.ttl,a=t.read,u=void 0!==a&&a,c=t.write,f=void 0!==c&&c,l=t.manage,h=void 0!==l&&l,p=t.authKeys,d=void 0===p?[]:p,g={};g.r=u?"1":"0",g.w=f?"1":"0",g.m=h?"1":"0",0<r.length&&(g.channel=r.join(","));0<o.length&&(g["channel-group"]=o.join(","));0<d.length&&(g.auth=d.join(","));!s&&0!==s||(g.ttl=s);return g},t.handleResponse=function(){return {}};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNAccessManagerGrantToken},t.extractPermissions=l,t.validateParams=function(e,t){var n=e.config;if(!n.subscribeKey)return "Missing Subscribe Key";if(!n.publishKey)return "Missing Publish Key";if(!n.secretKey)return "Missing Secret Key";if(!t.resources&&!t.patterns)return "Missing either Resources or Patterns.";if(t.resources&&(!t.resources.users||0===Object.keys(t.resources.users).length)&&(!t.resources.spaces||0===Object.keys(t.resources.spaces).length)||t.patterns&&(!t.patterns.users||0===Object.keys(t.patterns.users).length)&&(!t.patterns.spaces||0===Object.keys(t.patterns.spaces).length))return "Missing values for either Resources or Patterns."},t.postURL=function(e){var t=e.config;return "/v3/pam/".concat(t.subscribeKey,"/grant")},t.usePost=function(){return !0},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !1},t.prepareParams=function(){return {}},t.postPayload=function(e,t){return function(e,t){var n=t.ttl,r=t.resources,i=t.patterns,o=t.meta,s={ttl:0,permissions:{resources:{channels:{},groups:{},users:{},spaces:{}},patterns:{channels:{},groups:{},users:{},spaces:{}},meta:{}}};if(r){var a=r.users,u=r.spaces;a&&Object.keys(a).forEach(function(e){s.permissions.resources.users[e]=l(a[e]);}),u&&Object.keys(u).forEach(function(e){s.permissions.resources.spaces[e]=l(u[e]);});}if(i){var c=i.users,f=i.spaces;c&&Object.keys(c).forEach(function(e){s.permissions.patterns.users[e]=l(c[e]);}),f&&Object.keys(f).forEach(function(e){s.permissions.patterns.spaces[e]=l(f[e]);});}!n&&0!==n||(s.ttl=n);o&&(s.permissions.meta=o);return s}(0,t)},t.handleResponse=function(e,t){return t.data.token};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};function l(e){var t=0;return e.create&&(t|=16),e.delete&&(t|=8),e.manage&&(t|=4),e.write&&(t|=2),e.read&&(t|=1),t}},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return r.default.PNPublishOperation},t.validateParams=function(e,t){var n=e.config,r=t.message;if(!t.channel)return "Missing Channel";if(!r)return "Missing Message";if(!n.subscribeKey)return "Missing Subscribe Key"},t.usePost=function(e,t){var n=t.sendByPost;return void 0!==n&&n},t.getURL=function(e,t){var n=e.config,r=t.channel,i=t.message,o=a(e,i);return "/publish/".concat(n.publishKey,"/").concat(n.subscribeKey,"/0/").concat(s.default.encodeString(r),"/0/").concat(s.default.encodeString(o))},t.postURL=function(e,t){var n=e.config,r=t.channel;return "/publish/".concat(n.publishKey,"/").concat(n.subscribeKey,"/0/").concat(s.default.encodeString(r),"/0")},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.postPayload=function(e,t){var n=t.message;return a(e,n)},t.prepareParams=function(e,t){var n=t.meta,r=t.replicate,i=void 0===r||r,o=t.storeInHistory,s=t.ttl,a={};null!=o&&(a.store=o?"1":"0");s&&(a.ttl=s);!1===i&&(a.norep="true");n&&"object"===u(n)&&(a.meta=JSON.stringify(n));return a},t.handleResponse=function(e,t){return {timetoken:t[2]}};n(0);var r=i(n(1)),s=i(n(2));function i(e){return e&&e.__esModule?e:{default:e}}function u(e){return (u="function"==typeof Symbol&&"symbol"==typeof Symbol.iterator?function(e){return typeof e}:function(e){return e&&"function"==typeof Symbol&&e.constructor===Symbol&&e!==Symbol.prototype?"symbol":typeof e})(e)}function a(e,t){var n=e.crypto,r=e.config,i=JSON.stringify(t);return r.cipherKey&&(i=n.encrypt(i),i=JSON.stringify(i)),i}},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return r.default.PNSignalOperation},t.validateParams=function(e,t){var n=e.config,r=t.message;if(!t.channel)return "Missing Channel";if(!r)return "Missing Message";if(!n.subscribeKey)return "Missing Subscribe Key"},t.getURL=function(e,t){var n=e.config,r=t.channel,i=t.message,o=function(e,t){return JSON.stringify(t)}(0,i);return "/signal/".concat(n.publishKey,"/").concat(n.subscribeKey,"/0/").concat(s.default.encodeString(r),"/0/").concat(s.default.encodeString(o))},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(){return {}},t.handleResponse=function(e,t){return {timetoken:t[2]}};n(0);var r=i(n(1)),s=i(n(2));function i(e){return e&&e.__esModule?e:{default:e}}},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return r.default.PNHistoryOperation},t.validateParams=function(e,t){var n=t.channel,r=e.config;if(!n)return "Missing channel";if(!r.subscribeKey)return "Missing Subscribe Key"},t.getURL=function(e,t){var n=t.channel,r=e.config;return "/v2/history/sub-key/".concat(r.subscribeKey,"/channel/").concat(i.default.encodeString(n))},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(e,t){var n=t.start,r=t.end,i=t.reverse,o=t.count,s=void 0===o?100:o,a=t.stringifiedTimeToken,u=void 0!==a&&a,c=t.includeMeta,f=void 0!==c&&c,l={include_token:"true"};l.count=s,n&&(l.start=n);r&&(l.end=r);u&&(l.string_message_token="true");null!=i&&(l.reverse=i.toString());f&&(l.include_meta="true");return l},t.handleResponse=function(n,e){var r={messages:[],startTimeToken:e[1],endTimeToken:e[2]};Array.isArray(e[0])&&e[0].forEach(function(e){var t={timetoken:e.timetoken,entry:function(e,t){var n=e.config,r=e.crypto;if(!n.cipherKey)return t;try{return r.decrypt(t)}catch(e){return t}}(n,e.message)};e.meta&&(t.meta=e.meta),r.messages.push(t);});return r};n(0);var r=o(n(1)),i=o(n(2));function o(e){return e&&e.__esModule?e:{default:e}}},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return r.default.PNDeleteMessagesOperation},t.validateParams=function(e,t){var n=t.channel,r=e.config;if(!n)return "Missing channel";if(!r.subscribeKey)return "Missing Subscribe Key"},t.useDelete=function(){return !0},t.getURL=function(e,t){var n=t.channel,r=e.config;return "/v3/history/sub-key/".concat(r.subscribeKey,"/channel/").concat(i.default.encodeString(n))},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(e,t){var n=t.start,r=t.end,i={};n&&(i.start=n);r&&(i.end=r);return i},t.handleResponse=function(e,t){return t.payload};n(0);var r=o(n(1)),i=o(n(2));function o(e){return e&&e.__esModule?e:{default:e}}},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return r.default.PNMessageCounts},t.validateParams=function(e,t){var n=t.channels,r=t.timetoken,i=t.channelTimetokens,o=e.config;if(!n)return "Missing channel";if(r&&i)return "timetoken and channelTimetokens are incompatible together";if(r&&i&&1<i.length&&n.length!==i.length)return "Length of channelTimetokens and channels do not match";if(!o.subscribeKey)return "Missing Subscribe Key"},t.getURL=function(e,t){var n=t.channels,r=e.config,i=n.join(",");return "/v3/history/sub-key/".concat(r.subscribeKey,"/message-counts/").concat(o.default.encodeString(i))},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(e,t){var n=t.timetoken,r=t.channelTimetokens,i={};if(r&&1===r.length){var o=function(e,t){return function(e){if(Array.isArray(e))return e}(e)||function(e,t){if(!(Symbol.iterator in Object(e)||"[object Arguments]"===Object.prototype.toString.call(e)))return;var n=[],r=!0,i=!1,o=void 0;try{for(var s,a=e[Symbol.iterator]();!(r=(s=a.next()).done)&&(n.push(s.value),!t||n.length!==t);r=!0);}catch(e){i=!0,o=e;}finally{try{r||null==a.return||a.return();}finally{if(i)throw o}}return n}(e,t)||function(){throw new TypeError("Invalid attempt to destructure non-iterable instance")}()}(r,1)[0];i.timetoken=o;}else r?i.channelsTimetoken=r.join(","):n&&(i.timetoken=n);return i},t.handleResponse=function(e,t){return {channels:t.channels}};var r=i(n(1)),o=i(n(2));function i(e){return e&&e.__esModule?e:{default:e}}},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return r.default.PNFetchMessagesOperation},t.validateParams=function(e,t){var n=t.channels,r=t.includeMessageActions,i=void 0!==r&&r,o=e.config;if(!n||0===n.length)return "Missing channels";if(!o.subscribeKey)return "Missing Subscribe Key";if(i&&1<n.length)throw new TypeError("History can return actions data for a single channel only. Either pass a single channel or disable the includeMessageActions flag.")},t.getURL=function(e,t){var n=t.channels,r=void 0===n?[]:n,i=t.includeMessageActions,o=void 0!==i&&i,s=e.config,a=o?"history-with-actions":"history",u=0<r.length?r.join(","):",";return "/v3/".concat(a,"/sub-key/").concat(s.subscribeKey,"/channel/").concat(c.default.encodeString(u))},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(e,t){var n=t.start,r=t.end,i=t.count,o=t.stringifiedTimeToken,s=void 0!==o&&o,a=t.includeMeta,u=void 0!==a&&a,c={};i&&(c.max=i);n&&(c.start=n);r&&(c.end=r);s&&(c.string_message_token="true");u&&(c.include_meta="true");return c},t.handleResponse=function(r,e){var i={channels:{}};return Object.keys(e.channels||{}).forEach(function(n){i.channels[n]=[],(e.channels[n]||[]).forEach(function(e){var t={};t.channel=n,t.timetoken=e.timetoken,t.message=function(e,t){var n=e.config,r=e.crypto;if(!n.cipherKey)return t;try{return r.decrypt(t)}catch(e){return t}}(r,e.message),e.actions&&(t.actions=e.actions,t.data=e.actions),e.meta&&(t.meta=e.meta),i.channels[n].push(t);});}),i};n(0);var r=i(n(1)),c=i(n(2));function i(e){return e&&e.__esModule?e:{default:e}}},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return r.default.PNSubscribeOperation},t.validateParams=function(e){if(!e.config.subscribeKey)return "Missing Subscribe Key"},t.getURL=function(e,t){var n=e.config,r=t.channels,i=void 0===r?[]:r,o=0<i.length?i.join(","):",";return "/v2/subscribe/".concat(n.subscribeKey,"/").concat(s.default.encodeString(o),"/0")},t.getRequestTimeout=function(e){return e.config.getSubscribeTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(e,t){var n=e.config,r=t.state,i=t.channelGroups,o=void 0===i?[]:i,s=t.timetoken,a=t.filterExpression,u=t.region,c={heartbeat:n.getPresenceTimeout()};0<o.length&&(c["channel-group"]=o.join(","));a&&0<a.length&&(c["filter-expr"]=a);Object.keys(r).length&&(c.state=JSON.stringify(r));s&&(c.tt=s);u&&(c.tr=u);return c},t.handleResponse=function(e,t){var r=[];t.m.forEach(function(e){var t={publishTimetoken:e.p.t,region:e.p.r},n={shard:parseInt(e.a,10),subscriptionMatch:e.b,channel:e.c,messageType:e.e,payload:e.d,flags:e.f,issuingClientId:e.i,subscribeKey:e.k,originationTimetoken:e.o,userMetadata:e.u,publishMetaData:t};r.push(n);});var n={timetoken:t.t.t,region:t.t.r};return {messages:r,metadata:n}};n(0);var r=i(n(1)),s=i(n(2));function i(e){return e&&e.__esModule?e:{default:e}}},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.default=void 0;i(n(3));var r=i(n(4));n(0);function i(e){return e&&e.__esModule?e:{default:e}}function o(e,t){for(var n=0;n<t.length;n++){var r=t[n];r.enumerable=r.enumerable||!1,r.configurable=!0,"value"in r&&(r.writable=!0),Object.defineProperty(e,r.key,r);}}function s(e,t,n){return t in e?Object.defineProperty(e,t,{value:n,enumerable:!0,configurable:!0,writable:!0}):e[t]=n,e}var a,u,f=(a=l,(u=[{key:"init",value:function(e){this._config=e,this._maxSubDomain=20,this._currentSubDomain=Math.floor(Math.random()*this._maxSubDomain),this._providedFQDN=(this._config.secure?"https://":"http://")+this._config.origin,this._coreParams={},this.shiftStandardOrigin();}},{key:"nextOrigin",value:function(){return this._providedFQDN.match(/ps\.pndsn\.com$/i)?(this._currentSubDomain=this._currentSubDomain+1,this._currentSubDomain>=this._maxSubDomain&&(this._currentSubDomain=1),e=this._currentSubDomain.toString(),this._providedFQDN.replace("ps.pndsn.com","ps".concat(e,".pndsn.com"))):this._providedFQDN;var e;}},{key:"hasModule",value:function(e){return e in this._modules}},{key:"shiftStandardOrigin",value:function(){return this._standardOrigin=this.nextOrigin(),this._standardOrigin}},{key:"getStandardOrigin",value:function(){return this._standardOrigin}},{key:"POST",value:function(e,t,n,r){return this._modules.post(e,t,n,r)}},{key:"PATCH",value:function(e,t,n,r){return this._modules.patch(e,t,n,r)}},{key:"GET",value:function(e,t,n){return this._modules.get(e,t,n)}},{key:"DELETE",value:function(e,t,n){return this._modules.del(e,t,n)}},{key:"_detectErrorCategory",value:function(e){if("ENOTFOUND"===e.code)return r.default.PNNetworkIssuesCategory;if("ECONNREFUSED"===e.code)return r.default.PNNetworkIssuesCategory;if("ECONNRESET"===e.code)return r.default.PNNetworkIssuesCategory;if("EAI_AGAIN"===e.code)return r.default.PNNetworkIssuesCategory;if(0===e.status||e.hasOwnProperty("status")&&void 0===e.status)return r.default.PNNetworkIssuesCategory;if(e.timeout)return r.default.PNTimeoutCategory;if("ETIMEDOUT"===e.code)return r.default.PNNetworkIssuesCategory;if(e.response){if(e.response.badRequest)return r.default.PNBadRequestCategory;if(e.response.forbidden)return r.default.PNAccessDeniedCategory}return r.default.PNUnknownCategory}}])&&o(a.prototype,u),l);function l(t){var n=this;!function(e,t){if(!(e instanceof t))throw new TypeError("Cannot call a class as a function")}(this,l),s(this,"_modules",void 0),s(this,"_config",void 0),s(this,"_maxSubDomain",void 0),s(this,"_currentSubDomain",void 0),s(this,"_standardOrigin",void 0),s(this,"_subscribeOrigin",void 0),s(this,"_providedFQDN",void 0),s(this,"_requestTimeout",void 0),s(this,"_coreParams",void 0),this._modules={},Object.keys(t).forEach(function(e){n._modules[e]=t[e].bind(n);});}t.default=f,e.exports=t.default;},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.default=void 0;var r={get:function(e){try{return localStorage.getItem(e)}catch(e){return null}},set:function(e,t){try{return localStorage.setItem(e,t)}catch(e){return null}}};t.default=r,e.exports=t.default;},function(f,l,h){(function(i){Object.defineProperty(l,"__esModule",{value:!0}),l.default=void 0;var e,o=(e=h(74))&&e.__esModule?e:{default:e};function s(e){return (s="function"==typeof Symbol&&"symbol"==typeof Symbol.iterator?function(e){return typeof e}:function(e){return e&&"function"==typeof Symbol&&e.constructor===Symbol&&e!==Symbol.prototype?"symbol":typeof e})(e)}function t(e,t){for(var n=0;n<t.length;n++){var r=t[n];r.enumerable=r.enumerable||!1,r.configurable=!0,"value"in r&&(r.writable=!0),Object.defineProperty(e,r.key,r);}}var n,r,u=(n=c,(r=[{key:"decodeToken",value:function(e){var t="";e.length%4==3?t="=":e.length%4==2&&(t="==");var n=e.replace("-","+").replace("_","/")+t,r=o.default.decode(new i.from(n,"base64"));if("object"===s(r))return r}}])&&t(n.prototype,r),c);function c(){!function(e,t){if(!(e instanceof t))throw new TypeError("Cannot call a class as a function")}(this,c);}l.default=u,f.exports=l.default;}).call(this,h(9).Buffer);},function(e,t){var n;n=function(){return this}();try{n=n||new Function("return this")();}catch(e){"object"==typeof window&&(n=window);}e.exports=n;},function(e,t,n){t.byteLength=function(e){var t=l(e),n=t[0],r=t[1];return 3*(n+r)/4-r},t.toByteArray=function(e){var t,n,r=l(e),i=r[0],o=r[1],s=new f(function(e,t,n){return 3*(t+n)/4-n}(0,i,o)),a=0,u=0<o?i-4:i;for(n=0;n<u;n+=4)t=c[e.charCodeAt(n)]<<18|c[e.charCodeAt(n+1)]<<12|c[e.charCodeAt(n+2)]<<6|c[e.charCodeAt(n+3)],s[a++]=t>>16&255,s[a++]=t>>8&255,s[a++]=255&t;2===o&&(t=c[e.charCodeAt(n)]<<2|c[e.charCodeAt(n+1)]>>4,s[a++]=255&t);1===o&&(t=c[e.charCodeAt(n)]<<10|c[e.charCodeAt(n+1)]<<4|c[e.charCodeAt(n+2)]>>2,s[a++]=t>>8&255,s[a++]=255&t);return s},t.fromByteArray=function(e){for(var t,n=e.length,r=n%3,i=[],o=0,s=n-r;o<s;o+=16383)i.push(u(e,o,s<o+16383?s:o+16383));1==r?(t=e[n-1],i.push(a[t>>2]+a[t<<4&63]+"==")):2==r&&(t=(e[n-2]<<8)+e[n-1],i.push(a[t>>10]+a[t>>4&63]+a[t<<2&63]+"="));return i.join("")};for(var a=[],c=[],f="undefined"!=typeof Uint8Array?Uint8Array:Array,r="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/",i=0,o=r.length;i<o;++i)a[i]=r[i],c[r.charCodeAt(i)]=i;function l(e){var t=e.length;if(0<t%4)throw new Error("Invalid string. Length must be a multiple of 4");var n=e.indexOf("=");return -1===n&&(n=t),[n,n===t?0:4-n%4]}function u(e,t,n){for(var r,i,o=[],s=t;s<n;s+=3)r=(e[s]<<16&16711680)+(e[s+1]<<8&65280)+(255&e[s+2]),o.push(a[(i=r)>>18&63]+a[i>>12&63]+a[i>>6&63]+a[63&i]);return o.join("")}c["-".charCodeAt(0)]=62,c["_".charCodeAt(0)]=63;},function(e,t){t.read=function(e,t,n,r,i){var o,s,a=8*i-r-1,u=(1<<a)-1,c=u>>1,f=-7,l=n?i-1:0,h=n?-1:1,p=e[t+l];for(l+=h,o=p&(1<<-f)-1,p>>=-f,f+=a;0<f;o=256*o+e[t+l],l+=h,f-=8);for(s=o&(1<<-f)-1,o>>=-f,f+=r;0<f;s=256*s+e[t+l],l+=h,f-=8);if(0===o)o=1-c;else{if(o===u)return s?NaN:1/0*(p?-1:1);s+=Math.pow(2,r),o-=c;}return (p?-1:1)*s*Math.pow(2,o-r)},t.write=function(e,t,n,r,i,o){var s,a,u,c=8*o-i-1,f=(1<<c)-1,l=f>>1,h=23===i?Math.pow(2,-24)-Math.pow(2,-77):0,p=r?0:o-1,d=r?1:-1,g=t<0||0===t&&1/t<0?1:0;for(t=Math.abs(t),isNaN(t)||t===1/0?(a=isNaN(t)?1:0,s=f):(s=Math.floor(Math.log(t)/Math.LN2),t*(u=Math.pow(2,-s))<1&&(s--,u*=2),2<=(t+=1<=s+l?h/u:h*Math.pow(2,1-l))*u&&(s++,u/=2),f<=s+l?(a=0,s=f):1<=s+l?(a=(t*u-1)*Math.pow(2,i),s+=l):(a=t*Math.pow(2,l-1)*Math.pow(2,i),s=0));8<=i;e[n+p]=255&a,p+=d,a/=256,i-=8);for(s=s<<i|a,c+=i;0<c;e[n+p]=255&s,p+=d,s/=256,c-=8);e[n+p-d]|=128*g;};},function(e,t){var n={}.toString;e.exports=Array.isArray||function(e){return "[object Array]"==n.call(e)};},function(r,i,e){(function(b){var e,t,n;t=[],void 0===(n="function"==typeof(e=function(){var e=function(){function o(e){this.$hex=e;}o.prototype={length:function(){return this.$hex.length/2},toString:function(e){if(!e||"hex"===e||16===e)return this.$hex;if("utf-8"===e){for(var t="",n=0;n<this.$hex.length;n+=2)t+="%"+this.$hex.substring(n,n+2);return decodeURIComponent(t)}if("latin"!==e)throw new Error("Unrecognised format: "+e);for(var t=[],n=0;n<this.$hex.length;n+=2)t.push(parseInt(this.$hex.substring(n,n+2),16));return String.fromCharCode.apply(String,t)}},o.fromLatinString=function(e){for(var t="",n=0;n<e.length;n++){var r=e.charCodeAt(n).toString(16);1===r.length&&(r="0"+r),t+=r;}return new o(t)},o.fromUtf8String=function(e){for(var t=encodeURIComponent(e),n="",r=0;r<t.length;r++)if("%"===t.charAt(r))n+=t.substring(r+1,r+3),r+=2;else{var i=t.charCodeAt(r).toString(16);i.length<2&&(i="0"+i),n+=i;}return new o(n)};var s=[],f={},r=function(e){return function(){throw new Error(e+" not implemented")}};function e(){}function t(){}function l(e,t){var n=e.value;return n<24?n:24==n?t.readByte():25==n?t.readUint16():26==n?t.readUint32():27==n?t.readUint64():31==n?null:void r("Additional info: "+n)()}function a(e,t,n){var r=e<<5;t<24?n.writeByte(r|t):t<256?(n.writeByte(24|r),n.writeByte(t)):t<65536?(n.writeByte(25|r),n.writeUint16(t)):t<4294967296?(n.writeByte(26|r),n.writeUint32(t)):(n.writeByte(27|r),n.writeUint64(t));}e.prototype={peekByte:r("peekByte"),readByte:r("readByte"),readChunk:r("readChunk"),readFloat16:function(){var e=this.readUint16(),t=(32767&e)>>10,n=1023&e,r=32768&e;if(31==t)return 0==n?r?-1/0:1/0:NaN;var i=t?Math.pow(2,t-25)*(1024+n):Math.pow(2,-24)*n;return r?-i:i},readFloat32:function(){var e=this.readUint32(),t=(2147483647&e)>>23,n=8388607&e,r=2147483648&e;if(255==t)return 0==n?r?-1/0:1/0:NaN;var i=t?Math.pow(2,t-23-127)*(8388608+n):Math.pow(2,-149)*n;return r?-i:i},readFloat64:function(){var e=this.readUint32(),t=this.readUint32(),n=e>>20&2047,r=4294967296*(1048575&e)+t,i=2147483648&e;if(2047==n)return 0===r?i?-1/0:1/0:NaN;var o=n?Math.pow(2,n-52-1023)*(4503599627370496+r):Math.pow(2,-1074)*r;return i?-o:o},readUint16:function(){return 256*this.readByte()+this.readByte()},readUint32:function(){return 65536*this.readUint16()+this.readUint16()},readUint64:function(){return 4294967296*this.readUint32()+this.readUint32()}},t.prototype={writeByte:r("writeByte"),result:r("result"),writeFloat16:r("writeFloat16"),writeFloat32:r("writeFloat32"),writeFloat64:r("writeFloat64"),writeUint16:function(e){this.writeByte(e>>8&255),this.writeByte(255&e);},writeUint32:function(e){this.writeUint16(e>>16&65535),this.writeUint16(65535&e);},writeUint64:function(e){if(9007199254740992<=e||e<=-9007199254740992)throw new Error("Cannot encode Uint64 of: "+e+" magnitude to big (floating point errors)");this.writeUint32(Math.floor(e/4294967296)),this.writeUint32(e%4294967296);},writeString:r("writeString"),canWriteBinary:function(e){return !1},writeBinary:r("writeChunk")};var h=new Error;function p(e){var t=function(e){var t=e.readByte();return {type:t>>5,value:31&t}}(e);switch(t.type){case 0:return l(t,e);case 1:return -1-l(t,e);case 2:return e.readChunk(l(t,e));case 3:var n=e.readChunk(l(t,e));return n.toString("utf-8");case 4:case 5:var r=l(t,e),i=[];if(null!==r){5===t.type&&(r*=2);for(var o=0;o<r;o++)i[o]=p(e);}else for(var s;(s=p(e))!==h;)i.push(s);if(5!==t.type)return i;for(var a={},o=0;o<i.length;o+=2)a[i[o]]=i[o+1];return a;case 6:var u=l(t,e),c=f[u],i=p(e);return c?c(i):i;case 7:if(25===t.value)return e.readFloat16();if(26===t.value)return e.readFloat32();if(27===t.value)return e.readFloat64();switch(l(t,e)){case 20:return !1;case 21:return !0;case 22:return null;case 23:return;case null:return h;default:throw new Error("Unknown fixed value: "+t.value)}default:throw new Error("Unsupported header: "+JSON.stringify(t))}throw new Error("not implemented yet")}function u(e,t){for(var n=0;n<s.length;n++){var r=s[n].fn(e);if(void 0!==r)return a(6,s[n].tag,t),u(r,t)}if(e&&"function"==typeof e.toCBOR&&(e=e.toCBOR()),!1===e)a(7,20,t);else if(!0===e)a(7,21,t);else if(null===e)a(7,22,t);else if(void 0===e)a(7,23,t);else if("number"==typeof e)Math.floor(e)===e&&e<9007199254740992&&-9007199254740992<e?e<0?a(1,-1-e,t):a(0,e,t):(function(e,t,n){n.writeByte(e<<5|t);}(7,27,t),t.writeFloat64(e));else if("string"==typeof e)t.writeString(e,function(e){a(3,e,t);});else if(t.canWriteBinary(e))t.writeBinary(e,function(e){a(2,e,t);});else{if("object"!=typeof e)throw new Error("CBOR encoding not supported: "+e);if(g.config.useToJSON&&"function"==typeof e.toJSON&&(e=e.toJSON()),Array.isArray(e)){a(4,e.length,t);for(var n=0;n<e.length;n++)u(e[n],t);}else{var i=Object.keys(e);a(5,i.length,t);for(var n=0;n<i.length;n++)u(i[n],t),u(e[i[n]],t);}}}var c=[],d=[],g={config:{useToJSON:!0},addWriter:function(t,n){"string"==typeof t?d.push(function(e){if(t===e)return n(e)}):d.push(t);},addReader:function(n,r){"string"==typeof n?c.push(function(e,t){if(n===t)return r(e,t)}):c.push(n);},encode:function(e,t){for(var n=0;n<d.length;n++){var r=d[n],i=r(t);if(i)return u(e,i),i.result()}throw new Error("Unsupported output format: "+t)},decode:function(e,t){for(var n=0;n<c.length;n++){var r=c[n],i=r(e,t);if(i)return p(i)}throw new Error("Unsupported input format: "+t)},addSemanticEncode:function(e,t){if("number"!=typeof e||e%1!=0||e<0)throw new Error("Tag must be a positive integer");return s.push({tag:e,fn:t}),this},addSemanticDecode:function(e,t){if("number"!=typeof e||e%1!=0||e<0)throw new Error("Tag must be a positive integer");return f[e]=t,this},Reader:e,Writer:t};function i(e){this.buffer=e,this.pos=0;}function n(e){this.byteLength=0,this.defaultBufferLength=16384,this.latestBuffer=b.alloc(this.defaultBufferLength),this.latestBufferOffset=0,this.completeBuffers=[],this.stringFormat=e;}function y(e){this.hex=e,this.pos=0;}function v(e){this.$hex="",this.finalFormat=e||"hex";}return (i.prototype=Object.create(e.prototype)).peekByte=function(){return this.buffer[this.pos]},i.prototype.readByte=function(){return this.buffer[this.pos++]},i.prototype.readUint16=function(){var e=this.buffer.readUInt16BE(this.pos);return this.pos+=2,e},i.prototype.readUint32=function(){var e=this.buffer.readUInt32BE(this.pos);return this.pos+=4,e},i.prototype.readFloat32=function(){var e=this.buffer.readFloatBE(this.pos);return this.pos+=4,e},i.prototype.readFloat64=function(){var e=this.buffer.readDoubleBE(this.pos);return this.pos+=8,e},i.prototype.readChunk=function(e){var t=b.alloc(e);return this.buffer.copy(t,0,this.pos,this.pos+=e),t},(n.prototype=Object.create(t.prototype)).writeByte=function(e){this.latestBuffer[this.latestBufferOffset++]=e,this.latestBufferOffset>=this.latestBuffer.length&&(this.completeBuffers.push(this.latestBuffer),this.latestBuffer=b.alloc(this.defaultBufferLength),this.latestBufferOffset=0),this.byteLength++;},n.prototype.writeFloat32=function(e){var t=b.alloc(4);t.writeFloatBE(e,0),this.writeBuffer(t);},n.prototype.writeFloat64=function(e){var t=b.alloc(8);t.writeDoubleBE(e,0),this.writeBuffer(t);},n.prototype.writeString=function(e,t){var n=b.from(e,"utf-8");t(n.length),this.writeBuffer(n);},n.prototype.canWriteBinary=function(e){return e instanceof b},n.prototype.writeBinary=function(e,t){t(e.length),this.writeBuffer(e);},n.prototype.writeBuffer=function(e){if(!(e instanceof b))throw new TypeError("BufferWriter only accepts Buffers");this.latestBufferOffset?this.latestBuffer.length-this.latestBufferOffset>=e.length?(e.copy(this.latestBuffer,this.latestBufferOffset),this.latestBufferOffset+=e.length,this.latestBufferOffset>=this.latestBuffer.length&&(this.completeBuffers.push(this.latestBuffer),this.latestBuffer=b.alloc(this.defaultBufferLength),this.latestBufferOffset=0)):(this.completeBuffers.push(this.latestBuffer.slice(0,this.latestBufferOffset)),this.completeBuffers.push(e),this.latestBuffer=b.alloc(this.defaultBufferLength),this.latestBufferOffset=0):this.completeBuffers.push(e),this.byteLength+=e.length;},n.prototype.result=function(){for(var e=b.alloc(this.byteLength),t=0,n=0;n<this.completeBuffers.length;n++){var r=this.completeBuffers[n];r.copy(e,t,0,r.length),t+=r.length;}return this.latestBufferOffset&&this.latestBuffer.copy(e,t,0,this.latestBufferOffset),this.stringFormat?e.toString(this.stringFormat):e},"function"==typeof b&&(g.addReader(function(e,t){if(e instanceof b)return new i(e);if("hex"===t||"base64"===t){var n=b.from(e,t);return new i(n)}}),g.addWriter(function(e){return e&&"buffer"!==e?"hex"===e||"base64"===e?new n(e):void 0:new n})),(y.prototype=Object.create(e.prototype)).peekByte=function(){var e=this.hex.substring(this.pos,2);return parseInt(e,16)},y.prototype.readByte=function(){var e=this.hex.substring(this.pos,this.pos+2);return this.pos+=2,parseInt(e,16)},y.prototype.readChunk=function(e){var t=this.hex.substring(this.pos,this.pos+2*e);return this.pos+=2*e,"function"==typeof b?b.from(t,"hex"):new o(t)},(v.prototype=Object.create(t.prototype)).writeByte=function(e){if(e<0||255<e)throw new Error("Byte value out of range: "+e);var t=e.toString(16);1==t.length&&(t="0"+t),this.$hex+=t;},v.prototype.canWriteBinary=function(e){return e instanceof o||"function"==typeof b&&e instanceof b},v.prototype.writeBinary=function(e,t){if(e instanceof o)t(e.length()),this.$hex+=e.$hex;else{if(!("function"==typeof b&&e instanceof b))throw new TypeError("HexWriter only accepts BinaryHex or Buffers");t(e.length),this.$hex+=e.toString("hex");}},v.prototype.result=function(){return "buffer"===this.finalFormat&&"function"==typeof b?b.from(this.$hex,"hex"):new o(this.$hex).toString(this.finalFormat)},v.prototype.writeString=function(e,t){var n=o.fromUtf8String(e);t(n.length()),this.$hex+=n.$hex;},g.addReader(function(e,t){return e instanceof o||e.$hex?new y(e.$hex):"hex"===t?new y(e):void 0}),g.addWriter(function(e){if("hex"===e)return new v}),g}();return e.addSemanticEncode(0,function(e){if(e instanceof Date)return e.toISOString()}).addSemanticDecode(0,function(e){return new Date(e)}).addSemanticDecode(1,function(e){return new Date(e)}),e})?e.apply(i,t):e)||(r.exports=n);}).call(this,e(9).Buffer);},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.get=function(e,t,n){var r=o.default.get(this.getStandardOrigin()+t.url).set(t.headers).query(e);return s.call(this,r,t,n)},t.post=function(e,t,n,r){var i=o.default.post(this.getStandardOrigin()+n.url).query(e).set(n.headers).send(t);return s.call(this,i,n,r)},t.patch=function(e,t,n,r){var i=o.default.patch(this.getStandardOrigin()+n.url).query(e).set(n.headers).send(t);return s.call(this,i,n,r)},t.del=function(e,t,n){var r=o.default.delete(this.getStandardOrigin()+t.url).set(t.headers).query(e);return s.call(this,r,t,n)};var r,o=(r=n(76))&&r.__esModule?r:{default:r};n(0);function a(r){var i=(new Date).getTime(),e=(new Date).toISOString(),o=console&&console.log?console:window&&window.console&&window.console.log?window.console:console;o.log("<<<<<"),o.log("[".concat(e,"]"),"\n",r.url,"\n",r.qs),o.log("-----"),r.on("response",function(e){var t=(new Date).getTime()-i,n=(new Date).toISOString();o.log(">>>>>>"),o.log("[".concat(n," / ").concat(t,"]"),"\n",r.url,"\n",r.qs,"\n",e.text),o.log("-----");});}function s(e,i,o){var s=this;return this._config.logVerbosity&&(e=e.use(a)),this._config.proxy&&this._modules.proxy&&(e=this._modules.proxy.call(this,e)),this._config.keepAlive&&this._modules.keepAlive&&(e=this._modules.keepAlive(e)),e.timeout(i.timeout).end(function(t,n){var e,r={};if(r.error=null!==t,r.operation=i.operation,n&&n.status&&(r.statusCode=n.status),t){if(t.response&&t.response.text&&!s._config.logVerbosity)try{r.errorData=JSON.parse(t.response.text);}catch(e){r.errorData=t;}else r.errorData=t;return r.category=s._detectErrorCategory(t),o(r,null)}try{e=JSON.parse(n.text);}catch(e){return r.errorData=n,r.error=!0,o(r,null)}return e.error&&1===e.error&&e.status&&e.message&&e.service?(r.errorData=e,r.statusCode=e.status,r.error=!0,r.category=s._detectErrorCategory(r),o(r,null)):(e.error&&e.error.message&&(r.errorData=e.error),o(r,e))})}},function(e,n,t){var r;r="undefined"!=typeof window?window:"undefined"!=typeof self?self:(console.warn("Using browser-only version of superagent in non-browser environment"),this);var i=t(77),o=t(78),s=t(10),a=t(79),u=t(81);function c(){}var f=n=e.exports=function(e,t){return "function"==typeof t?new n.Request("GET",e).end(t):1==arguments.length?new n.Request("GET",e):new n.Request(e,t)};n.Request=v,f.getXHR=function(){if(!(!r.XMLHttpRequest||r.location&&"file:"==r.location.protocol&&r.ActiveXObject))return new XMLHttpRequest;try{return new ActiveXObject("Microsoft.XMLHTTP")}catch(e){}try{return new ActiveXObject("Msxml2.XMLHTTP.6.0")}catch(e){}try{return new ActiveXObject("Msxml2.XMLHTTP.3.0")}catch(e){}try{return new ActiveXObject("Msxml2.XMLHTTP")}catch(e){}throw Error("Browser-only version of superagent could not find XHR")};var l="".trim?function(e){return e.trim()}:function(e){return e.replace(/(^\s*|\s*$)/g,"")};function h(e){if(!s(e))return e;var t=[];for(var n in e)p(t,n,e[n]);return t.join("&")}function p(t,n,e){if(null!=e)if(Array.isArray(e))e.forEach(function(e){p(t,n,e);});else if(s(e))for(var r in e)p(t,n+"["+r+"]",e[r]);else t.push(encodeURIComponent(n)+"="+encodeURIComponent(e));else null===e&&t.push(encodeURIComponent(n));}function d(e){for(var t,n,r={},i=e.split("&"),o=0,s=i.length;o<s;++o)-1==(n=(t=i[o]).indexOf("="))?r[decodeURIComponent(t)]="":r[decodeURIComponent(t.slice(0,n))]=decodeURIComponent(t.slice(n+1));return r}function g(e){return /[\/+]json($|[^-\w])/.test(e)}function y(e){this.req=e,this.xhr=this.req.xhr,this.text="HEAD"!=this.req.method&&(""===this.xhr.responseType||"text"===this.xhr.responseType)||void 0===this.xhr.responseType?this.xhr.responseText:null,this.statusText=this.req.xhr.statusText;var t=this.xhr.status;1223===t&&(t=204),this._setStatusProperties(t),this.header=this.headers=function(e){for(var t,n,r,i,o=e.split(/\r?\n/),s={},a=0,u=o.length;a<u;++a)-1!==(t=(n=o[a]).indexOf(":"))&&(r=n.slice(0,t).toLowerCase(),i=l(n.slice(t+1)),s[r]=i);return s}(this.xhr.getAllResponseHeaders()),this.header["content-type"]=this.xhr.getResponseHeader("content-type"),this._setHeaderProperties(this.header),null===this.text&&e._responseType?this.body=this.xhr.response:this.body="HEAD"!=this.req.method?this._parseBody(this.text?this.text:this.xhr.response):null;}function v(e,t){var r=this;this._query=this._query||[],this.method=e,this.url=t,this.header={},this._header={},this.on("end",function(){var t,n=null,e=null;try{e=new y(r);}catch(e){return (n=new Error("Parser is unable to parse the response")).parse=!0,n.original=e,r.xhr?(n.rawResponse=void 0===r.xhr.responseType?r.xhr.responseText:r.xhr.response,n.status=r.xhr.status?r.xhr.status:null,n.statusCode=n.status):(n.rawResponse=null,n.status=null),r.callback(n)}r.emit("response",e);try{r._isResponseOK(e)||(t=new Error(e.statusText||"Unsuccessful HTTP response"));}catch(e){t=e;}t?(t.original=n,t.response=e,t.status=e.status,r.callback(t,e)):r.callback(null,e);});}function b(e,t,n){var r=f("DELETE",e);return "function"==typeof t&&(n=t,t=null),t&&r.send(t),n&&r.end(n),r}f.serializeObject=h,f.parseString=d,f.types={html:"text/html",json:"application/json",xml:"text/xml",urlencoded:"application/x-www-form-urlencoded",form:"application/x-www-form-urlencoded","form-data":"application/x-www-form-urlencoded"},f.serialize={"application/x-www-form-urlencoded":h,"application/json":JSON.stringify},f.parse={"application/x-www-form-urlencoded":d,"application/json":JSON.parse},a(y.prototype),y.prototype._parseBody=function(e){var t=f.parse[this.type];return this.req._parser?this.req._parser(this,e):(!t&&g(this.type)&&(t=f.parse["application/json"]),t&&e&&(e.length||e instanceof Object)?t(e):null)},y.prototype.toError=function(){var e=this.req,t=e.method,n=e.url,r="cannot "+t+" "+n+" ("+this.status+")",i=new Error(r);return i.status=this.status,i.method=t,i.url=n,i},f.Response=y,i(v.prototype),o(v.prototype),v.prototype.type=function(e){return this.set("Content-Type",f.types[e]||e),this},v.prototype.accept=function(e){return this.set("Accept",f.types[e]||e),this},v.prototype.auth=function(e,t,n){1===arguments.length&&(t=""),"object"==typeof t&&null!==t&&(n=t,t=""),n=n||{type:"function"==typeof btoa?"basic":"auto"};return this._auth(e,t,n,function(e){if("function"==typeof btoa)return btoa(e);throw new Error("Cannot use basic auth, btoa is not a function")})},v.prototype.query=function(e){return "string"!=typeof e&&(e=h(e)),e&&this._query.push(e),this},v.prototype.attach=function(e,t,n){if(t){if(this._data)throw Error("superagent can't mix .send() and .attach()");this._getFormData().append(e,t,n||t.name);}return this},v.prototype._getFormData=function(){return this._formData||(this._formData=new r.FormData),this._formData},v.prototype.callback=function(e,t){if(this._shouldRetry(e,t))return this._retry();var n=this._callback;this.clearTimeout(),e&&(this._maxRetries&&(e.retries=this._retries-1),this.emit("error",e)),n(e,t);},v.prototype.crossDomainError=function(){var e=new Error("Request has been terminated\nPossible causes: the network is offline, Origin is not allowed by Access-Control-Allow-Origin, the page is being unloaded, etc.");e.crossDomain=!0,e.status=this.status,e.method=this.method,e.url=this.url,this.callback(e);},v.prototype.buffer=v.prototype.ca=v.prototype.agent=function(){return console.warn("This is not supported in browser version of superagent"),this},v.prototype.pipe=v.prototype.write=function(){throw Error("Streaming is not supported in browser version of superagent")},v.prototype._isHost=function(e){return e&&"object"==typeof e&&!Array.isArray(e)&&"[object Object]"!==Object.prototype.toString.call(e)},v.prototype.end=function(e){return this._endCalled&&console.warn("Warning: .end() was called twice. This is not supported in superagent"),this._endCalled=!0,this._callback=e||c,this._finalizeQueryString(),this._end()},v.prototype._end=function(){var n=this,r=this.xhr=f.getXHR(),e=this._formData||this._data;this._setTimeouts(),r.onreadystatechange=function(){var e=r.readyState;if(2<=e&&n._responseTimeoutTimer&&clearTimeout(n._responseTimeoutTimer),4==e){var t;try{t=r.status;}catch(e){t=0;}if(!t){if(n.timedout||n._aborted)return;return n.crossDomainError()}n.emit("end");}};function t(e,t){0<t.total&&(t.percent=t.loaded/t.total*100),t.direction=e,n.emit("progress",t);}if(this.hasListeners("progress"))try{r.onprogress=t.bind(null,"download"),r.upload&&(r.upload.onprogress=t.bind(null,"upload"));}catch(e){}try{this.username&&this.password?r.open(this.method,this.url,!0,this.username,this.password):r.open(this.method,this.url,!0);}catch(e){return this.callback(e)}if(this._withCredentials&&(r.withCredentials=!0),!this._formData&&"GET"!=this.method&&"HEAD"!=this.method&&"string"!=typeof e&&!this._isHost(e)){var i=this._header["content-type"],o=this._serializer||f.serialize[i?i.split(";")[0]:""];!o&&g(i)&&(o=f.serialize["application/json"]),o&&(e=o(e));}for(var s in this.header)null!=this.header[s]&&this.header.hasOwnProperty(s)&&r.setRequestHeader(s,this.header[s]);return this._responseType&&(r.responseType=this._responseType),this.emit("request",this),r.send(void 0!==e?e:null),this},f.agent=function(){return new u},["GET","POST","OPTIONS","PATCH","PUT","DELETE"].forEach(function(r){u.prototype[r.toLowerCase()]=function(e,t){var n=new f.Request(r,e);return this._setDefaults(n),t&&n.end(t),n};}),u.prototype.del=u.prototype.delete,f.get=function(e,t,n){var r=f("GET",e);return "function"==typeof t&&(n=t,t=null),t&&r.query(t),n&&r.end(n),r},f.head=function(e,t,n){var r=f("HEAD",e);return "function"==typeof t&&(n=t,t=null),t&&r.query(t),n&&r.end(n),r},f.options=function(e,t,n){var r=f("OPTIONS",e);return "function"==typeof t&&(n=t,t=null),t&&r.send(t),n&&r.end(n),r},f.del=b,f.delete=b,f.patch=function(e,t,n){var r=f("PATCH",e);return "function"==typeof t&&(n=t,t=null),t&&r.send(t),n&&r.end(n),r},f.post=function(e,t,n){var r=f("POST",e);return "function"==typeof t&&(n=t,t=null),t&&r.send(t),n&&r.end(n),r},f.put=function(e,t,n){var r=f("PUT",e);return "function"==typeof t&&(n=t,t=null),t&&r.send(t),n&&r.end(n),r};},function(e,t,n){function r(e){if(e)return function(e){for(var t in r.prototype)e[t]=r.prototype[t];return e}(e)}(e.exports=r).prototype.on=r.prototype.addEventListener=function(e,t){return this._callbacks=this._callbacks||{},(this._callbacks["$"+e]=this._callbacks["$"+e]||[]).push(t),this},r.prototype.once=function(e,t){function n(){this.off(e,n),t.apply(this,arguments);}return n.fn=t,this.on(e,n),this},r.prototype.off=r.prototype.removeListener=r.prototype.removeAllListeners=r.prototype.removeEventListener=function(e,t){if(this._callbacks=this._callbacks||{},0==arguments.length)return this._callbacks={},this;var n,r=this._callbacks["$"+e];if(!r)return this;if(1==arguments.length)return delete this._callbacks["$"+e],this;for(var i=0;i<r.length;i++)if((n=r[i])===t||n.fn===t){r.splice(i,1);break}return 0===r.length&&delete this._callbacks["$"+e],this},r.prototype.emit=function(e){this._callbacks=this._callbacks||{};for(var t=new Array(arguments.length-1),n=this._callbacks["$"+e],r=1;r<arguments.length;r++)t[r-1]=arguments[r];if(n){r=0;for(var i=(n=n.slice(0)).length;r<i;++r)n[r].apply(this,t);}return this},r.prototype.listeners=function(e){return this._callbacks=this._callbacks||{},this._callbacks["$"+e]||[]},r.prototype.hasListeners=function(e){return !!this.listeners(e).length};},function(e,t,n){var i=n(10);function r(e){if(e)return function(e){for(var t in r.prototype)e[t]=r.prototype[t];return e}(e)}(e.exports=r).prototype.clearTimeout=function(){return clearTimeout(this._timer),clearTimeout(this._responseTimeoutTimer),delete this._timer,delete this._responseTimeoutTimer,this},r.prototype.parse=function(e){return this._parser=e,this},r.prototype.responseType=function(e){return this._responseType=e,this},r.prototype.serialize=function(e){return this._serializer=e,this},r.prototype.timeout=function(e){if(!e||"object"!=typeof e)return this._timeout=e,this._responseTimeout=0,this;for(var t in e)switch(t){case"deadline":this._timeout=e.deadline;break;case"response":this._responseTimeout=e.response;break;default:console.warn("Unknown timeout option",t);}return this},r.prototype.retry=function(e,t){return 0!==arguments.length&&!0!==e||(e=1),e<=0&&(e=0),this._maxRetries=e,this._retries=0,this._retryCallback=t,this};var o=["ECONNRESET","ETIMEDOUT","EADDRINFO","ESOCKETTIMEDOUT"];r.prototype._shouldRetry=function(e,t){if(!this._maxRetries||this._retries++>=this._maxRetries)return !1;if(this._retryCallback)try{var n=this._retryCallback(e,t);if(!0===n)return !0;if(!1===n)return !1}catch(e){console.error(e);}if(t&&t.status&&500<=t.status&&501!=t.status)return !0;if(e){if(e.code&&~o.indexOf(e.code))return !0;if(e.timeout&&"ECONNABORTED"==e.code)return !0;if(e.crossDomain)return !0}return !1},r.prototype._retry=function(){return this.clearTimeout(),this.req&&(this.req=null,this.req=this.request()),this._aborted=!1,this.timedout=!1,this._end()},r.prototype.then=function(e,t){if(!this._fullfilledPromise){var i=this;this._endCalled&&console.warn("Warning: superagent request was sent twice, because both .end() and .then() were called. Never call .end() if you use promises"),this._fullfilledPromise=new Promise(function(n,r){i.end(function(e,t){e?r(e):n(t);});});}return this._fullfilledPromise.then(e,t)},r.prototype.catch=function(e){return this.then(void 0,e)},r.prototype.use=function(e){return e(this),this},r.prototype.ok=function(e){if("function"!=typeof e)throw Error("Callback required");return this._okCallback=e,this},r.prototype._isResponseOK=function(e){return !!e&&(this._okCallback?this._okCallback(e):200<=e.status&&e.status<300)},r.prototype.getHeader=r.prototype.get=function(e){return this._header[e.toLowerCase()]},r.prototype.set=function(e,t){if(i(e)){for(var n in e)this.set(n,e[n]);return this}return this._header[e.toLowerCase()]=t,this.header[e]=t,this},r.prototype.unset=function(e){return delete this._header[e.toLowerCase()],delete this.header[e],this},r.prototype.field=function(e,t){if(null==e)throw new Error(".field(name, val) name can not be empty");if(this._data&&console.error(".field() can't be used if .send() is used. Please use only .send() or only .field() & .attach()"),i(e)){for(var n in e)this.field(n,e[n]);return this}if(Array.isArray(t)){for(var r in t)this.field(e,t[r]);return this}if(null==t)throw new Error(".field(name, val) val can not be empty");return "boolean"==typeof t&&(t=""+t),this._getFormData().append(e,t),this},r.prototype.abort=function(){return this._aborted||(this._aborted=!0,this.xhr&&this.xhr.abort(),this.req&&this.req.abort(),this.clearTimeout(),this.emit("abort")),this},r.prototype._auth=function(e,t,n,r){switch(n.type){case"basic":this.set("Authorization","Basic "+r(e+":"+t));break;case"auto":this.username=e,this.password=t;break;case"bearer":this.set("Authorization","Bearer "+e);}return this},r.prototype.withCredentials=function(e){return null==e&&(e=!0),this._withCredentials=e,this},r.prototype.redirects=function(e){return this._maxRedirects=e,this},r.prototype.maxResponseSize=function(e){if("number"!=typeof e)throw TypeError("Invalid argument");return this._maxResponseSize=e,this},r.prototype.toJSON=function(){return {method:this.method,url:this.url,data:this._data,headers:this._header}},r.prototype.send=function(e){var t=i(e),n=this._header["content-type"];if(this._formData&&console.error(".send() can't be used if .attach() or .field() is used. Please use only .send() or only .field() & .attach()"),t&&!this._data)Array.isArray(e)?this._data=[]:this._isHost(e)||(this._data={});else if(e&&this._data&&this._isHost(this._data))throw Error("Can't merge these send calls");if(t&&i(this._data))for(var r in e)this._data[r]=e[r];else"string"==typeof e?(n||this.type("form"),n=this._header["content-type"],this._data="application/x-www-form-urlencoded"==n?this._data?this._data+"&"+e:e:(this._data||"")+e):this._data=e;return !t||this._isHost(e)||n||this.type("json"),this},r.prototype.sortQuery=function(e){return this._sort=void 0===e||e,this},r.prototype._finalizeQueryString=function(){var e=this._query.join("&");if(e&&(this.url+=(0<=this.url.indexOf("?")?"&":"?")+e),this._query.length=0,this._sort){var t=this.url.indexOf("?");if(0<=t){var n=this.url.substring(t+1).split("&");"function"==typeof this._sort?n.sort(this._sort):n.sort(),this.url=this.url.substring(0,t)+"?"+n.join("&");}}},r.prototype._appendQueryString=function(){console.trace("Unsupported");},r.prototype._timeoutError=function(e,t,n){if(!this._aborted){var r=new Error(e+t+"ms exceeded");r.timeout=t,r.code="ECONNABORTED",r.errno=n,this.timedout=!0,this.abort(),this.callback(r);}},r.prototype._setTimeouts=function(){var e=this;this._timeout&&!this._timer&&(this._timer=setTimeout(function(){e._timeoutError("Timeout of ",e._timeout,"ETIME");},this._timeout)),this._responseTimeout&&!this._responseTimeoutTimer&&(this._responseTimeoutTimer=setTimeout(function(){e._timeoutError("Response timeout of ",e._responseTimeout,"ETIMEDOUT");},this._responseTimeout));};},function(e,t,n){var i=n(80);function r(e){if(e)return function(e){for(var t in r.prototype)e[t]=r.prototype[t];return e}(e)}(e.exports=r).prototype.get=function(e){return this.header[e.toLowerCase()]},r.prototype._setHeaderProperties=function(e){var t=e["content-type"]||"";this.type=i.type(t);var n=i.params(t);for(var r in n)this[r]=n[r];this.links={};try{e.link&&(this.links=i.parseLinks(e.link));}catch(e){}},r.prototype._setStatusProperties=function(e){var t=e/100|0;this.status=this.statusCode=e,this.statusType=t,this.info=1==t,this.ok=2==t,this.redirect=3==t,this.clientError=4==t,this.serverError=5==t,this.error=(4==t||5==t)&&this.toError(),this.created=201==e,this.accepted=202==e,this.noContent=204==e,this.badRequest=400==e,this.unauthorized=401==e,this.notAcceptable=406==e,this.forbidden=403==e,this.notFound=404==e,this.unprocessableEntity=422==e;};},function(e,t,n){t.type=function(e){return e.split(/ *; */).shift()},t.params=function(e){return e.split(/ *; */).reduce(function(e,t){var n=t.split(/ *= */),r=n.shift(),i=n.shift();return r&&i&&(e[r]=i),e},{})},t.parseLinks=function(e){return e.split(/ *, */).reduce(function(e,t){var n=t.split(/ *; */),r=n[0].slice(1,-1);return e[n[1].split(/ *= */)[1].slice(1,-1)]=r,e},{})},t.cleanHeader=function(e,t){return delete e["content-type"],delete e["content-length"],delete e["transfer-encoding"],delete e.host,t&&(delete e.authorization,delete e.cookie),e};},function(e,t){function n(){this._defaults=[];}["use","on","once","set","query","type","accept","auth","withCredentials","sortQuery","retry","ok","redirects","timeout","buffer","serialize","parse","ca","key","pfx","cert"].forEach(function(e){n.prototype[e]=function(){return this._defaults.push({fn:e,arguments:arguments}),this};}),n.prototype._setDefaults=function(t){this._defaults.forEach(function(e){t[e.fn].apply(t,e.arguments);});},e.exports=n;}],i.c=r,i.d=function(e,t,n){i.o(e,t)||Object.defineProperty(e,t,{enumerable:!0,get:n});},i.r=function(e){"undefined"!=typeof Symbol&&Symbol.toStringTag&&Object.defineProperty(e,Symbol.toStringTag,{value:"Module"}),Object.defineProperty(e,"__esModule",{value:!0});},i.t=function(t,e){if(1&e&&(t=i(t)),8&e)return t;if(4&e&&"object"==typeof t&&t&&t.__esModule)return t;var n=Object.create(null);if(i.r(n),Object.defineProperty(n,"default",{enumerable:!0,value:t}),2&e&&"string"!=typeof t)for(var r in t)i.d(n,r,function(e){return t[e]}.bind(null,r));return n},i.n=function(e){var t=e&&e.__esModule?function(){return e.default}:function(){return e};return i.d(t,"a",t),t},i.o=function(e,t){return Object.prototype.hasOwnProperty.call(e,t)},i.p="",i(i.s=11);function i(e){if(r[e])return r[e].exports;var t=r[e]={i:e,l:!1,exports:{}};return n[e].call(t.exports,t,t.exports,i),t.l=!0,t.exports}var n,r;});
+    !function(e,t){module.exports=t();}(window,function(){return r={},i.m=n=[function(e,t,n){e.exports={};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.default=void 0;t.default={PNTimeOperation:"PNTimeOperation",PNHistoryOperation:"PNHistoryOperation",PNDeleteMessagesOperation:"PNDeleteMessagesOperation",PNFetchMessagesOperation:"PNFetchMessagesOperation",PNMessageCounts:"PNMessageCountsOperation",PNSubscribeOperation:"PNSubscribeOperation",PNUnsubscribeOperation:"PNUnsubscribeOperation",PNPublishOperation:"PNPublishOperation",PNSignalOperation:"PNSignalOperation",PNAddMessageActionOperation:"PNAddActionOperation",PNRemoveMessageActionOperation:"PNRemoveMessageActionOperation",PNGetMessageActionsOperation:"PNGetMessageActionsOperation",PNCreateUserOperation:"PNCreateUserOperation",PNUpdateUserOperation:"PNUpdateUserOperation",PNDeleteUserOperation:"PNDeleteUserOperation",PNGetUserOperation:"PNGetUsersOperation",PNGetUsersOperation:"PNGetUsersOperation",PNCreateSpaceOperation:"PNCreateSpaceOperation",PNUpdateSpaceOperation:"PNUpdateSpaceOperation",PNDeleteSpaceOperation:"PNDeleteSpaceOperation",PNGetSpaceOperation:"PNGetSpacesOperation",PNGetSpacesOperation:"PNGetSpacesOperation",PNGetMembersOperation:"PNGetMembersOperation",PNUpdateMembersOperation:"PNUpdateMembersOperation",PNGetMembershipsOperation:"PNGetMembershipsOperation",PNUpdateMembershipsOperation:"PNUpdateMembershipsOperation",PNPushNotificationEnabledChannelsOperation:"PNPushNotificationEnabledChannelsOperation",PNRemoveAllPushNotificationsOperation:"PNRemoveAllPushNotificationsOperation",PNWhereNowOperation:"PNWhereNowOperation",PNSetStateOperation:"PNSetStateOperation",PNHereNowOperation:"PNHereNowOperation",PNGetStateOperation:"PNGetStateOperation",PNHeartbeatOperation:"PNHeartbeatOperation",PNChannelGroupsOperation:"PNChannelGroupsOperation",PNRemoveGroupOperation:"PNRemoveGroupOperation",PNChannelsForGroupOperation:"PNChannelsForGroupOperation",PNAddChannelsToGroupOperation:"PNAddChannelsToGroupOperation",PNRemoveChannelsFromGroupOperation:"PNRemoveChannelsFromGroupOperation",PNAccessManagerGrant:"PNAccessManagerGrant",PNAccessManagerGrantToken:"PNAccessManagerGrantToken",PNAccessManagerAudit:"PNAccessManagerAudit"},e.exports=t.default;},function(e,t,n){function r(e){return encodeURIComponent(e).replace(/[!~*'()]/g,function(e){return "%".concat(e.charCodeAt(0).toString(16).toUpperCase())})}function i(e){return function(e){var t=[];return Object.keys(e).forEach(function(e){return t.push(e)}),t}(e).sort()}e.exports={signPamFromParams:function(t){return i(t).map(function(e){return "".concat(e,"=").concat(r(t[e]))}).join("&")},endsWith:function(e,t){return -1!==e.indexOf(t,this.length-t.length)},createPromise:function(){var n,r;return {promise:new Promise(function(e,t){n=e,r=t;}),reject:r,fulfill:n}},encodeString:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.default=void 0;var r,i=(r=n(5))&&r.__esModule?r:{default:r};n(0);function s(e,t){for(var n=0;n<t.length;n++){var r=t[n];r.enumerable=r.enumerable||!1,r.configurable=!0,"value"in r&&(r.writable=!0),Object.defineProperty(e,r.key,r);}}function o(e,t,n){return t in e?Object.defineProperty(e,t,{value:n,enumerable:!0,configurable:!0,writable:!0}):e[t]=n,e}var a,u,l=(a=f,(u=[{key:"getAuthKey",value:function(){return this.authKey}},{key:"setAuthKey",value:function(e){return this.authKey=e,this}},{key:"setCipherKey",value:function(e){return this.cipherKey=e,this}},{key:"getUUID",value:function(){return this.UUID}},{key:"setUUID",value:function(e){return this._db&&this._db.set&&this._db.set("".concat(this.subscribeKey,"uuid"),e),this.UUID=e,this}},{key:"getFilterExpression",value:function(){return this.filterExpression}},{key:"setFilterExpression",value:function(e){return this.filterExpression=e,this}},{key:"getPresenceTimeout",value:function(){return this._presenceTimeout}},{key:"setPresenceTimeout",value:function(e){return 20<=e?this._presenceTimeout=e:(this._presenceTimeout=20,console.log("WARNING: Presence timeout is less than the minimum. Using minimum value: ",this._presenceTimeout)),this.setHeartbeatInterval(this._presenceTimeout/2-1),this}},{key:"setProxy",value:function(e){this.proxy=e;}},{key:"getHeartbeatInterval",value:function(){return this._heartbeatInterval}},{key:"setHeartbeatInterval",value:function(e){return this._heartbeatInterval=e,this}},{key:"getSubscribeTimeout",value:function(){return this._subscribeRequestTimeout}},{key:"setSubscribeTimeout",value:function(e){return this._subscribeRequestTimeout=e,this}},{key:"getTransactionTimeout",value:function(){return this._transactionalRequestTimeout}},{key:"setTransactionTimeout",value:function(e){return this._transactionalRequestTimeout=e,this}},{key:"isSendBeaconEnabled",value:function(){return this._useSendBeacon}},{key:"setSendBeaconConfig",value:function(e){return this._useSendBeacon=e,this}},{key:"getVersion",value:function(){return "4.27.6"}},{key:"_addPnsdkSuffix",value:function(e,t){this._PNSDKSuffix[e]=t;}},{key:"_getPnsdkSuffix",value:function(n){var r=this;return Object.keys(this._PNSDKSuffix).reduce(function(e,t){return e+n+r._PNSDKSuffix[t]},"")}},{key:"_decideUUID",value:function(e){return e||(this._db&&this._db.get&&this._db.get("".concat(this.subscribeKey,"uuid"))?this._db.get("".concat(this.subscribeKey,"uuid")):"pn-".concat(i.default.createUUID()))}}])&&s(a.prototype,u),f);function f(e){var t=e.setup,n=e.db;!function(e,t){if(!(e instanceof t))throw new TypeError("Cannot call a class as a function")}(this,f),o(this,"_db",void 0),o(this,"subscribeKey",void 0),o(this,"publishKey",void 0),o(this,"secretKey",void 0),o(this,"cipherKey",void 0),o(this,"authKey",void 0),o(this,"UUID",void 0),o(this,"proxy",void 0),o(this,"instanceId",void 0),o(this,"sdkName",void 0),o(this,"sdkFamily",void 0),o(this,"partnerId",void 0),o(this,"filterExpression",void 0),o(this,"suppressLeaveEvents",void 0),o(this,"secure",void 0),o(this,"origin",void 0),o(this,"logVerbosity",void 0),o(this,"useInstanceId",void 0),o(this,"useRequestId",void 0),o(this,"keepAlive",void 0),o(this,"keepAliveSettings",void 0),o(this,"autoNetworkDetection",void 0),o(this,"announceSuccessfulHeartbeats",void 0),o(this,"announceFailedHeartbeats",void 0),o(this,"_presenceTimeout",void 0),o(this,"_heartbeatInterval",void 0),o(this,"_subscribeRequestTimeout",void 0),o(this,"_transactionalRequestTimeout",void 0),o(this,"_useSendBeacon",void 0),o(this,"_PNSDKSuffix",void 0),o(this,"requestMessageCountThreshold",void 0),o(this,"restore",void 0),o(this,"dedupeOnSubscribe",void 0),o(this,"maximumCacheSize",void 0),o(this,"customEncrypt",void 0),o(this,"customDecrypt",void 0),this._PNSDKSuffix={},this._db=n,this.instanceId="pn-".concat(i.default.createUUID()),this.secretKey=t.secretKey||t.secret_key,this.subscribeKey=t.subscribeKey||t.subscribe_key,this.publishKey=t.publishKey||t.publish_key,this.sdkName=t.sdkName,this.sdkFamily=t.sdkFamily,this.partnerId=t.partnerId,this.setAuthKey(t.authKey),this.setCipherKey(t.cipherKey),this.setFilterExpression(t.filterExpression),this.origin=t.origin||"ps.pndsn.com",this.secure=t.ssl||!1,this.restore=t.restore||!1,this.proxy=t.proxy,this.keepAlive=t.keepAlive,this.keepAliveSettings=t.keepAliveSettings,this.autoNetworkDetection=t.autoNetworkDetection||!1,this.dedupeOnSubscribe=t.dedupeOnSubscribe||!1,this.maximumCacheSize=t.maximumCacheSize||100,this.customEncrypt=t.customEncrypt,this.customDecrypt=t.customDecrypt,"undefined"!=typeof location&&"https:"===location.protocol&&(this.secure=!0),this.logVerbosity=t.logVerbosity||!1,this.suppressLeaveEvents=t.suppressLeaveEvents||!1,this.announceFailedHeartbeats=t.announceFailedHeartbeats||!0,this.announceSuccessfulHeartbeats=t.announceSuccessfulHeartbeats||!1,this.useInstanceId=t.useInstanceId||!1,this.useRequestId=t.useRequestId||!1,this.requestMessageCountThreshold=t.requestMessageCountThreshold,this.setTransactionTimeout(t.transactionalRequestTimeout||15e3),this.setSubscribeTimeout(t.subscribeRequestTimeout||31e4),this.setSendBeaconConfig(t.useSendBeacon||!0),t.presenceTimeout?this.setPresenceTimeout(t.presenceTimeout):this._presenceTimeout=300,null!=t.heartbeatInterval&&this.setHeartbeatInterval(t.heartbeatInterval),this.setUUID(this._decideUUID(t.uuid));}t.default=l,e.exports=t.default;},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.default=void 0;t.default={PNNetworkUpCategory:"PNNetworkUpCategory",PNNetworkDownCategory:"PNNetworkDownCategory",PNNetworkIssuesCategory:"PNNetworkIssuesCategory",PNTimeoutCategory:"PNTimeoutCategory",PNBadRequestCategory:"PNBadRequestCategory",PNAccessDeniedCategory:"PNAccessDeniedCategory",PNUnknownCategory:"PNUnknownCategory",PNReconnectedCategory:"PNReconnectedCategory",PNConnectedCategory:"PNConnectedCategory",PNRequestMessageCountExceededCategory:"PNRequestMessageCountExceededCategory"},e.exports=t.default;},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.default=void 0;var r,i=(r=n(14))&&r.__esModule?r:{default:r};var s={createUUID:function(){return i.default.uuid?i.default.uuid():(0, i.default)()}};t.default=s,e.exports=t.default;},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.default=void 0;r(n(3));var u=r(n(7));function r(e){return e&&e.__esModule?e:{default:e}}function i(e,t){for(var n=0;n<t.length;n++){var r=t[n];r.enumerable=r.enumerable||!1,r.configurable=!0,"value"in r&&(r.writable=!0),Object.defineProperty(e,r.key,r);}}function s(e,t,n){return t in e?Object.defineProperty(e,t,{value:n,enumerable:!0,configurable:!0,writable:!0}):e[t]=n,e}var o,a,l=(o=f,(a=[{key:"HMACSHA256",value:function(e){return u.default.HmacSHA256(e,this._config.secretKey).toString(u.default.enc.Base64)}},{key:"SHA256",value:function(e){return u.default.SHA256(e).toString(u.default.enc.Hex)}},{key:"_parseOptions",value:function(e){var t=e||{};return t.hasOwnProperty("encryptKey")||(t.encryptKey=this._defaultOptions.encryptKey),t.hasOwnProperty("keyEncoding")||(t.keyEncoding=this._defaultOptions.keyEncoding),t.hasOwnProperty("keyLength")||(t.keyLength=this._defaultOptions.keyLength),t.hasOwnProperty("mode")||(t.mode=this._defaultOptions.mode),-1===this._allowedKeyEncodings.indexOf(t.keyEncoding.toLowerCase())&&(t.keyEncoding=this._defaultOptions.keyEncoding),-1===this._allowedKeyLengths.indexOf(parseInt(t.keyLength,10))&&(t.keyLength=this._defaultOptions.keyLength),-1===this._allowedModes.indexOf(t.mode.toLowerCase())&&(t.mode=this._defaultOptions.mode),t}},{key:"_decodeKey",value:function(e,t){return "base64"===t.keyEncoding?u.default.enc.Base64.parse(e):"hex"===t.keyEncoding?u.default.enc.Hex.parse(e):e}},{key:"_getPaddedKey",value:function(e,t){return e=this._decodeKey(e,t),t.encryptKey?u.default.enc.Utf8.parse(this.SHA256(e).slice(0,32)):e}},{key:"_getMode",value:function(e){return "ecb"===e.mode?u.default.mode.ECB:u.default.mode.CBC}},{key:"_getIV",value:function(e){return "cbc"===e.mode?u.default.enc.Utf8.parse(this._iv):null}},{key:"encrypt",value:function(e,t,n){return this._config.customEncrypt?this._config.customEncrypt(e):this.pnEncrypt(e,t,n)}},{key:"decrypt",value:function(e,t,n){return this._config.customDecrypt?this._config.customDecrypt(e):this.pnDecrypt(e,t,n)}},{key:"pnEncrypt",value:function(e,t,n){if(!t&&!this._config.cipherKey)return e;n=this._parseOptions(n);var r=this._getIV(n),i=this._getMode(n),s=this._getPaddedKey(t||this._config.cipherKey,n);return u.default.AES.encrypt(e,s,{iv:r,mode:i}).ciphertext.toString(u.default.enc.Base64)||e}},{key:"pnDecrypt",value:function(e,t,n){if(!t&&!this._config.cipherKey)return e;n=this._parseOptions(n);var r=this._getIV(n),i=this._getMode(n),s=this._getPaddedKey(t||this._config.cipherKey,n);try{var o=u.default.enc.Base64.parse(e),a=u.default.AES.decrypt({ciphertext:o},s,{iv:r,mode:i}).toString(u.default.enc.Utf8);return JSON.parse(a)}catch(e){return null}}}])&&i(o.prototype,a),f);function f(e){var t=e.config;!function(e,t){if(!(e instanceof t))throw new TypeError("Cannot call a class as a function")}(this,f),s(this,"_config",void 0),s(this,"_iv",void 0),s(this,"_allowedKeyEncodings",void 0),s(this,"_allowedKeyLengths",void 0),s(this,"_allowedModes",void 0),s(this,"_defaultOptions",void 0),this._config=t,this._iv="0123456789012345",this._allowedKeyEncodings=["hex","utf8","base64","binary"],this._allowedKeyLengths=[128,256],this._allowedModes=["ecb","cbc"],this._defaultOptions={encryptKey:!0,keyEncoding:"utf8",keyLength:256,mode:"cbc"};}t.default=l,e.exports=t.default;},function(e,t,n){var r,c,i,u,s,o,a,l,f,h,j=j||function(a){function n(){}var e={},t=e.lib={},r=t.Base={extend:function(e){n.prototype=this;var t=new n;return e&&t.mixIn(e),t.hasOwnProperty("init")||(t.init=function(){t.$super.init.apply(this,arguments);}),(t.init.prototype=t).$super=this,t},create:function(){var e=this.extend();return e.init.apply(e,arguments),e},init:function(){},mixIn:function(e){for(var t in e)e.hasOwnProperty(t)&&(this[t]=e[t]);e.hasOwnProperty("toString")&&(this.toString=e.toString);},clone:function(){return this.init.prototype.extend(this)}},u=t.WordArray=r.extend({init:function(e,t){e=this.words=e||[],this.sigBytes=null!=t?t:4*e.length;},toString:function(e){return (e||s).stringify(this)},concat:function(e){var t=this.words,n=e.words,r=this.sigBytes;if(e=e.sigBytes,this.clamp(),r%4)for(var i=0;i<e;i++)t[r+i>>>2]|=(n[i>>>2]>>>24-i%4*8&255)<<24-(r+i)%4*8;else if(65535<n.length)for(i=0;i<e;i+=4)t[r+i>>>2]=n[i>>>2];else t.push.apply(t,n);return this.sigBytes+=e,this},clamp:function(){var e=this.words,t=this.sigBytes;e[t>>>2]&=4294967295<<32-t%4*8,e.length=a.ceil(t/4);},clone:function(){var e=r.clone.call(this);return e.words=this.words.slice(0),e},random:function(e){for(var t=[],n=0;n<e;n+=4)t.push(4294967296*a.random()|0);return new u.init(t,e)}}),i=e.enc={},s=i.Hex={stringify:function(e){var t=e.words;e=e.sigBytes;for(var n=[],r=0;r<e;r++){var i=t[r>>>2]>>>24-r%4*8&255;n.push((i>>>4).toString(16)),n.push((15&i).toString(16));}return n.join("")},parse:function(e){for(var t=e.length,n=[],r=0;r<t;r+=2)n[r>>>3]|=parseInt(e.substr(r,2),16)<<24-r%8*4;return new u.init(n,t/2)}},o=i.Latin1={stringify:function(e){var t=e.words;e=e.sigBytes;for(var n=[],r=0;r<e;r++)n.push(String.fromCharCode(t[r>>>2]>>>24-r%4*8&255));return n.join("")},parse:function(e){for(var t=e.length,n=[],r=0;r<t;r++)n[r>>>2]|=(255&e.charCodeAt(r))<<24-r%4*8;return new u.init(n,t)}},c=i.Utf8={stringify:function(e){try{return decodeURIComponent(escape(o.stringify(e)))}catch(e){throw Error("Malformed UTF-8 data")}},parse:function(e){return o.parse(unescape(encodeURIComponent(e)))}},l=t.BufferedBlockAlgorithm=r.extend({reset:function(){this._data=new u.init,this._nDataBytes=0;},_append:function(e){"string"==typeof e&&(e=c.parse(e)),this._data.concat(e),this._nDataBytes+=e.sigBytes;},_process:function(e){var t=this._data,n=t.words,r=t.sigBytes,i=this.blockSize,s=r/(4*i);if(e=(s=e?a.ceil(s):a.max((0|s)-this._minBufferSize,0))*i,r=a.min(4*e,r),e){for(var o=0;o<e;o+=i)this._doProcessBlock(n,o);o=n.splice(0,e),t.sigBytes-=r;}return new u.init(o,r)},clone:function(){var e=r.clone.call(this);return e._data=this._data.clone(),e},_minBufferSize:0});t.Hasher=l.extend({cfg:r.extend(),init:function(e){this.cfg=this.cfg.extend(e),this.reset();},reset:function(){l.reset.call(this),this._doReset();},update:function(e){return this._append(e),this._process(),this},finalize:function(e){return e&&this._append(e),this._doFinalize()},blockSize:16,_createHelper:function(n){return function(e,t){return new n.init(t).finalize(e)}},_createHmacHelper:function(n){return function(e,t){return new f.HMAC.init(n,t).finalize(e)}}});var f=e.algo={};return e}(Math);!function(i){for(var e=j,t=(r=e.lib).WordArray,n=r.Hasher,r=e.algo,s=[],d=[],o=function(e){return 4294967296*(e-(0|e))|0},a=2,u=0;u<64;){var c;e:{c=a;for(var l=i.sqrt(c),f=2;f<=l;f++)if(!(c%f)){c=!1;break e}c=!0;}c&&(u<8&&(s[u]=o(i.pow(a,.5))),d[u]=o(i.pow(a,1/3)),u++),a++;}var g=[];r=r.SHA256=n.extend({_doReset:function(){this._hash=new t.init(s.slice(0));},_doProcessBlock:function(e,t){for(var n=this._hash.words,r=n[0],i=n[1],s=n[2],o=n[3],a=n[4],u=n[5],c=n[6],l=n[7],f=0;f<64;f++){if(f<16)g[f]=0|e[t+f];else {var h=g[f-15],p=g[f-2];g[f]=((h<<25|h>>>7)^(h<<14|h>>>18)^h>>>3)+g[f-7]+((p<<15|p>>>17)^(p<<13|p>>>19)^p>>>10)+g[f-16];}h=l+((a<<26|a>>>6)^(a<<21|a>>>11)^(a<<7|a>>>25))+(a&u^~a&c)+d[f]+g[f],p=((r<<30|r>>>2)^(r<<19|r>>>13)^(r<<10|r>>>22))+(r&i^r&s^i&s),l=c,c=u,u=a,a=o+h|0,o=s,s=i,i=r,r=h+p|0;}n[0]=n[0]+r|0,n[1]=n[1]+i|0,n[2]=n[2]+s|0,n[3]=n[3]+o|0,n[4]=n[4]+a|0,n[5]=n[5]+u|0,n[6]=n[6]+c|0,n[7]=n[7]+l|0;},_doFinalize:function(){var e=this._data,t=e.words,n=8*this._nDataBytes,r=8*e.sigBytes;return t[r>>>5]|=128<<24-r%32,t[14+(64+r>>>9<<4)]=i.floor(n/4294967296),t[15+(64+r>>>9<<4)]=n,e.sigBytes=4*t.length,this._process(),this._hash},clone:function(){var e=n.clone.call(this);return e._hash=this._hash.clone(),e}});e.SHA256=n._createHelper(r),e.HmacSHA256=n._createHmacHelper(r);}(Math),c=(r=j).enc.Utf8,r.algo.HMAC=r.lib.Base.extend({init:function(e,t){e=this._hasher=new e.init,"string"==typeof t&&(t=c.parse(t));var n=e.blockSize,r=4*n;t.sigBytes>r&&(t=e.finalize(t)),t.clamp();for(var i=this._oKey=t.clone(),s=this._iKey=t.clone(),o=i.words,a=s.words,u=0;u<n;u++)o[u]^=1549556828,a[u]^=909522486;i.sigBytes=s.sigBytes=r,this.reset();},reset:function(){var e=this._hasher;e.reset(),e.update(this._iKey);},update:function(e){return this._hasher.update(e),this},finalize:function(e){var t=this._hasher;return e=t.finalize(e),t.reset(),t.finalize(this._oKey.clone().concat(e))}}),u=(i=j).lib.WordArray,i.enc.Base64={stringify:function(e){var t=e.words,n=e.sigBytes,r=this._map;e.clamp(),e=[];for(var i=0;i<n;i+=3)for(var s=(t[i>>>2]>>>24-i%4*8&255)<<16|(t[i+1>>>2]>>>24-(i+1)%4*8&255)<<8|t[i+2>>>2]>>>24-(i+2)%4*8&255,o=0;o<4&&i+.75*o<n;o++)e.push(r.charAt(s>>>6*(3-o)&63));if(t=r.charAt(64))for(;e.length%4;)e.push(t);return e.join("")},parse:function(e){var t=e.length,n=this._map;!(r=n.charAt(64))||-1!=(r=e.indexOf(r))&&(t=r);for(var r=[],i=0,s=0;s<t;s++)if(s%4){var o=n.indexOf(e.charAt(s-1))<<s%4*2,a=n.indexOf(e.charAt(s))>>>6-s%4*2;r[i>>>2]|=(o|a)<<24-i%4*8,i++;}return u.create(r,i)},_map:"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/="},function(s){function O(e,t,n,r,i,s,o){return ((e=e+(t&n|~t&r)+i+o)<<s|e>>>32-s)+t}function T(e,t,n,r,i,s,o){return ((e=e+(t&r|n&~r)+i+o)<<s|e>>>32-s)+t}function S(e,t,n,r,i,s,o){return ((e=e+(t^n^r)+i+o)<<s|e>>>32-s)+t}function M(e,t,n,r,i,s,o){return ((e=e+(n^(t|~r))+i+o)<<s|e>>>32-s)+t}for(var e=j,t=(r=e.lib).WordArray,n=r.Hasher,r=e.algo,w=[],i=0;i<64;i++)w[i]=4294967296*s.abs(s.sin(i+1))|0;r=r.MD5=n.extend({_doReset:function(){this._hash=new t.init([1732584193,4023233417,2562383102,271733878]);},_doProcessBlock:function(e,t){for(var n=0;n<16;n++){var r=e[o=t+n];e[o]=16711935&(r<<8|r>>>24)|4278255360&(r<<24|r>>>8);}n=this._hash.words;var i,s,o=e[t+0],a=(r=e[t+1],e[t+2]),u=e[t+3],c=e[t+4],l=e[t+5],f=e[t+6],h=e[t+7],p=e[t+8],d=e[t+9],g=e[t+10],y=e[t+11],v=e[t+12],b=e[t+13],m=e[t+14],_=e[t+15],k=n[0],P=M(P=M(P=M(P=M(P=S(P=S(P=S(P=S(P=T(P=T(P=T(P=T(P=O(P=O(P=O(P=O(P=n[1],s=O(s=n[2],i=O(i=n[3],k=O(k,P,s,i,o,7,w[0]),P,s,r,12,w[1]),k,P,a,17,w[2]),i,k,u,22,w[3]),s=O(s,i=O(i,k=O(k,P,s,i,c,7,w[4]),P,s,l,12,w[5]),k,P,f,17,w[6]),i,k,h,22,w[7]),s=O(s,i=O(i,k=O(k,P,s,i,p,7,w[8]),P,s,d,12,w[9]),k,P,g,17,w[10]),i,k,y,22,w[11]),s=O(s,i=O(i,k=O(k,P,s,i,v,7,w[12]),P,s,b,12,w[13]),k,P,m,17,w[14]),i,k,_,22,w[15]),s=T(s,i=T(i,k=T(k,P,s,i,r,5,w[16]),P,s,f,9,w[17]),k,P,y,14,w[18]),i,k,o,20,w[19]),s=T(s,i=T(i,k=T(k,P,s,i,l,5,w[20]),P,s,g,9,w[21]),k,P,_,14,w[22]),i,k,c,20,w[23]),s=T(s,i=T(i,k=T(k,P,s,i,d,5,w[24]),P,s,m,9,w[25]),k,P,u,14,w[26]),i,k,p,20,w[27]),s=T(s,i=T(i,k=T(k,P,s,i,b,5,w[28]),P,s,a,9,w[29]),k,P,h,14,w[30]),i,k,v,20,w[31]),s=S(s,i=S(i,k=S(k,P,s,i,l,4,w[32]),P,s,p,11,w[33]),k,P,y,16,w[34]),i,k,m,23,w[35]),s=S(s,i=S(i,k=S(k,P,s,i,r,4,w[36]),P,s,c,11,w[37]),k,P,h,16,w[38]),i,k,g,23,w[39]),s=S(s,i=S(i,k=S(k,P,s,i,b,4,w[40]),P,s,o,11,w[41]),k,P,u,16,w[42]),i,k,f,23,w[43]),s=S(s,i=S(i,k=S(k,P,s,i,d,4,w[44]),P,s,v,11,w[45]),k,P,_,16,w[46]),i,k,a,23,w[47]),s=M(s,i=M(i,k=M(k,P,s,i,o,6,w[48]),P,s,h,10,w[49]),k,P,m,15,w[50]),i,k,l,21,w[51]),s=M(s,i=M(i,k=M(k,P,s,i,v,6,w[52]),P,s,u,10,w[53]),k,P,g,15,w[54]),i,k,r,21,w[55]),s=M(s,i=M(i,k=M(k,P,s,i,p,6,w[56]),P,s,_,10,w[57]),k,P,f,15,w[58]),i,k,b,21,w[59]),s=M(s,i=M(i,k=M(k,P,s,i,c,6,w[60]),P,s,y,10,w[61]),k,P,a,15,w[62]),i,k,d,21,w[63]);n[0]=n[0]+k|0,n[1]=n[1]+P|0,n[2]=n[2]+s|0,n[3]=n[3]+i|0;},_doFinalize:function(){var e=this._data,t=e.words,n=8*this._nDataBytes,r=8*e.sigBytes;t[r>>>5]|=128<<24-r%32;var i=s.floor(n/4294967296);for(t[15+(r+64>>>9<<4)]=16711935&(i<<8|i>>>24)|4278255360&(i<<24|i>>>8),t[14+(r+64>>>9<<4)]=16711935&(n<<8|n>>>24)|4278255360&(n<<24|n>>>8),e.sigBytes=4*(t.length+1),this._process(),t=(e=this._hash).words,n=0;n<4;n++)r=t[n],t[n]=16711935&(r<<8|r>>>24)|4278255360&(r<<24|r>>>8);return e},clone:function(){var e=n.clone.call(this);return e._hash=this._hash.clone(),e}}),e.MD5=n._createHelper(r),e.HmacMD5=n._createHmacHelper(r);}(Math),a=(s=(o=j).lib).Base,l=s.WordArray,f=(s=o.algo).EvpKDF=a.extend({cfg:a.extend({keySize:4,hasher:s.MD5,iterations:1}),init:function(e){this.cfg=this.cfg.extend(e);},compute:function(e,t){for(var n=(o=this.cfg).hasher.create(),r=l.create(),i=r.words,s=o.keySize,o=o.iterations;i.length<s;){a&&n.update(a);var a=n.update(e).finalize(t);n.reset();for(var u=1;u<o;u++)a=n.finalize(a),n.reset();r.concat(a);}return r.sigBytes=4*s,r}}),o.EvpKDF=function(e,t,n){return f.create(n).compute(e,t)},j.lib.Cipher||function(){var e=(h=j).lib,t=e.Base,o=e.WordArray,n=e.BufferedBlockAlgorithm,r=h.enc.Base64,i=h.algo.EvpKDF,s=e.Cipher=n.extend({cfg:t.extend(),createEncryptor:function(e,t){return this.create(this._ENC_XFORM_MODE,e,t)},createDecryptor:function(e,t){return this.create(this._DEC_XFORM_MODE,e,t)},init:function(e,t,n){this.cfg=this.cfg.extend(n),this._xformMode=e,this._key=t,this.reset();},reset:function(){n.reset.call(this),this._doReset();},process:function(e){return this._append(e),this._process()},finalize:function(e){return e&&this._append(e),this._doFinalize()},keySize:4,ivSize:4,_ENC_XFORM_MODE:1,_DEC_XFORM_MODE:2,_createHelper:function(r){return {encrypt:function(e,t,n){return ("string"==typeof t?p:f).encrypt(r,e,t,n)},decrypt:function(e,t,n){return ("string"==typeof t?p:f).decrypt(r,e,t,n)}}}});e.StreamCipher=s.extend({_doFinalize:function(){return this._process(!0)},blockSize:1});function a(e,t,n){var r=this._iv;r?this._iv=void 0:r=this._prevBlock;for(var i=0;i<n;i++)e[t+i]^=r[i];}var u=h.mode={},c=(e.BlockCipherMode=t.extend({createEncryptor:function(e,t){return this.Encryptor.create(e,t)},createDecryptor:function(e,t){return this.Decryptor.create(e,t)},init:function(e,t){this._cipher=e,this._iv=t;}})).extend();c.Encryptor=c.extend({processBlock:function(e,t){var n=this._cipher,r=n.blockSize;a.call(this,e,t,r),n.encryptBlock(e,t),this._prevBlock=e.slice(t,t+r);}}),c.Decryptor=c.extend({processBlock:function(e,t){var n=this._cipher,r=n.blockSize,i=e.slice(t,t+r);n.decryptBlock(e,t),a.call(this,e,t,r),this._prevBlock=i;}}),u=u.CBC=c,c=(h.pad={}).Pkcs7={pad:function(e,t){for(var n,r=(n=(n=4*t)-e.sigBytes%n)<<24|n<<16|n<<8|n,i=[],s=0;s<n;s+=4)i.push(r);n=o.create(i,n),e.concat(n);},unpad:function(e){e.sigBytes-=255&e.words[e.sigBytes-1>>>2];}},e.BlockCipher=s.extend({cfg:s.cfg.extend({mode:u,padding:c}),reset:function(){s.reset.call(this);var e=(t=this.cfg).iv,t=t.mode;if(this._xformMode==this._ENC_XFORM_MODE)var n=t.createEncryptor;else n=t.createDecryptor,this._minBufferSize=1;this._mode=n.call(t,this,e&&e.words);},_doProcessBlock:function(e,t){this._mode.processBlock(e,t);},_doFinalize:function(){var e=this.cfg.padding;if(this._xformMode==this._ENC_XFORM_MODE){e.pad(this._data,this.blockSize);var t=this._process(!0);}else t=this._process(!0),e.unpad(t);return t},blockSize:4});var l=e.CipherParams=t.extend({init:function(e){this.mixIn(e);},toString:function(e){return (e||this.formatter).stringify(this)}}),f=(u=(h.format={}).OpenSSL={stringify:function(e){var t=e.ciphertext;return ((e=e.salt)?o.create([1398893684,1701076831]).concat(e).concat(t):t).toString(r)},parse:function(e){var t=(e=r.parse(e)).words;if(1398893684==t[0]&&1701076831==t[1]){var n=o.create(t.slice(2,4));t.splice(0,4),e.sigBytes-=16;}return l.create({ciphertext:e,salt:n})}},e.SerializableCipher=t.extend({cfg:t.extend({format:u}),encrypt:function(e,t,n,r){r=this.cfg.extend(r);var i=e.createEncryptor(n,r);return t=i.finalize(t),i=i.cfg,l.create({ciphertext:t,key:n,iv:i.iv,algorithm:e,mode:i.mode,padding:i.padding,blockSize:e.blockSize,formatter:r.format})},decrypt:function(e,t,n,r){return r=this.cfg.extend(r),t=this._parse(t,r.format),e.createDecryptor(n,r).finalize(t.ciphertext)},_parse:function(e,t){return "string"==typeof e?t.parse(e,this):e}})),h=(h.kdf={}).OpenSSL={execute:function(e,t,n,r){return r=r||o.random(8),e=i.create({keySize:t+n}).compute(e,r),n=o.create(e.words.slice(t),4*n),e.sigBytes=4*t,l.create({key:e,iv:n,salt:r})}},p=e.PasswordBasedCipher=f.extend({cfg:f.cfg.extend({kdf:h}),encrypt:function(e,t,n,r){return n=(r=this.cfg.extend(r)).kdf.execute(n,e.keySize,e.ivSize),r.iv=n.iv,(e=f.encrypt.call(this,e,t,n.key,r)).mixIn(n),e},decrypt:function(e,t,n,r){return r=this.cfg.extend(r),t=this._parse(t,r.format),n=r.kdf.execute(n,e.keySize,e.ivSize,t.salt),r.iv=n.iv,f.decrypt.call(this,e,t,n.key,r)}});}(),function(){for(var e=j,t=e.lib.BlockCipher,n=e.algo,o=[],r=[],i=[],s=[],a=[],u=[],c=[],l=[],f=[],h=[],p=[],d=0;d<256;d++)p[d]=d<128?d<<1:d<<1^283;var g=0,y=0;for(d=0;d<256;d++){var v=(v=y^y<<1^y<<2^y<<3^y<<4)>>>8^255&v^99;o[g]=v;var b=p[r[v]=g],m=p[b],_=p[m],k=257*p[v]^16843008*v;i[g]=k<<24|k>>>8,s[g]=k<<16|k>>>16,a[g]=k<<8|k>>>24,u[g]=k,k=16843009*_^65537*m^257*b^16843008*g,c[v]=k<<24|k>>>8,l[v]=k<<16|k>>>16,f[v]=k<<8|k>>>24,h[v]=k,g?(g=b^p[p[p[_^b]]],y^=p[p[y]]):g=y=1;}var P=[0,1,2,4,8,16,32,64,128,27,54];n=n.AES=t.extend({_doReset:function(){for(var e=(n=this._key).words,t=n.sigBytes/4,n=4*((this._nRounds=t+6)+1),r=this._keySchedule=[],i=0;i<n;i++)if(i<t)r[i]=e[i];else {var s=r[i-1];i%t?6<t&&4==i%t&&(s=o[s>>>24]<<24|o[s>>>16&255]<<16|o[s>>>8&255]<<8|o[255&s]):(s=o[(s=s<<8|s>>>24)>>>24]<<24|o[s>>>16&255]<<16|o[s>>>8&255]<<8|o[255&s],s^=P[i/t|0]<<24),r[i]=r[i-t]^s;}for(e=this._invKeySchedule=[],t=0;t<n;t++)i=n-t,s=t%4?r[i]:r[i-4],e[t]=t<4||i<=4?s:c[o[s>>>24]]^l[o[s>>>16&255]]^f[o[s>>>8&255]]^h[o[255&s]];},encryptBlock:function(e,t){this._doCryptBlock(e,t,this._keySchedule,i,s,a,u,o);},decryptBlock:function(e,t){var n=e[t+1];e[t+1]=e[t+3],e[t+3]=n,this._doCryptBlock(e,t,this._invKeySchedule,c,l,f,h,r),n=e[t+1],e[t+1]=e[t+3],e[t+3]=n;},_doCryptBlock:function(e,t,n,r,i,s,o,a){for(var u=this._nRounds,c=e[t]^n[0],l=e[t+1]^n[1],f=e[t+2]^n[2],h=e[t+3]^n[3],p=4,d=1;d<u;d++){var g=r[c>>>24]^i[l>>>16&255]^s[f>>>8&255]^o[255&h]^n[p++],y=r[l>>>24]^i[f>>>16&255]^s[h>>>8&255]^o[255&c]^n[p++],v=r[f>>>24]^i[h>>>16&255]^s[c>>>8&255]^o[255&l]^n[p++];h=r[h>>>24]^i[c>>>16&255]^s[l>>>8&255]^o[255&f]^n[p++],c=g,l=y,f=v;}g=(a[c>>>24]<<24|a[l>>>16&255]<<16|a[f>>>8&255]<<8|a[255&h])^n[p++],y=(a[l>>>24]<<24|a[f>>>16&255]<<16|a[h>>>8&255]<<8|a[255&c])^n[p++],v=(a[f>>>24]<<24|a[h>>>16&255]<<16|a[c>>>8&255]<<8|a[255&l])^n[p++],h=(a[h>>>24]<<24|a[c>>>16&255]<<16|a[l>>>8&255]<<8|a[255&f])^n[p++],e[t]=g,e[t+1]=y,e[t+2]=v,e[t+3]=h;},keySize:8});e.AES=t._createHelper(n);}(),j.mode.ECB=((h=j.lib.BlockCipherMode.extend()).Encryptor=h.extend({processBlock:function(e,t){this._cipher.encryptBlock(e,t);}}),h.Decryptor=h.extend({processBlock:function(e,t){this._cipher.decryptBlock(e,t);}}),h),e.exports=j;},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.default=void 0;n(0);var r,i=(r=n(4))&&r.__esModule?r:{default:r};function s(e,t){for(var n=0;n<t.length;n++){var r=t[n];r.enumerable=r.enumerable||!1,r.configurable=!0,"value"in r&&(r.writable=!0),Object.defineProperty(e,r.key,r);}}var o,a,c=(o=l,(a=[{key:"addListener",value:function(e){this._listeners.push(e);}},{key:"removeListener",value:function(t){var n=[];this._listeners.forEach(function(e){e!==t&&n.push(e);}),this._listeners=n;}},{key:"removeAllListeners",value:function(){this._listeners=[];}},{key:"announcePresence",value:function(t){this._listeners.forEach(function(e){e.presence&&e.presence(t);});}},{key:"announceStatus",value:function(t){this._listeners.forEach(function(e){e.status&&e.status(t);});}},{key:"announceMessage",value:function(t){this._listeners.forEach(function(e){e.message&&e.message(t);});}},{key:"announceSignal",value:function(t){this._listeners.forEach(function(e){e.signal&&e.signal(t);});}},{key:"announceMessageAction",value:function(t){this._listeners.forEach(function(e){e.messageAction&&e.messageAction(t);});}},{key:"announceUser",value:function(t){this._listeners.forEach(function(e){e.user&&e.user(t);});}},{key:"announceSpace",value:function(t){this._listeners.forEach(function(e){e.space&&e.space(t);});}},{key:"announceMembership",value:function(t){this._listeners.forEach(function(e){e.membership&&e.membership(t);});}},{key:"announceNetworkUp",value:function(){var e={};e.category=i.default.PNNetworkUpCategory,this.announceStatus(e);}},{key:"announceNetworkDown",value:function(){var e={};e.category=i.default.PNNetworkDownCategory,this.announceStatus(e);}}])&&s(o.prototype,a),l);function l(){!function(e,t){if(!(e instanceof t))throw new TypeError("Cannot call a class as a function")}(this,l),function(e,t,n){t in e?Object.defineProperty(e,t,{value:n,enumerable:!0,configurable:!0,writable:!0}):e[t]=n;}(this,"_listeners",void 0),this._listeners=[];}t.default=c,e.exports=t.default;},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNTimeOperation},t.getURL=function(){return "/time/0"},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.prepareParams=function(){return {}},t.isAuthSupported=function(){return !1},t.handleResponse=function(e,t){return {timetoken:t[0]}},t.validateParams=function(){};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){e.exports=function(e){return null!==e&&"object"==typeof e};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.default=void 0;var i=l(n(12)),r=l(n(13)),s=l(n(68)),a=l(n(7)),o=l(n(69)),u=l(n(70)),c=n(71);n(0);function l(e){return e&&e.__esModule?e:{default:e}}function f(e,t){return !t||"object"!==d(t)&&"function"!=typeof t?function(e){if(void 0!==e)return e;throw new ReferenceError("this hasn't been initialised - super() hasn't been called")}(e):t}function h(e){return (h=Object.setPrototypeOf?Object.getPrototypeOf:function(e){return e.__proto__||Object.getPrototypeOf(e)})(e)}function p(e,t){return (p=Object.setPrototypeOf||function(e,t){return e.__proto__=t,e})(e,t)}function d(e){return (d="function"==typeof Symbol&&"symbol"==typeof Symbol.iterator?function(e){return typeof e}:function(e){return e&&"function"==typeof Symbol&&e.constructor===Symbol&&e!==Symbol.prototype?"symbol":typeof e})(e)}function g(e){if(!navigator||!navigator.sendBeacon)return !1;navigator.sendBeacon(e);}function y(e){for(var t=a.default.enc.Base64.parse(e).words,n=new ArrayBuffer(4*t.length),r=new Uint8Array(n),i=0;i<t.length;i+=1){var s=t[i],o=4*i;r[o]=(4278190080&s)>>24,r[1+o]=(16711680&s)>>16,r[2+o]=(65280&s)>>8,r[3+o]=255&s;}return r.buffer}function v(i){function s(e){return e&&"object"===d(e)&&e.constructor===Object}if(!s(i))return i;var o={};return Object.keys(i).forEach(function(e){var t=function(e){return "string"==typeof e||e instanceof String}(e),n=e,r=i[e];Array.isArray(e)||t&&0<=e.indexOf(",")?n=(t?e.split(","):e).reduce(function(e,t){return e+=String.fromCharCode(t)},""):(function(e){return "number"==typeof e&&isFinite(e)}(e)||t&&!isNaN(e))&&(n=String.fromCharCode(t?parseInt(e,10):10));o[n]=s(r)?v(r):r;}),o}var b=(function(e,t){if("function"!=typeof t&&null!==t)throw new TypeError("Super expression must either be null or a function");e.prototype=Object.create(t&&t.prototype,{constructor:{value:e,writable:!0,configurable:!0}}),t&&p(e,t);}(m,r.default),m);function m(e){var t;!function(e,t){if(!(e instanceof t))throw new TypeError("Cannot call a class as a function")}(this,m);var n=e.listenToBrowserNetworkEvents,r=void 0===n||n;return e.db=o.default,e.sdkFamily="Web",e.networking=new s.default({del:c.del,get:c.get,post:c.post,patch:c.patch,sendBeacon:g}),e.cbor=new u.default(function(e){return v(i.default.decode(e))},y),t=f(this,h(m).call(this,e)),r&&(window.addEventListener("offline",function(){t.networkDownDetected();}),window.addEventListener("online",function(){t.networkUpDetected();})),t}t.default=b,e.exports=t.default;},function(t,n,r){var s,o;!function(e,S){var M=Math.pow(2,-24),i=Math.pow(2,32),g=Math.pow(2,53);(o="function"==typeof(s={encode:function(e){var o,a=new ArrayBuffer(256),u=new DataView(a),c=0;function l(e){for(var t=a.byteLength,n=c+e;t<n;)t*=2;if(t!==a.byteLength){var r=u;a=new ArrayBuffer(t),u=new DataView(a);for(var i=c+3>>2,s=0;s<i;++s)u.setUint32(4*s,r.getUint32(4*s));}return o=e,u}function f(){c+=o;}function h(e){f(l(1).setUint8(c,e));}function p(e){for(var t=l(e.length),n=0;n<e.length;++n)t.setUint8(c+n,e[n]);f();}function d(e,t){t<24?h(e<<5|t):t<256?(h(e<<5|24),h(t)):t<65536?(h(e<<5|25),function(e){f(l(2).setUint16(c,e));}(t)):t<4294967296?(h(e<<5|26),function(e){f(l(4).setUint32(c,e));}(t)):(h(e<<5|27),function(e){var t=e%i,n=(e-t)/i,r=l(8);r.setUint32(c,n),r.setUint32(c+4,t),f();}(t));}if(function e(t){var n;if(!1===t)return h(244);if(!0===t)return h(245);if(null===t)return h(246);if(t===S)return h(247);switch(typeof t){case"number":if(Math.floor(t)===t){if(0<=t&&t<=g)return d(0,t);if(-g<=t&&t<0)return d(1,-(t+1))}return h(251),function(e){f(l(8).setFloat64(c,e));}(t);case"string":var r=[];for(n=0;n<t.length;++n){var i=t.charCodeAt(n);i<128?r.push(i):(i<2048?r.push(192|i>>6):(i<55296?r.push(224|i>>12):(i=(1023&i)<<10,i|=1023&t.charCodeAt(++n),i+=65536,r.push(240|i>>18),r.push(128|i>>12&63)),r.push(128|i>>6&63)),r.push(128|63&i));}return d(3,r.length),p(r);default:var s;if(Array.isArray(t))for(d(4,s=t.length),n=0;n<s;++n)e(t[n]);else if(t instanceof Uint8Array)d(2,t.length),p(t);else {var o=Object.keys(t);for(d(5,s=o.length),n=0;n<s;++n){var a=o[n];e(a),e(t[a]);}}}}(e),"slice"in a)return a.slice(0,c);for(var t=new ArrayBuffer(c),n=new DataView(t),r=0;r<c;++r)n.setUint8(r,u.getUint8(r));return t},decode:function(t,p,d){var g=new DataView(t),y=0;function v(e,t){return y+=t,e}function b(e){return v(new Uint8Array(t,y,e),e)}function m(){return v(g.getUint8(y),1)}function _(){return v(g.getUint16(y),2)}function n(){return v(g.getUint32(y),4)}function k(){return 255===g.getUint8(y)&&(y+=1,!0)}function P(e){if(e<24)return e;if(24===e)return m();if(25===e)return _();if(26===e)return n();if(27===e)return n()*i+n();if(31===e)return -1;throw "Invalid length encoding"}function O(e){var t=m();if(255===t)return -1;var n=P(31&t);if(n<0||t>>5!==e)throw "Invalid indefinite length element";return n}function T(e,t){for(var n=0;n<t;++n){var r=m();128&r&&(r<224?(r=(31&r)<<6|63&m(),t-=1):r<240?(r=(15&r)<<12|(63&m())<<6|63&m(),t-=2):(r=(15&r)<<18|(63&m())<<12|(63&m())<<6|63&m(),t-=3)),r<65536?e.push(r):(r-=65536,e.push(55296|r>>10),e.push(56320|1023&r));}}"function"!=typeof p&&(p=function(e){return e}),"function"!=typeof d&&(d=function(){return S});var e=function e(){var t,n,r=m(),i=r>>5,s=31&r;if(7==i)switch(s){case 25:return function(){var e=new ArrayBuffer(4),t=new DataView(e),n=_(),r=32768&n,i=31744&n,s=1023&n;if(31744===i)i=261120;else if(0!==i)i+=114688;else if(0!=s)return s*M;return t.setUint32(0,r<<16|i<<13|s<<13),t.getFloat32(0)}();case 26:return v(g.getFloat32(y),4);case 27:return v(g.getFloat64(y),8)}if((n=P(s))<0&&(i<2||6<i))throw "Invalid length";switch(i){case 0:return n;case 1:return -1-n;case 2:if(n<0){for(var o=[],a=0;0<=(n=O(i));)a+=n,o.push(b(n));var u=new Uint8Array(a),c=0;for(t=0;t<o.length;++t)u.set(o[t],c),c+=o[t].length;return u}return b(n);case 3:var l=[];if(n<0)for(;0<=(n=O(i));)T(l,n);else T(l,n);return String.fromCharCode.apply(null,l);case 4:var f;if(n<0)for(f=[];!k();)f.push(e());else for(f=new Array(n),t=0;t<n;++t)f[t]=e();return f;case 5:var h={};for(t=0;t<n||n<0&&!k();++t)h[e()]=e();return h;case 6:return p(e(),n);case 7:switch(n){case 20:return !1;case 21:return !0;case 22:return null;case 23:return S;default:return d(n)}}}();if(y!==t.byteLength)throw "Remaining bytes";return e}})?s.call(n,r,n,t):s)===S||(t.exports=o);}();},function(e,t,n){function o(e){return (o="function"==typeof Symbol&&"symbol"==typeof Symbol.iterator?function(e){return typeof e}:function(e){return e&&"function"==typeof Symbol&&e.constructor===Symbol&&e!==Symbol.prototype?"symbol":typeof e})(e)}Object.defineProperty(t,"__esModule",{value:!0}),t.default=void 0;var y=l(n(3)),v=l(n(6)),b=l(n(15)),m=l(n(18)),r=l(n(19)),_=l(n(8)),k=l(n(20)),P=l(n(21)),O=c(n(22)),T=c(n(23)),S=c(n(24)),M=c(n(25)),w=c(n(26)),j=c(n(27)),C=c(n(28)),N=c(n(29)),E=c(n(30)),A=c(n(31)),R=c(n(32)),x=c(n(33)),U=c(n(34)),K=c(n(35)),D=c(n(36)),I=c(n(37)),G=c(n(38)),L=c(n(39)),F=c(n(40)),H=c(n(41)),q=c(n(42)),B=c(n(43)),z=c(n(44)),W=c(n(45)),X=c(n(46)),V=c(n(47)),J=c(n(48)),$=c(n(49)),Q=c(n(50)),Y=c(n(51)),Z=c(n(52)),ee=c(n(53)),te=c(n(54)),ne=c(n(55)),re=c(n(56)),ie=c(n(57)),se=c(n(58)),oe=c(n(59)),ae=c(n(60)),ue=c(n(61)),ce=c(n(62)),le=c(n(63)),fe=c(n(64)),he=c(n(65)),pe=c(n(66)),de=c(n(9)),ge=c(n(67)),i=l(n(1)),s=l(n(4)),a=(n(0),l(n(5)));function u(){if("function"!=typeof WeakMap)return null;var e=new WeakMap;return u=function(){return e},e}function c(e){if(e&&e.__esModule)return e;if(null===e||"object"!==o(e)&&"function"!=typeof e)return {default:e};var t=u();if(t&&t.has(e))return t.get(e);var n={},r=Object.defineProperty&&Object.getOwnPropertyDescriptor;for(var i in e)if(Object.prototype.hasOwnProperty.call(e,i)){var s=r?Object.getOwnPropertyDescriptor(e,i):null;s&&(s.get||s.set)?Object.defineProperty(n,i,s):n[i]=e[i];}return n.default=e,t&&t.set(e,n),n}function l(e){return e&&e.__esModule?e:{default:e}}function f(e,t){for(var n=0;n<t.length;n++){var r=t[n];r.enumerable=r.enumerable||!1,r.configurable=!0,"value"in r&&(r.writable=!0),Object.defineProperty(e,r.key,r);}}function ye(e,t,n){return t in e?Object.defineProperty(e,t,{value:n,enumerable:!0,configurable:!0,writable:!0}):e[t]=n,e}var h,p,d,g=(h=ve,d=[{key:"notificationPayload",value:function(e,t){return new r.default(e,t)}},{key:"generateUUID",value:function(){return a.default.createUUID()}}],(p=[{key:"getVersion",value:function(){return this._config.getVersion()}},{key:"_addPnsdkSuffix",value:function(e,t){this._config._addPnsdkSuffix(e,t);}},{key:"networkDownDetected",value:function(){this._listenerManager.announceNetworkDown(),this._config.restore?this.disconnect():this.destroy(!0);}},{key:"networkUpDetected",value:function(){this._listenerManager.announceNetworkUp(),this.reconnect();}}])&&f(h.prototype,p),void(d&&f(h,d)),ve);function ve(e){var n=this;!function(e,t){if(!(e instanceof t))throw new TypeError("Cannot call a class as a function")}(this,ve),ye(this,"_config",void 0),ye(this,"_telemetryManager",void 0),ye(this,"_listenerManager",void 0),ye(this,"_tokenManager",void 0),ye(this,"time",void 0),ye(this,"publish",void 0),ye(this,"fire",void 0),ye(this,"history",void 0),ye(this,"deleteMessages",void 0),ye(this,"messageCounts",void 0),ye(this,"fetchMessages",void 0),ye(this,"channelGroups",void 0),ye(this,"push",void 0),ye(this,"hereNow",void 0),ye(this,"whereNow",void 0),ye(this,"getState",void 0),ye(this,"setState",void 0),ye(this,"grant",void 0),ye(this,"grantToken",void 0),ye(this,"audit",void 0),ye(this,"subscribe",void 0),ye(this,"signal",void 0),ye(this,"presence",void 0),ye(this,"unsubscribe",void 0),ye(this,"unsubscribeAll",void 0),ye(this,"addMessageAction",void 0),ye(this,"removeMessageAction",void 0),ye(this,"getMessageActions",void 0),ye(this,"createUser",void 0),ye(this,"updateUser",void 0),ye(this,"deleteUser",void 0),ye(this,"getUser",void 0),ye(this,"getUsers",void 0),ye(this,"createSpace",void 0),ye(this,"updateSpace",void 0),ye(this,"deleteSpace",void 0),ye(this,"getSpaces",void 0),ye(this,"getSpace",void 0),ye(this,"getMembers",void 0),ye(this,"addMembers",void 0),ye(this,"updateMembers",void 0),ye(this,"removeMembers",void 0),ye(this,"getMemberships",void 0),ye(this,"joinSpaces",void 0),ye(this,"updateMemberships",void 0),ye(this,"leaveSpaces",void 0),ye(this,"disconnect",void 0),ye(this,"reconnect",void 0),ye(this,"destroy",void 0),ye(this,"stop",void 0),ye(this,"getSubscribedChannels",void 0),ye(this,"getSubscribedChannelGroups",void 0),ye(this,"addListener",void 0),ye(this,"removeListener",void 0),ye(this,"removeAllListeners",void 0),ye(this,"parseToken",void 0),ye(this,"setToken",void 0),ye(this,"setTokens",void 0),ye(this,"getToken",void 0),ye(this,"getTokens",void 0),ye(this,"clearTokens",void 0),ye(this,"getAuthKey",void 0),ye(this,"setAuthKey",void 0),ye(this,"setCipherKey",void 0),ye(this,"setUUID",void 0),ye(this,"getUUID",void 0),ye(this,"getFilterExpression",void 0),ye(this,"setFilterExpression",void 0),ye(this,"setHeartbeatInterval",void 0),ye(this,"setProxy",void 0),ye(this,"encrypt",void 0),ye(this,"decrypt",void 0);var t=e.db,r=e.networking,i=e.cbor,s=this._config=new y.default({setup:e,db:t}),o=new v.default({config:s});r.init(s);var a=this._tokenManager=new k.default(s,i),u={config:s,networking:r,crypto:o,tokenManager:a,telemetryManager:this._telemetryManager=new m.default({maximumSamplesCount:6e4})},c=P.default.bind(this,u,de),l=P.default.bind(this,u,A),f=P.default.bind(this,u,x),h=P.default.bind(this,u,K),p=P.default.bind(this,u,ge),d=this._listenerManager=new _.default,g=new b.default({timeEndpoint:c,leaveEndpoint:l,heartbeatEndpoint:f,setStateEndpoint:h,subscribeEndpoint:p,crypto:u.crypto,config:u.config,listenerManager:d});this.addListener=d.addListener.bind(d),this.removeListener=d.removeListener.bind(d),this.removeAllListeners=d.removeAllListeners.bind(d),this.parseToken=a.parseToken.bind(a),this.setToken=a.setToken.bind(a),this.setTokens=a.setTokens.bind(a),this.getToken=a.getToken.bind(a),this.getTokens=a.getTokens.bind(a),this.clearTokens=a.clearTokens.bind(a),this.channelGroups={listGroups:P.default.bind(this,u,M),listChannels:P.default.bind(this,u,w),addChannels:P.default.bind(this,u,O),removeChannels:P.default.bind(this,u,T),deleteGroup:P.default.bind(this,u,S)},this.push={addChannels:P.default.bind(this,u,j),removeChannels:P.default.bind(this,u,C),deleteDevice:P.default.bind(this,u,E),listChannels:P.default.bind(this,u,N)},this.hereNow=P.default.bind(this,u,D),this.whereNow=P.default.bind(this,u,R),this.getState=P.default.bind(this,u,U),this.setState=g.adaptStateChange.bind(g),this.grant=P.default.bind(this,u,oe),this.grantToken=P.default.bind(this,u,ae),this.audit=P.default.bind(this,u,se),this.publish=P.default.bind(this,u,ue),this.fire=function(e,t){return e.replicate=!1,e.storeInHistory=!1,n.publish(e,t)},this.signal=P.default.bind(this,u,ce),this.history=P.default.bind(this,u,le),this.deleteMessages=P.default.bind(this,u,fe),this.messageCounts=P.default.bind(this,u,he),this.fetchMessages=P.default.bind(this,u,pe),this.addMessageAction=P.default.bind(this,u,I),this.removeMessageAction=P.default.bind(this,u,G),this.getMessageActions=P.default.bind(this,u,L),this.createUser=P.default.bind(this,u,F),this.updateUser=P.default.bind(this,u,H),this.deleteUser=P.default.bind(this,u,q),this.getUser=P.default.bind(this,u,B),this.getUsers=P.default.bind(this,u,z),this.createSpace=P.default.bind(this,u,W),this.updateSpace=P.default.bind(this,u,X),this.deleteSpace=P.default.bind(this,u,V),this.getSpaces=P.default.bind(this,u,J),this.getSpace=P.default.bind(this,u,$),this.addMembers=P.default.bind(this,u,Y),this.updateMembers=P.default.bind(this,u,Z),this.removeMembers=P.default.bind(this,u,ee),this.getMembers=P.default.bind(this,u,Q),this.getMemberships=P.default.bind(this,u,te),this.joinSpaces=P.default.bind(this,u,re),this.updateMemberships=P.default.bind(this,u,ne),this.leaveSpaces=P.default.bind(this,u,ie),this.time=c,this.subscribe=g.adaptSubscribeChange.bind(g),this.presence=g.adaptPresenceChange.bind(g),this.unsubscribe=g.adaptUnsubscribeChange.bind(g),this.disconnect=g.disconnect.bind(g),this.reconnect=g.reconnect.bind(g),this.destroy=function(e){g.unsubscribeAll(e),g.disconnect();},this.stop=this.destroy,this.unsubscribeAll=g.unsubscribeAll.bind(g),this.getSubscribedChannels=g.getSubscribedChannels.bind(g),this.getSubscribedChannelGroups=g.getSubscribedChannelGroups.bind(g),this.encrypt=o.encrypt.bind(o),this.decrypt=o.decrypt.bind(o),this.getAuthKey=u.config.getAuthKey.bind(u.config),this.setAuthKey=u.config.setAuthKey.bind(u.config),this.setCipherKey=u.config.setCipherKey.bind(u.config),this.getUUID=u.config.getUUID.bind(u.config),this.setUUID=u.config.setUUID.bind(u.config),this.getFilterExpression=u.config.getFilterExpression.bind(u.config),this.setFilterExpression=u.config.setFilterExpression.bind(u.config),this.setHeartbeatInterval=u.config.setHeartbeatInterval.bind(u.config),r.hasModule("proxy")&&(this.setProxy=function(e){u.config.setProxy(e),n.reconnect();});}ye(t.default=g,"OPERATIONS",i.default),ye(g,"CATEGORIES",s.default),e.exports=t.default;},function(e,t,n){var r,i,s;i=[t],void 0===(s="function"==typeof(r=function(e){var r={3:/^[0-9A-F]{8}-[0-9A-F]{4}-3[0-9A-F]{3}-[0-9A-F]{4}-[0-9A-F]{12}$/i,4:/^[0-9A-F]{8}-[0-9A-F]{4}-4[0-9A-F]{3}-[89AB][0-9A-F]{3}-[0-9A-F]{12}$/i,5:/^[0-9A-F]{8}-[0-9A-F]{4}-5[0-9A-F]{3}-[89AB][0-9A-F]{3}-[0-9A-F]{12}$/i,all:/^[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}$/i};function t(){var e,t,n="";for(e=0;e<32;e++)t=16*Math.random()|0,8!==e&&12!==e&&16!==e&&20!==e||(n+="-"),n+=(12===e?4:16===e?3&t|8:t).toString(16);return n}function n(e,t){var n=r[t||"all"];return n&&n.test(e)||!1}t.isUUID=n,t.VERSION="0.1.0",e.uuid=t,e.isUUID=n;})?r.apply(t,i):r)||(e.exports=s);},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.default=void 0;r(n(6)),r(n(3)),r(n(8));var c=r(n(16)),l=r(n(17)),f=r(n(2)),a=(n(0),r(n(4)));function r(e){return e&&e.__esModule?e:{default:e}}function i(e,t){for(var n=0;n<t.length;n++){var r=t[n];r.enumerable=r.enumerable||!1,r.configurable=!0,"value"in r&&(r.writable=!0),Object.defineProperty(e,r.key,r);}}function h(e,t,n){return t in e?Object.defineProperty(e,t,{value:n,enumerable:!0,configurable:!0,writable:!0}):e[t]=n,e}var s,o,p=(s=d,(o=[{key:"adaptStateChange",value:function(e,t){var n=this,r=e.state,i=e.channels,s=void 0===i?[]:i,o=e.channelGroups,a=void 0===o?[]:o;return s.forEach(function(e){e in n._channels&&(n._channels[e].state=r);}),a.forEach(function(e){e in n._channelGroups&&(n._channelGroups[e].state=r);}),this._setStateEndpoint({state:r,channels:s,channelGroups:a},t)}},{key:"adaptPresenceChange",value:function(e){var t=this,n=e.connected,r=e.channels,i=void 0===r?[]:r,s=e.channelGroups,o=void 0===s?[]:s;n?(i.forEach(function(e){t._heartbeatChannels[e]={state:{}};}),o.forEach(function(e){t._heartbeatChannelGroups[e]={state:{}};})):(i.forEach(function(e){e in t._heartbeatChannels&&delete t._heartbeatChannels[e];}),o.forEach(function(e){e in t._heartbeatChannelGroups&&delete t._heartbeatChannelGroups[e];}),!1===this._config.suppressLeaveEvents&&this._leaveEndpoint({channels:i,channelGroups:o},function(e){t._listenerManager.announceStatus(e);})),this.reconnect();}},{key:"adaptSubscribeChange",value:function(e){var t=this,n=e.timetoken,r=e.channels,i=void 0===r?[]:r,s=e.channelGroups,o=void 0===s?[]:s,a=e.withPresence,u=void 0!==a&&a,c=e.withHeartbeats,l=void 0!==c&&c;this._config.subscribeKey&&""!==this._config.subscribeKey?(n&&(this._lastTimetoken=this._currentTimetoken,this._currentTimetoken=n),"0"!==this._currentTimetoken&&0!==this._currentTimetoken&&(this._storedTimetoken=this._currentTimetoken,this._currentTimetoken=0),i.forEach(function(e){t._channels[e]={state:{}},u&&(t._presenceChannels[e]={}),(l||t._config.getHeartbeatInterval())&&(t._heartbeatChannels[e]={}),t._pendingChannelSubscriptions.push(e);}),o.forEach(function(e){t._channelGroups[e]={state:{}},u&&(t._presenceChannelGroups[e]={}),(l||t._config.getHeartbeatInterval())&&(t._heartbeatChannelGroups[e]={}),t._pendingChannelGroupSubscriptions.push(e);}),this._subscriptionStatusAnnounced=!1,this.reconnect()):console&&console.log&&console.log("subscribe key missing; aborting subscribe");}},{key:"adaptUnsubscribeChange",value:function(e,t){var n=this,r=e.channels,i=void 0===r?[]:r,s=e.channelGroups,o=void 0===s?[]:s,a=[],u=[];i.forEach(function(e){e in n._channels&&(delete n._channels[e],a.push(e),e in n._heartbeatChannels&&delete n._heartbeatChannels[e]),e in n._presenceChannels&&(delete n._presenceChannels[e],a.push(e));}),o.forEach(function(e){e in n._channelGroups&&(delete n._channelGroups[e],u.push(e),e in n._heartbeatChannelGroups&&delete n._heartbeatChannelGroups[e]),e in n._presenceChannelGroups&&(delete n._channelGroups[e],u.push(e));}),0===a.length&&0===u.length||(!1!==this._config.suppressLeaveEvents||t||this._leaveEndpoint({channels:a,channelGroups:u},function(e){e.affectedChannels=a,e.affectedChannelGroups=u,e.currentTimetoken=n._currentTimetoken,e.lastTimetoken=n._lastTimetoken,n._listenerManager.announceStatus(e);}),0===Object.keys(this._channels).length&&0===Object.keys(this._presenceChannels).length&&0===Object.keys(this._channelGroups).length&&0===Object.keys(this._presenceChannelGroups).length&&(this._lastTimetoken=0,this._currentTimetoken=0,this._storedTimetoken=null,this._region=null,this._reconnectionManager.stopPolling()),this.reconnect());}},{key:"unsubscribeAll",value:function(e){this.adaptUnsubscribeChange({channels:this.getSubscribedChannels(),channelGroups:this.getSubscribedChannelGroups()},e);}},{key:"getHeartbeatChannels",value:function(){return Object.keys(this._heartbeatChannels)}},{key:"getHeartbeatChannelGroups",value:function(){return Object.keys(this._heartbeatChannelGroups)}},{key:"getSubscribedChannels",value:function(){return Object.keys(this._channels)}},{key:"getSubscribedChannelGroups",value:function(){return Object.keys(this._channelGroups)}},{key:"reconnect",value:function(){this._startSubscribeLoop(),this._registerHeartbeatTimer();}},{key:"disconnect",value:function(){this._stopSubscribeLoop(),this._stopHeartbeatTimer(),this._reconnectionManager.stopPolling();}},{key:"_registerHeartbeatTimer",value:function(){this._stopHeartbeatTimer(),0!==this._config.getHeartbeatInterval()&&(this._performHeartbeatLoop(),this._heartbeatTimer=setInterval(this._performHeartbeatLoop.bind(this),1e3*this._config.getHeartbeatInterval()));}},{key:"_stopHeartbeatTimer",value:function(){this._heartbeatTimer&&(clearInterval(this._heartbeatTimer),this._heartbeatTimer=null);}},{key:"_performHeartbeatLoop",value:function(){var n=this,e=this.getHeartbeatChannels(),t=this.getHeartbeatChannelGroups(),r={};0===e.length&&0===t.length||(this.getSubscribedChannels().forEach(function(e){var t=n._channels[e].state;Object.keys(t).length&&(r[e]=t);}),this.getSubscribedChannelGroups().forEach(function(e){var t=n._channelGroups[e].state;Object.keys(t).length&&(r[e]=t);}),this._heartbeatEndpoint({channels:e,channelGroups:t,state:r},function(e){e.error&&n._config.announceFailedHeartbeats&&n._listenerManager.announceStatus(e),e.error&&n._config.autoNetworkDetection&&n._isOnline&&(n._isOnline=!1,n.disconnect(),n._listenerManager.announceNetworkDown(),n.reconnect()),!e.error&&n._config.announceSuccessfulHeartbeats&&n._listenerManager.announceStatus(e);}.bind(this)));}},{key:"_startSubscribeLoop",value:function(){var n=this;this._stopSubscribeLoop();var r={},i=[],s=[];if(Object.keys(this._channels).forEach(function(e){var t=n._channels[e].state;Object.keys(t).length&&(r[e]=t),i.push(e);}),Object.keys(this._presenceChannels).forEach(function(e){i.push("".concat(e,"-pnpres"));}),Object.keys(this._channelGroups).forEach(function(e){var t=n._channelGroups[e].state;Object.keys(t).length&&(r[e]=t),s.push(e);}),Object.keys(this._presenceChannelGroups).forEach(function(e){s.push("".concat(e,"-pnpres"));}),0!==i.length||0!==s.length){var e={channels:i,channelGroups:s,state:r,timetoken:this._currentTimetoken,filterExpression:this._config.filterExpression,region:this._region};this._subscribeCall=this._subscribeEndpoint(e,this._processSubscribeResponse.bind(this));}}},{key:"_processSubscribeResponse",value:function(t,e){var c=this;if(t.error)t.category===a.default.PNTimeoutCategory?this._startSubscribeLoop():(t.category===a.default.PNNetworkIssuesCategory?(this.disconnect(),t.error&&this._config.autoNetworkDetection&&this._isOnline&&(this._isOnline=!1,this._listenerManager.announceNetworkDown()),this._reconnectionManager.onReconnection(function(){c._config.autoNetworkDetection&&!c._isOnline&&(c._isOnline=!0,c._listenerManager.announceNetworkUp()),c.reconnect(),c._subscriptionStatusAnnounced=!0;var e={category:a.default.PNReconnectedCategory,operation:t.operation,lastTimetoken:c._lastTimetoken,currentTimetoken:c._currentTimetoken};c._listenerManager.announceStatus(e);}),this._reconnectionManager.startPolling()):t.category===a.default.PNBadRequestCategory&&this._stopHeartbeatTimer(),this._listenerManager.announceStatus(t));else {if(this._storedTimetoken?(this._currentTimetoken=this._storedTimetoken,this._storedTimetoken=null):(this._lastTimetoken=this._currentTimetoken,this._currentTimetoken=e.metadata.timetoken),!this._subscriptionStatusAnnounced){var n={};n.category=a.default.PNConnectedCategory,n.operation=t.operation,n.affectedChannels=this._pendingChannelSubscriptions,n.subscribedChannels=this.getSubscribedChannels(),n.affectedChannelGroups=this._pendingChannelGroupSubscriptions,n.lastTimetoken=this._lastTimetoken,n.currentTimetoken=this._currentTimetoken,this._subscriptionStatusAnnounced=!0,this._listenerManager.announceStatus(n),this._pendingChannelSubscriptions=[],this._pendingChannelGroupSubscriptions=[];}var r=e.messages||[],i=this._config,s=i.requestMessageCountThreshold,l=i.dedupeOnSubscribe;if(s&&r.length>=s){var o={};o.category=a.default.PNRequestMessageCountExceededCategory,o.operation=t.operation,this._listenerManager.announceStatus(o);}r.forEach(function(e){var t=e.channel,n=e.subscriptionMatch,r=e.publishMetaData;if(t===n&&(n=null),l){if(c._dedupingManager.isDuplicate(e))return;c._dedupingManager.addEntry(e);}if(f.default.endsWith(e.channel,"-pnpres")){var i={channel:null,subscription:null};i.actualChannel=null!=n?t:null,i.subscribedChannel=null!=n?n:t,t&&(i.channel=t.substring(0,t.lastIndexOf("-pnpres"))),n&&(i.subscription=n.substring(0,n.lastIndexOf("-pnpres"))),i.action=e.payload.action,i.state=e.payload.data,i.timetoken=r.publishTimetoken,i.occupancy=e.payload.occupancy,i.uuid=e.payload.uuid,i.timestamp=e.payload.timestamp,e.payload.join&&(i.join=e.payload.join),e.payload.leave&&(i.leave=e.payload.leave),e.payload.timeout&&(i.timeout=e.payload.timeout),c._listenerManager.announcePresence(i);}else if(1===e.messageType){var s={channel:null,subscription:null};s.channel=t,s.subscription=n,s.timetoken=r.publishTimetoken,s.publisher=e.issuingClientId,e.userMetadata&&(s.userMetadata=e.userMetadata),s.message=e.payload,c._listenerManager.announceSignal(s);}else if(2===e.messageType){var o={channel:null,subscription:null};o.channel=t,o.subscription=n,o.timetoken=r.publishTimetoken,o.publisher=e.issuingClientId,e.userMetadata&&(o.userMetadata=e.userMetadata),o.message={event:e.payload.event,type:e.payload.type,data:e.payload.data},"user"===e.payload.type?c._listenerManager.announceUser(o):"space"===e.payload.type?c._listenerManager.announceSpace(o):"membership"===e.payload.type&&c._listenerManager.announceMembership(o);}else if(3===e.messageType){var a={};a.channel=t,a.subscription=n,a.timetoken=r.publishTimetoken,a.publisher=e.issuingClientId,a.data={messageTimetoken:e.payload.data.messageTimetoken,actionTimetoken:e.payload.data.actionTimetoken,type:e.payload.data.type,uuid:e.issuingClientId,value:e.payload.data.value},a.event=e.payload.event,c._listenerManager.announceMessageAction(a);}else {var u={channel:null,subscription:null};u.actualChannel=null!=n?t:null,u.subscribedChannel=null!=n?n:t,u.channel=t,u.subscription=n,u.timetoken=r.publishTimetoken,u.publisher=e.issuingClientId,e.userMetadata&&(u.userMetadata=e.userMetadata),c._config.cipherKey?u.message=c._crypto.decrypt(e.payload):u.message=e.payload,c._listenerManager.announceMessage(u);}}),this._region=e.metadata.region,this._startSubscribeLoop();}}},{key:"_stopSubscribeLoop",value:function(){this._subscribeCall&&("function"==typeof this._subscribeCall.abort&&this._subscribeCall.abort(),this._subscribeCall=null);}}])&&i(s.prototype,o),d);function d(e){var t=e.subscribeEndpoint,n=e.leaveEndpoint,r=e.heartbeatEndpoint,i=e.setStateEndpoint,s=e.timeEndpoint,o=e.config,a=e.crypto,u=e.listenerManager;!function(e,t){if(!(e instanceof t))throw new TypeError("Cannot call a class as a function")}(this,d),h(this,"_crypto",void 0),h(this,"_config",void 0),h(this,"_listenerManager",void 0),h(this,"_reconnectionManager",void 0),h(this,"_leaveEndpoint",void 0),h(this,"_heartbeatEndpoint",void 0),h(this,"_setStateEndpoint",void 0),h(this,"_subscribeEndpoint",void 0),h(this,"_channels",void 0),h(this,"_presenceChannels",void 0),h(this,"_heartbeatChannels",void 0),h(this,"_heartbeatChannelGroups",void 0),h(this,"_channelGroups",void 0),h(this,"_presenceChannelGroups",void 0),h(this,"_currentTimetoken",void 0),h(this,"_lastTimetoken",void 0),h(this,"_storedTimetoken",void 0),h(this,"_region",void 0),h(this,"_subscribeCall",void 0),h(this,"_heartbeatTimer",void 0),h(this,"_subscriptionStatusAnnounced",void 0),h(this,"_autoNetworkDetection",void 0),h(this,"_isOnline",void 0),h(this,"_pendingChannelSubscriptions",void 0),h(this,"_pendingChannelGroupSubscriptions",void 0),h(this,"_dedupingManager",void 0),this._listenerManager=u,this._config=o,this._leaveEndpoint=n,this._heartbeatEndpoint=r,this._setStateEndpoint=i,this._subscribeEndpoint=t,this._crypto=a,this._channels={},this._presenceChannels={},this._heartbeatChannels={},this._heartbeatChannelGroups={},this._channelGroups={},this._presenceChannelGroups={},this._pendingChannelSubscriptions=[],this._pendingChannelGroupSubscriptions=[],this._currentTimetoken=0,this._lastTimetoken=0,this._storedTimetoken=null,this._subscriptionStatusAnnounced=!1,this._isOnline=!0,this._reconnectionManager=new c.default({timeEndpoint:s}),this._dedupingManager=new l.default({config:o});}t.default=p,e.exports=t.default;},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.default=void 0;var r;(r=n(9))&&r.__esModule,n(0);function i(e,t){for(var n=0;n<t.length;n++){var r=t[n];r.enumerable=r.enumerable||!1,r.configurable=!0,"value"in r&&(r.writable=!0),Object.defineProperty(e,r.key,r);}}function s(e,t,n){return t in e?Object.defineProperty(e,t,{value:n,enumerable:!0,configurable:!0,writable:!0}):e[t]=n,e}var o,a,c=(o=l,(a=[{key:"onReconnection",value:function(e){this._reconnectionCallback=e;}},{key:"startPolling",value:function(){this._timeTimer=setInterval(this._performTimeLoop.bind(this),3e3);}},{key:"stopPolling",value:function(){clearInterval(this._timeTimer);}},{key:"_performTimeLoop",value:function(){var t=this;this._timeEndpoint(function(e){e.error||(clearInterval(t._timeTimer),t._reconnectionCallback());});}}])&&i(o.prototype,a),l);function l(e){var t=e.timeEndpoint;!function(e,t){if(!(e instanceof t))throw new TypeError("Cannot call a class as a function")}(this,l),s(this,"_reconnectionCallback",void 0),s(this,"_timeEndpoint",void 0),s(this,"_timeTimer",void 0),this._timeEndpoint=t;}t.default=c,e.exports=t.default;},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.default=void 0;var r;(r=n(3))&&r.__esModule,n(0);function i(e,t){for(var n=0;n<t.length;n++){var r=t[n];r.enumerable=r.enumerable||!1,r.configurable=!0,"value"in r&&(r.writable=!0),Object.defineProperty(e,r.key,r);}}function s(e,t,n){return t in e?Object.defineProperty(e,t,{value:n,enumerable:!0,configurable:!0,writable:!0}):e[t]=n,e}var o,a,c=(o=l,(a=[{key:"getKey",value:function(e){var t=function(e){var t=0;if(0===e.length)return t;for(var n=0;n<e.length;n+=1)t=(t<<5)-t+e.charCodeAt(n),t&=t;return t}(JSON.stringify(e.payload)).toString(),n=e.publishMetaData.publishTimetoken;return "".concat(n,"-").concat(t)}},{key:"isDuplicate",value:function(e){return this.hashHistory.includes(this.getKey(e))}},{key:"addEntry",value:function(e){this.hashHistory.length>=this._config.maximumCacheSize&&this.hashHistory.shift(),this.hashHistory.push(this.getKey(e));}},{key:"clearHistory",value:function(){this.hashHistory=[];}}])&&i(o.prototype,a),l);function l(e){var t=e.config;!function(e,t){if(!(e instanceof t))throw new TypeError("Cannot call a class as a function")}(this,l),s(this,"_config",void 0),s(this,"hashHistory",void 0),this.hashHistory=[],this._config=t;}t.default=c,e.exports=t.default;},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.default=void 0;var r,s=(r=n(1))&&r.__esModule?r:{default:r};function i(e,t){for(var n=0;n<t.length;n++){var r=t[n];r.enumerable=r.enumerable||!1,r.configurable=!0,"value"in r&&(r.writable=!0),Object.defineProperty(e,r.key,r);}}function o(e,t,n){return t in e?Object.defineProperty(e,t,{value:n,enumerable:!0,configurable:!0,writable:!0}):e[t]=n,e}var a,u,l=(a=f,(u=[{key:"operationsLatencyForRequest",value:function(){var r=this,i={};return Object.keys(this._latencies).forEach(function(e){var t=r._latencies[e],n=r._averageLatency(t);0<n&&(i["l_".concat(e)]=n);}),i}},{key:"startLatencyMeasure",value:function(e,t){e!==s.default.PNSubscribeOperation&&t&&(this._trackedLatencies[t]=Date.now());}},{key:"stopLatencyMeasure",value:function(e,t){if(e!==s.default.PNSubscribeOperation&&t){var n=this._endpointName(e),r=this._latencies[n],i=this._trackedLatencies[t];(r=r||(this._latencies[n]=[])).push(Date.now()-i),r.length>this._maximumSamplesCount&&r.splice(0,r.length-this._maximumSamplesCount),delete this._trackedLatencies[t];}}},{key:"_averageLatency",value:function(e){return Math.floor(e.reduce(function(e,t){return e+t},0)/e.length)}},{key:"_endpointName",value:function(e){var t=null;switch(e){case s.default.PNPublishOperation:t="pub";break;case s.default.PNSignalOperation:t="sig";break;case s.default.PNHistoryOperation:case s.default.PNFetchMessagesOperation:case s.default.PNDeleteMessagesOperation:case s.default.PNMessageCounts:t="hist";break;case s.default.PNUnsubscribeOperation:case s.default.PNWhereNowOperation:case s.default.PNHereNowOperation:case s.default.PNHeartbeatOperation:case s.default.PNSetStateOperation:case s.default.PNGetStateOperation:t="pres";break;case s.default.PNAddChannelsToGroupOperation:case s.default.PNRemoveChannelsFromGroupOperation:case s.default.PNChannelGroupsOperation:case s.default.PNRemoveGroupOperation:case s.default.PNChannelsForGroupOperation:t="cg";break;case s.default.PNPushNotificationEnabledChannelsOperation:case s.default.PNRemoveAllPushNotificationsOperation:t="push";break;case s.default.PNCreateUserOperation:case s.default.PNUpdateUserOperation:case s.default.PNDeleteUserOperation:case s.default.PNGetUserOperation:case s.default.PNGetUsersOperation:case s.default.PNCreateSpaceOperation:case s.default.PNUpdateSpaceOperation:case s.default.PNDeleteSpaceOperation:case s.default.PNGetSpaceOperation:case s.default.PNGetSpacesOperation:case s.default.PNGetMembersOperation:case s.default.PNUpdateMembersOperation:case s.default.PNGetMembershipsOperation:case s.default.PNUpdateMembershipsOperation:t="obj";break;case s.default.PNAddMessageActionOperation:case s.default.PNRemoveMessageActionOperation:case s.default.PNGetMessageActionsOperation:t="msga";break;case s.default.PNAccessManagerGrant:case s.default.PNAccessManagerAudit:t="pam";break;case s.default.PNAccessManagerGrantToken:t="pam3";break;default:t="time";}return t}}])&&i(a.prototype,u),f);function f(e){!function(e,t){if(!(e instanceof t))throw new TypeError("Cannot call a class as a function")}(this,f),o(this,"_maximumSamplesCount",100),o(this,"_trackedLatencies",{}),o(this,"_latencies",{}),this._maximumSamplesCount=e.maximumSamplesCount||this._maximumSamplesCount;}t.default=l,e.exports=t.default;},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.default=t.FCMNotificationPayload=t.MPNSNotificationPayload=t.APNSNotificationPayload=void 0;n(0);function r(e){return (r="function"==typeof Symbol&&"symbol"==typeof Symbol.iterator?function(e){return typeof e}:function(e){return e&&"function"==typeof Symbol&&e.constructor===Symbol&&e!==Symbol.prototype?"symbol":typeof e})(e)}function i(e,t){if(null==e)return {};var n,r,i=function(e,t){if(null==e)return {};var n,r,i={},s=Object.keys(e);for(r=0;r<s.length;r++)n=s[r],0<=t.indexOf(n)||(i[n]=e[n]);return i}(e,t);if(Object.getOwnPropertySymbols){var s=Object.getOwnPropertySymbols(e);for(r=0;r<s.length;r++)n=s[r],0<=t.indexOf(n)||Object.prototype.propertyIsEnumerable.call(e,n)&&(i[n]=e[n]);}return i}function s(t,e){var n=Object.keys(t);if(Object.getOwnPropertySymbols){var r=Object.getOwnPropertySymbols(t);e&&(r=r.filter(function(e){return Object.getOwnPropertyDescriptor(t,e).enumerable})),n.push.apply(n,r);}return n}function o(t){for(var e=1;e<arguments.length;e++){var n=null!=arguments[e]?arguments[e]:{};e%2?s(Object(n),!0).forEach(function(e){g(t,e,n[e]);}):Object.getOwnPropertyDescriptors?Object.defineProperties(t,Object.getOwnPropertyDescriptors(n)):s(Object(n)).forEach(function(e){Object.defineProperty(t,e,Object.getOwnPropertyDescriptor(n,e));});}return t}function a(e,t){return !t||"object"!==r(t)&&"function"!=typeof t?c(e):t}function u(e){return (u=Object.setPrototypeOf?Object.getPrototypeOf:function(e){return e.__proto__||Object.getPrototypeOf(e)})(e)}function c(e){if(void 0===e)throw new ReferenceError("this hasn't been initialised - super() hasn't been called");return e}function l(e,t){if("function"!=typeof t&&null!==t)throw new TypeError("Super expression must either be null or a function");e.prototype=Object.create(t&&t.prototype,{constructor:{value:e,writable:!0,configurable:!0}}),t&&f(e,t);}function f(e,t){return (f=Object.setPrototypeOf||function(e,t){return e.__proto__=t,e})(e,t)}function h(e,t){if(!(e instanceof t))throw new TypeError("Cannot call a class as a function")}function p(e,t){for(var n=0;n<t.length;n++){var r=t[n];r.enumerable=r.enumerable||!1,r.configurable=!0,"value"in r&&(r.writable=!0),Object.defineProperty(e,r.key,r);}}function d(e,t,n){return t&&p(e.prototype,t),n&&p(e,n),e}function g(e,t,n){return t in e?Object.defineProperty(e,t,{value:n,enumerable:!0,configurable:!0,writable:!0}):e[t]=n,e}var y=(d(v,[{key:"payload",get:function(){return this._payload}},{key:"title",set:function(e){this._title=e;}},{key:"subtitle",set:function(e){this._subtitle=e;}},{key:"body",set:function(e){this._body=e;}},{key:"badge",set:function(e){this._badge=e;}},{key:"sound",set:function(e){this._sound=e;}}]),d(v,[{key:"_setDefaultPayloadStructure",value:function(){}},{key:"toObject",value:function(){return {}}}]),v);function v(e,t,n){h(this,v),g(this,"_subtitle",void 0),g(this,"_payload",void 0),g(this,"_badge",void 0),g(this,"_sound",void 0),g(this,"_title",void 0),g(this,"_body",void 0),this._payload=e,this._setDefaultPayloadStructure(),this.title=t,this.body=n;}var b=(l(m,y),d(m,[{key:"_setDefaultPayloadStructure",value:function(){this._payload.aps={alert:{}};}},{key:"toObject",value:function(){var t=this,e=o({},this._payload),n=e.aps,r=n.alert;if(this._isSilent&&(n["content-available"]=1),"apns2"===this._apnsPushType){if(!this._configurations||!this._configurations.length)throw new ReferenceError("APNS2 configuration is missing");var i=[];this._configurations.forEach(function(e){i.push(t._objectFromAPNS2Configuration(e));}),i.length&&(e.pn_push=i);}return r&&Object.keys(r).length||delete n.alert,this._isSilent&&(delete n.alert,delete n.badge,delete n.sound,r={}),this._isSilent||Object.keys(r).length?e:null}},{key:"_objectFromAPNS2Configuration",value:function(e){var t=this;if(!e.targets||!e.targets.length)throw new ReferenceError("At least one APNS2 target should be provided");var n=[];e.targets.forEach(function(e){n.push(t._objectFromAPNSTarget(e));});var r=e.collapseId,i=e.expirationDate,s={auth_method:"token",targets:n,version:"v2"};return r&&r.length&&(s.collapse_id=r),i&&(s.expiration=i.toISOString()),s}},{key:"_objectFromAPNSTarget",value:function(e){if(!e.topic||!e.topic.length)throw new TypeError("Target 'topic' undefined.");var t=e.topic,n=e.environment,r=void 0===n?"development":n,i=e.excludedDevices,s=void 0===i?[]:i,o={topic:t,environment:r};return s.length&&(o.excluded_devices=s),o}},{key:"configurations",set:function(e){e&&e.length&&(this._configurations=e);}},{key:"notification",get:function(){return this._payload.aps}},{key:"title",get:function(){return this._title},set:function(e){e&&e.length&&(this._payload.aps.alert.title=e,this._title=e);}},{key:"subtitle",get:function(){return this._subtitle},set:function(e){e&&e.length&&(this._payload.aps.alert.subtitle=e,this._subtitle=e);}},{key:"body",get:function(){return this._body},set:function(e){e&&e.length&&(this._payload.aps.alert.body=e,this._body=e);}},{key:"badge",get:function(){return this._badge},set:function(e){null!=e&&(this._payload.aps.badge=e,this._badge=e);}},{key:"sound",get:function(){return this._sound},set:function(e){e&&e.length&&(this._payload.aps.sound=e,this._sound=e);}},{key:"silent",set:function(e){this._isSilent=e;}}]),m);function m(){var e,t;h(this,m);for(var n=arguments.length,r=new Array(n),i=0;i<n;i++)r[i]=arguments[i];return g(c(t=a(this,(e=u(m)).call.apply(e,[this].concat(r)))),"_configurations",void 0),g(c(t),"_apnsPushType",void 0),g(c(t),"_isSilent",void 0),t}t.APNSNotificationPayload=b;var _=(l(k,y),d(k,[{key:"toObject",value:function(){return Object.keys(this._payload).length?o({},this._payload):null}},{key:"backContent",get:function(){return this._backContent},set:function(e){e&&e.length&&(this._payload.back_content=e,this._backContent=e);}},{key:"backTitle",get:function(){return this._backTitle},set:function(e){e&&e.length&&(this._payload.back_title=e,this._backTitle=e);}},{key:"count",get:function(){return this._count},set:function(e){null!=e&&(this._payload.count=e,this._count=e);}},{key:"title",get:function(){return this._title},set:function(e){e&&e.length&&(this._payload.title=e,this._title=e);}},{key:"type",get:function(){return this._type},set:function(e){e&&e.length&&(this._payload.type=e,this._type=e);}},{key:"subtitle",get:function(){return this.backTitle},set:function(e){this.backTitle=e;}},{key:"body",get:function(){return this.backContent},set:function(e){this.backContent=e;}},{key:"badge",get:function(){return this.count},set:function(e){this.count=e;}}]),k);function k(){var e,t;h(this,k);for(var n=arguments.length,r=new Array(n),i=0;i<n;i++)r[i]=arguments[i];return g(c(t=a(this,(e=u(k)).call.apply(e,[this].concat(r)))),"_backContent",void 0),g(c(t),"_backTitle",void 0),g(c(t),"_count",void 0),g(c(t),"_type",void 0),t}t.MPNSNotificationPayload=_;var P=(l(O,y),d(O,[{key:"_setDefaultPayloadStructure",value:function(){this._payload.notification={},this._payload.data={};}},{key:"toObject",value:function(){var e=o({},this._payload.data),t=null,n={};if(2<Object.keys(this._payload).length){var r=this._payload;r.notification,r.data,e=o({},e,{},i(r,["notification","data"]));}return this._isSilent?e.notification=this._payload.notification:t=this._payload.notification,Object.keys(e).length&&(n.data=e),t&&Object.keys(t).length&&(n.notification=t),Object.keys(n).length?n:null}},{key:"notification",get:function(){return this._payload.notification}},{key:"data",get:function(){return this._payload.data}},{key:"title",get:function(){return this._title},set:function(e){e&&e.length&&(this._payload.notification.title=e,this._title=e);}},{key:"body",get:function(){return this._body},set:function(e){e&&e.length&&(this._payload.notification.body=e,this._body=e);}},{key:"sound",get:function(){return this._sound},set:function(e){e&&e.length&&(this._payload.notification.sound=e,this._sound=e);}},{key:"icon",get:function(){return this._icon},set:function(e){e&&e.length&&(this._payload.notification.icon=e,this._icon=e);}},{key:"tag",get:function(){return this._tag},set:function(e){e&&e.length&&(this._payload.notification.tag=e,this._tag=e);}},{key:"silent",set:function(e){this._isSilent=e;}}]),O);function O(){var e,t;h(this,O);for(var n=arguments.length,r=new Array(n),i=0;i<n;i++)r[i]=arguments[i];return g(c(t=a(this,(e=u(O)).call.apply(e,[this].concat(r)))),"_isSilent",void 0),g(c(t),"_icon",void 0),g(c(t),"_tag",void 0),t}function T(e,t){h(this,T),g(this,"_payload",void 0),g(this,"_debugging",void 0),g(this,"_subtitle",void 0),g(this,"_badge",void 0),g(this,"_sound",void 0),g(this,"_title",void 0),g(this,"_body",void 0),g(this,"apns",void 0),g(this,"mpns",void 0),g(this,"fcm",void 0),this._payload={apns:{},mpns:{},fcm:{}},this._title=e,this._body=t,this.apns=new b(this._payload.apns,e,t),this.mpns=new _(this._payload.mpns,e,t),this.fcm=new P(this._payload.fcm,e,t);}t.FCMNotificationPayload=P;var S=(d(T,[{key:"debugging",set:function(e){this._debugging=e;}},{key:"title",get:function(){return this._title}},{key:"body",get:function(){return this._body}},{key:"subtitle",get:function(){return this._subtitle},set:function(e){this._subtitle=e,this.apns.subtitle=e,this.mpns.subtitle=e,this.fcm.subtitle=e;}},{key:"badge",get:function(){return this._badge},set:function(e){this._badge=e,this.apns.badge=e,this.mpns.badge=e,this.fcm.badge=e;}},{key:"sound",get:function(){return this._sound},set:function(e){this._sound=e,this.apns.sound=e,this.mpns.sound=e,this.fcm.sound=e;}}]),d(T,[{key:"buildPayload",value:function(e){var t={};if(e.includes("apns")||e.includes("apns2")){this.apns._apnsPushType=e.includes("apns")?"apns":"apns2";var n=this.apns.toObject();n&&Object.keys(n).length&&(t.pn_apns=n);}if(e.includes("mpns")){var r=this.mpns.toObject();r&&Object.keys(r).length&&(t.pn_mpns=r);}if(e.includes("fcm")){var i=this.fcm.toObject();i&&Object.keys(i).length&&(t.pn_gcm=i);}return Object.keys(t).length&&this._debugging&&(t.pn_debug=!0),t}}]),T);t.default=S;},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.default=void 0;var r;(r=n(3))&&r.__esModule,n(0);function i(e){return (i="function"==typeof Symbol&&"symbol"==typeof Symbol.iterator?function(e){return typeof e}:function(e){return e&&"function"==typeof Symbol&&e.constructor===Symbol&&e!==Symbol.prototype?"symbol":typeof e})(e)}function s(e,t){for(var n=0;n<t.length;n++){var r=t[n];r.enumerable=r.enumerable||!1,r.configurable=!0,"value"in r&&(r.writable=!0),Object.defineProperty(e,r.key,r);}}function o(e,t,n){return t in e?Object.defineProperty(e,t,{value:n,enumerable:!0,configurable:!0,writable:!0}):e[t]=n,e}var a,u,l=(a=f,(u=[{key:"_initializeTokens",value:function(){this._userTokens={},this._spaceTokens={},this._userToken=void 0,this._spaceToken=void 0;}},{key:"_setToken",value:function(t){var n=this,e=this.parseToken(t);e&&e.resources&&(e.resources.users&&Object.keys(e.resources.users).forEach(function(e){n._userTokens[e]=t;}),e.resources.spaces&&Object.keys(e.resources.spaces).forEach(function(e){n._spaceTokens[e]=t;})),e&&e.patterns&&(e.patterns.users&&0<Object.keys(e.patterns.users).length&&(this._userToken=t),e.patterns.spaces&&0<Object.keys(e.patterns.spaces).length&&(this._spaceToken=t));}},{key:"setToken",value:function(e){e&&0<e.length&&this._setToken(e);}},{key:"setTokens",value:function(e){var t=this;e&&e.length&&"object"===i(e)&&e.forEach(function(e){t.setToken(e);});}},{key:"getTokens",value:function(e){var t=this,n={users:{},spaces:{}};return e?(e.user&&(n.user=this._userToken),e.space&&(n.space=this._spaceToken),e.users&&e.users.forEach(function(e){n.users[e]=t._userTokens[e];}),e.space&&e.spaces.forEach(function(e){n.spaces[e]=t._spaceTokens[e];})):(this._userToken&&(n.user=this._userToken),this._spaceToken&&(n.space=this._spaceToken),Object.keys(this._userTokens).forEach(function(e){n.users[e]=t._userTokens[e];}),Object.keys(this._spaceTokens).forEach(function(e){n.spaces[e]=t._spaceTokens[e];})),n}},{key:"getToken",value:function(e,t){var n;return t?"user"===e?n=this._userTokens[t]:"space"===e&&(n=this._spaceTokens[t]):"user"===e?n=this._userToken:"space"===e&&(n=this._spaceToken),n}},{key:"extractPermissions",value:function(e){var t={create:!1,read:!1,write:!1,manage:!1,delete:!1};return 16==(16&e)&&(t.create=!0),8==(8&e)&&(t.delete=!0),4==(4&e)&&(t.manage=!0),2==(2&e)&&(t.write=!0),1==(1&e)&&(t.read=!0),t}},{key:"parseToken",value:function(e){var t=this,n=this._cbor.decodeToken(e);if(void 0!==n){var r=Object.keys(n.res.usr),i=Object.keys(n.res.spc),s=Object.keys(n.pat.usr),o=Object.keys(n.pat.spc),a={version:n.v,timestamp:n.t,ttl:n.ttl},u=0<r.length,c=0<i.length;(u||c)&&(a.resources={},u&&(a.resources.users={},r.forEach(function(e){a.resources.users[e]=t.extractPermissions(n.res.usr[e]);})),c&&(a.resources.spaces={},i.forEach(function(e){a.resources.spaces[e]=t.extractPermissions(n.res.spc[e]);})));var l=0<s.length,f=0<o.length;return (l||f)&&(a.patterns={},l&&(a.patterns.users={},s.forEach(function(e){a.patterns.users[e]=t.extractPermissions(n.pat.usr[e]);})),f&&(a.patterns.spaces={},o.forEach(function(e){a.patterns.spaces[e]=t.extractPermissions(n.pat.spc[e]);}))),0<Object.keys(n.meta).length&&(a.meta=n.meta),a.signature=n.sig,a}}},{key:"clearTokens",value:function(){this._initializeTokens();}}])&&s(a.prototype,u),f);function f(e,t){!function(e,t){if(!(e instanceof t))throw new TypeError("Cannot call a class as a function")}(this,f),o(this,"_config",void 0),o(this,"_cbor",void 0),o(this,"_userTokens",void 0),o(this,"_spaceTokens",void 0),o(this,"_userToken",void 0),o(this,"_spaceToken",void 0),this._config=e,this._cbor=t,this._initializeTokens();}t.default=l,e.exports=t.default;},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.default=function(r,i){var e=r.networking,t=r.config,s=r.telemetryManager,o=m.default.createUUID(),a=null,u=null,c={};a=i.getOperation()===k.default.PNTimeOperation||i.getOperation()===k.default.PNChannelGroupsOperation?arguments.length<=2?void 0:arguments[2]:(c=arguments.length<=2?void 0:arguments[2],arguments.length<=3?void 0:arguments[3]);"undefined"==typeof Promise||a||(u=_.default.createPromise());var n=i.validateParams(r,c);if(n)return a?a(S(n)):u?(u.reject(new T("Validation failed, check status for details",S(n))),u.promise):void 0;var l,f=i.prepareParams(r,c),h=function(e,t,n){return e.usePost&&e.usePost(t,n)?e.postURL(t,n):e.usePatch&&e.usePatch(t,n)?e.patchURL(t,n):e.getURL(t,n)}(i,r,c),p={url:h,operation:i.getOperation(),timeout:i.getRequestTimeout(r),headers:i.getRequestHeaders?i.getRequestHeaders():{}};f.uuid=t.UUID,f.pnsdk=function(e){if(e.sdkName)return e.sdkName;var t="PubNub-JS-".concat(e.sdkFamily);e.partnerId&&(t+="-".concat(e.partnerId));t+="/".concat(e.getVersion());var n=e._getPnsdkSuffix(" ");0<n.length&&(t+=n);return t}(t);var d=s.operationsLatencyForRequest();Object.keys(d).length&&(f=function(t){for(var e=1;e<arguments.length;e++){var n=null!=arguments[e]?arguments[e]:{};e%2?P(Object(n),!0).forEach(function(e){O(t,e,n[e]);}):Object.getOwnPropertyDescriptors?Object.defineProperties(t,Object.getOwnPropertyDescriptors(n)):P(Object(n)).forEach(function(e){Object.defineProperty(t,e,Object.getOwnPropertyDescriptor(n,e));});}return t}({},f,{},d));t.useInstanceId&&(f.instanceid=t.instanceId);t.useRequestId&&(f.requestid=o);if(i.isAuthSupported()){var g=function(e,t,n){var r;e.getAuthToken&&(r=e.getAuthToken(t,n));return r}(i,r,c)||t.getAuthKey();g&&(f.auth=g);}t.secretKey&&function(e,t,n,r,i){var s=e.config,o=e.crypto,a=M(e,i,r);n.timestamp=Math.floor((new Date).getTime()/1e3);var u="".concat(a,"\n").concat(s.publishKey,"\n").concat(t,"\n").concat(_.default.signPamFromParams(n),"\n");if("POST"===a){var c=i.postPayload(e,r);u+="string"==typeof c?c:JSON.stringify(c);}else if("PATCH"===a){var l=i.patchPayload(e,r);u+="string"==typeof l?l:JSON.stringify(l);}var f="v2.".concat(o.HMACSHA256(u));f=(f=(f=f.replace(/\+/g,"-")).replace(/\//g,"_")).replace(/=+$/,""),n.signature=f;}(r,h,f,c,i);function y(e,t){if(e.error)a?a(e):u&&u.reject(new T("PubNub call failed, check status for details",e));else {s.stopLatencyMeasure(i.getOperation(),o);var n=i.handleResponse(r,t,c);a?a(e,n):u&&u.fulfill(n);}}if(s.startLatencyMeasure(i.getOperation(),o),"POST"===M(r,i,c)){var v=i.postPayload(r,c);l=e.POST(f,v,p,y);}else if("PATCH"===M(r,i,c)){var b=i.patchPayload(r,c);l=e.PATCH(f,b,p,y);}else l="DELETE"===M(r,i,c)?e.DELETE(f,p,y):e.GET(f,p,y);if(i.getOperation()===k.default.PNSubscribeOperation)return l;if(u)return u.promise};var m=r(n(5)),_=(n(0),r(n(2))),k=(r(n(3)),r(n(1)));function r(e){return e&&e.__esModule?e:{default:e}}function P(t,e){var n=Object.keys(t);if(Object.getOwnPropertySymbols){var r=Object.getOwnPropertySymbols(t);e&&(r=r.filter(function(e){return Object.getOwnPropertyDescriptor(t,e).enumerable})),n.push.apply(n,r);}return n}function O(e,t,n){return t in e?Object.defineProperty(e,t,{value:n,enumerable:!0,configurable:!0,writable:!0}):e[t]=n,e}function i(e){return (i="function"==typeof Symbol&&"symbol"==typeof Symbol.iterator?function(e){return typeof e}:function(e){return e&&"function"==typeof Symbol&&e.constructor===Symbol&&e!==Symbol.prototype?"symbol":typeof e})(e)}function s(e,t){return !t||"object"!==i(t)&&"function"!=typeof t?function(e){if(void 0!==e)return e;throw new ReferenceError("this hasn't been initialised - super() hasn't been called")}(e):t}function o(e){var n="function"==typeof Map?new Map:void 0;return (o=function(e){if(null===e||!function(e){return -1!==Function.toString.call(e).indexOf("[native code]")}(e))return e;if("function"!=typeof e)throw new TypeError("Super expression must either be null or a function");if(void 0!==n){if(n.has(e))return n.get(e);n.set(e,t);}function t(){return a(e,arguments,c(this).constructor)}return t.prototype=Object.create(e.prototype,{constructor:{value:t,enumerable:!1,writable:!0,configurable:!0}}),u(t,e)})(e)}function a(e,t,n){return (a=function(){if("undefined"==typeof Reflect||!Reflect.construct)return !1;if(Reflect.construct.sham)return !1;if("function"==typeof Proxy)return !0;try{return Date.prototype.toString.call(Reflect.construct(Date,[],function(){})),!0}catch(e){return !1}}()?Reflect.construct:function(e,t,n){var r=[null];r.push.apply(r,t);var i=new(Function.bind.apply(e,r));return n&&u(i,n.prototype),i}).apply(null,arguments)}function u(e,t){return (u=Object.setPrototypeOf||function(e,t){return e.__proto__=t,e})(e,t)}function c(e){return (c=Object.setPrototypeOf?Object.getPrototypeOf:function(e){return e.__proto__||Object.getPrototypeOf(e)})(e)}var T=(function(e,t){if("function"!=typeof t&&null!==t)throw new TypeError("Super expression must either be null or a function");e.prototype=Object.create(t&&t.prototype,{constructor:{value:e,writable:!0,configurable:!0}}),t&&u(e,t);}(l,o(Error)),l);function l(e,t){var n;return function(e,t){if(!(e instanceof t))throw new TypeError("Cannot call a class as a function")}(this,l),(n=s(this,c(l).call(this,e))).name=n.constructor.name,n.status=t,n.message=e,n}function S(e){return function(e,t){return e.type=t,e.error=!0,e}({message:e},"validationError")}function M(e,t,n){return t.usePost&&t.usePost(e,n)?"POST":t.usePatch&&t.usePatch(e,n)?"PATCH":t.useDelete&&t.useDelete(e,n)?"DELETE":"GET"}e.exports=t.default;},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return r.default.PNAddChannelsToGroupOperation},t.validateParams=function(e,t){var n=t.channels,r=t.channelGroup,i=e.config;if(!r)return "Missing Channel Group";if(!n||0===n.length)return "Missing Channels";if(!i.subscribeKey)return "Missing Subscribe Key"},t.getURL=function(e,t){var n=t.channelGroup,r=e.config;return "/v1/channel-registration/sub-key/".concat(r.subscribeKey,"/channel-group/").concat(i.default.encodeString(n))},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(e,t){var n=t.channels;return {add:(void 0===n?[]:n).join(",")}},t.handleResponse=function(){return {}};n(0);var r=s(n(1)),i=s(n(2));function s(e){return e&&e.__esModule?e:{default:e}}},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return r.default.PNRemoveChannelsFromGroupOperation},t.validateParams=function(e,t){var n=t.channels,r=t.channelGroup,i=e.config;if(!r)return "Missing Channel Group";if(!n||0===n.length)return "Missing Channels";if(!i.subscribeKey)return "Missing Subscribe Key"},t.getURL=function(e,t){var n=t.channelGroup,r=e.config;return "/v1/channel-registration/sub-key/".concat(r.subscribeKey,"/channel-group/").concat(i.default.encodeString(n))},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(e,t){var n=t.channels;return {remove:(void 0===n?[]:n).join(",")}},t.handleResponse=function(){return {}};n(0);var r=s(n(1)),i=s(n(2));function s(e){return e&&e.__esModule?e:{default:e}}},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return r.default.PNRemoveGroupOperation},t.validateParams=function(e,t){var n=t.channelGroup,r=e.config;if(!n)return "Missing Channel Group";if(!r.subscribeKey)return "Missing Subscribe Key"},t.getURL=function(e,t){var n=t.channelGroup,r=e.config;return "/v1/channel-registration/sub-key/".concat(r.subscribeKey,"/channel-group/").concat(i.default.encodeString(n),"/remove")},t.isAuthSupported=function(){return !0},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.prepareParams=function(){return {}},t.handleResponse=function(){return {}};n(0);var r=s(n(1)),i=s(n(2));function s(e){return e&&e.__esModule?e:{default:e}}},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNChannelGroupsOperation},t.validateParams=function(e){if(!e.config.subscribeKey)return "Missing Subscribe Key"},t.getURL=function(e){var t=e.config;return "/v1/channel-registration/sub-key/".concat(t.subscribeKey,"/channel-group")},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(){return {}},t.handleResponse=function(e,t){return {groups:t.payload.groups}};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return r.default.PNChannelsForGroupOperation},t.validateParams=function(e,t){var n=t.channelGroup,r=e.config;if(!n)return "Missing Channel Group";if(!r.subscribeKey)return "Missing Subscribe Key"},t.getURL=function(e,t){var n=t.channelGroup,r=e.config;return "/v1/channel-registration/sub-key/".concat(r.subscribeKey,"/channel-group/").concat(i.default.encodeString(n))},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(){return {}},t.handleResponse=function(e,t){return {channels:t.payload.channels}};n(0);var r=s(n(1)),i=s(n(2));function s(e){return e&&e.__esModule?e:{default:e}}},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNPushNotificationEnabledChannelsOperation},t.validateParams=function(e,t){var n=t.device,r=t.pushGateway,i=t.channels,s=t.topic,o=e.config;if(!n)return "Missing Device ID (device)";if(!r)return "Missing GW Type (pushGateway: gcm, apns or apns2)";if("apns2"===r&&!s)return "Missing APNS2 topic";if(!i||0===i.length)return "Missing Channels";if(!o.subscribeKey)return "Missing Subscribe Key"},t.getURL=function(e,t){var n=t.device,r=t.pushGateway,i=e.config;return "apns2"!==r?"/v1/push/sub-key/".concat(i.subscribeKey,"/devices/").concat(n):"/v2/push/sub-key/".concat(i.subscribeKey,"/devices-apns2/").concat(n)},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(e,t){var n=t.pushGateway,r=t.channels,i=void 0===r?[]:r,s=t.environment,o=void 0===s?"development":s,a=t.topic,u={type:n,add:i.join(",")};"apns2"===n&&delete(u=Object.assign({},u,{environment:o,topic:a})).type;return u},t.handleResponse=function(){return {}};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNPushNotificationEnabledChannelsOperation},t.validateParams=function(e,t){var n=t.device,r=t.pushGateway,i=t.channels,s=t.topic,o=e.config;if(!n)return "Missing Device ID (device)";if(!r)return "Missing GW Type (pushGateway: gcm, apns or apns2)";if("apns2"===r&&!s)return "Missing APNS2 topic";if(!i||0===i.length)return "Missing Channels";if(!o.subscribeKey)return "Missing Subscribe Key"},t.getURL=function(e,t){var n=t.device,r=t.pushGateway,i=e.config;return "apns2"!==r?"/v1/push/sub-key/".concat(i.subscribeKey,"/devices/").concat(n):"/v2/push/sub-key/".concat(i.subscribeKey,"/devices-apns2/").concat(n)},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(e,t){var n=t.pushGateway,r=t.channels,i=void 0===r?[]:r,s=t.environment,o=void 0===s?"development":s,a=t.topic,u={type:n,remove:i.join(",")};"apns2"===n&&delete(u=Object.assign({},u,{environment:o,topic:a})).type;return u},t.handleResponse=function(){return {}};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNPushNotificationEnabledChannelsOperation},t.validateParams=function(e,t){var n=t.device,r=t.pushGateway,i=t.topic,s=e.config;if(!n)return "Missing Device ID (device)";if(!r)return "Missing GW Type (pushGateway: gcm, apns or apns2)";if("apns2"===r&&!i)return "Missing APNS2 topic";if(!s.subscribeKey)return "Missing Subscribe Key"},t.getURL=function(e,t){var n=t.device,r=t.pushGateway,i=e.config;return "apns2"!==r?"/v1/push/sub-key/".concat(i.subscribeKey,"/devices/").concat(n):"/v2/push/sub-key/".concat(i.subscribeKey,"/devices-apns2/").concat(n)},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(e,t){var n=t.pushGateway,r=t.environment,i=void 0===r?"development":r,s=t.topic,o={type:n};"apns2"===n&&delete(o=Object.assign({},o,{environment:i,topic:s})).type;return o},t.handleResponse=function(e,t){return {channels:t}};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNRemoveAllPushNotificationsOperation},t.validateParams=function(e,t){var n=t.device,r=t.pushGateway,i=t.topic,s=e.config;if(!n)return "Missing Device ID (device)";if(!r)return "Missing GW Type (pushGateway: gcm, apns or apns2)";if("apns2"===r&&!i)return "Missing APNS2 topic";if(!s.subscribeKey)return "Missing Subscribe Key"},t.getURL=function(e,t){var n=t.device,r=t.pushGateway,i=e.config;return "apns2"!==r?"/v1/push/sub-key/".concat(i.subscribeKey,"/devices/").concat(n,"/remove"):"/v2/push/sub-key/".concat(i.subscribeKey,"/devices-apns2/").concat(n,"/remove")},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(e,t){var n=t.pushGateway,r=t.environment,i=void 0===r?"development":r,s=t.topic,o={type:n};"apns2"===n&&delete(o=Object.assign({},o,{environment:i,topic:s})).type;return o},t.handleResponse=function(){return {}};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return r.default.PNUnsubscribeOperation},t.validateParams=function(e){if(!e.config.subscribeKey)return "Missing Subscribe Key"},t.getURL=function(e,t){var n=e.config,r=t.channels,i=void 0===r?[]:r,s=0<i.length?i.join(","):",";return "/v2/presence/sub-key/".concat(n.subscribeKey,"/channel/").concat(o.default.encodeString(s),"/leave")},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(e,t){var n=t.channelGroups,r=void 0===n?[]:n,i={};0<r.length&&(i["channel-group"]=r.join(","));return i},t.handleResponse=function(){return {}};n(0);var r=i(n(1)),o=i(n(2));function i(e){return e&&e.__esModule?e:{default:e}}},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNWhereNowOperation},t.validateParams=function(e){if(!e.config.subscribeKey)return "Missing Subscribe Key"},t.getURL=function(e,t){var n=e.config,r=t.uuid,i=void 0===r?n.UUID:r;return "/v2/presence/sub-key/".concat(n.subscribeKey,"/uuid/").concat(i)},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(){return {}},t.handleResponse=function(e,t){return t.payload?{channels:t.payload.channels}:{channels:[]}};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return r.default.PNHeartbeatOperation},t.validateParams=function(e){if(!e.config.subscribeKey)return "Missing Subscribe Key"},t.getURL=function(e,t){var n=e.config,r=t.channels,i=void 0===r?[]:r,s=0<i.length?i.join(","):",";return "/v2/presence/sub-key/".concat(n.subscribeKey,"/channel/").concat(o.default.encodeString(s),"/heartbeat")},t.isAuthSupported=function(){return !0},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.prepareParams=function(e,t){var n=t.channelGroups,r=void 0===n?[]:n,i=t.state,s=void 0===i?{}:i,o=e.config,a={};0<r.length&&(a["channel-group"]=r.join(","));return a.state=JSON.stringify(s),a.heartbeat=o.getPresenceTimeout(),a},t.handleResponse=function(){return {}};n(0);var r=i(n(1)),o=i(n(2));function i(e){return e&&e.__esModule?e:{default:e}}},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return r.default.PNGetStateOperation},t.validateParams=function(e){if(!e.config.subscribeKey)return "Missing Subscribe Key"},t.getURL=function(e,t){var n=e.config,r=t.uuid,i=void 0===r?n.UUID:r,s=t.channels,o=void 0===s?[]:s,a=0<o.length?o.join(","):",";return "/v2/presence/sub-key/".concat(n.subscribeKey,"/channel/").concat(u.default.encodeString(a),"/uuid/").concat(i)},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(e,t){var n=t.channelGroups,r=void 0===n?[]:n,i={};0<r.length&&(i["channel-group"]=r.join(","));return i},t.handleResponse=function(e,t,n){var r=n.channels,i=void 0===r?[]:r,s=n.channelGroups,o=void 0===s?[]:s,a={};1===i.length&&0===o.length?a[i[0]]=t.payload:a=t.payload;return {channels:a}};n(0);var r=i(n(1)),u=i(n(2));function i(e){return e&&e.__esModule?e:{default:e}}},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return r.default.PNSetStateOperation},t.validateParams=function(e,t){var n=e.config,r=t.state,i=t.channels,s=void 0===i?[]:i,o=t.channelGroups,a=void 0===o?[]:o;if(!r)return "Missing State";if(!n.subscribeKey)return "Missing Subscribe Key";if(0===s.length&&0===a.length)return "Please provide a list of channels and/or channel-groups"},t.getURL=function(e,t){var n=e.config,r=t.channels,i=void 0===r?[]:r,s=0<i.length?i.join(","):",";return "/v2/presence/sub-key/".concat(n.subscribeKey,"/channel/").concat(o.default.encodeString(s),"/uuid/").concat(n.UUID,"/data")},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(e,t){var n=t.state,r=t.channelGroups,i=void 0===r?[]:r,s={};s.state=JSON.stringify(n),0<i.length&&(s["channel-group"]=i.join(","));return s},t.handleResponse=function(e,t){return {state:t.payload}};n(0);var r=i(n(1)),o=i(n(2));function i(e){return e&&e.__esModule?e:{default:e}}},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return r.default.PNHereNowOperation},t.validateParams=function(e){if(!e.config.subscribeKey)return "Missing Subscribe Key"},t.getURL=function(e,t){var n=e.config,r=t.channels,i=void 0===r?[]:r,s=t.channelGroups,o=void 0===s?[]:s,a="/v2/presence/sub-key/".concat(n.subscribeKey);if(0<i.length||0<o.length){var u=0<i.length?i.join(","):",";a+="/channel/".concat(c.default.encodeString(u));}return a},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(e,t){var n=t.channelGroups,r=void 0===n?[]:n,i=t.includeUUIDs,s=void 0===i||i,o=t.includeState,a=void 0!==o&&o,u=t.queryParameters,c=void 0===u?{}:u,l={};s||(l.disable_uuids=1);a&&(l.state=1);0<r.length&&(l["channel-group"]=r.join(","));return l=function(t){for(var e=1;e<arguments.length;e++){var n=null!=arguments[e]?arguments[e]:{};e%2?f(Object(n),!0).forEach(function(e){h(t,e,n[e]);}):Object.getOwnPropertyDescriptors?Object.defineProperties(t,Object.getOwnPropertyDescriptors(n)):f(Object(n)).forEach(function(e){Object.defineProperty(t,e,Object.getOwnPropertyDescriptor(n,e));});}return t}({},l,{},c)},t.handleResponse=function(e,i,t){var n,r=t.channels,s=void 0===r?[]:r,o=t.channelGroups,a=void 0===o?[]:o,u=t.includeUUIDs,c=void 0===u||u,l=t.includeState,f=void 0!==l&&l;n=1<s.length||0<a.length||0===a.length&&0===s.length?function(){var r={};return r.totalChannels=i.payload.total_channels,r.totalOccupancy=i.payload.total_occupancy,r.channels={},Object.keys(i.payload.channels).forEach(function(e){var t=i.payload.channels[e],n=[];return r.channels[e]={occupants:n,name:e,occupancy:t.occupancy},c&&t.uuids.forEach(function(e){f?n.push({state:e.state,uuid:e.uuid}):n.push({state:null,uuid:e});}),r}),r}():function(){var e={},t=[];return e.totalChannels=1,e.totalOccupancy=i.occupancy,e.channels={},e.channels[s[0]]={occupants:t,name:s[0],occupancy:i.occupancy},c&&i.uuids&&i.uuids.forEach(function(e){f?t.push({state:e.state,uuid:e.uuid}):t.push({state:null,uuid:e});}),e}();return n};n(0);var r=i(n(1)),c=i(n(2));function i(e){return e&&e.__esModule?e:{default:e}}function f(t,e){var n=Object.keys(t);if(Object.getOwnPropertySymbols){var r=Object.getOwnPropertySymbols(t);e&&(r=r.filter(function(e){return Object.getOwnPropertyDescriptor(t,e).enumerable})),n.push.apply(n,r);}return n}function h(e,t,n){return t in e?Object.defineProperty(e,t,{value:n,enumerable:!0,configurable:!0,writable:!0}):e[t]=n,e}},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNAddMessageActionOperation},t.validateParams=function(e,t){var n=e.config,r=t.action,i=t.channel;if(!t.messageTimetoken)return "Missing message timetoken";if(!n.subscribeKey)return "Missing Subscribe Key";if(!i)return "Missing message channel";if(!r)return "Missing Action";if(!r.value)return "Missing Action.value";if(!r.type)return "Missing Action.type";if(15<r.type.length)return "Action.type value exceed maximum length of 15"},t.usePost=function(){return !0},t.postURL=function(e,t){var n=e.config,r=t.channel,i=t.messageTimetoken;return "/v1/message-actions/".concat(n.subscribeKey,"/channel/").concat(r,"/message/").concat(i)},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.getRequestHeaders=function(){return {"Content-Type":"application/json"}},t.isAuthSupported=function(){return !0},t.prepareParams=function(){return {}},t.postPayload=function(e,t){return t.action},t.handleResponse=function(e,t){return {data:t.data}};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNRemoveMessageActionOperation},t.validateParams=function(e,t){var n=e.config,r=t.channel,i=t.actionTimetoken;if(!t.messageTimetoken)return "Missing message timetoken";if(!i)return "Missing action timetoken";if(!n.subscribeKey)return "Missing Subscribe Key";if(!r)return "Missing message channel"},t.useDelete=function(){return !0},t.getURL=function(e,t){var n=e.config,r=t.channel,i=t.actionTimetoken,s=t.messageTimetoken;return "/v1/message-actions/".concat(n.subscribeKey,"/channel/").concat(r,"/message/").concat(s,"/action/").concat(i)},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(){return {}},t.handleResponse=function(e,t){return {data:t.data}};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNGetMessageActionsOperation},t.validateParams=function(e,t){var n=e.config,r=t.channel;if(!n.subscribeKey)return "Missing Subscribe Key";if(!r)return "Missing message channel"},t.getURL=function(e,t){var n=e.config,r=t.channel;return "/v1/message-actions/".concat(n.subscribeKey,"/channel/").concat(r)},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(e,t){var n=t.limit,r=t.start,i=t.end,s={};n&&(s.limit=n);r&&(s.start=r);i&&(s.end=i);return s},t.handleResponse=function(e,t){var n={data:t.data,start:null,end:null};n.data.length&&(n.end=n.data[n.data.length-1].actionTimetoken,n.start=n.data[0].actionTimetoken);return n};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNCreateUserOperation},t.validateParams=function(e,t){var n=e.config,r=t.id,i=t.name,s=t.custom;if(!r)return "Missing User.id";if(!i)return "Missing User.name";if(!n.subscribeKey)return "Missing Subscribe Key";if(s&&!Object.values(s).every(function(e){return "string"==typeof e||"number"==typeof e||"boolean"==typeof e}))return "Invalid custom type, only string, number and boolean values are allowed."},t.usePost=function(){return !0},t.getURL=function(e){var t=e.config;return "/v1/objects/".concat(t.subscribeKey,"/users")},t.postURL=function(e){var t=e.config;return "/v1/objects/".concat(t.subscribeKey,"/users")},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.getAuthToken=function(e,t){return e.tokenManager.getToken("user",t.id)||e.tokenManager.getToken("user")},t.prepareParams=function(e,t){var n=t.include,r={};n?void 0===n.customFields&&(n.customFields=!0):n={customFields:!0};if(n){var i=[];n.customFields&&i.push("custom");var s=i.join(",");0<s.length&&(r.include=s);}return r},t.postPayload=function(e,t){return function(e,t){return t}(0,t)},t.handleResponse=function(e,t){return t};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNUpdateUserOperation},t.validateParams=function(e,t){var n=e.config,r=t.id,i=t.name,s=t.custom;if(!r)return "Missing User.id";if(!i)return "Missing User.name";if(!n.subscribeKey)return "Missing Subscribe Key";if(s&&!Object.values(s).every(function(e){return "string"==typeof e||"number"==typeof e||"boolean"==typeof e}))return "Invalid custom type, only string, number and boolean values are allowed."},t.usePatch=function(){return !0},t.getURL=function(e,t){var n=e.config,r=t.id;return "/v1/objects/".concat(n.subscribeKey,"/users/").concat(r)},t.patchURL=function(e,t){var n=e.config,r=t.id;return "/v1/objects/".concat(n.subscribeKey,"/users/").concat(r)},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.getAuthToken=function(e,t){return e.tokenManager.getToken("user",t.id)||e.tokenManager.getToken("user")},t.prepareParams=function(e,t){var n=t.include,r={};n?void 0===n.customFields&&(n.customFields=!0):n={customFields:!0};if(n){var i=[];n.customFields&&i.push("custom");var s=i.join(",");0<s.length&&(r.include=s);}return r},t.patchPayload=function(e,t){return function(e,t){return t}(0,t)},t.handleResponse=function(e,t){return t};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNDeleteUserOperation},t.validateParams=function(e,t){var n=e.config;if(!t)return "Missing UserId";if(!n.subscribeKey)return "Missing Subscribe Key"},t.useDelete=function(){return !0},t.getURL=function(e,t){var n=e.config;return "/v1/objects/".concat(n.subscribeKey,"/users/").concat(t)},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.getAuthToken=function(e,t){return e.tokenManager.getToken("user",t)||e.tokenManager.getToken("user")},t.prepareParams=function(){return {}},t.handleResponse=function(e,t){return t};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNGetUserOperation},t.validateParams=function(e,t){if(!t.userId)return "Missing userId"},t.getURL=function(e,t){var n=e.config;return "/v1/objects/".concat(n.subscribeKey,"/users/").concat(t.userId)},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.getAuthToken=function(e,t){return e.tokenManager.getToken("user",t.userId)||e.tokenManager.getToken("user")},t.prepareParams=function(e,t){var n=t.include,r={};n?void 0===n.customFields&&(n.customFields=!0):n={customFields:!0};if(n){var i=[];n.customFields&&i.push("custom");var s=i.join(",");0<s.length&&(r.include=s);}return r},t.handleResponse=function(e,t){return t};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNGetUsersOperation},t.validateParams=function(){},t.getURL=function(e){var t=e.config;return "/v1/objects/".concat(t.subscribeKey,"/users")},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.getAuthToken=function(e){return e.tokenManager.getToken("user")},t.prepareParams=function(e,t){var n=t.include,r=t.limit,i=t.page,s=t.filter,o={};r&&(o.limit=r);if(n){var a=[];n.totalCount&&(o.count=!0),n.customFields&&a.push("custom");var u=a.join(",");0<u.length&&(o.include=u);}i&&(i.next&&(o.start=i.next),i.prev&&(o.end=i.prev));s&&(o.filter=s);return o},t.handleResponse=function(e,t){return t};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNCreateSpaceOperation},t.validateParams=function(e,t){var n=e.config,r=t.id,i=t.name,s=t.custom;if(!r)return "Missing Space.id";if(!i)return "Missing Space.name";if(!n.subscribeKey)return "Missing Subscribe Key";if(s&&!Object.values(s).every(function(e){return "string"==typeof e||"number"==typeof e||"boolean"==typeof e}))return "Invalid custom type, only string, number and boolean values are allowed."},t.usePost=function(){return !0},t.getURL=function(e){var t=e.config;return "/v1/objects/".concat(t.subscribeKey,"/spaces")},t.postURL=function(e){var t=e.config;return "/v1/objects/".concat(t.subscribeKey,"/spaces")},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.getAuthToken=function(e,t){return e.tokenManager.getToken("space",t.id)||e.tokenManager.getToken("space")},t.prepareParams=function(e,t){var n=t.include,r={};n?void 0===n.customFields&&(n.customFields=!0):n={customFields:!0};if(n){var i=[];n.customFields&&i.push("custom");var s=i.join(",");0<s.length&&(r.include=s);}return r},t.postPayload=function(e,t){return function(e,t){return t}(0,t)},t.handleResponse=function(e,t){return t};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNUpdateSpaceOperation},t.validateParams=function(e,t){var n=e.config,r=t.id,i=t.name,s=t.custom;if(!r)return "Missing Space.id";if(!i)return "Missing Space.name";if(!n.subscribeKey)return "Missing Subscribe Key";if(s&&!Object.values(s).every(function(e){return "string"==typeof e||"number"==typeof e||"boolean"==typeof e}))return "Invalid custom type, only string, number and boolean values are allowed."},t.usePatch=function(){return !0},t.getURL=function(e,t){var n=e.config,r=t.id;return "/v1/objects/".concat(n.subscribeKey,"/spaces/").concat(r)},t.patchURL=function(e,t){var n=e.config,r=t.id;return "/v1/objects/".concat(n.subscribeKey,"/spaces/").concat(r)},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.getAuthToken=function(e,t){return e.tokenManager.getToken("space",t.id)||e.tokenManager.getToken("space")},t.prepareParams=function(e,t){var n=t.include,r={};n?void 0===n.customFields&&(n.customFields=!0):n={customFields:!0};if(n){var i=[];n.customFields&&i.push("custom");var s=i.join(",");0<s.length&&(r.include=s);}return r},t.patchPayload=function(e,t){return function(e,t){return t}(0,t)},t.handleResponse=function(e,t){return t};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNDeleteSpaceOperation},t.validateParams=function(e,t){var n=e.config;if(!t)return "Missing SpaceId";if(!n.subscribeKey)return "Missing Subscribe Key"},t.useDelete=function(){return !0},t.getURL=function(e,t){var n=e.config;return "/v1/objects/".concat(n.subscribeKey,"/spaces/").concat(t)},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.getAuthToken=function(e,t){return e.tokenManager.getToken("space",t)||e.tokenManager.getToken("space")},t.prepareParams=function(){return {}},t.handleResponse=function(e,t){return t};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNGetSpacesOperation},t.validateParams=function(){},t.getURL=function(e){var t=e.config;return "/v1/objects/".concat(t.subscribeKey,"/spaces")},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.getAuthToken=function(e){return e.tokenManager.getToken("space")},t.prepareParams=function(e,t){var n=t.include,r=t.limit,i=t.page,s=t.filter,o={};r&&(o.limit=r);if(n){var a=[];n.totalCount&&(o.count=!0),n.customFields&&a.push("custom");var u=a.join(",");0<u.length&&(o.include=u);}i&&(i.next&&(o.start=i.next),i.prev&&(o.end=i.prev));s&&(o.filter=s);return o},t.handleResponse=function(e,t){return t};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNGetSpaceOperation},t.validateParams=function(e,t){if(!t.spaceId)return "Missing spaceId"},t.getURL=function(e,t){var n=e.config;return "/v1/objects/".concat(n.subscribeKey,"/spaces/").concat(t.spaceId)},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.getAuthToken=function(e,t){return e.tokenManager.getToken("space",t.spaceId)||e.tokenManager.getToken("space")},t.prepareParams=function(e,t){var n=t.include,r={};n?void 0===n.customFields&&(n.customFields=!0):n={customFields:!0};if(n){var i=[];n.customFields&&i.push("custom");var s=i.join(",");0<s.length&&(r.include=s);}return r},t.handleResponse=function(e,t){return t};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNGetMembersOperation},t.validateParams=function(e,t){if(!t.spaceId)return "Missing spaceId"},t.getURL=function(e,t){var n=e.config;return "/v1/objects/".concat(n.subscribeKey,"/spaces/").concat(t.spaceId,"/users")},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.getAuthToken=function(e,t){return e.tokenManager.getToken("space",t.spaceId)||e.tokenManager.getToken("space")},t.prepareParams=function(e,t){var n=t.include,r=t.limit,i=t.page,s=t.filter,o={};r&&(o.limit=r);if(n){var a=[];n.totalCount&&(o.count=!0),n.customFields&&a.push("custom"),n.userFields&&a.push("user"),n.customUserFields&&a.push("user.custom");var u=a.join(",");0<u.length&&(o.include=u);}i&&(i.next&&(o.start=i.next),i.prev&&(o.end=i.prev));s&&(o.filter=s);return o},t.handleResponse=function(e,t){return t};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNUpdateMembersOperation},t.validateParams=function(e,t){var n=t.spaceId,r=t.users;if(!n)return "Missing spaceId";if(!r)return "Missing users"},t.getURL=function(e,t){var n=e.config;return "/v1/objects/".concat(n.subscribeKey,"/spaces/").concat(t.spaceId,"/users")},t.patchURL=function(e,t){var n=e.config;return "/v1/objects/".concat(n.subscribeKey,"/spaces/").concat(t.spaceId,"/users")},t.usePatch=function(){return !0},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.getAuthToken=function(e,t){return e.tokenManager.getToken("space",t.spaceId)||e.tokenManager.getToken("space")},t.prepareParams=function(e,t){var n=t.include,r=t.limit,i=t.page,s={};r&&(s.limit=r);if(n){var o=[];n.totalCount&&(s.count=!0),n.customFields&&o.push("custom"),n.spaceFields&&o.push("space"),n.customSpaceFields&&o.push("space.custom");var a=o.join(",");0<a.length&&(s.include=a);}i&&(i.next&&(s.start=i.next),i.prev&&(s.end=i.prev));return s},t.patchPayload=function(e,t){return function(e,t){var n=t.users,r={};n&&0<n.length&&(r.add=[],n.forEach(function(e){var t={id:e.id};e.custom&&(t.custom=e.custom),r.add.push(t);}));return r}(0,t)},t.handleResponse=function(e,t){return t};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNUpdateMembersOperation},t.validateParams=function(e,t){var n=t.spaceId,r=t.users;if(!n)return "Missing spaceId";if(!r)return "Missing users"},t.getURL=function(e,t){var n=e.config;return "/v1/objects/".concat(n.subscribeKey,"/spaces/").concat(t.spaceId,"/users")},t.patchURL=function(e,t){var n=e.config;return "/v1/objects/".concat(n.subscribeKey,"/spaces/").concat(t.spaceId,"/users")},t.usePatch=function(){return !0},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.getAuthToken=function(e,t){return e.tokenManager.getToken("space",t.spaceId)||e.tokenManager.getToken("space")},t.prepareParams=function(e,t){var n=t.include,r=t.limit,i=t.page,s={};r&&(s.limit=r);if(n){var o=[];n.totalCount&&(s.count=!0),n.customFields&&o.push("custom"),n.spaceFields&&o.push("space"),n.customSpaceFields&&o.push("space.custom");var a=o.join(",");0<a.length&&(s.include=a);}i&&(i.next&&(s.start=i.next),i.prev&&(s.end=i.prev));return s},t.patchPayload=function(e,t){return function(e,t){var n=t.addMembers,r=t.updateMembers,i=t.removeMembers,s=t.users,o={};n&&0<n.length&&(o.add=[],n.forEach(function(e){var t={id:e.id};e.custom&&(t.custom=e.custom),o.add.push(t);}));r&&0<r.length&&(o.update=[],r.forEach(function(e){var t={id:e.id};e.custom&&(t.custom=e.custom),o.update.push(t);}));s&&0<s.length&&(o.update=o.update||[],s.forEach(function(e){var t={id:e.id};e.custom&&(t.custom=e.custom),o.update.push(t);}));i&&0<i.length&&(o.remove=[],i.forEach(function(e){o.remove.push({id:e});}));return o}(0,t)},t.handleResponse=function(e,t){return t};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNUpdateMembersOperation},t.validateParams=function(e,t){var n=t.spaceId,r=t.users;if(!n)return "Missing spaceId";if(!r)return "Missing users"},t.getURL=function(e,t){var n=e.config;return "/v1/objects/".concat(n.subscribeKey,"/spaces/").concat(t.spaceId,"/users")},t.patchURL=function(e,t){var n=e.config;return "/v1/objects/".concat(n.subscribeKey,"/spaces/").concat(t.spaceId,"/users")},t.usePatch=function(){return !0},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.getAuthToken=function(e,t){return e.tokenManager.getToken("space",t.spaceId)||e.tokenManager.getToken("space")},t.prepareParams=function(e,t){var n=t.include,r=t.limit,i=t.page,s={};r&&(s.limit=r);if(n){var o=[];n.totalCount&&(s.count=!0),n.customFields&&o.push("custom"),n.spaceFields&&o.push("space"),n.customSpaceFields&&o.push("space.custom");var a=o.join(",");0<a.length&&(s.include=a);}i&&(i.next&&(s.start=i.next),i.prev&&(s.end=i.prev));return s},t.patchPayload=function(e,t){return function(e,t){var n=t.users,r={};n&&0<n.length&&(r.remove=[],n.forEach(function(e){r.remove.push({id:e});}));return r}(0,t)},t.handleResponse=function(e,t){return t};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNGetMembershipsOperation},t.validateParams=function(e,t){if(!t.userId)return "Missing userId"},t.getURL=function(e,t){var n=e.config;return "/v1/objects/".concat(n.subscribeKey,"/users/").concat(t.userId,"/spaces")},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.getAuthToken=function(e,t){return e.tokenManager.getToken("user",t.userId)||e.tokenManager.getToken("user")},t.prepareParams=function(e,t){var n=t.include,r=t.limit,i=t.page,s=t.filter,o={};r&&(o.limit=r);if(n){var a=[];n.totalCount&&(o.count=!0),n.customFields&&a.push("custom"),n.spaceFields&&a.push("space"),n.customSpaceFields&&a.push("space.custom");var u=a.join(",");0<u.length&&(o.include=u);}i&&(i.next&&(o.start=i.next),i.prev&&(o.end=i.prev));s&&(o.filter=s);return o},t.handleResponse=function(e,t){return t};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNUpdateMembershipsOperation},t.validateParams=function(e,t){var n=t.userId,r=t.spaces;if(!n)return "Missing userId";if(!r)return "Missing spaces"},t.getURL=function(e,t){var n=e.config;return "/v1/objects/".concat(n.subscribeKey,"/users/").concat(t.userId,"/spaces")},t.patchURL=function(e,t){var n=e.config;return "/v1/objects/".concat(n.subscribeKey,"/users/").concat(t.userId,"/spaces")},t.usePatch=function(){return !0},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.getAuthToken=function(e,t){return e.tokenManager.getToken("user",t.userId)||e.tokenManager.getToken("user")},t.prepareParams=function(e,t){var n=t.include,r=t.limit,i=t.page,s={};r&&(s.limit=r);if(n){var o=[];n.totalCount&&(s.count=!0),n.customFields&&o.push("custom"),n.spaceFields&&o.push("space"),n.customSpaceFields&&o.push("space.custom");var a=o.join(",");0<a.length&&(s.include=a);}i&&(i.next&&(s.start=i.next),i.prev&&(s.end=i.prev));return s},t.patchPayload=function(e,t){return function(e,t){var n=t.addMemberships,r=t.updateMemberships,i=t.removeMemberships,s=t.spaces,o={};n&&0<n.length&&(o.add=[],n.forEach(function(e){var t={id:e.id};e.custom&&(t.custom=e.custom),o.add.push(t);}));r&&0<r.length&&(o.update=[],r.forEach(function(e){var t={id:e.id};e.custom&&(t.custom=e.custom),o.update.push(t);}));s&&0<s.length&&(o.update=o.update||[],s.forEach(function(e){var t={id:e.id};e.custom&&(t.custom=e.custom),o.update.push(t);}));i&&0<i.length&&(o.remove=[],i.forEach(function(e){o.remove.push({id:e});}));return o}(0,t)},t.handleResponse=function(e,t){return t};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNUpdateMembershipsOperation},t.validateParams=function(e,t){var n=t.userId,r=t.spaces;if(!n)return "Missing userId";if(!r)return "Missing spaces"},t.getURL=function(e,t){var n=e.config;return "/v1/objects/".concat(n.subscribeKey,"/users/").concat(t.userId,"/spaces")},t.patchURL=function(e,t){var n=e.config;return "/v1/objects/".concat(n.subscribeKey,"/users/").concat(t.userId,"/spaces")},t.usePatch=function(){return !0},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.getAuthToken=function(e,t){return e.tokenManager.getToken("user",t.userId)||e.tokenManager.getToken("user")},t.prepareParams=function(e,t){var n=t.include,r=t.limit,i=t.page,s={};r&&(s.limit=r);if(n){var o=[];n.totalCount&&(s.count=!0),n.customFields&&o.push("custom"),n.spaceFields&&o.push("space"),n.customSpaceFields&&o.push("space.custom");var a=o.join(",");0<a.length&&(s.include=a);}i&&(i.next&&(s.start=i.next),i.prev&&(s.end=i.prev));return s},t.patchPayload=function(e,t){return function(e,t){var n=t.spaces,r={};n&&0<n.length&&(r.add=[],n.forEach(function(e){var t={id:e.id};e.custom&&(t.custom=e.custom),r.add.push(t);}));return r}(0,t)},t.handleResponse=function(e,t){return t};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNUpdateMembershipsOperation},t.validateParams=function(e,t){var n=t.userId,r=t.spaces;if(!n)return "Missing userId";if(!r)return "Missing spaces"},t.getURL=function(e,t){var n=e.config;return "/v1/objects/".concat(n.subscribeKey,"/users/").concat(t.userId,"/spaces")},t.patchURL=function(e,t){var n=e.config;return "/v1/objects/".concat(n.subscribeKey,"/users/").concat(t.userId,"/spaces")},t.usePatch=function(){return !0},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.getAuthToken=function(e,t){return e.tokenManager.getToken("user",t.userId)||e.tokenManager.getToken("user")},t.prepareParams=function(e,t){var n=t.include,r=t.limit,i=t.page,s={};r&&(s.limit=r);if(n){var o=[];n.totalCount&&(s.count=!0),n.customFields&&o.push("custom"),n.spaceFields&&o.push("space"),n.customSpaceFields&&o.push("space.custom");var a=o.join(",");0<a.length&&(s.include=a);}i&&(i.next&&(s.start=i.next),i.prev&&(s.end=i.prev));return s},t.patchPayload=function(e,t){return function(e,t){var n=t.spaces,r={};n&&0<n.length&&(r.remove=[],n.forEach(function(e){r.remove.push({id:e});}));return r}(0,t)},t.handleResponse=function(e,t){return t};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNAccessManagerAudit},t.validateParams=function(e){if(!e.config.subscribeKey)return "Missing Subscribe Key"},t.getURL=function(e){var t=e.config;return "/v2/auth/audit/sub-key/".concat(t.subscribeKey)},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !1},t.prepareParams=function(e,t){var n=t.channel,r=t.channelGroup,i=t.authKeys,s=void 0===i?[]:i,o={};n&&(o.channel=n);r&&(o["channel-group"]=r);0<s.length&&(o.auth=s.join(","));return o},t.handleResponse=function(e,t){return t.payload};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNAccessManagerGrant},t.validateParams=function(e){var t=e.config;if(!t.subscribeKey)return "Missing Subscribe Key";if(!t.publishKey)return "Missing Publish Key";if(!t.secretKey)return "Missing Secret Key"},t.getURL=function(e){var t=e.config;return "/v2/auth/grant/sub-key/".concat(t.subscribeKey)},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !1},t.prepareParams=function(e,t){var n=t.channels,r=void 0===n?[]:n,i=t.channelGroups,s=void 0===i?[]:i,o=t.ttl,a=t.read,u=void 0!==a&&a,c=t.write,l=void 0!==c&&c,f=t.manage,h=void 0!==f&&f,p=t.authKeys,d=void 0===p?[]:p,g=t.delete,y={};y.r=u?"1":"0",y.w=l?"1":"0",y.m=h?"1":"0",y.d=g?"1":"0",0<r.length&&(y.channel=r.join(","));0<s.length&&(y["channel-group"]=s.join(","));0<d.length&&(y.auth=d.join(","));!o&&0!==o||(y.ttl=o);return y},t.handleResponse=function(){return {}};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return i.default.PNAccessManagerGrantToken},t.extractPermissions=f,t.validateParams=function(e,t){var n=e.config;if(!n.subscribeKey)return "Missing Subscribe Key";if(!n.publishKey)return "Missing Publish Key";if(!n.secretKey)return "Missing Secret Key";if(!t.resources&&!t.patterns)return "Missing either Resources or Patterns.";if(t.resources&&(!t.resources.users||0===Object.keys(t.resources.users).length)&&(!t.resources.spaces||0===Object.keys(t.resources.spaces).length)||t.patterns&&(!t.patterns.users||0===Object.keys(t.patterns.users).length)&&(!t.patterns.spaces||0===Object.keys(t.patterns.spaces).length))return "Missing values for either Resources or Patterns."},t.postURL=function(e){var t=e.config;return "/v3/pam/".concat(t.subscribeKey,"/grant")},t.usePost=function(){return !0},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !1},t.prepareParams=function(){return {}},t.postPayload=function(e,t){return function(e,t){var n=t.ttl,r=t.resources,i=t.patterns,s=t.meta,o={ttl:0,permissions:{resources:{channels:{},groups:{},users:{},spaces:{}},patterns:{channels:{},groups:{},users:{},spaces:{}},meta:{}}};if(r){var a=r.users,u=r.spaces;a&&Object.keys(a).forEach(function(e){o.permissions.resources.users[e]=f(a[e]);}),u&&Object.keys(u).forEach(function(e){o.permissions.resources.spaces[e]=f(u[e]);});}if(i){var c=i.users,l=i.spaces;c&&Object.keys(c).forEach(function(e){o.permissions.patterns.users[e]=f(c[e]);}),l&&Object.keys(l).forEach(function(e){o.permissions.patterns.spaces[e]=f(l[e]);});}!n&&0!==n||(o.ttl=n);s&&(o.permissions.meta=s);return o}(0,t)},t.handleResponse=function(e,t){return t.data.token};n(0);var r,i=(r=n(1))&&r.__esModule?r:{default:r};function f(e){var t=0;return e.create&&(t|=16),e.delete&&(t|=8),e.manage&&(t|=4),e.write&&(t|=2),e.read&&(t|=1),t}},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return r.default.PNPublishOperation},t.validateParams=function(e,t){var n=e.config,r=t.message;if(!t.channel)return "Missing Channel";if(!r)return "Missing Message";if(!n.subscribeKey)return "Missing Subscribe Key"},t.usePost=function(e,t){var n=t.sendByPost;return void 0!==n&&n},t.getURL=function(e,t){var n=e.config,r=t.channel,i=t.message,s=a(e,i);return "/publish/".concat(n.publishKey,"/").concat(n.subscribeKey,"/0/").concat(o.default.encodeString(r),"/0/").concat(o.default.encodeString(s))},t.postURL=function(e,t){var n=e.config,r=t.channel;return "/publish/".concat(n.publishKey,"/").concat(n.subscribeKey,"/0/").concat(o.default.encodeString(r),"/0")},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.postPayload=function(e,t){var n=t.message;return a(e,n)},t.prepareParams=function(e,t){var n=t.meta,r=t.replicate,i=void 0===r||r,s=t.storeInHistory,o=t.ttl,a={};null!=s&&(a.store=s?"1":"0");o&&(a.ttl=o);!1===i&&(a.norep="true");n&&"object"===u(n)&&(a.meta=JSON.stringify(n));return a},t.handleResponse=function(e,t){return {timetoken:t[2]}};n(0);var r=i(n(1)),o=i(n(2));function i(e){return e&&e.__esModule?e:{default:e}}function u(e){return (u="function"==typeof Symbol&&"symbol"==typeof Symbol.iterator?function(e){return typeof e}:function(e){return e&&"function"==typeof Symbol&&e.constructor===Symbol&&e!==Symbol.prototype?"symbol":typeof e})(e)}function a(e,t){var n=e.crypto,r=e.config,i=JSON.stringify(t);return r.cipherKey&&(i=n.encrypt(i),i=JSON.stringify(i)),i}},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return r.default.PNSignalOperation},t.validateParams=function(e,t){var n=e.config,r=t.message;if(!t.channel)return "Missing Channel";if(!r)return "Missing Message";if(!n.subscribeKey)return "Missing Subscribe Key"},t.getURL=function(e,t){var n=e.config,r=t.channel,i=t.message,s=function(e,t){return JSON.stringify(t)}(0,i);return "/signal/".concat(n.publishKey,"/").concat(n.subscribeKey,"/0/").concat(o.default.encodeString(r),"/0/").concat(o.default.encodeString(s))},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(){return {}},t.handleResponse=function(e,t){return {timetoken:t[2]}};n(0);var r=i(n(1)),o=i(n(2));function i(e){return e&&e.__esModule?e:{default:e}}},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return r.default.PNHistoryOperation},t.validateParams=function(e,t){var n=t.channel,r=e.config;if(!n)return "Missing channel";if(!r.subscribeKey)return "Missing Subscribe Key"},t.getURL=function(e,t){var n=t.channel,r=e.config;return "/v2/history/sub-key/".concat(r.subscribeKey,"/channel/").concat(i.default.encodeString(n))},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(e,t){var n=t.start,r=t.end,i=t.reverse,s=t.count,o=void 0===s?100:s,a=t.stringifiedTimeToken,u=void 0!==a&&a,c=t.includeMeta,l=void 0!==c&&c,f={include_token:"true"};f.count=o,n&&(f.start=n);r&&(f.end=r);u&&(f.string_message_token="true");null!=i&&(f.reverse=i.toString());l&&(f.include_meta="true");return f},t.handleResponse=function(n,e){var r={messages:[],startTimeToken:e[1],endTimeToken:e[2]};Array.isArray(e[0])&&e[0].forEach(function(e){var t={timetoken:e.timetoken,entry:function(e,t){var n=e.config,r=e.crypto;if(!n.cipherKey)return t;try{return r.decrypt(t)}catch(e){return t}}(n,e.message)};e.meta&&(t.meta=e.meta),r.messages.push(t);});return r};n(0);var r=s(n(1)),i=s(n(2));function s(e){return e&&e.__esModule?e:{default:e}}},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return r.default.PNDeleteMessagesOperation},t.validateParams=function(e,t){var n=t.channel,r=e.config;if(!n)return "Missing channel";if(!r.subscribeKey)return "Missing Subscribe Key"},t.useDelete=function(){return !0},t.getURL=function(e,t){var n=t.channel,r=e.config;return "/v3/history/sub-key/".concat(r.subscribeKey,"/channel/").concat(i.default.encodeString(n))},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(e,t){var n=t.start,r=t.end,i={};n&&(i.start=n);r&&(i.end=r);return i},t.handleResponse=function(e,t){return t.payload};n(0);var r=s(n(1)),i=s(n(2));function s(e){return e&&e.__esModule?e:{default:e}}},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return r.default.PNMessageCounts},t.validateParams=function(e,t){var n=t.channels,r=t.timetoken,i=t.channelTimetokens,s=e.config;if(!n)return "Missing channel";if(r&&i)return "timetoken and channelTimetokens are incompatible together";if(r&&i&&1<i.length&&n.length!==i.length)return "Length of channelTimetokens and channels do not match";if(!s.subscribeKey)return "Missing Subscribe Key"},t.getURL=function(e,t){var n=t.channels,r=e.config,i=n.join(",");return "/v3/history/sub-key/".concat(r.subscribeKey,"/message-counts/").concat(s.default.encodeString(i))},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(e,t){var n=t.timetoken,r=t.channelTimetokens,i={};if(r&&1===r.length){var s=function(e,t){return function(e){if(Array.isArray(e))return e}(e)||function(e,t){if(!(Symbol.iterator in Object(e)||"[object Arguments]"===Object.prototype.toString.call(e)))return;var n=[],r=!0,i=!1,s=void 0;try{for(var o,a=e[Symbol.iterator]();!(r=(o=a.next()).done)&&(n.push(o.value),!t||n.length!==t);r=!0);}catch(e){i=!0,s=e;}finally{try{r||null==a.return||a.return();}finally{if(i)throw s}}return n}(e,t)||function(){throw new TypeError("Invalid attempt to destructure non-iterable instance")}()}(r,1)[0];i.timetoken=s;}else r?i.channelsTimetoken=r.join(","):n&&(i.timetoken=n);return i},t.handleResponse=function(e,t){return {channels:t.channels}};var r=i(n(1)),s=i(n(2));function i(e){return e&&e.__esModule?e:{default:e}}},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return r.default.PNFetchMessagesOperation},t.validateParams=function(e,t){var n=t.channels,r=t.includeMessageActions,i=void 0!==r&&r,s=e.config;if(!n||0===n.length)return "Missing channels";if(!s.subscribeKey)return "Missing Subscribe Key";if(i&&1<n.length)throw new TypeError("History can return actions data for a single channel only. Either pass a single channel or disable the includeMessageActions flag.")},t.getURL=function(e,t){var n=t.channels,r=void 0===n?[]:n,i=t.includeMessageActions,s=void 0!==i&&i,o=e.config,a=s?"history-with-actions":"history",u=0<r.length?r.join(","):",";return "/v3/".concat(a,"/sub-key/").concat(o.subscribeKey,"/channel/").concat(c.default.encodeString(u))},t.getRequestTimeout=function(e){return e.config.getTransactionTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(e,t){var n=t.start,r=t.end,i=t.count,s=t.stringifiedTimeToken,o=void 0!==s&&s,a=t.includeMeta,u=void 0!==a&&a,c={};i&&(c.max=i);n&&(c.start=n);r&&(c.end=r);o&&(c.string_message_token="true");u&&(c.include_meta="true");return c},t.handleResponse=function(r,e){var i={channels:{}};return Object.keys(e.channels||{}).forEach(function(n){i.channels[n]=[],(e.channels[n]||[]).forEach(function(e){var t={};t.channel=n,t.timetoken=e.timetoken,t.message=function(e,t){var n=e.config,r=e.crypto;if(!n.cipherKey)return t;try{return r.decrypt(t)}catch(e){return t}}(r,e.message),e.actions&&(t.actions=e.actions,t.data=e.actions),e.meta&&(t.meta=e.meta),i.channels[n].push(t);});}),i};n(0);var r=i(n(1)),c=i(n(2));function i(e){return e&&e.__esModule?e:{default:e}}},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.getOperation=function(){return r.default.PNSubscribeOperation},t.validateParams=function(e){if(!e.config.subscribeKey)return "Missing Subscribe Key"},t.getURL=function(e,t){var n=e.config,r=t.channels,i=void 0===r?[]:r,s=0<i.length?i.join(","):",";return "/v2/subscribe/".concat(n.subscribeKey,"/").concat(o.default.encodeString(s),"/0")},t.getRequestTimeout=function(e){return e.config.getSubscribeTimeout()},t.isAuthSupported=function(){return !0},t.prepareParams=function(e,t){var n=e.config,r=t.state,i=t.channelGroups,s=void 0===i?[]:i,o=t.timetoken,a=t.filterExpression,u=t.region,c={heartbeat:n.getPresenceTimeout()};0<s.length&&(c["channel-group"]=s.join(","));a&&0<a.length&&(c["filter-expr"]=a);Object.keys(r).length&&(c.state=JSON.stringify(r));o&&(c.tt=o);u&&(c.tr=u);return c},t.handleResponse=function(e,t){var r=[];t.m.forEach(function(e){var t={publishTimetoken:e.p.t,region:e.p.r},n={shard:parseInt(e.a,10),subscriptionMatch:e.b,channel:e.c,messageType:e.e,payload:e.d,flags:e.f,issuingClientId:e.i,subscribeKey:e.k,originationTimetoken:e.o,userMetadata:e.u,publishMetaData:t};r.push(n);});var n={timetoken:t.t.t,region:t.t.r};return {messages:r,metadata:n}};n(0);var r=i(n(1)),o=i(n(2));function i(e){return e&&e.__esModule?e:{default:e}}},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.default=void 0;i(n(3));var r=i(n(4));n(0);function i(e){return e&&e.__esModule?e:{default:e}}function s(e,t){for(var n=0;n<t.length;n++){var r=t[n];r.enumerable=r.enumerable||!1,r.configurable=!0,"value"in r&&(r.writable=!0),Object.defineProperty(e,r.key,r);}}function o(e,t,n){return t in e?Object.defineProperty(e,t,{value:n,enumerable:!0,configurable:!0,writable:!0}):e[t]=n,e}var a,u,l=(a=f,(u=[{key:"init",value:function(e){this._config=e,this._maxSubDomain=20,this._currentSubDomain=Math.floor(Math.random()*this._maxSubDomain),this._providedFQDN=(this._config.secure?"https://":"http://")+this._config.origin,this._coreParams={},this.shiftStandardOrigin();}},{key:"nextOrigin",value:function(){return this._providedFQDN.match(/ps\.pndsn\.com$/i)?(this._currentSubDomain=this._currentSubDomain+1,this._currentSubDomain>=this._maxSubDomain&&(this._currentSubDomain=1),e=this._currentSubDomain.toString(),this._providedFQDN.replace("ps.pndsn.com","ps".concat(e,".pndsn.com"))):this._providedFQDN;var e;}},{key:"hasModule",value:function(e){return e in this._modules}},{key:"shiftStandardOrigin",value:function(){return this._standardOrigin=this.nextOrigin(),this._standardOrigin}},{key:"getStandardOrigin",value:function(){return this._standardOrigin}},{key:"POST",value:function(e,t,n,r){return this._modules.post(e,t,n,r)}},{key:"PATCH",value:function(e,t,n,r){return this._modules.patch(e,t,n,r)}},{key:"GET",value:function(e,t,n){return this._modules.get(e,t,n)}},{key:"DELETE",value:function(e,t,n){return this._modules.del(e,t,n)}},{key:"_detectErrorCategory",value:function(e){if("ENOTFOUND"===e.code)return r.default.PNNetworkIssuesCategory;if("ECONNREFUSED"===e.code)return r.default.PNNetworkIssuesCategory;if("ECONNRESET"===e.code)return r.default.PNNetworkIssuesCategory;if("EAI_AGAIN"===e.code)return r.default.PNNetworkIssuesCategory;if(0===e.status||e.hasOwnProperty("status")&&void 0===e.status)return r.default.PNNetworkIssuesCategory;if(e.timeout)return r.default.PNTimeoutCategory;if("ETIMEDOUT"===e.code)return r.default.PNNetworkIssuesCategory;if(e.response){if(e.response.badRequest)return r.default.PNBadRequestCategory;if(e.response.forbidden)return r.default.PNAccessDeniedCategory}return r.default.PNUnknownCategory}}])&&s(a.prototype,u),f);function f(t){var n=this;!function(e,t){if(!(e instanceof t))throw new TypeError("Cannot call a class as a function")}(this,f),o(this,"_modules",void 0),o(this,"_config",void 0),o(this,"_maxSubDomain",void 0),o(this,"_currentSubDomain",void 0),o(this,"_standardOrigin",void 0),o(this,"_subscribeOrigin",void 0),o(this,"_providedFQDN",void 0),o(this,"_requestTimeout",void 0),o(this,"_coreParams",void 0),this._modules={},Object.keys(t).forEach(function(e){n._modules[e]=t[e].bind(n);});}t.default=l,e.exports=t.default;},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.default=void 0;var r={get:function(e){try{return localStorage.getItem(e)}catch(e){return null}},set:function(e,t){try{return localStorage.setItem(e,t)}catch(e){return null}}};t.default=r,e.exports=t.default;},function(e,t,n){function i(e){return (i="function"==typeof Symbol&&"symbol"==typeof Symbol.iterator?function(e){return typeof e}:function(e){return e&&"function"==typeof Symbol&&e.constructor===Symbol&&e!==Symbol.prototype?"symbol":typeof e})(e)}function r(e,t){for(var n=0;n<t.length;n++){var r=t[n];r.enumerable=r.enumerable||!1,r.configurable=!0,"value"in r&&(r.writable=!0),Object.defineProperty(e,r.key,r);}}function s(e,t,n){return t in e?Object.defineProperty(e,t,{value:n,enumerable:!0,configurable:!0,writable:!0}):e[t]=n,e}Object.defineProperty(t,"__esModule",{value:!0}),t.default=void 0;var o,a,c=(o=l,(a=[{key:"decodeToken",value:function(e){var t="";e.length%4==3?t="=":e.length%4==2&&(t="==");var n=e.replace(/-/gi,"+").replace(/_/gi,"/")+t,r=this._decode(this._base64ToBinary(n));if("object"===i(r))return r}}])&&r(o.prototype,a),l);function l(e,t){!function(e,t){if(!(e instanceof t))throw new TypeError("Cannot call a class as a function")}(this,l),s(this,"_base64ToBinary",void 0),s(this,"_cborReader",void 0),this._base64ToBinary=t,this._decode=e;}t.default=c,e.exports=t.default;},function(e,t,n){Object.defineProperty(t,"__esModule",{value:!0}),t.get=function(e,t,n){var r=s.default.get(this.getStandardOrigin()+t.url).set(t.headers).query(e);return o.call(this,r,t,n)},t.post=function(e,t,n,r){var i=s.default.post(this.getStandardOrigin()+n.url).query(e).set(n.headers).send(t);return o.call(this,i,n,r)},t.patch=function(e,t,n,r){var i=s.default.patch(this.getStandardOrigin()+n.url).query(e).set(n.headers).send(t);return o.call(this,i,n,r)},t.del=function(e,t,n){var r=s.default.delete(this.getStandardOrigin()+t.url).set(t.headers).query(e);return o.call(this,r,t,n)};var r,s=(r=n(72))&&r.__esModule?r:{default:r};n(0);function a(r){var i=(new Date).getTime(),e=(new Date).toISOString(),s=console&&console.log?console:window&&window.console&&window.console.log?window.console:console;s.log("<<<<<"),s.log("[".concat(e,"]"),"\n",r.url,"\n",r.qs),s.log("-----"),r.on("response",function(e){var t=(new Date).getTime()-i,n=(new Date).toISOString();s.log(">>>>>>"),s.log("[".concat(n," / ").concat(t,"]"),"\n",r.url,"\n",r.qs,"\n",e.text),s.log("-----");});}function o(e,i,s){var o=this;return this._config.logVerbosity&&(e=e.use(a)),this._config.proxy&&this._modules.proxy&&(e=this._modules.proxy.call(this,e)),this._config.keepAlive&&this._modules.keepAlive&&(e=this._modules.keepAlive(e)),e.timeout(i.timeout).end(function(t,n){var e,r={};if(r.error=null!==t,r.operation=i.operation,n&&n.status&&(r.statusCode=n.status),t){if(t.response&&t.response.text&&!o._config.logVerbosity)try{r.errorData=JSON.parse(t.response.text);}catch(e){r.errorData=t;}else r.errorData=t;return r.category=o._detectErrorCategory(t),s(r,null)}try{e=JSON.parse(n.text);}catch(e){return r.errorData=n,r.error=!0,s(r,null)}return e.error&&1===e.error&&e.status&&e.message&&e.service?(r.errorData=e,r.statusCode=e.status,r.error=!0,r.category=o._detectErrorCategory(r),s(r,null)):(e.error&&e.error.message&&(r.errorData=e.error),s(r,e))})}},function(e,n,t){var r;r="undefined"!=typeof window?window:"undefined"!=typeof self?self:(console.warn("Using browser-only version of superagent in non-browser environment"),this);var i=t(73),s=t(74),o=t(10),a=t(75),u=t(77);function c(){}var l=n=e.exports=function(e,t){return "function"==typeof t?new n.Request("GET",e).end(t):1==arguments.length?new n.Request("GET",e):new n.Request(e,t)};n.Request=v,l.getXHR=function(){if(!(!r.XMLHttpRequest||r.location&&"file:"==r.location.protocol&&r.ActiveXObject))return new XMLHttpRequest;try{return new ActiveXObject("Microsoft.XMLHTTP")}catch(e){}try{return new ActiveXObject("Msxml2.XMLHTTP.6.0")}catch(e){}try{return new ActiveXObject("Msxml2.XMLHTTP.3.0")}catch(e){}try{return new ActiveXObject("Msxml2.XMLHTTP")}catch(e){}throw Error("Browser-only version of superagent could not find XHR")};var f="".trim?function(e){return e.trim()}:function(e){return e.replace(/(^\s*|\s*$)/g,"")};function h(e){if(!o(e))return e;var t=[];for(var n in e)p(t,n,e[n]);return t.join("&")}function p(t,n,e){if(null!=e)if(Array.isArray(e))e.forEach(function(e){p(t,n,e);});else if(o(e))for(var r in e)p(t,n+"["+r+"]",e[r]);else t.push(encodeURIComponent(n)+"="+encodeURIComponent(e));else null===e&&t.push(encodeURIComponent(n));}function d(e){for(var t,n,r={},i=e.split("&"),s=0,o=i.length;s<o;++s)-1==(n=(t=i[s]).indexOf("="))?r[decodeURIComponent(t)]="":r[decodeURIComponent(t.slice(0,n))]=decodeURIComponent(t.slice(n+1));return r}function g(e){return /[\/+]json($|[^-\w])/.test(e)}function y(e){this.req=e,this.xhr=this.req.xhr,this.text="HEAD"!=this.req.method&&(""===this.xhr.responseType||"text"===this.xhr.responseType)||void 0===this.xhr.responseType?this.xhr.responseText:null,this.statusText=this.req.xhr.statusText;var t=this.xhr.status;1223===t&&(t=204),this._setStatusProperties(t),this.header=this.headers=function(e){for(var t,n,r,i,s=e.split(/\r?\n/),o={},a=0,u=s.length;a<u;++a)-1!==(t=(n=s[a]).indexOf(":"))&&(r=n.slice(0,t).toLowerCase(),i=f(n.slice(t+1)),o[r]=i);return o}(this.xhr.getAllResponseHeaders()),this.header["content-type"]=this.xhr.getResponseHeader("content-type"),this._setHeaderProperties(this.header),null===this.text&&e._responseType?this.body=this.xhr.response:this.body="HEAD"!=this.req.method?this._parseBody(this.text?this.text:this.xhr.response):null;}function v(e,t){var r=this;this._query=this._query||[],this.method=e,this.url=t,this.header={},this._header={},this.on("end",function(){var t,n=null,e=null;try{e=new y(r);}catch(e){return (n=new Error("Parser is unable to parse the response")).parse=!0,n.original=e,r.xhr?(n.rawResponse=void 0===r.xhr.responseType?r.xhr.responseText:r.xhr.response,n.status=r.xhr.status?r.xhr.status:null,n.statusCode=n.status):(n.rawResponse=null,n.status=null),r.callback(n)}r.emit("response",e);try{r._isResponseOK(e)||(t=new Error(e.statusText||"Unsuccessful HTTP response"));}catch(e){t=e;}t?(t.original=n,t.response=e,t.status=e.status,r.callback(t,e)):r.callback(null,e);});}function b(e,t,n){var r=l("DELETE",e);return "function"==typeof t&&(n=t,t=null),t&&r.send(t),n&&r.end(n),r}l.serializeObject=h,l.parseString=d,l.types={html:"text/html",json:"application/json",xml:"text/xml",urlencoded:"application/x-www-form-urlencoded",form:"application/x-www-form-urlencoded","form-data":"application/x-www-form-urlencoded"},l.serialize={"application/x-www-form-urlencoded":h,"application/json":JSON.stringify},l.parse={"application/x-www-form-urlencoded":d,"application/json":JSON.parse},a(y.prototype),y.prototype._parseBody=function(e){var t=l.parse[this.type];return this.req._parser?this.req._parser(this,e):(!t&&g(this.type)&&(t=l.parse["application/json"]),t&&e&&(e.length||e instanceof Object)?t(e):null)},y.prototype.toError=function(){var e=this.req,t=e.method,n=e.url,r="cannot "+t+" "+n+" ("+this.status+")",i=new Error(r);return i.status=this.status,i.method=t,i.url=n,i},l.Response=y,i(v.prototype),s(v.prototype),v.prototype.type=function(e){return this.set("Content-Type",l.types[e]||e),this},v.prototype.accept=function(e){return this.set("Accept",l.types[e]||e),this},v.prototype.auth=function(e,t,n){1===arguments.length&&(t=""),"object"==typeof t&&null!==t&&(n=t,t=""),n=n||{type:"function"==typeof btoa?"basic":"auto"};return this._auth(e,t,n,function(e){if("function"==typeof btoa)return btoa(e);throw new Error("Cannot use basic auth, btoa is not a function")})},v.prototype.query=function(e){return "string"!=typeof e&&(e=h(e)),e&&this._query.push(e),this},v.prototype.attach=function(e,t,n){if(t){if(this._data)throw Error("superagent can't mix .send() and .attach()");this._getFormData().append(e,t,n||t.name);}return this},v.prototype._getFormData=function(){return this._formData||(this._formData=new r.FormData),this._formData},v.prototype.callback=function(e,t){if(this._shouldRetry(e,t))return this._retry();var n=this._callback;this.clearTimeout(),e&&(this._maxRetries&&(e.retries=this._retries-1),this.emit("error",e)),n(e,t);},v.prototype.crossDomainError=function(){var e=new Error("Request has been terminated\nPossible causes: the network is offline, Origin is not allowed by Access-Control-Allow-Origin, the page is being unloaded, etc.");e.crossDomain=!0,e.status=this.status,e.method=this.method,e.url=this.url,this.callback(e);},v.prototype.buffer=v.prototype.ca=v.prototype.agent=function(){return console.warn("This is not supported in browser version of superagent"),this},v.prototype.pipe=v.prototype.write=function(){throw Error("Streaming is not supported in browser version of superagent")},v.prototype._isHost=function(e){return e&&"object"==typeof e&&!Array.isArray(e)&&"[object Object]"!==Object.prototype.toString.call(e)},v.prototype.end=function(e){return this._endCalled&&console.warn("Warning: .end() was called twice. This is not supported in superagent"),this._endCalled=!0,this._callback=e||c,this._finalizeQueryString(),this._end()},v.prototype._end=function(){var n=this,r=this.xhr=l.getXHR(),e=this._formData||this._data;this._setTimeouts(),r.onreadystatechange=function(){var e=r.readyState;if(2<=e&&n._responseTimeoutTimer&&clearTimeout(n._responseTimeoutTimer),4==e){var t;try{t=r.status;}catch(e){t=0;}if(!t){if(n.timedout||n._aborted)return;return n.crossDomainError()}n.emit("end");}};function t(e,t){0<t.total&&(t.percent=t.loaded/t.total*100),t.direction=e,n.emit("progress",t);}if(this.hasListeners("progress"))try{r.onprogress=t.bind(null,"download"),r.upload&&(r.upload.onprogress=t.bind(null,"upload"));}catch(e){}try{this.username&&this.password?r.open(this.method,this.url,!0,this.username,this.password):r.open(this.method,this.url,!0);}catch(e){return this.callback(e)}if(this._withCredentials&&(r.withCredentials=!0),!this._formData&&"GET"!=this.method&&"HEAD"!=this.method&&"string"!=typeof e&&!this._isHost(e)){var i=this._header["content-type"],s=this._serializer||l.serialize[i?i.split(";")[0]:""];!s&&g(i)&&(s=l.serialize["application/json"]),s&&(e=s(e));}for(var o in this.header)null!=this.header[o]&&this.header.hasOwnProperty(o)&&r.setRequestHeader(o,this.header[o]);return this._responseType&&(r.responseType=this._responseType),this.emit("request",this),r.send(void 0!==e?e:null),this},l.agent=function(){return new u},["GET","POST","OPTIONS","PATCH","PUT","DELETE"].forEach(function(r){u.prototype[r.toLowerCase()]=function(e,t){var n=new l.Request(r,e);return this._setDefaults(n),t&&n.end(t),n};}),u.prototype.del=u.prototype.delete,l.get=function(e,t,n){var r=l("GET",e);return "function"==typeof t&&(n=t,t=null),t&&r.query(t),n&&r.end(n),r},l.head=function(e,t,n){var r=l("HEAD",e);return "function"==typeof t&&(n=t,t=null),t&&r.query(t),n&&r.end(n),r},l.options=function(e,t,n){var r=l("OPTIONS",e);return "function"==typeof t&&(n=t,t=null),t&&r.send(t),n&&r.end(n),r},l.del=b,l.delete=b,l.patch=function(e,t,n){var r=l("PATCH",e);return "function"==typeof t&&(n=t,t=null),t&&r.send(t),n&&r.end(n),r},l.post=function(e,t,n){var r=l("POST",e);return "function"==typeof t&&(n=t,t=null),t&&r.send(t),n&&r.end(n),r},l.put=function(e,t,n){var r=l("PUT",e);return "function"==typeof t&&(n=t,t=null),t&&r.send(t),n&&r.end(n),r};},function(e,t,n){function r(e){if(e)return function(e){for(var t in r.prototype)e[t]=r.prototype[t];return e}(e)}(e.exports=r).prototype.on=r.prototype.addEventListener=function(e,t){return this._callbacks=this._callbacks||{},(this._callbacks["$"+e]=this._callbacks["$"+e]||[]).push(t),this},r.prototype.once=function(e,t){function n(){this.off(e,n),t.apply(this,arguments);}return n.fn=t,this.on(e,n),this},r.prototype.off=r.prototype.removeListener=r.prototype.removeAllListeners=r.prototype.removeEventListener=function(e,t){if(this._callbacks=this._callbacks||{},0==arguments.length)return this._callbacks={},this;var n,r=this._callbacks["$"+e];if(!r)return this;if(1==arguments.length)return delete this._callbacks["$"+e],this;for(var i=0;i<r.length;i++)if((n=r[i])===t||n.fn===t){r.splice(i,1);break}return 0===r.length&&delete this._callbacks["$"+e],this},r.prototype.emit=function(e){this._callbacks=this._callbacks||{};for(var t=new Array(arguments.length-1),n=this._callbacks["$"+e],r=1;r<arguments.length;r++)t[r-1]=arguments[r];if(n){r=0;for(var i=(n=n.slice(0)).length;r<i;++r)n[r].apply(this,t);}return this},r.prototype.listeners=function(e){return this._callbacks=this._callbacks||{},this._callbacks["$"+e]||[]},r.prototype.hasListeners=function(e){return !!this.listeners(e).length};},function(e,t,n){var i=n(10);function r(e){if(e)return function(e){for(var t in r.prototype)e[t]=r.prototype[t];return e}(e)}(e.exports=r).prototype.clearTimeout=function(){return clearTimeout(this._timer),clearTimeout(this._responseTimeoutTimer),delete this._timer,delete this._responseTimeoutTimer,this},r.prototype.parse=function(e){return this._parser=e,this},r.prototype.responseType=function(e){return this._responseType=e,this},r.prototype.serialize=function(e){return this._serializer=e,this},r.prototype.timeout=function(e){if(!e||"object"!=typeof e)return this._timeout=e,this._responseTimeout=0,this;for(var t in e)switch(t){case"deadline":this._timeout=e.deadline;break;case"response":this._responseTimeout=e.response;break;default:console.warn("Unknown timeout option",t);}return this},r.prototype.retry=function(e,t){return 0!==arguments.length&&!0!==e||(e=1),e<=0&&(e=0),this._maxRetries=e,this._retries=0,this._retryCallback=t,this};var s=["ECONNRESET","ETIMEDOUT","EADDRINFO","ESOCKETTIMEDOUT"];r.prototype._shouldRetry=function(e,t){if(!this._maxRetries||this._retries++>=this._maxRetries)return !1;if(this._retryCallback)try{var n=this._retryCallback(e,t);if(!0===n)return !0;if(!1===n)return !1}catch(e){console.error(e);}if(t&&t.status&&500<=t.status&&501!=t.status)return !0;if(e){if(e.code&&~s.indexOf(e.code))return !0;if(e.timeout&&"ECONNABORTED"==e.code)return !0;if(e.crossDomain)return !0}return !1},r.prototype._retry=function(){return this.clearTimeout(),this.req&&(this.req=null,this.req=this.request()),this._aborted=!1,this.timedout=!1,this._end()},r.prototype.then=function(e,t){if(!this._fullfilledPromise){var i=this;this._endCalled&&console.warn("Warning: superagent request was sent twice, because both .end() and .then() were called. Never call .end() if you use promises"),this._fullfilledPromise=new Promise(function(n,r){i.end(function(e,t){e?r(e):n(t);});});}return this._fullfilledPromise.then(e,t)},r.prototype.catch=function(e){return this.then(void 0,e)},r.prototype.use=function(e){return e(this),this},r.prototype.ok=function(e){if("function"!=typeof e)throw Error("Callback required");return this._okCallback=e,this},r.prototype._isResponseOK=function(e){return !!e&&(this._okCallback?this._okCallback(e):200<=e.status&&e.status<300)},r.prototype.getHeader=r.prototype.get=function(e){return this._header[e.toLowerCase()]},r.prototype.set=function(e,t){if(i(e)){for(var n in e)this.set(n,e[n]);return this}return this._header[e.toLowerCase()]=t,this.header[e]=t,this},r.prototype.unset=function(e){return delete this._header[e.toLowerCase()],delete this.header[e],this},r.prototype.field=function(e,t){if(null==e)throw new Error(".field(name, val) name can not be empty");if(this._data&&console.error(".field() can't be used if .send() is used. Please use only .send() or only .field() & .attach()"),i(e)){for(var n in e)this.field(n,e[n]);return this}if(Array.isArray(t)){for(var r in t)this.field(e,t[r]);return this}if(null==t)throw new Error(".field(name, val) val can not be empty");return "boolean"==typeof t&&(t=""+t),this._getFormData().append(e,t),this},r.prototype.abort=function(){return this._aborted||(this._aborted=!0,this.xhr&&this.xhr.abort(),this.req&&this.req.abort(),this.clearTimeout(),this.emit("abort")),this},r.prototype._auth=function(e,t,n,r){switch(n.type){case"basic":this.set("Authorization","Basic "+r(e+":"+t));break;case"auto":this.username=e,this.password=t;break;case"bearer":this.set("Authorization","Bearer "+e);}return this},r.prototype.withCredentials=function(e){return null==e&&(e=!0),this._withCredentials=e,this},r.prototype.redirects=function(e){return this._maxRedirects=e,this},r.prototype.maxResponseSize=function(e){if("number"!=typeof e)throw TypeError("Invalid argument");return this._maxResponseSize=e,this},r.prototype.toJSON=function(){return {method:this.method,url:this.url,data:this._data,headers:this._header}},r.prototype.send=function(e){var t=i(e),n=this._header["content-type"];if(this._formData&&console.error(".send() can't be used if .attach() or .field() is used. Please use only .send() or only .field() & .attach()"),t&&!this._data)Array.isArray(e)?this._data=[]:this._isHost(e)||(this._data={});else if(e&&this._data&&this._isHost(this._data))throw Error("Can't merge these send calls");if(t&&i(this._data))for(var r in e)this._data[r]=e[r];else "string"==typeof e?(n||this.type("form"),n=this._header["content-type"],this._data="application/x-www-form-urlencoded"==n?this._data?this._data+"&"+e:e:(this._data||"")+e):this._data=e;return !t||this._isHost(e)||n||this.type("json"),this},r.prototype.sortQuery=function(e){return this._sort=void 0===e||e,this},r.prototype._finalizeQueryString=function(){var e=this._query.join("&");if(e&&(this.url+=(0<=this.url.indexOf("?")?"&":"?")+e),this._query.length=0,this._sort){var t=this.url.indexOf("?");if(0<=t){var n=this.url.substring(t+1).split("&");"function"==typeof this._sort?n.sort(this._sort):n.sort(),this.url=this.url.substring(0,t)+"?"+n.join("&");}}},r.prototype._appendQueryString=function(){console.trace("Unsupported");},r.prototype._timeoutError=function(e,t,n){if(!this._aborted){var r=new Error(e+t+"ms exceeded");r.timeout=t,r.code="ECONNABORTED",r.errno=n,this.timedout=!0,this.abort(),this.callback(r);}},r.prototype._setTimeouts=function(){var e=this;this._timeout&&!this._timer&&(this._timer=setTimeout(function(){e._timeoutError("Timeout of ",e._timeout,"ETIME");},this._timeout)),this._responseTimeout&&!this._responseTimeoutTimer&&(this._responseTimeoutTimer=setTimeout(function(){e._timeoutError("Response timeout of ",e._responseTimeout,"ETIMEDOUT");},this._responseTimeout));};},function(e,t,n){var i=n(76);function r(e){if(e)return function(e){for(var t in r.prototype)e[t]=r.prototype[t];return e}(e)}(e.exports=r).prototype.get=function(e){return this.header[e.toLowerCase()]},r.prototype._setHeaderProperties=function(e){var t=e["content-type"]||"";this.type=i.type(t);var n=i.params(t);for(var r in n)this[r]=n[r];this.links={};try{e.link&&(this.links=i.parseLinks(e.link));}catch(e){}},r.prototype._setStatusProperties=function(e){var t=e/100|0;this.status=this.statusCode=e,this.statusType=t,this.info=1==t,this.ok=2==t,this.redirect=3==t,this.clientError=4==t,this.serverError=5==t,this.error=(4==t||5==t)&&this.toError(),this.created=201==e,this.accepted=202==e,this.noContent=204==e,this.badRequest=400==e,this.unauthorized=401==e,this.notAcceptable=406==e,this.forbidden=403==e,this.notFound=404==e,this.unprocessableEntity=422==e;};},function(e,t,n){t.type=function(e){return e.split(/ *; */).shift()},t.params=function(e){return e.split(/ *; */).reduce(function(e,t){var n=t.split(/ *= */),r=n.shift(),i=n.shift();return r&&i&&(e[r]=i),e},{})},t.parseLinks=function(e){return e.split(/ *, */).reduce(function(e,t){var n=t.split(/ *; */),r=n[0].slice(1,-1);return e[n[1].split(/ *= */)[1].slice(1,-1)]=r,e},{})},t.cleanHeader=function(e,t){return delete e["content-type"],delete e["content-length"],delete e["transfer-encoding"],delete e.host,t&&(delete e.authorization,delete e.cookie),e};},function(e,t){function n(){this._defaults=[];}["use","on","once","set","query","type","accept","auth","withCredentials","sortQuery","retry","ok","redirects","timeout","buffer","serialize","parse","ca","key","pfx","cert"].forEach(function(e){n.prototype[e]=function(){return this._defaults.push({fn:e,arguments:arguments}),this};}),n.prototype._setDefaults=function(t){this._defaults.forEach(function(e){t[e.fn].apply(t,e.arguments);});},e.exports=n;}],i.c=r,i.d=function(e,t,n){i.o(e,t)||Object.defineProperty(e,t,{enumerable:!0,get:n});},i.r=function(e){"undefined"!=typeof Symbol&&Symbol.toStringTag&&Object.defineProperty(e,Symbol.toStringTag,{value:"Module"}),Object.defineProperty(e,"__esModule",{value:!0});},i.t=function(t,e){if(1&e&&(t=i(t)),8&e)return t;if(4&e&&"object"==typeof t&&t&&t.__esModule)return t;var n=Object.create(null);if(i.r(n),Object.defineProperty(n,"default",{enumerable:!0,value:t}),2&e&&"string"!=typeof t)for(var r in t)i.d(n,r,function(e){return t[e]}.bind(null,r));return n},i.n=function(e){var t=e&&e.__esModule?function(){return e.default}:function(){return e};return i.d(t,"a",t),t},i.o=function(e,t){return Object.prototype.hasOwnProperty.call(e,t)},i.p="",i(i.s=11);function i(e){if(r[e])return r[e].exports;var t=r[e]={i:e,l:!1,exports:{}};return n[e].call(t.exports,t,t.exports,i),t.l=!0,t.exports}var n,r;});
     });
 
     var PubNub = unwrapExports(pubnub_min);
@@ -34800,9 +35018,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
       }
     };
 
-    /* src/Home.svelte generated by Svelte v3.18.1 */
+    /* src/Home.svelte generated by Svelte v3.20.1 */
 
-    const { console: console_1$1 } = globals;
+    const { console: console_1$2 } = globals;
     const file$5 = "src/Home.svelte";
 
     function get_each_context$1(ctx, list, i) {
@@ -34811,7 +35029,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return child_ctx;
     }
 
-    // (216:2) {:catch err}
+    // (215:2) {:catch err}
     function create_catch_block(ctx) {
     	let h1;
 
@@ -34819,7 +35037,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		c: function create() {
     			h1 = element("h1");
     			h1.textContent = "Error :- Contact Admin";
-    			add_location(h1, file$5, 216, 4, 7233);
+    			add_location(h1, file$5, 215, 4, 7217);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, h1, anchor);
@@ -34836,14 +35054,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_catch_block.name,
     		type: "catch",
-    		source: "(216:2) {:catch err}",
+    		source: "(215:2) {:catch err}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (210:2) {:then result}
+    // (209:2) {:then result}
     function create_then_block(ctx) {
     	let div;
     	let t0;
@@ -34869,7 +35087,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			t1 = space();
     			create_component(editorarea.$$.fragment);
     			attr_dev(div, "class", "flex flex-col w-full");
-    			add_location(div, file$5, 210, 4, 7073);
+    			add_location(div, file$5, 209, 4, 7057);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div, anchor);
@@ -34907,39 +35125,30 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_then_block.name,
     		type: "then",
-    		source: "(210:2) {:then result}",
+    		source: "(209:2) {:then result}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (207:20)      {pubbie()}
+    // (207:20)      <h1>Test is being loaded...</h1>   {:then result}
     function create_pending_block(ctx) {
-    	let t0_value = /*pubbie*/ ctx[10]() + "";
-    	let t0;
-    	let t1;
     	let h1;
 
     	const block = {
     		c: function create() {
-    			t0 = text(t0_value);
-    			t1 = space();
     			h1 = element("h1");
     			h1.textContent = "Test is being loaded...";
-    			add_location(h1, file$5, 208, 4, 7019);
+    			add_location(h1, file$5, 207, 4, 7003);
     		},
     		m: function mount(target, anchor) {
-    			insert_dev(target, t0, anchor);
-    			insert_dev(target, t1, anchor);
     			insert_dev(target, h1, anchor);
     		},
     		p: noop,
     		i: noop,
     		o: noop,
     		d: function destroy(detaching) {
-    			if (detaching) detach_dev(t0);
-    			if (detaching) detach_dev(t1);
     			if (detaching) detach_dev(h1);
     		}
     	};
@@ -34948,14 +35157,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_pending_block.name,
     		type: "pending",
-    		source: "(207:20)      {pubbie()}",
+    		source: "(207:20)      <h1>Test is being loaded...</h1>   {:then result}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (308:4) {:else}
+    // (307:4) {:else}
     function create_else_block_1(ctx) {
     	let div3;
     	let div2;
@@ -34980,19 +35189,19 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			attr_dev(img, "class", "chat-notification-logo svelte-1ijc3hc");
     			if (img.src !== (img_src_value = "https://img.icons8.com/cotton/50/000000/filled-chat.png")) attr_dev(img, "src", img_src_value);
     			attr_dev(img, "alt", "ChitChat Logo");
-    			add_location(img, file$5, 311, 12, 10371);
+    			add_location(img, file$5, 310, 12, 10355);
     			attr_dev(div0, "class", "chat-notification-logo-wrapper svelte-1ijc3hc");
-    			add_location(div0, file$5, 310, 10, 10314);
+    			add_location(div0, file$5, 309, 10, 10298);
     			attr_dev(h4, "class", "chat-notification-title svelte-1ijc3hc");
-    			add_location(h4, file$5, 317, 12, 10613);
+    			add_location(h4, file$5, 316, 12, 10597);
     			attr_dev(div1, "class", "chat-notification-content svelte-1ijc3hc");
-    			add_location(div1, file$5, 316, 10, 10561);
+    			add_location(div1, file$5, 315, 10, 10545);
     			attr_dev(div2, "class", "chat-notification svelte-1ijc3hc");
-    			add_location(div2, file$5, 309, 8, 10272);
+    			add_location(div2, file$5, 308, 8, 10256);
     			attr_dev(div3, "class", "btm svelte-1ijc3hc");
-    			add_location(div3, file$5, 308, 6, 10228);
+    			add_location(div3, file$5, 307, 6, 10212);
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, div3, anchor);
     			append_dev(div3, div2);
     			append_dev(div2, div0);
@@ -35000,6 +35209,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			append_dev(div2, t0);
     			append_dev(div2, div1);
     			append_dev(div1, h4);
+    			if (remount) dispose();
     			dispose = listen_dev(div3, "click", /*joined*/ ctx[8], false, false, false);
     		},
     		p: noop,
@@ -35013,14 +35223,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_else_block_1.name,
     		type: "else",
-    		source: "(308:4) {:else}",
+    		source: "(307:4) {:else}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (221:4) {#if hasJoinedChat}
+    // (220:4) {#if hasJoinedChat}
     function create_if_block$1(ctx) {
     	let div9;
     	let div3;
@@ -35051,6 +35261,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	let img1_src_value;
     	let dispose;
     	let each_value = /*output*/ ctx[2];
+    	validate_each_argument(each_value);
     	let each_blocks = [];
 
     	for (let i = 0; i < each_value.length; i += 1) {
@@ -35093,54 +35304,54 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			attr_dev(img0, "alt", "admin photo");
     			attr_dev(img0, "class", "h-12 w-12 rounded-full");
     			if (img0.src !== (img0_src_value = "https://darrenjameseeley.files.wordpress.com/2014/09/expendables3.jpeg")) attr_dev(img0, "src", img0_src_value);
-    			add_location(img0, file$5, 227, 12, 7523);
-    			add_location(div0, file$5, 226, 10, 7505);
+    			add_location(img0, file$5, 226, 12, 7507);
+    			add_location(div0, file$5, 225, 10, 7489);
     			attr_dev(p0, "class", "text-grey-darkest");
-    			add_location(p0, file$5, 234, 14, 7860);
+    			add_location(p0, file$5, 233, 14, 7844);
     			attr_dev(div1, "class", "flex items-bottom justify-between");
-    			add_location(div1, file$5, 233, 12, 7798);
+    			add_location(div1, file$5, 232, 12, 7782);
     			attr_dev(p1, "class", "text-grey-dark mt-1 text-sm");
-    			add_location(p1, file$5, 236, 12, 7933);
+    			add_location(p1, file$5, 235, 12, 7917);
     			attr_dev(div2, "class", "ml-4 flex-1 border-b border-grey-lighter py-4");
-    			add_location(div2, file$5, 232, 10, 7726);
+    			add_location(div2, file$5, 231, 10, 7710);
     			attr_dev(div3, "class", "px-3 flex items-center bg-grey-light cursor-pointer rounded-lg");
-    			add_location(div3, file$5, 224, 8, 7408);
+    			add_location(div3, file$5, 223, 8, 7392);
     			attr_dev(div4, "class", "flex-1 overflow-auto");
-    			add_location(div4, file$5, 245, 12, 8256);
+    			add_location(div4, file$5, 244, 12, 8240);
     			attr_dev(div5, "class", "message-form");
-    			add_location(div5, file$5, 244, 10, 8217);
+    			add_location(div5, file$5, 243, 10, 8201);
     			attr_dev(div6, "class", "container mx-auto overflow-auto margin-bottom:10%;");
     			set_style(div6, "bottom", "120px");
     			set_style(div6, "right", "55px");
     			set_style(div6, "height", "280px");
     			set_style(div6, "width", "295px");
-    			add_location(div6, file$5, 241, 8, 8056);
+    			add_location(div6, file$5, 240, 8, 8040);
     			attr_dev(input, "type", "search");
     			attr_dev(input, "name", "serch");
     			attr_dev(input, "placeholder", "Type Message and Press Enter");
     			attr_dev(input, "class", "bg-white h-10 px-5 pr-10 rounded-full text-sm\n                focus:outline-none svelte-1ijc3hc");
-    			add_location(input, file$5, 277, 14, 9426);
-    			add_location(form, file$5, 275, 12, 9321);
+    			add_location(input, file$5, 276, 14, 9410);
+    			add_location(form, file$5, 274, 12, 9305);
     			attr_dev(div7, "class", "relative text-gray-600");
-    			add_location(div7, file$5, 274, 10, 9272);
+    			add_location(div7, file$5, 273, 10, 9256);
     			attr_dev(div8, "class", "container block");
     			set_style(div8, "position", "absolute");
     			set_style(div8, "bottom", "0");
-    			add_location(div8, file$5, 273, 8, 9192);
+    			add_location(div8, file$5, 272, 8, 9176);
     			attr_dev(div9, "class", "chat shadow-xl rounded-lg svelte-1ijc3hc");
-    			add_location(div9, file$5, 221, 6, 7333);
+    			add_location(div9, file$5, 220, 6, 7317);
     			attr_dev(img1, "class", "chat-notification-logo svelte-1ijc3hc");
     			if (img1.src !== (img1_src_value = "https://img.icons8.com/cute-clipart/50/000000/close-window.png")) attr_dev(img1, "src", img1_src_value);
     			attr_dev(img1, "alt", "ChitChat Logo");
-    			add_location(img1, file$5, 300, 12, 9995);
+    			add_location(img1, file$5, 299, 12, 9979);
     			attr_dev(div10, "class", "chat-notification-logo-wrapper svelte-1ijc3hc");
-    			add_location(div10, file$5, 299, 10, 9938);
+    			add_location(div10, file$5, 298, 10, 9922);
     			attr_dev(div11, "class", "chat-notification svelte-1ijc3hc");
-    			add_location(div11, file$5, 298, 8, 9896);
+    			add_location(div11, file$5, 297, 8, 9880);
     			attr_dev(div12, "class", "btm svelte-1ijc3hc");
-    			add_location(div12, file$5, 297, 6, 9853);
+    			add_location(div12, file$5, 296, 6, 9837);
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, div9, anchor);
     			append_dev(div9, div3);
     			append_dev(div3, div0);
@@ -35172,6 +35383,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			append_dev(div12, div11);
     			append_dev(div11, div10);
     			append_dev(div10, img1);
+    			if (remount) run_all(dispose);
 
     			dispose = [
     				listen_dev(input, "input", /*input_input_handler*/ ctx[18]),
@@ -35194,6 +35406,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     			if (dirty & /*output, userName*/ 20) {
     				each_value = /*output*/ ctx[2];
+    				validate_each_argument(each_value);
     				let i;
 
     				for (i = 0; i < each_value.length; i += 1) {
@@ -35232,14 +35445,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_if_block$1.name,
     		type: "if",
-    		source: "(221:4) {#if hasJoinedChat}",
+    		source: "(220:4) {#if hasJoinedChat}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (257:16) {:else}
+    // (256:16) {:else}
     function create_else_block(ctx) {
     	let div1;
     	let div0;
@@ -35261,13 +35474,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			t2 = text(t2_value);
     			t3 = space();
     			attr_dev(p0, "class", "text-grey-darkest");
-    			add_location(p0, file$5, 259, 22, 8850);
+    			add_location(p0, file$5, 258, 22, 8834);
     			attr_dev(div0, "class", "flex items-bottom justify-between");
-    			add_location(div0, file$5, 258, 20, 8780);
+    			add_location(div0, file$5, 257, 20, 8764);
     			attr_dev(p1, "class", "text-grey-dark mt-1 text-sm");
-    			add_location(p1, file$5, 262, 20, 8937);
+    			add_location(p1, file$5, 261, 20, 8921);
     			attr_dev(div1, "class", "ml-4 flex-1 rounded py-4");
-    			add_location(div1, file$5, 257, 18, 8721);
+    			add_location(div1, file$5, 256, 18, 8705);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div1, anchor);
@@ -35290,14 +35503,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_else_block.name,
     		type: "else",
-    		source: "(257:16) {:else}",
+    		source: "(256:16) {:else}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (249:16) {#if temp.publisher == userName}
+    // (248:16) {#if temp.publisher == userName}
     function create_if_block_1$1(ctx) {
     	let div1;
     	let div0;
@@ -35314,12 +35527,12 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			t0 = text(t0_value);
     			t1 = space();
     			attr_dev(p, "class", "text-sm mt-1");
-    			add_location(p, file$5, 253, 22, 8584);
+    			add_location(p, file$5, 252, 22, 8568);
     			attr_dev(div0, "class", "rounded py-2 px-3");
     			set_style(div0, "background-color", "#E2F7CB");
-    			add_location(div0, file$5, 250, 20, 8452);
+    			add_location(div0, file$5, 249, 20, 8436);
     			attr_dev(div1, "class", "flex justify-end mb-2");
-    			add_location(div1, file$5, 249, 18, 8396);
+    			add_location(div1, file$5, 248, 18, 8380);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div1, anchor);
@@ -35340,14 +35553,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_if_block_1$1.name,
     		type: "if",
-    		source: "(249:16) {#if temp.publisher == userName}",
+    		source: "(248:16) {#if temp.publisher == userName}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (248:14) {#each output as temp}
+    // (247:14) {#each output as temp}
     function create_each_block$1(ctx) {
     	let if_block_anchor;
 
@@ -35391,7 +35604,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_each_block$1.name,
     		type: "each",
-    		source: "(248:14) {#each output as temp}",
+    		source: "(247:14) {#each output as temp}",
     		ctx
     	});
 
@@ -35435,8 +35648,8 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			div = element("div");
     			if_block.c();
     			attr_dev(div, "class", "container");
-    			add_location(div, file$5, 219, 2, 7279);
-    			add_location(body, file$5, 204, 0, 6971);
+    			add_location(div, file$5, 218, 2, 7263);
+    			add_location(body, file$5, 204, 0, 6970);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -35504,6 +35717,10 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	});
 
     	return block;
+    }
+
+    function updateStore$1(result) {
+    	console.log(result);
     }
 
     function instance$7($$self, $$props, $$invalidate) {
@@ -35613,8 +35830,11 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	const writable_props = ["currentRoute"];
 
     	Object.keys($$props).forEach(key => {
-    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$1.warn(`<Home> was created with unknown prop '${key}'`);
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$2.warn(`<Home> was created with unknown prop '${key}'`);
     	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Home", $$slots, []);
 
     	function input_input_handler() {
     		newMessage = this.value;
@@ -35622,28 +35842,48 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	}
 
     	$$self.$set = $$props => {
-    		if ("currentRoute" in $$props) $$invalidate(11, currentRoute = $$props.currentRoute);
+    		if ("currentRoute" in $$props) $$invalidate(10, currentRoute = $$props.currentRoute);
     	};
 
-    	$$self.$capture_state = () => {
-    		return {
-    			currentRoute,
-    			tokens,
-    			hasJoinedChat,
-    			is_joined,
-    			channel,
-    			username,
-    			newMessage,
-    			messages,
-    			output,
-    			comment,
-    			userName,
-    			$problems
-    		};
-    	};
+    	$$self.$capture_state = () => ({
+    		onMount,
+    		EditorArea,
+    		Tabs,
+    		getClient,
+    		query,
+    		subscribe: subscribe$2,
+    		apolloClient,
+    		dataStore,
+    		currentTab,
+    		getContext,
+    		cookieHandler,
+    		currentRoute,
+    		Timer,
+    		publish,
+    		grantPermissions,
+    		pubnub,
+    		client,
+    		problems,
+    		tokens,
+    		hasJoinedChat,
+    		is_joined,
+    		channel,
+    		username,
+    		newMessage,
+    		messages,
+    		output,
+    		comment,
+    		updateStore: updateStore$1,
+    		joined,
+    		close,
+    		userName,
+    		email,
+    		pubbie,
+    		$problems
+    	});
 
     	$$self.$inject_state = $$props => {
-    		if ("currentRoute" in $$props) $$invalidate(11, currentRoute = $$props.currentRoute);
+    		if ("currentRoute" in $$props) $$invalidate(10, currentRoute = $$props.currentRoute);
     		if ("tokens" in $$props) $$invalidate(7, tokens = $$props.tokens);
     		if ("hasJoinedChat" in $$props) $$invalidate(0, hasJoinedChat = $$props.hasJoinedChat);
     		if ("is_joined" in $$props) is_joined = $$props.is_joined;
@@ -35654,8 +35894,11 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		if ("output" in $$props) $$invalidate(2, output = $$props.output);
     		if ("comment" in $$props) $$invalidate(3, comment = $$props.comment);
     		if ("userName" in $$props) $$invalidate(4, userName = $$props.userName);
-    		if ("$problems" in $$props) problems.set($problems = $$props.$problems);
     	};
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
 
     	return [
     		hasJoinedChat,
@@ -35668,7 +35911,6 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		tokens,
     		joined,
     		close,
-    		pubbie,
     		currentRoute,
     		is_joined,
     		client,
@@ -35676,6 +35918,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		username,
     		messages,
     		email,
+    		pubbie,
     		input_input_handler
     	];
     }
@@ -35683,7 +35926,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Home extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$7, create_fragment$7, safe_not_equal, { currentRoute: 11 });
+    		init(this, options, instance$7, create_fragment$7, safe_not_equal, { currentRoute: 10 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
@@ -35695,8 +35938,8 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		const { ctx } = this.$$;
     		const props = options.props || {};
 
-    		if (/*currentRoute*/ ctx[11] === undefined && !("currentRoute" in props)) {
-    			console_1$1.warn("<Home> was created without expected prop 'currentRoute'");
+    		if (/*currentRoute*/ ctx[10] === undefined && !("currentRoute" in props)) {
+    			console_1$2.warn("<Home> was created without expected prop 'currentRoute'");
     		}
     	}
 
@@ -35709,7 +35952,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	}
     }
 
-    /* src/components/navbar.svelte generated by Svelte v3.18.1 */
+    /* src/components/navbar.svelte generated by Svelte v3.20.1 */
+
+    const { console: console_1$3 } = globals;
     const file$6 = "src/components/navbar.svelte";
 
     function create_fragment$8(ctx) {
@@ -35776,56 +36021,56 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			attr_dev(link, "href", "https://fonts.googleapis.com/css2?family=Jost&display=swap");
     			attr_dev(link, "rel", "stylesheet");
     			attr_dev(link, "class", "svelte-1thwvf9");
-    			add_location(link, file$6, 61, 0, 2567);
+    			add_location(link, file$6, 64, 0, 2644);
     			attr_dev(h1, "class", "welcome text-primary svelte-1thwvf9");
-    			add_location(h1, file$6, 69, 4, 2814);
+    			add_location(h1, file$6, 72, 4, 2891);
     			attr_dev(img0, "alt", "admin");
     			attr_dev(img0, "width", "25");
     			attr_dev(img0, "height", "25");
     			if (img0.src !== (img0_src_value = "https://img.icons8.com/carbon-copy/64/000000/user.png")) attr_dev(img0, "src", img0_src_value);
     			attr_dev(img0, "class", "svelte-1thwvf9");
-    			add_location(img0, file$6, 77, 10, 3195);
+    			add_location(img0, file$6, 80, 10, 3288);
     			set_style(p0, "font-family", "'Jost', sans-serif");
     			attr_dev(p0, "class", "svelte-1thwvf9");
-    			add_location(p0, file$6, 82, 10, 3356);
+    			add_location(p0, file$6, 85, 10, 3449);
     			attr_dev(button, "class", "container bg-white mx-3 flex flex-row hover:bg-light text-dark\n          font-semibold hover:text-white py-4 px-6 border border-white-500\n          rounded hover:border-white hover:border-transparent rounded-full svelte-1thwvf9");
-    			add_location(button, file$6, 73, 8, 2945);
+    			add_location(button, file$6, 76, 8, 3038);
     			attr_dev(img1, "alt", "Theme");
     			attr_dev(img1, "width", "25");
     			attr_dev(img1, "height", "25");
     			if (img1.src !== (img1_src_value = "https://img.icons8.com/material-rounded/24/000000/change.png")) attr_dev(img1, "src", img1_src_value);
     			attr_dev(img1, "class", "svelte-1thwvf9");
-    			add_location(img1, file$6, 95, 12, 3878);
+    			add_location(img1, file$6, 98, 12, 3971);
     			attr_dev(p1, "class", "svelte-1thwvf9");
-    			add_location(p1, file$6, 100, 12, 4056);
+    			add_location(p1, file$6, 103, 12, 4149);
     			attr_dev(li0, "class", "rounded-t flex flex-row bg-gray-200 hover:bg-gray-400 py-2\n            px-4 block whitespace-no-wrap svelte-1thwvf9");
-    			add_location(li0, file$6, 87, 10, 3579);
+    			add_location(li0, file$6, 90, 10, 3672);
     			attr_dev(img2, "alt", "logout");
     			attr_dev(img2, "width", "25");
     			attr_dev(img2, "height", "25");
     			if (img2.src !== (img2_src_value = "https://img.icons8.com/pastel-glyph/64/000000/logout-rounded-down.png")) attr_dev(img2, "src", img2_src_value);
     			attr_dev(img2, "class", "svelte-1thwvf9");
-    			add_location(img2, file$6, 107, 12, 4270);
+    			add_location(img2, file$6, 110, 12, 4363);
     			attr_dev(p2, "class", "svelte-1thwvf9");
-    			add_location(p2, file$6, 112, 12, 4458);
+    			add_location(p2, file$6, 115, 12, 4551);
     			attr_dev(li1, "class", "bg-gray-200 flex flex-row hover:bg-gray-400 py-2 px-4 block\n            whitespace-no-wrap svelte-1thwvf9");
-    			add_location(li1, file$6, 102, 10, 4107);
+    			add_location(li1, file$6, 105, 10, 4200);
     			attr_dev(ul, "class", "ml-3 dropdown-content container text-gray-700 pt-1 svelte-1thwvf9");
-    			add_location(ul, file$6, 86, 8, 3505);
+    			add_location(ul, file$6, 89, 8, 3598);
     			attr_dev(div0, "class", "dropdown svelte-1thwvf9");
-    			add_location(div0, file$6, 72, 6, 2914);
+    			add_location(div0, file$6, 75, 6, 3007);
     			attr_dev(div1, "id", "btn");
     			attr_dev(div1, "class", "flex flex-row svelte-1thwvf9");
-    			add_location(div1, file$6, 70, 4, 2870);
+    			add_location(div1, file$6, 73, 4, 2963);
     			attr_dev(div2, "class", "w-full block flex-grow lg:items-right svelte-1thwvf9");
-    			add_location(div2, file$6, 68, 2, 2758);
+    			add_location(div2, file$6, 71, 2, 2835);
     			attr_dev(nav, "class", "flex shadow-2xl items-center justify-between flex-wrap bg-dark sticky\n  p-6 svelte-1thwvf9");
-    			add_location(nav, file$6, 64, 0, 2663);
+    			add_location(nav, file$6, 67, 0, 2740);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, link, anchor);
     			insert_dev(target, t0, anchor);
     			insert_dev(target, nav, anchor);
@@ -35849,8 +36094,10 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			append_dev(li1, img2);
     			append_dev(li1, t10);
     			append_dev(li1, p2);
+    			if (remount) run_all(dispose);
 
     			dispose = [
+    				listen_dev(h1, "click", home, false, false, false),
     				listen_dev(li0, "click", /*click_handler*/ ctx[4], false, false, false),
     				listen_dev(li1, "click", myFunction, false, false, false)
     			];
@@ -35881,6 +36128,10 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	location.replace("http://localhost:3000/logout");
     }
 
+    function home() {
+    	location.replace("http://localhost:5000/admin");
+    }
+
     function instance$8($$self, $$props, $$invalidate) {
     	const tokens = cookieHandler.getCookie("access_token").split(".");
     	console.log(atob(tokens[1]));
@@ -35906,6 +36157,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	console.log(number);
     	changeTheme(number);
+    	const writable_props = [];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$3.warn(`<Navbar> was created with unknown prop '${key}'`);
+    	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Navbar", $$slots, []);
 
     	const click_handler = () => {
     		$$invalidate(0, number++, number);
@@ -35913,14 +36172,24 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		changeTheme(number % themesize);
     	};
 
-    	$$self.$capture_state = () => {
-    		return {};
-    	};
+    	$$self.$capture_state = () => ({
+    		cookieHandler,
+    		tokens,
+    		myFunction,
+    		home,
+    		themes,
+    		number,
+    		changeTheme
+    	});
 
     	$$self.$inject_state = $$props => {
     		if ("themes" in $$props) $$invalidate(2, themes = $$props.themes);
     		if ("number" in $$props) $$invalidate(0, number = $$props.number);
     	};
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
 
     	return [number, tokens, themes, changeTheme, click_handler];
     }
@@ -38324,7 +38593,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     var feather$1 = unwrapExports(feather);
 
-    /* src/Icon.svelte generated by Svelte v3.18.1 */
+    /* src/Icon.svelte generated by Svelte v3.20.1 */
 
     function create_fragment$9(ctx) {
     	let html_tag;
@@ -38375,6 +38644,8 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     function instance$9($$self, $$props, $$invalidate) {
     	let { icon = "square" } = $$props;
     	let { attr = {} } = $$props;
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Icon", $$slots, []);
 
     	$$self.$set = $$new_props => {
     		$$invalidate(2, $$props = assign(assign({}, $$props), exclude_internal_props($$new_props)));
@@ -38382,15 +38653,17 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		if ("attr" in $$new_props) $$invalidate(1, attr = $$new_props.attr);
     	};
 
-    	$$self.$capture_state = () => {
-    		return { icon, attr };
-    	};
+    	$$self.$capture_state = () => ({ feather: feather$1, icon, attr });
 
     	$$self.$inject_state = $$new_props => {
     		$$invalidate(2, $$props = assign(assign({}, $$props), $$new_props));
     		if ("icon" in $$props) $$invalidate(0, icon = $$new_props.icon);
     		if ("attr" in $$props) $$invalidate(1, attr = $$new_props.attr);
     	};
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
 
     	$$props = exclude_internal_props($$props);
     	return [icon, attr, $$props];
@@ -38426,11 +38699,11 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	}
     }
 
-    /* src/components/Side.svelte generated by Svelte v3.18.1 */
+    /* src/components/Side.svelte generated by Svelte v3.20.1 */
     const file$7 = "src/components/Side.svelte";
 
     function create_fragment$a(ctx) {
-    	let div4;
+    	let div3;
     	let ul;
     	let li0;
     	let a0;
@@ -38449,33 +38722,26 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	let span2;
     	let t6;
     	let div2;
-    	let t8;
-    	let li3;
-    	let a3;
-    	let span3;
-    	let t9;
-    	let div3;
     	let current;
-    	const icon0 = new Icon({ props: { icon: "home" }, $$inline: true });
 
-    	const icon1 = new Icon({
+    	const icon0 = new Icon({
     			props: { icon: "server" },
     			$$inline: true
     		});
 
-    	const icon2 = new Icon({
+    	const icon1 = new Icon({
     			props: { icon: "folder" },
     			$$inline: true
     		});
 
-    	const icon3 = new Icon({
+    	const icon2 = new Icon({
     			props: { icon: "user-check" },
     			$$inline: true
     		});
 
     	const block = {
     		c: function create() {
-    			div4 = element("div");
+    			div3 = element("div");
     			ul = element("ul");
     			li0 = element("li");
     			a0 = element("a");
@@ -38483,7 +38749,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			create_component(icon0.$$.fragment);
     			t0 = space();
     			div0 = element("div");
-    			div0.textContent = "Home";
+    			div0.textContent = "Problems";
     			t2 = space();
     			li1 = element("li");
     			a1 = element("a");
@@ -38491,7 +38757,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			create_component(icon1.$$.fragment);
     			t3 = space();
     			div1 = element("div");
-    			div1.textContent = "Problems";
+    			div1.textContent = "Tests";
     			t5 = space();
     			li2 = element("li");
     			a2 = element("a");
@@ -38499,62 +38765,45 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			create_component(icon2.$$.fragment);
     			t6 = space();
     			div2 = element("div");
-    			div2.textContent = "Tests";
-    			t8 = space();
-    			li3 = element("li");
-    			a3 = element("a");
-    			span3 = element("span");
-    			create_component(icon3.$$.fragment);
-    			t9 = space();
-    			div3 = element("div");
-    			div3.textContent = "Results";
-    			attr_dev(span0, "class", "icon svelte-4j4wa5");
-    			add_location(span0, file$7, 68, 16, 2839);
-    			attr_dev(div0, "class", "name svelte-4j4wa5");
-    			add_location(div0, file$7, 71, 17, 2939);
+    			div2.textContent = "Results";
+    			attr_dev(span0, "class", "icon svelte-1sdjki6");
+    			add_location(span0, file$7, 69, 17, 2895);
+    			attr_dev(div0, "class", "name svelte-1sdjki6");
+    			add_location(div0, file$7, 72, 17, 2997);
     			attr_dev(a0, "href", "/admin");
-    			attr_dev(a0, "class", "active svelte-4j4wa5");
-    			add_location(a0, file$7, 67, 16, 2790);
-    			attr_dev(li0, "class", "svelte-4j4wa5");
-    			add_location(li0, file$7, 67, 12, 2786);
-    			attr_dev(span1, "class", "icon svelte-4j4wa5");
-    			add_location(span1, file$7, 75, 17, 3066);
-    			attr_dev(div1, "class", "name svelte-4j4wa5");
-    			add_location(div1, file$7, 78, 17, 3168);
-    			attr_dev(a1, "href", "/showproblems");
-    			attr_dev(a1, "class", "svelte-4j4wa5");
-    			add_location(a1, file$7, 74, 16, 3024);
-    			attr_dev(li1, "class", "svelte-4j4wa5");
-    			add_location(li1, file$7, 74, 12, 3020);
-    			attr_dev(span2, "class", "icon svelte-4j4wa5");
-    			add_location(span2, file$7, 82, 16, 3298);
-    			attr_dev(div2, "class", "name svelte-4j4wa5");
-    			add_location(div2, file$7, 85, 17, 3400);
-    			attr_dev(a2, "href", "/showtests");
-    			attr_dev(a2, "class", "svelte-4j4wa5");
-    			add_location(a2, file$7, 81, 16, 3260);
-    			attr_dev(li2, "class", "svelte-4j4wa5");
-    			add_location(li2, file$7, 81, 12, 3256);
-    			attr_dev(span3, "class", "icon svelte-4j4wa5");
-    			add_location(span3, file$7, 89, 17, 3528);
-    			attr_dev(div3, "class", "name svelte-4j4wa5");
-    			add_location(div3, file$7, 92, 17, 3634);
-    			attr_dev(a3, "href", "/showresults");
-    			attr_dev(a3, "class", "svelte-4j4wa5");
-    			add_location(a3, file$7, 88, 16, 3487);
-    			attr_dev(li3, "class", "svelte-4j4wa5");
-    			add_location(li3, file$7, 88, 12, 3483);
-    			attr_dev(ul, "class", "svelte-4j4wa5");
-    			add_location(ul, file$7, 66, 8, 2769);
-    			attr_dev(div4, "class", "sidebar svelte-4j4wa5");
-    			add_location(div4, file$7, 65, 4, 2739);
+    			attr_dev(a0, "class", "svelte-1sdjki6");
+    			add_location(a0, file$7, 68, 16, 2860);
+    			attr_dev(li0, "class", "svelte-1sdjki6");
+    			add_location(li0, file$7, 68, 12, 2856);
+    			attr_dev(span1, "class", "icon svelte-1sdjki6");
+    			add_location(span1, file$7, 76, 16, 3127);
+    			attr_dev(div1, "class", "name svelte-1sdjki6");
+    			add_location(div1, file$7, 79, 17, 3229);
+    			attr_dev(a1, "href", "/showtests");
+    			attr_dev(a1, "class", "svelte-1sdjki6");
+    			add_location(a1, file$7, 75, 16, 3089);
+    			attr_dev(li1, "class", "svelte-1sdjki6");
+    			add_location(li1, file$7, 75, 12, 3085);
+    			attr_dev(span2, "class", "icon svelte-1sdjki6");
+    			add_location(span2, file$7, 83, 17, 3357);
+    			attr_dev(div2, "class", "name svelte-1sdjki6");
+    			add_location(div2, file$7, 86, 17, 3463);
+    			attr_dev(a2, "href", "/showresults");
+    			attr_dev(a2, "class", "svelte-1sdjki6");
+    			add_location(a2, file$7, 82, 16, 3316);
+    			attr_dev(li2, "class", "svelte-1sdjki6");
+    			add_location(li2, file$7, 82, 12, 3312);
+    			attr_dev(ul, "class", "svelte-1sdjki6");
+    			add_location(ul, file$7, 67, 8, 2839);
+    			attr_dev(div3, "class", "sidebar svelte-1sdjki6");
+    			add_location(div3, file$7, 66, 4, 2809);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
     		m: function mount(target, anchor) {
-    			insert_dev(target, div4, anchor);
-    			append_dev(div4, ul);
+    			insert_dev(target, div3, anchor);
+    			append_dev(div3, ul);
     			append_dev(ul, li0);
     			append_dev(li0, a0);
     			append_dev(a0, span0);
@@ -38575,13 +38824,6 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			mount_component(icon2, span2, null);
     			append_dev(a2, t6);
     			append_dev(a2, div2);
-    			append_dev(ul, t8);
-    			append_dev(ul, li3);
-    			append_dev(li3, a3);
-    			append_dev(a3, span3);
-    			mount_component(icon3, span3, null);
-    			append_dev(a3, t9);
-    			append_dev(a3, div3);
     			current = true;
     		},
     		p: noop,
@@ -38590,22 +38832,19 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			transition_in(icon0.$$.fragment, local);
     			transition_in(icon1.$$.fragment, local);
     			transition_in(icon2.$$.fragment, local);
-    			transition_in(icon3.$$.fragment, local);
     			current = true;
     		},
     		o: function outro(local) {
     			transition_out(icon0.$$.fragment, local);
     			transition_out(icon1.$$.fragment, local);
     			transition_out(icon2.$$.fragment, local);
-    			transition_out(icon3.$$.fragment, local);
     			current = false;
     		},
     		d: function destroy(detaching) {
-    			if (detaching) detach_dev(div4);
+    			if (detaching) detach_dev(div3);
     			destroy_component(icon0);
     			destroy_component(icon1);
     			destroy_component(icon2);
-    			destroy_component(icon3);
     		}
     	};
 
@@ -38620,10 +38859,23 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
+    function instance$a($$self, $$props, $$invalidate) {
+    	const writable_props = [];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<Side> was created with unknown prop '${key}'`);
+    	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Side", $$slots, []);
+    	$$self.$capture_state = () => ({ Icon, Navbar });
+    	return [];
+    }
+
     class Side extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, null, create_fragment$a, safe_not_equal, {});
+    		init(this, options, instance$a, create_fragment$a, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
@@ -38634,7 +38886,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	}
     }
 
-    /* src/routes/pubnub.svelte generated by Svelte v3.18.1 */
+    /* src/routes/pubnub.svelte generated by Svelte v3.20.1 */
+
+    const { console: console_1$4 } = globals;
     const file$8 = "src/routes/pubnub.svelte";
 
     function get_each_context$2(ctx, list, i) {
@@ -38670,23 +38924,23 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			t0 = space();
     			div1 = element("div");
     			h4 = element("h4");
-    			h4.textContent = "User Chat";
+    			h4.textContent = "User Support";
     			attr_dev(img, "class", "chat-notification-logo svelte-15kyrb4");
     			if (img.src !== (img_src_value = "https://img.icons8.com/cotton/50/000000/filled-chat.png")) attr_dev(img, "src", img_src_value);
     			attr_dev(img, "alt", "ChitChat Logo");
-    			add_location(img, file$8, 268, 10, 9577);
+    			add_location(img, file$8, 268, 10, 9575);
     			attr_dev(div0, "class", "chat-notification-logo-wrapper svelte-15kyrb4");
-    			add_location(div0, file$8, 267, 8, 9522);
+    			add_location(div0, file$8, 267, 8, 9520);
     			attr_dev(h4, "class", "chat-notification-title svelte-15kyrb4");
-    			add_location(h4, file$8, 274, 10, 9807);
+    			add_location(h4, file$8, 274, 10, 9805);
     			attr_dev(div1, "class", "chat-notification-content svelte-15kyrb4");
-    			add_location(div1, file$8, 273, 8, 9757);
+    			add_location(div1, file$8, 273, 8, 9755);
     			attr_dev(div2, "class", "chat-notification svelte-15kyrb4");
-    			add_location(div2, file$8, 266, 6, 9482);
+    			add_location(div2, file$8, 266, 6, 9480);
     			attr_dev(div3, "class", "btm svelte-15kyrb4");
-    			add_location(div3, file$8, 265, 4, 9440);
+    			add_location(div3, file$8, 265, 4, 9438);
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, div3, anchor);
     			append_dev(div3, div2);
     			append_dev(div2, div0);
@@ -38694,6 +38948,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			append_dev(div2, t0);
     			append_dev(div2, div1);
     			append_dev(div1, h4);
+    			if (remount) dispose();
     			dispose = listen_dev(div3, "click", /*joined*/ ctx[6], false, false, false);
     		},
     		p: noop,
@@ -38750,6 +39005,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	let img_src_value;
     	let dispose;
     	let each_value_1 = /*channels*/ ctx[1];
+    	validate_each_argument(each_value_1);
     	let each_blocks_1 = [];
 
     	for (let i = 0; i < each_value_1.length; i += 1) {
@@ -38757,6 +39013,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	}
 
     	let each_value = /*output*/ ctx[3];
+    	validate_each_argument(each_value);
     	let each_blocks = [];
 
     	for (let i = 0; i < each_value.length; i += 1) {
@@ -38808,63 +39065,63 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			div14 = element("div");
     			img = element("img");
     			attr_dev(p0, "class", "text-grey-darkest");
-    			add_location(p0, file$8, 172, 12, 5963);
+    			add_location(p0, file$8, 172, 12, 5961);
     			attr_dev(div0, "class", "flex");
-    			add_location(div0, file$8, 171, 10, 5932);
+    			add_location(div0, file$8, 171, 10, 5930);
     			attr_dev(div1, "class", "py-2 px-3 bg-grey-lighter flex flex-row justify-between\n          items-center");
-    			add_location(div1, file$8, 168, 8, 5819);
+    			add_location(div1, file$8, 168, 8, 5817);
     			attr_dev(div2, "class", "bg-grey-lighter flex-1 overflow-auto");
-    			add_location(div2, file$8, 176, 8, 6077);
+    			add_location(div2, file$8, 176, 8, 6075);
     			attr_dev(div3, "class", "w-1/3 border flex flex-col");
-    			add_location(div3, file$8, 166, 6, 5746);
+    			add_location(div3, file$8, 166, 6, 5744);
     			attr_dev(p1, "class", "text-grey-darkest");
-    			add_location(p1, file$8, 199, 14, 7014);
+    			add_location(p1, file$8, 199, 14, 7012);
     			attr_dev(div4, "class", "flex items-bottom justify-between");
-    			add_location(div4, file$8, 198, 12, 6952);
+    			add_location(div4, file$8, 198, 12, 6950);
     			attr_dev(p2, "class", "text-grey-dark mt-1 text-sm");
-    			add_location(p2, file$8, 201, 12, 7092);
+    			add_location(p2, file$8, 201, 12, 7090);
     			attr_dev(div5, "class", "ml-4 flex-1 border-b border-grey-lighter py-4");
-    			add_location(div5, file$8, 197, 10, 6880);
+    			add_location(div5, file$8, 197, 10, 6878);
     			attr_dev(div6, "class", "px-3 flex-row items-center bg-grey-light cursor-pointer\n          rounded-lg");
-    			add_location(div6, file$8, 194, 8, 6769);
+    			add_location(div6, file$8, 194, 8, 6767);
     			attr_dev(div7, "class", "flex-1 overflow-auto");
-    			add_location(div7, file$8, 210, 12, 7415);
+    			add_location(div7, file$8, 210, 12, 7413);
     			attr_dev(div8, "class", "message-form");
-    			add_location(div8, file$8, 209, 10, 7376);
+    			add_location(div8, file$8, 209, 10, 7374);
     			attr_dev(div9, "class", "container mx-auto overflow-auto margin-bottom:10%;");
     			set_style(div9, "bottom", "120px");
     			set_style(div9, "right", "55px");
     			set_style(div9, "height", "380px");
     			set_style(div9, "width", "390px");
-    			add_location(div9, file$8, 206, 8, 7215);
+    			add_location(div9, file$8, 206, 8, 7213);
     			attr_dev(input, "type", "search");
     			attr_dev(input, "name", "serch");
     			attr_dev(input, "placeholder", "Type Message and Press Enter");
     			attr_dev(input, "class", "bg-white h-10 px-5 pr-10 rounded-full text-sm\n                focus:outline-none svelte-15kyrb4");
-    			add_location(input, file$8, 239, 14, 8663);
-    			add_location(form, file$8, 238, 12, 8591);
+    			add_location(input, file$8, 239, 14, 8661);
+    			add_location(form, file$8, 238, 12, 8589);
     			attr_dev(div10, "class", "relative text-gray-600");
-    			add_location(div10, file$8, 237, 10, 8542);
+    			add_location(div10, file$8, 237, 10, 8540);
     			attr_dev(div11, "class", "container block");
     			set_style(div11, "position", "absolute");
     			set_style(div11, "bottom", "0");
-    			add_location(div11, file$8, 236, 8, 8462);
+    			add_location(div11, file$8, 236, 8, 8460);
     			attr_dev(div12, "class", "w-2/3 border flex flex-col");
-    			add_location(div12, file$8, 192, 6, 6694);
+    			add_location(div12, file$8, 192, 6, 6692);
     			attr_dev(div13, "class", "chat flex flex-row shadow-xl rounded-lg svelte-15kyrb4");
-    			add_location(div13, file$8, 164, 4, 5667);
+    			add_location(div13, file$8, 164, 4, 5665);
     			attr_dev(img, "class", "chat-notification-logo svelte-15kyrb4");
     			if (img.src !== (img_src_value = "https://img.icons8.com/cute-clipart/50/000000/close-window.png")) attr_dev(img, "src", img_src_value);
     			attr_dev(img, "alt", "ChitChat Logo");
-    			add_location(img, file$8, 257, 10, 9223);
+    			add_location(img, file$8, 257, 10, 9221);
     			attr_dev(div14, "class", "chat-notification-logo-wrapper svelte-15kyrb4");
-    			add_location(div14, file$8, 256, 8, 9168);
+    			add_location(div14, file$8, 256, 8, 9166);
     			attr_dev(div15, "class", "chat-notification svelte-15kyrb4");
-    			add_location(div15, file$8, 255, 6, 9128);
+    			add_location(div15, file$8, 255, 6, 9126);
     			attr_dev(div16, "class", "btm svelte-15kyrb4");
-    			add_location(div16, file$8, 254, 4, 9087);
+    			add_location(div16, file$8, 254, 4, 9085);
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, div13, anchor);
     			append_dev(div13, div3);
     			append_dev(div3, div1);
@@ -38907,6 +39164,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			append_dev(div16, div15);
     			append_dev(div15, div14);
     			append_dev(div14, img);
+    			if (remount) run_all(dispose);
 
     			dispose = [
     				listen_dev(input, "input", /*input_input_handler*/ ctx[16]),
@@ -38928,6 +39186,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     			if (dirty & /*changeChannel, channels*/ 1026) {
     				each_value_1 = /*channels*/ ctx[1];
+    				validate_each_argument(each_value_1);
     				let i;
 
     				for (i = 0; i < each_value_1.length; i += 1) {
@@ -38954,6 +39213,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     			if (dirty & /*output, userName, channelName*/ 296) {
     				each_value = /*output*/ ctx[3];
+    				validate_each_argument(each_value);
     				let i;
 
     				for (i = 0; i < each_value.length; i += 1) {
@@ -39020,21 +39280,22 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			t0 = text(t0_value);
     			t1 = space();
     			attr_dev(p, "class", "text-grey-darkest");
-    			add_location(p, file$8, 184, 18, 6515);
+    			add_location(p, file$8, 184, 18, 6513);
     			attr_dev(div0, "class", "flex items-bottom justify-between");
-    			add_location(div0, file$8, 183, 16, 6449);
+    			add_location(div0, file$8, 183, 16, 6447);
     			attr_dev(div1, "class", "ml-4 flex-1 border-b border-grey-lighter py-4");
-    			add_location(div1, file$8, 182, 14, 6373);
+    			add_location(div1, file$8, 182, 14, 6371);
     			attr_dev(div2, "class", "bg-white hover:bg-gray-400 px-3 flex items-center\n              hover:bg-grey-lighter cursor-pointer");
-    			add_location(div2, file$8, 178, 12, 6178);
+    			add_location(div2, file$8, 178, 12, 6176);
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, div2, anchor);
     			append_dev(div2, div1);
     			append_dev(div1, div0);
     			append_dev(div0, p);
     			append_dev(p, t0);
     			append_dev(div2, t1);
+    			if (remount) dispose();
 
     			dispose = listen_dev(
     				div2,
@@ -39143,13 +39404,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			t2 = text(t2_value);
     			t3 = space();
     			attr_dev(p0, "class", "text-grey-darkest");
-    			add_location(p0, file$8, 224, 24, 8082);
+    			add_location(p0, file$8, 224, 24, 8080);
     			attr_dev(div0, "class", "flex items-bottom justify-between");
-    			add_location(div0, file$8, 223, 22, 8010);
+    			add_location(div0, file$8, 223, 22, 8008);
     			attr_dev(p1, "class", "text-grey-dark mt-1 text-sm");
-    			add_location(p1, file$8, 226, 22, 8183);
+    			add_location(p1, file$8, 226, 22, 8181);
     			attr_dev(div1, "class", "ml-4 flex-1 rounded py-4");
-    			add_location(div1, file$8, 222, 20, 7949);
+    			add_location(div1, file$8, 222, 20, 7947);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div1, anchor);
@@ -39198,12 +39459,12 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			t0 = text(t0_value);
     			t1 = space();
     			attr_dev(p, "class", "text-sm mt-1");
-    			add_location(p, file$8, 218, 24, 7804);
+    			add_location(p, file$8, 218, 24, 7802);
     			attr_dev(div0, "class", "rounded py-2 px-3");
     			set_style(div0, "background-color", "#E2F7CB");
-    			add_location(div0, file$8, 215, 22, 7666);
+    			add_location(div0, file$8, 215, 22, 7664);
     			attr_dev(div1, "class", "flex justify-end mb-2");
-    			add_location(div1, file$8, 214, 20, 7608);
+    			add_location(div1, file$8, 214, 20, 7606);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div1, anchor);
@@ -39297,9 +39558,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			if_block.c();
     			attr_dev(link, "href", "https://unpkg.com/tailwindcss@^1.0/dist/tailwind.min.css");
     			attr_dev(link, "rel", "stylesheet");
-    			add_location(link, file$8, 159, 0, 5523);
+    			add_location(link, file$8, 159, 0, 5521);
     			attr_dev(div, "class", "container");
-    			add_location(div, file$8, 162, 0, 5617);
+    			add_location(div, file$8, 162, 0, 5615);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -39349,9 +39610,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	if (match) return match[2];
     }
 
-    function instance$a($$self, $$props, $$invalidate) {
+    function instance$b($$self, $$props, $$invalidate) {
     	let hasJoinedChat = false;
-    	let channels = [""];
+    	let channels = [];
     	let username = "";
     	let newMessage = "";
     	let messages = "";
@@ -39429,14 +39690,43 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		fetchmessages(channelName);
     	};
 
+    	const writable_props = [];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$4.warn(`<Pubnub> was created with unknown prop '${key}'`);
+    	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Pubnub", $$slots, []);
+
     	function input_input_handler() {
     		newMessage = this.value;
     		$$invalidate(2, newMessage);
     	}
 
-    	$$self.$capture_state = () => {
-    		return {};
-    	};
+    	$$self.$capture_state = () => ({
+    		publish,
+    		grantPermissions,
+    		fetchmessages,
+    		pubnub,
+    		hasJoinedChat,
+    		channels,
+    		username,
+    		newMessage,
+    		messages,
+    		output,
+    		comment,
+    		joined,
+    		close,
+    		getCookie: getCookie$1,
+    		userEmail,
+    		sEmails,
+    		userName,
+    		user,
+    		channelName,
+    		sendMessage,
+    		changeChannel
+    	});
 
     	$$self.$inject_state = $$props => {
     		if ("hasJoinedChat" in $$props) $$invalidate(0, hasJoinedChat = $$props.hasJoinedChat);
@@ -39451,6 +39741,10 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		if ("channelName" in $$props) $$invalidate(5, channelName = $$props.channelName);
     		if ("sendMessage" in $$props) $$invalidate(9, sendMessage = $$props.sendMessage);
     	};
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
 
     	return [
     		hasJoinedChat,
@@ -39476,7 +39770,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Pubnub extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$a, create_fragment$b, safe_not_equal, {});
+    		init(this, options, instance$b, create_fragment$b, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
@@ -39487,125 +39781,11 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	}
     }
 
-    /* src/routes/Admin.svelte generated by Svelte v3.18.1 */
-    const file$9 = "src/routes/Admin.svelte";
+    /* src/routes/Login.svelte generated by Svelte v3.20.1 */
+
+    const file$9 = "src/routes/Login.svelte";
 
     function create_fragment$c(ctx) {
-    	let link;
-    	let t0;
-    	let body;
-    	let header;
-    	let t1;
-    	let t2;
-    	let current;
-    	const navbar = new Navbar({ $$inline: true });
-    	const sidebar = new Side({ $$inline: true });
-    	const pubnub = new Pubnub({ $$inline: true });
-
-    	const block = {
-    		c: function create() {
-    			link = element("link");
-    			t0 = space();
-    			body = element("body");
-    			header = element("header");
-    			create_component(navbar.$$.fragment);
-    			t1 = space();
-    			create_component(sidebar.$$.fragment);
-    			t2 = space();
-    			create_component(pubnub.$$.fragment);
-    			attr_dev(link, "href", "https://unpkg.com/tailwindcss@^1.0/dist/tailwind.min.css");
-    			attr_dev(link, "rel", "stylesheet");
-    			add_location(link, file$9, 23, 0, 877);
-    			add_location(header, file$9, 28, 2, 981);
-    			add_location(body, file$9, 27, 0, 972);
-    		},
-    		l: function claim(nodes) {
-    			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
-    		},
-    		m: function mount(target, anchor) {
-    			insert_dev(target, link, anchor);
-    			insert_dev(target, t0, anchor);
-    			insert_dev(target, body, anchor);
-    			append_dev(body, header);
-    			mount_component(navbar, header, null);
-    			append_dev(header, t1);
-    			mount_component(sidebar, header, null);
-    			append_dev(body, t2);
-    			mount_component(pubnub, body, null);
-    			current = true;
-    		},
-    		p: noop,
-    		i: function intro(local) {
-    			if (current) return;
-    			transition_in(navbar.$$.fragment, local);
-    			transition_in(sidebar.$$.fragment, local);
-    			transition_in(pubnub.$$.fragment, local);
-    			current = true;
-    		},
-    		o: function outro(local) {
-    			transition_out(navbar.$$.fragment, local);
-    			transition_out(sidebar.$$.fragment, local);
-    			transition_out(pubnub.$$.fragment, local);
-    			current = false;
-    		},
-    		d: function destroy(detaching) {
-    			if (detaching) detach_dev(link);
-    			if (detaching) detach_dev(t0);
-    			if (detaching) detach_dev(body);
-    			destroy_component(navbar);
-    			destroy_component(sidebar);
-    			destroy_component(pubnub);
-    		}
-    	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_fragment$c.name,
-    		type: "component",
-    		source: "",
-    		ctx
-    	});
-
-    	return block;
-    }
-
-    function instance$b($$self) {
-    	const client = getClient();
-    	const tokens = cookieHandler.getCookie("access_token").split(".");
-    	console.log(atob(tokens[1]));
-    	const Test = query(client, { query: apolloClient.allTests });
-    	const Problem = query(client, { query: apolloClient.getProblems });
-
-    	$$self.$capture_state = () => {
-    		return {};
-    	};
-
-    	$$self.$inject_state = $$props => {
-    		
-    	};
-
-    	return [];
-    }
-
-    class Admin extends SvelteComponentDev {
-    	constructor(options) {
-    		super(options);
-    		init(this, options, instance$b, create_fragment$c, safe_not_equal, {});
-
-    		dispatch_dev("SvelteRegisterComponent", {
-    			component: this,
-    			tagName: "Admin",
-    			options,
-    			id: create_fragment$c.name
-    		});
-    	}
-    }
-
-    /* src/routes/Login.svelte generated by Svelte v3.18.1 */
-
-    const file$a = "src/routes/Login.svelte";
-
-    function create_fragment$d(ctx) {
     	let link;
     	let t0;
     	let body;
@@ -39666,52 +39846,52 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			p1.textContent = "Try Out.";
     			attr_dev(link, "href", "https://unpkg.com/tailwindcss@^1.0/dist/tailwind.min.css");
     			attr_dev(link, "rel", "stylesheet");
-    			add_location(link, file$a, 67, 0, 3074);
+    			add_location(link, file$9, 67, 0, 3074);
     			attr_dev(h2, "class", "text-2xl font-semibold text-gray-700 text-center");
-    			add_location(h2, file$a, 81, 8, 3474);
+    			add_location(h2, file$9, 81, 8, 3474);
     			attr_dev(p0, "class", "text-xl text-gray-600 text-center");
-    			add_location(p0, file$a, 84, 8, 3578);
+    			add_location(p0, file$9, 84, 8, 3578);
     			attr_dev(path0, "d", "M36.3425 16.7358H35V16.6667H20V23.3333H29.4192C28.045 27.2142\n                24.3525 30 20 30C14.4775 30 10 25.5225 10 20C10 14.4775 14.4775\n                9.99999 20 9.99999C22.5492 9.99999 24.8683 10.9617 26.6342\n                12.5325L31.3483 7.81833C28.3717 5.04416 24.39 3.33333 20\n                3.33333C10.7958 3.33333 3.33335 10.7958 3.33335 20C3.33335\n                29.2042 10.7958 36.6667 20 36.6667C29.2042 36.6667 36.6667\n                29.2042 36.6667 20C36.6667 18.8825 36.5517 17.7917 36.3425\n                16.7358Z");
     			attr_dev(path0, "fill", "#FFC107");
-    			add_location(path0, file$a, 91, 14, 3922);
+    			add_location(path0, file$9, 91, 14, 3922);
     			attr_dev(path1, "d", "M5.25497 12.2425L10.7308 16.2583C12.2125 12.59 15.8008\n                9.99999 20 9.99999C22.5491 9.99999 24.8683 10.9617 26.6341\n                12.5325L31.3483 7.81833C28.3716 5.04416 24.39 3.33333 20\n                3.33333C13.5983 3.33333 8.04663 6.94749 5.25497 12.2425Z");
     			attr_dev(path1, "fill", "#FF3D00");
-    			add_location(path1, file$a, 101, 14, 4536);
+    			add_location(path1, file$9, 101, 14, 4536);
     			attr_dev(path2, "d", "M20 36.6667C24.305 36.6667 28.2167 35.0192 31.1742\n                32.34L26.0159 27.975C24.3425 29.2425 22.2625 30 20 30C15.665 30\n                11.9842 27.2359 10.5975 23.3784L5.16254 27.5659C7.92087 32.9634\n                13.5225 36.6667 20 36.6667Z");
     			attr_dev(path2, "fill", "#4CAF50");
-    			add_location(path2, file$a, 107, 14, 4886);
+    			add_location(path2, file$9, 107, 14, 4886);
     			attr_dev(path3, "d", "M36.3425 16.7358H35V16.6667H20V23.3333H29.4192C28.7592\n                25.1975 27.56 26.805 26.0133 27.9758C26.0142 27.975 26.015\n                27.975 26.0158 27.9742L31.1742 32.3392C30.8092 32.6708 36.6667\n                28.3333 36.6667 20C36.6667 18.8825 36.5517 17.7917 36.3425\n                16.7358Z");
     			attr_dev(path3, "fill", "#1976D2");
-    			add_location(path3, file$a, 113, 14, 5215);
+    			add_location(path3, file$9, 113, 14, 5215);
     			attr_dev(svg, "class", "h-6 w-6");
     			attr_dev(svg, "viewBox", "0 0 40 40");
-    			add_location(svg, file$a, 90, 12, 3866);
+    			add_location(svg, file$9, 90, 12, 3866);
     			attr_dev(div0, "class", "px-4 py-3");
-    			add_location(div0, file$a, 89, 10, 3830);
+    			add_location(div0, file$9, 89, 10, 3830);
     			attr_dev(h1, "class", "px-4 py-3 w-5/6 text-center text-gray-600 font-bold");
-    			add_location(h1, file$a, 122, 10, 5630);
+    			add_location(h1, file$9, 122, 10, 5630);
     			attr_dev(a, "href", "http://localhost:3000/auth/google");
     			attr_dev(a, "class", "flex items-center justify-center mt-4 text-white rounded-lg\n          shadow-md hover:bg-gray-100");
-    			add_location(a, file$a, 85, 8, 3649);
+    			add_location(a, file$9, 85, 8, 3649);
     			attr_dev(div1, "class", "flex flex-col justify-center md:justify-start w-full p-8 lg:w-1/2\n        m-64 lg:px-32 my-auto pt-8 ");
-    			add_location(div1, file$a, 78, 6, 3342);
+    			add_location(div1, file$9, 78, 6, 3342);
     			attr_dev(div2, "class", "w-full md:w-1/2 flex flex-col");
-    			add_location(div2, file$a, 76, 4, 3291);
+    			add_location(div2, file$9, 76, 4, 3291);
     			attr_dev(img, "alt", "acchi picture");
     			attr_dev(img, "class", "object-cover w-full h-screen hidden md:block");
     			if (img.src !== (img_src_value = "https://source.unsplash.com/IXUM4cJynP0")) attr_dev(img, "src", img_src_value);
-    			add_location(img, file$a, 133, 6, 5861);
+    			add_location(img, file$9, 133, 6, 5861);
     			attr_dev(p1, "class", "line-1 anim-typewriter font-semibold text-gray-900 svelte-1imoluh");
     			set_style(p1, "font-size", "70px");
-    			add_location(p1, file$a, 138, 8, 6049);
+    			add_location(p1, file$9, 138, 8, 6049);
     			attr_dev(div3, "class", "centered svelte-1imoluh");
-    			add_location(div3, file$a, 137, 6, 6018);
+    			add_location(div3, file$9, 137, 6, 6018);
     			attr_dev(div4, "class", "container w-1/2 shadow-2xl svelte-1imoluh");
-    			add_location(div4, file$a, 132, 4, 5814);
+    			add_location(div4, file$9, 132, 4, 5814);
     			attr_dev(div5, "class", "w-full flex flex-wrap");
-    			add_location(div5, file$a, 73, 2, 3223);
+    			add_location(div5, file$9, 73, 2, 3223);
     			attr_dev(body, "class", "bg-white font-family-karla h-screen svelte-1imoluh");
-    			add_location(body, file$a, 71, 0, 3169);
+    			add_location(body, file$9, 71, 0, 3169);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -39755,6 +39935,95 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
+    		id: create_fragment$c.name,
+    		type: "component",
+    		source: "",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    function myFunction$1() {
+    	location.replace("http://localhost:3000/auth/google");
+    }
+
+    function instance$c($$self, $$props, $$invalidate) {
+    	const writable_props = [];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<Login> was created with unknown prop '${key}'`);
+    	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Login", $$slots, []);
+    	$$self.$capture_state = () => ({ myFunction: myFunction$1 });
+    	return [];
+    }
+
+    class Login extends SvelteComponentDev {
+    	constructor(options) {
+    		super(options);
+    		init(this, options, instance$c, create_fragment$c, safe_not_equal, {});
+
+    		dispatch_dev("SvelteRegisterComponent", {
+    			component: this,
+    			tagName: "Login",
+    			options,
+    			id: create_fragment$c.name
+    		});
+    	}
+    }
+
+    /* src/inputTest.svelte generated by Svelte v3.20.1 */
+
+    const { console: console_1$5 } = globals;
+    const file$a = "src/inputTest.svelte";
+
+    function create_fragment$d(ctx) {
+    	let div0;
+    	let t0;
+    	let div1;
+    	let t1;
+    	let dispose;
+
+    	const block = {
+    		c: function create() {
+    			div0 = element("div");
+    			t0 = space();
+    			div1 = element("div");
+    			t1 = text(/*inputstatus*/ ctx[0]);
+    			attr_dev(div0, "id", "inputEditor");
+    			attr_dev(div0, "class", "editor flex-grow svelte-170ngk4");
+    			add_location(div0, file$a, 72, 0, 2267);
+    			add_location(div1, file$a, 73, 0, 2338);
+    		},
+    		l: function claim(nodes) {
+    			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
+    		},
+    		m: function mount(target, anchor, remount) {
+    			insert_dev(target, div0, anchor);
+    			insert_dev(target, t0, anchor);
+    			insert_dev(target, div1, anchor);
+    			append_dev(div1, t1);
+    			if (remount) dispose();
+    			dispose = listen_dev(div0, "keydown", /*onInput*/ ctx[1], false, false, false);
+    		},
+    		p: function update(ctx, [dirty]) {
+    			if (dirty & /*inputstatus*/ 1) set_data_dev(t1, /*inputstatus*/ ctx[0]);
+    		},
+    		i: noop,
+    		o: noop,
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(div0);
+    			if (detaching) detach_dev(t0);
+    			if (detaching) detach_dev(div1);
+    			dispose();
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
     		id: create_fragment$d.name,
     		type: "component",
     		source: "",
@@ -39764,23 +40033,153 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    class Login extends SvelteComponentDev {
+    function instance$d($$self, $$props, $$invalidate) {
+    	let { inputChange } = $$props;
+    	let { inputVal } = $$props;
+    	let ieditor;
+    	let test_case = "";
+
+    	onMount(() => {
+    		ace.config.set("basePath", "ace-builds/src-noconflict/");
+    		ieditor = ace.edit("inputEditor");
+
+    		ieditor.setOptions({
+    			enableBasicAutocompletion: true,
+    			enableSnippets: true,
+    			highlightActiveLine: true,
+    			showPrintMargin: false,
+    			theme: "ace/theme/tomorrow_night",
+    			mode: "ace/mode/javascript",
+    			enableLiveAutocompletion: true,
+    			useWorker: false
+    		});
+    	});
+
+    	afterUpdate(() => {
+    		let pos = ieditor.session.selection.toJSON();
+    		ieditor.session.setValue(inputVal);
+    		ieditor.session.selection.fromJSON(pos);
+    	});
+
+    	const onInput = (function onInput() {
+    		let timer;
+
+    		return e => {
+    			clearTimeout(timer);
+
+    			timer = setTimeout(
+    				() => {
+    					test_case = ieditor.getValue();
+    					inputChange(test_case);
+
+    					try {
+    						JSON.parse(test_case);
+    						$$invalidate(0, inputstatus = "Correct");
+    					} catch(err) {
+    						console.log(err.message);
+    						$$invalidate(0, inputstatus = err.message);
+    					}
+    				},
+    				10
+    			);
+    		};
+    	})();
+
+    	try {
+    		JSON.parse(test_case);
+    		inputstatus = "Correct";
+    	} catch(err) {
+    		console.log(err.message);
+    	}
+
+    	const writable_props = ["inputChange", "inputVal"];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$5.warn(`<InputTest> was created with unknown prop '${key}'`);
+    	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("InputTest", $$slots, []);
+
+    	$$self.$set = $$props => {
+    		if ("inputChange" in $$props) $$invalidate(2, inputChange = $$props.inputChange);
+    		if ("inputVal" in $$props) $$invalidate(3, inputVal = $$props.inputVal);
+    	};
+
+    	$$self.$capture_state = () => ({
+    		onMount,
+    		afterUpdate,
+    		beforeUpdate,
+    		inputChange,
+    		inputVal,
+    		ieditor,
+    		test_case,
+    		onInput,
+    		inputstatus
+    	});
+
+    	$$self.$inject_state = $$props => {
+    		if ("inputChange" in $$props) $$invalidate(2, inputChange = $$props.inputChange);
+    		if ("inputVal" in $$props) $$invalidate(3, inputVal = $$props.inputVal);
+    		if ("ieditor" in $$props) ieditor = $$props.ieditor;
+    		if ("test_case" in $$props) test_case = $$props.test_case;
+    		if ("inputstatus" in $$props) $$invalidate(0, inputstatus = $$props.inputstatus);
+    	};
+
+    	let inputstatus;
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
+
+    	 $$invalidate(0, inputstatus = "Corret");
+    	return [inputstatus, onInput, inputChange, inputVal];
+    }
+
+    class InputTest extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, null, create_fragment$d, safe_not_equal, {});
+    		init(this, options, instance$d, create_fragment$d, safe_not_equal, { inputChange: 2, inputVal: 3 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
-    			tagName: "Login",
+    			tagName: "InputTest",
     			options,
     			id: create_fragment$d.name
     		});
+
+    		const { ctx } = this.$$;
+    		const props = options.props || {};
+
+    		if (/*inputChange*/ ctx[2] === undefined && !("inputChange" in props)) {
+    			console_1$5.warn("<InputTest> was created without expected prop 'inputChange'");
+    		}
+
+    		if (/*inputVal*/ ctx[3] === undefined && !("inputVal" in props)) {
+    			console_1$5.warn("<InputTest> was created without expected prop 'inputVal'");
+    		}
+    	}
+
+    	get inputChange() {
+    		throw new Error("<InputTest>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	set inputChange(value) {
+    		throw new Error("<InputTest>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	get inputVal() {
+    		throw new Error("<InputTest>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	set inputVal(value) {
+    		throw new Error("<InputTest>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
     	}
     }
 
-    /* src/routes/Problems.svelte generated by Svelte v3.18.1 */
+    /* src/routes/Problems.svelte generated by Svelte v3.20.1 */
 
-    const { console: console_1$2 } = globals;
+    const { console: console_1$6 } = globals;
     const file$b = "src/routes/Problems.svelte";
 
     // (126:4) {:catch err}
@@ -39981,7 +40380,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			attr_dev(div12, "class", "max-w-6xl my-4 mb-32 flex flex-col mx-auto svelte-1xwh2qq");
     			add_location(div12, file$b, 106, 6, 4114);
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, div3, anchor);
     			append_dev(div3, div0);
     			append_dev(div0, t0);
@@ -40027,6 +40426,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			append_dev(button0, t24);
     			append_dev(div11, t25);
     			append_dev(div11, button1);
+    			if (remount) run_all(dispose);
 
     			dispose = [
     				listen_dev(button0, "c", /*c_handler*/ ctx[5], false, false, false),
@@ -40204,7 +40604,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$c($$self, $$props, $$invalidate) {
+    function instance$e($$self, $$props, $$invalidate) {
     	let $problem;
     	let { currentRoute } = $$props;
     	console.log(currentRoute);
@@ -40240,8 +40640,11 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	const writable_props = ["currentRoute"];
 
     	Object.keys($$props).forEach(key => {
-    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$2.warn(`<Problems> was created with unknown prop '${key}'`);
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$6.warn(`<Problems> was created with unknown prop '${key}'`);
     	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Problems", $$slots, []);
 
     	function c_handler(event) {
     		bubble($$self, event);
@@ -40255,14 +40658,28 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		if ("currentRoute" in $$props) $$invalidate(0, currentRoute = $$props.currentRoute);
     	};
 
-    	$$self.$capture_state = () => {
-    		return { currentRoute, $problem };
-    	};
+    	$$self.$capture_state = () => ({
+    		apolloClient,
+    		getClient,
+    		query,
+    		mutate,
+    		Navbar,
+    		Sidebar: Side,
+    		InputWindow: InputTest,
+    		currentRoute,
+    		client,
+    		problem,
+    		deleteProblemHandler,
+    		$problem
+    	});
 
     	$$self.$inject_state = $$props => {
     		if ("currentRoute" in $$props) $$invalidate(0, currentRoute = $$props.currentRoute);
-    		if ("$problem" in $$props) problem.set($problem = $$props.$problem);
     	};
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
 
     	return [currentRoute, $problem, problem, deleteProblemHandler, client, c_handler, func];
     }
@@ -40270,7 +40687,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Problems extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$c, create_fragment$e, safe_not_equal, { currentRoute: 0 });
+    		init(this, options, instance$e, create_fragment$e, safe_not_equal, { currentRoute: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
@@ -40283,7 +40700,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		const props = options.props || {};
 
     		if (/*currentRoute*/ ctx[0] === undefined && !("currentRoute" in props)) {
-    			console_1$2.warn("<Problems> was created without expected prop 'currentRoute'");
+    			console_1$6.warn("<Problems> was created without expected prop 'currentRoute'");
     		}
     	}
 
@@ -40296,9 +40713,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	}
     }
 
-    /* src/routes/Tests.svelte generated by Svelte v3.18.1 */
+    /* src/routes/Tests.svelte generated by Svelte v3.20.1 */
 
-    const { console: console_1$3 } = globals;
+    const { console: console_1$7 } = globals;
     const file$c = "src/routes/Tests.svelte";
 
     function get_each_context$3(ctx, list, i) {
@@ -40395,6 +40812,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	let div17;
     	let dispose;
     	let each_value_1 = JSON.parse(/*result*/ ctx[7].data.testById.problems);
+    	validate_each_argument(each_value_1);
     	let each_blocks_1 = [];
 
     	for (let i = 0; i < each_value_1.length; i += 1) {
@@ -40402,6 +40820,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	}
 
     	let each_value = /*result*/ ctx[7].data.testById.tags.split("#");
+    	validate_each_argument(each_value);
     	let each_blocks = [];
 
     	for (let i = 0; i < each_value.length; i += 1) {
@@ -40512,7 +40931,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			attr_dev(div18, "class", " flex-grow align-bottom relative mx-64");
     			add_location(div18, file$c, 167, 6, 6111);
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, div16, anchor);
     			append_dev(div16, div3);
     			append_dev(div3, div0);
@@ -40562,6 +40981,8 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     				each_blocks[i].m(div17, null);
     			}
 
+    			if (remount) run_all(dispose);
+
     			dispose = [
     				listen_dev(button0, "click", /*click_handler*/ ctx[5], false, false, false),
     				listen_dev(button1, "click", /*deleteTestHandler*/ ctx[3], false, false, false),
@@ -40575,6 +40996,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     			if (dirty & /*JSON, $test*/ 2) {
     				each_value_1 = JSON.parse(/*result*/ ctx[7].data.testById.problems);
+    				validate_each_argument(each_value_1);
     				let i;
 
     				for (i = 0; i < each_value_1.length; i += 1) {
@@ -40598,6 +41020,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     			if (dirty & /*$test*/ 2) {
     				each_value = /*result*/ ctx[7].data.testById.tags.split("#");
+    				validate_each_argument(each_value);
     				let i;
 
     				for (i = 0; i < each_value.length; i += 1) {
@@ -40942,7 +41365,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$d($$self, $$props, $$invalidate) {
+    function instance$f($$self, $$props, $$invalidate) {
     	let $test;
     	let { currentRoute } = $$props;
     	console.log(currentRoute);
@@ -40977,8 +41400,11 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	const writable_props = ["currentRoute"];
 
     	Object.keys($$props).forEach(key => {
-    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$3.warn(`<Tests> was created with unknown prop '${key}'`);
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$7.warn(`<Tests> was created with unknown prop '${key}'`);
     	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Tests", $$slots, []);
 
     	const click_handler = () => {
     		location.replace(`http://localhost:5000/edittest/${currentRoute.namedParams.id}`);
@@ -40992,14 +41418,26 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		if ("currentRoute" in $$props) $$invalidate(0, currentRoute = $$props.currentRoute);
     	};
 
-    	$$self.$capture_state = () => {
-    		return { currentRoute, $test };
-    	};
+    	$$self.$capture_state = () => ({
+    		apolloClient,
+    		getClient,
+    		query,
+    		mutate,
+    		Navbar,
+    		currentRoute,
+    		client,
+    		test,
+    		deleteTestHandler,
+    		$test
+    	});
 
     	$$self.$inject_state = $$props => {
     		if ("currentRoute" in $$props) $$invalidate(0, currentRoute = $$props.currentRoute);
-    		if ("$test" in $$props) test.set($test = $$props.$test);
     	};
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
 
     	return [
     		currentRoute,
@@ -41015,7 +41453,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Tests extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$d, create_fragment$f, safe_not_equal, { currentRoute: 0 });
+    		init(this, options, instance$f, create_fragment$f, safe_not_equal, { currentRoute: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
@@ -41028,7 +41466,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		const props = options.props || {};
 
     		if (/*currentRoute*/ ctx[0] === undefined && !("currentRoute" in props)) {
-    			console_1$3.warn("<Tests> was created without expected prop 'currentRoute'");
+    			console_1$7.warn("<Tests> was created without expected prop 'currentRoute'");
     		}
     	}
 
@@ -41041,9 +41479,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	}
     }
 
-    /* src/routes/send_test.svelte generated by Svelte v3.18.1 */
+    /* src/routes/send_test.svelte generated by Svelte v3.20.1 */
 
-    const { console: console_1$4 } = globals;
+    const { console: console_1$8 } = globals;
     const file$d = "src/routes/send_test.svelte";
 
     function create_fragment$g(ctx) {
@@ -41163,7 +41601,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, link, anchor);
     			insert_dev(target, t0, anchor);
     			insert_dev(target, div11, anchor);
@@ -41195,6 +41633,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			append_dev(div10, div9);
     			append_dev(div9, button);
     			current = true;
+    			if (remount) run_all(dispose);
 
     			dispose = [
     				listen_dev(input0, "input", /*input0_input_handler*/ ctx[3]),
@@ -41240,7 +41679,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$e($$self, $$props, $$invalidate) {
+    function instance$g($$self, $$props, $$invalidate) {
     	let { currentRoute } = $$props;
     	console.log(currentRoute);
     	const client = getClient();
@@ -41248,8 +41687,11 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	const writable_props = ["currentRoute"];
 
     	Object.keys($$props).forEach(key => {
-    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$4.warn(`<Send_test> was created with unknown prop '${key}'`);
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$8.warn(`<Send_test> was created with unknown prop '${key}'`);
     	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Send_test", $$slots, []);
 
     	function input0_input_handler() {
     		mailInitials.email = this.value;
@@ -41282,14 +41724,25 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		if ("currentRoute" in $$props) $$invalidate(0, currentRoute = $$props.currentRoute);
     	};
 
-    	$$self.$capture_state = () => {
-    		return { currentRoute, mailInitials };
-    	};
+    	$$self.$capture_state = () => ({
+    		currentRoute,
+    		getClient,
+    		query,
+    		mutate,
+    		apolloClient,
+    		Navbar,
+    		client,
+    		mailInitials
+    	});
 
     	$$self.$inject_state = $$props => {
     		if ("currentRoute" in $$props) $$invalidate(0, currentRoute = $$props.currentRoute);
     		if ("mailInitials" in $$props) $$invalidate(1, mailInitials = $$props.mailInitials);
     	};
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
 
     	return [
     		currentRoute,
@@ -41304,7 +41757,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Send_test extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$e, create_fragment$g, safe_not_equal, { currentRoute: 0 });
+    		init(this, options, instance$g, create_fragment$g, safe_not_equal, { currentRoute: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
@@ -41317,7 +41770,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		const props = options.props || {};
 
     		if (/*currentRoute*/ ctx[0] === undefined && !("currentRoute" in props)) {
-    			console_1$4.warn("<Send_test> was created without expected prop 'currentRoute'");
+    			console_1$8.warn("<Send_test> was created without expected prop 'currentRoute'");
     		}
     	}
 
@@ -41330,7 +41783,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	}
     }
 
-    /* src/routes/test/test_navbar.svelte generated by Svelte v3.18.1 */
+    /* src/routes/test/test_navbar.svelte generated by Svelte v3.20.1 */
 
     const file$e = "src/routes/test/test_navbar.svelte";
 
@@ -41473,6 +41926,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	let t4;
     	let div4;
     	let each_value = /*content*/ ctx[1];
+    	validate_each_argument(each_value);
     	let each_blocks = [];
 
     	for (let i = 0; i < each_value.length; i += 1) {
@@ -41538,6 +41992,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		p: function update(ctx, [dirty]) {
     			if (dirty & /*content, position, activeBar, activeCircle*/ 15) {
     				each_value = /*content*/ ctx[1];
+    				validate_each_argument(each_value);
     				let i;
 
     				for (i = 0; i < each_value.length; i += 1) {
@@ -41578,7 +42033,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$f($$self, $$props, $$invalidate) {
+    function instance$h($$self, $$props, $$invalidate) {
     	let { position = 1 } = $$props;
     	let content = [1, 2];
     	let activeCircle = "w-16 h-16 text-dark bg-elight  mx-auto rounded-full text-lg flex items-center";
@@ -41592,18 +42047,19 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<Test_navbar> was created with unknown prop '${key}'`);
     	});
 
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Test_navbar", $$slots, []);
+
     	$$self.$set = $$props => {
     		if ("position" in $$props) $$invalidate(0, position = $$props.position);
     	};
 
-    	$$self.$capture_state = () => {
-    		return {
-    			position,
-    			content,
-    			activeCircle,
-    			activeBar
-    		};
-    	};
+    	$$self.$capture_state = () => ({
+    		position,
+    		content,
+    		activeCircle,
+    		activeBar
+    	});
 
     	$$self.$inject_state = $$props => {
     		if ("position" in $$props) $$invalidate(0, position = $$props.position);
@@ -41612,13 +42068,17 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		if ("activeBar" in $$props) $$invalidate(3, activeBar = $$props.activeBar);
     	};
 
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
+
     	return [position, content, activeCircle, activeBar];
     }
 
     class Test_navbar extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$f, create_fragment$h, safe_not_equal, { position: 0 });
+    		init(this, options, instance$h, create_fragment$h, safe_not_equal, { position: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
@@ -41637,7 +42097,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	}
     }
 
-    /* src/routes/test/loader.svelte generated by Svelte v3.18.1 */
+    /* src/routes/test/loader.svelte generated by Svelte v3.20.1 */
 
     const file$f = "src/routes/test/loader.svelte";
 
@@ -41696,10 +42156,22 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
+    function instance$i($$self, $$props) {
+    	const writable_props = [];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<Loader> was created with unknown prop '${key}'`);
+    	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Loader", $$slots, []);
+    	return [];
+    }
+
     class Loader extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, null, create_fragment$i, safe_not_equal, {});
+    		init(this, options, instance$i, create_fragment$i, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
@@ -41719,7 +42191,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
       tags: '',
     });
 
-    /* src/routes/test/test_initials.svelte generated by Svelte v3.18.1 */
+    /* src/routes/test/test_initials.svelte generated by Svelte v3.20.1 */
+
+    const { console: console_1$9 } = globals;
     const file$g = "src/routes/test/test_initials.svelte";
 
     function get_each_context$5(ctx, list, i) {
@@ -41928,6 +42402,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	let if_block1 = /*uniqueNameStatus*/ ctx[1] === 1 && create_if_block_1$3(ctx);
     	let if_block2 = /*uniqueNameStatus*/ ctx[1] === 3 && create_if_block$5(ctx);
     	let each_value = /*tagList*/ ctx[3];
+    	validate_each_argument(each_value);
     	let each_blocks = [];
 
     	for (let i = 0; i < each_value.length; i += 1) {
@@ -42088,7 +42563,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, div15, anchor);
     			append_dev(div15, div14);
     			append_dev(div14, div5);
@@ -42156,6 +42631,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			append_dev(div10, input5);
     			set_input_value(input5, /*$testStore*/ ctx[0].tags);
     			current = true;
+    			if (remount) run_all(dispose);
 
     			dispose = [
     				listen_dev(input0, "keydown", /*onInput*/ ctx[5], false, false, false),
@@ -42232,6 +42708,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     			if (dirty & /*tagList*/ 8) {
     				each_value = /*tagList*/ ctx[3];
+    				validate_each_argument(each_value);
     				let i;
 
     				for (i = 0; i < each_value.length; i += 1) {
@@ -42290,7 +42767,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$g($$self, $$props, $$invalidate) {
+    function instance$j($$self, $$props, $$invalidate) {
     	let $testStore;
     	validate_store(testStore, "testStore");
     	component_subscribe($$self, testStore, $$value => $$invalidate(0, $testStore = $$value));
@@ -42360,6 +42837,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		};
     	})();
 
+    	const writable_props = [];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$9.warn(`<Test_initials> was created with unknown prop '${key}'`);
+    	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Test_initials", $$slots, []);
     	const $$binding_groups = [[]];
 
     	function input0_input_handler() {
@@ -42402,19 +42887,38 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		testStore.set($testStore);
     	}
 
-    	$$self.$capture_state = () => {
-    		return {};
-    	};
+    	$$self.$capture_state = () => ({
+    		apolloClient,
+    		Loader,
+    		getClient,
+    		query,
+    		subscribe: subscribe$2,
+    		mutate,
+    		testStore,
+    		alert,
+    		tagList,
+    		client,
+    		selectedTags,
+    		hastTagString,
+    		changeHandler,
+    		onInput,
+    		$testStore,
+    		uniqueNameStatus
+    	});
 
     	$$self.$inject_state = $$props => {
     		if ("alert" in $$props) $$invalidate(2, alert = $$props.alert);
     		if ("selectedTags" in $$props) selectedTags = $$props.selectedTags;
     		if ("hastTagString" in $$props) hastTagString = $$props.hastTagString;
-    		if ("$testStore" in $$props) testStore.set($testStore = $$props.$testStore);
     		if ("uniqueNameStatus" in $$props) $$invalidate(1, uniqueNameStatus = $$props.uniqueNameStatus);
     	};
 
     	let uniqueNameStatus;
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
+
     	 $$invalidate(1, uniqueNameStatus = 0);
 
     	return [
@@ -42441,7 +42945,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Test_initials extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$g, create_fragment$j, safe_not_equal, {});
+    		init(this, options, instance$j, create_fragment$j, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
@@ -42452,7 +42956,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	}
     }
 
-    /* src/routes/test/all_problems.svelte generated by Svelte v3.18.1 */
+    /* src/routes/test/all_problems.svelte generated by Svelte v3.20.1 */
     const file$h = "src/routes/test/all_problems.svelte";
 
     function get_each_context$6(ctx, list, i) {
@@ -42500,6 +43004,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     function create_then_block$3(ctx) {
     	let each_1_anchor;
     	let each_value = /*result*/ ctx[5].data.allProblems;
+    	validate_each_argument(each_value);
     	let each_blocks = [];
 
     	for (let i = 0; i < each_value.length; i += 1) {
@@ -42524,6 +43029,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		p: function update(ctx, dirty) {
     			if (dirty & /*$Problems, addProblem*/ 3) {
     				each_value = /*result*/ ctx[5].data.allProblems;
+    				validate_each_argument(each_value);
     				let i;
 
     				for (i = 0; i < each_value.length; i += 1) {
@@ -42611,7 +43117,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			attr_dev(div4, "class", "flex mb mt-3 text-xl svelte-gm8br7");
     			add_location(div4, file$h, 19, 6, 807);
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, div4, anchor);
     			append_dev(div4, div1);
     			append_dev(div1, div0);
@@ -42622,6 +43128,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			append_dev(div3, div2);
     			append_dev(div2, button);
     			append_dev(div4, t3);
+    			if (remount) dispose();
     			dispose = listen_dev(button, "click", click_handler, false, false, false);
     		},
     		p: function update(new_ctx, dirty) {
@@ -42741,7 +43248,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$h($$self, $$props, $$invalidate) {
+    function instance$k($$self, $$props, $$invalidate) {
     	let $Problems;
     	let { addProblem } = $$props;
     	const client = getClient();
@@ -42753,6 +43260,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	Object.keys($$props).forEach(key => {
     		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<All_problems> was created with unknown prop '${key}'`);
     	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("All_problems", $$slots, []);
 
     	const click_handler = prob => {
     		let proble = {
@@ -42767,14 +43277,25 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		if ("addProblem" in $$props) $$invalidate(0, addProblem = $$props.addProblem);
     	};
 
-    	$$self.$capture_state = () => {
-    		return { addProblem, $Problems };
-    	};
+    	$$self.$capture_state = () => ({
+    		apolloClient,
+    		getClient,
+    		query,
+    		subscribe: subscribe$2,
+    		mutate,
+    		addProblem,
+    		client,
+    		Problems,
+    		$Problems
+    	});
 
     	$$self.$inject_state = $$props => {
     		if ("addProblem" in $$props) $$invalidate(0, addProblem = $$props.addProblem);
-    		if ("$Problems" in $$props) Problems.set($Problems = $$props.$Problems);
     	};
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
 
     	return [addProblem, $Problems, Problems, client, click_handler];
     }
@@ -42782,7 +43303,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class All_problems extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$h, create_fragment$k, safe_not_equal, { addProblem: 0 });
+    		init(this, options, instance$k, create_fragment$k, safe_not_equal, { addProblem: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
@@ -42808,7 +43329,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	}
     }
 
-    /* src/routes/test/select_problems.svelte generated by Svelte v3.18.1 */
+    /* src/routes/test/select_problems.svelte generated by Svelte v3.20.1 */
+
+    const { console: console_1$a } = globals;
     const file$i = "src/routes/test/select_problems.svelte";
 
     function get_each_context$7(ctx, list, i) {
@@ -42881,7 +43404,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			attr_dev(div6, "class", "flex pb-3 svelte-1xqcozc");
     			add_location(div6, file$i, 112, 14, 3735);
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, div6, anchor);
     			append_dev(div6, div1);
     			append_dev(div1, div0);
@@ -42896,6 +43419,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			append_dev(div5, div4);
     			append_dev(div4, button);
     			append_dev(div6, t4);
+    			if (remount) run_all(dispose);
 
     			dispose = [
     				listen_dev(input, "change", /*change_handler*/ ctx[6], false, false, false),
@@ -42957,6 +43481,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	let current;
     	let dispose;
     	let each_value = /*problemScore*/ ctx[0];
+    	validate_each_argument(each_value);
     	let each_blocks = [];
 
     	for (let i = 0; i < each_value.length; i += 1) {
@@ -43048,7 +43573,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, div15, anchor);
     			append_dev(div15, div13);
     			append_dev(div13, div12);
@@ -43081,11 +43606,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			append_dev(div15, div14);
     			append_dev(div14, button);
     			current = true;
+    			if (remount) dispose();
     			dispose = listen_dev(button, "click", /*click_handler_1*/ ctx[9], false, false, false);
     		},
     		p: function update(ctx, [dirty]) {
     			if (dirty & /*removeProblem, problemScore, $testStore, JSON*/ 11) {
     				each_value = /*problemScore*/ ctx[0];
+    				validate_each_argument(each_value);
     				let i;
 
     				for (i = 0; i < each_value.length; i += 1) {
@@ -43135,7 +43662,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$i($$self, $$props, $$invalidate) {
+    function instance$l($$self, $$props, $$invalidate) {
     	let $testStore;
     	validate_store(testStore, "testStore");
     	component_subscribe($$self, testStore, $$value => $$invalidate(1, $testStore = $$value));
@@ -43197,6 +43724,15 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		}
     	}
 
+    	const writable_props = [];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$a.warn(`<Select_problems> was created with unknown prop '${key}'`);
+    	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Select_problems", $$slots, []);
+
     	const change_handler = () => {
     		set_store_value(testStore, $testStore.problems = JSON.stringify(problemScore), $testStore);
     	};
@@ -43214,14 +43750,29 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		submitHandler();
     	};
 
-    	$$self.$capture_state = () => {
-    		return {};
-    	};
+    	$$self.$capture_state = () => ({
+    		testStore,
+    		apolloClient,
+    		getClient,
+    		query,
+    		subscribe: subscribe$2,
+    		mutate,
+    		client,
+    		problemScore,
+    		AllProblems: All_problems,
+    		addingProblem,
+    		removeProblem,
+    		submitHandler,
+    		$testStore
+    	});
 
     	$$self.$inject_state = $$props => {
     		if ("problemScore" in $$props) $$invalidate(0, problemScore = $$props.problemScore);
-    		if ("$testStore" in $$props) testStore.set($testStore = $$props.$testStore);
     	};
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
 
     	return [
     		problemScore,
@@ -43240,7 +43791,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Select_problems extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$i, create_fragment$l, safe_not_equal, {});
+    		init(this, options, instance$l, create_fragment$l, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
@@ -43251,7 +43802,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	}
     }
 
-    /* src/routes/test/select_page.svelte generated by Svelte v3.18.1 */
+    /* src/routes/test/select_page.svelte generated by Svelte v3.20.1 */
     const file$j = "src/routes/test/select_page.svelte";
 
     // (8:2) {#if pageNum === 1}
@@ -43423,7 +43974,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$j($$self, $$props, $$invalidate) {
+    function instance$m($$self, $$props, $$invalidate) {
     	let { pageNum = 1 } = $$props;
     	const writable_props = ["pageNum"];
 
@@ -43431,17 +43982,22 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<Select_page> was created with unknown prop '${key}'`);
     	});
 
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Select_page", $$slots, []);
+
     	$$self.$set = $$props => {
     		if ("pageNum" in $$props) $$invalidate(0, pageNum = $$props.pageNum);
     	};
 
-    	$$self.$capture_state = () => {
-    		return { pageNum };
-    	};
+    	$$self.$capture_state = () => ({ pageNum, TestInitials: Test_initials, TestProblems: Select_problems });
 
     	$$self.$inject_state = $$props => {
     		if ("pageNum" in $$props) $$invalidate(0, pageNum = $$props.pageNum);
     	};
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
 
     	return [pageNum];
     }
@@ -43449,7 +44005,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Select_page extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$j, create_fragment$m, safe_not_equal, { pageNum: 0 });
+    		init(this, options, instance$m, create_fragment$m, safe_not_equal, { pageNum: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
@@ -43468,7 +44024,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	}
     }
 
-    /* src/routes/test/add_test.svelte generated by Svelte v3.18.1 */
+    /* src/routes/test/add_test.svelte generated by Svelte v3.20.1 */
+
+    const { console: console_1$b } = globals;
     const file$k = "src/routes/test/add_test.svelte";
 
     function create_fragment$n(ctx) {
@@ -43546,7 +44104,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, div2, anchor);
     			append_dev(div2, header);
     			mount_component(navbar, header, null);
@@ -43564,6 +44122,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			append_dev(footer, div1);
     			append_dev(div1, button1);
     			current = true;
+    			if (remount) run_all(dispose);
 
     			dispose = [
     				listen_dev(button0, "click", /*click_handler*/ ctx[1], false, false, false),
@@ -43611,7 +44170,16 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$k($$self, $$props, $$invalidate) {
+    function instance$n($$self, $$props, $$invalidate) {
+    	const writable_props = [];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$b.warn(`<Add_test> was created with unknown prop '${key}'`);
+    	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Add_test", $$slots, []);
+
     	const click_handler = () => {
     		if (pageNum === 1) {
     			return;
@@ -43630,15 +44198,18 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		console.log(pageNum);
     	};
 
-    	$$self.$capture_state = () => {
-    		return {};
-    	};
+    	$$self.$capture_state = () => ({ Navbar, SubNavbar: Test_navbar, SelectPage: Select_page, pageNum });
 
     	$$self.$inject_state = $$props => {
     		if ("pageNum" in $$props) $$invalidate(0, pageNum = $$props.pageNum);
     	};
 
     	let pageNum;
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
+
     	 $$invalidate(0, pageNum = 1);
     	return [pageNum, click_handler, click_handler_1];
     }
@@ -43646,7 +44217,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Add_test extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$k, create_fragment$n, safe_not_equal, {});
+    		init(this, options, instance$n, create_fragment$n, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
@@ -43657,7 +44228,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	}
     }
 
-    /* src/routes/update_test/test_navbar.svelte generated by Svelte v3.18.1 */
+    /* src/routes/update_test/test_navbar.svelte generated by Svelte v3.20.1 */
 
     const file$l = "src/routes/update_test/test_navbar.svelte";
 
@@ -43800,6 +44371,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	let t4;
     	let div4;
     	let each_value = /*content*/ ctx[1];
+    	validate_each_argument(each_value);
     	let each_blocks = [];
 
     	for (let i = 0; i < each_value.length; i += 1) {
@@ -43865,6 +44437,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		p: function update(ctx, [dirty]) {
     			if (dirty & /*content, position, activeBar, activeCircle*/ 15) {
     				each_value = /*content*/ ctx[1];
+    				validate_each_argument(each_value);
     				let i;
 
     				for (i = 0; i < each_value.length; i += 1) {
@@ -43905,7 +44478,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$l($$self, $$props, $$invalidate) {
+    function instance$o($$self, $$props, $$invalidate) {
     	let { position = 1 } = $$props;
     	let content = [1, 2];
     	let activeCircle = "w-16 h-16 text-dark bg-elight  mx-auto rounded-full text-lg flex items-center";
@@ -43919,18 +44492,19 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<Test_navbar> was created with unknown prop '${key}'`);
     	});
 
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Test_navbar", $$slots, []);
+
     	$$self.$set = $$props => {
     		if ("position" in $$props) $$invalidate(0, position = $$props.position);
     	};
 
-    	$$self.$capture_state = () => {
-    		return {
-    			position,
-    			content,
-    			activeCircle,
-    			activeBar
-    		};
-    	};
+    	$$self.$capture_state = () => ({
+    		position,
+    		content,
+    		activeCircle,
+    		activeBar
+    	});
 
     	$$self.$inject_state = $$props => {
     		if ("position" in $$props) $$invalidate(0, position = $$props.position);
@@ -43939,13 +44513,17 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		if ("activeBar" in $$props) $$invalidate(3, activeBar = $$props.activeBar);
     	};
 
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
+
     	return [position, content, activeCircle, activeBar];
     }
 
     class Test_navbar$1 extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$l, create_fragment$o, safe_not_equal, { position: 0 });
+    		init(this, options, instance$o, create_fragment$o, safe_not_equal, { position: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
@@ -43964,7 +44542,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	}
     }
 
-    /* src/routes/update_test/loader.svelte generated by Svelte v3.18.1 */
+    /* src/routes/update_test/loader.svelte generated by Svelte v3.20.1 */
 
     const file$m = "src/routes/update_test/loader.svelte";
 
@@ -44023,10 +44601,22 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
+    function instance$p($$self, $$props) {
+    	const writable_props = [];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<Loader> was created with unknown prop '${key}'`);
+    	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Loader", $$slots, []);
+    	return [];
+    }
+
     class Loader$1 extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, null, create_fragment$p, safe_not_equal, {});
+    		init(this, options, instance$p, create_fragment$p, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
@@ -44046,7 +44636,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
       tags: '',
     });
 
-    /* src/routes/update_test/test_initials.svelte generated by Svelte v3.18.1 */
+    /* src/routes/update_test/test_initials.svelte generated by Svelte v3.20.1 */
+
+    const { console: console_1$c } = globals;
     const file$n = "src/routes/update_test/test_initials.svelte";
 
     function get_each_context$9(ctx, list, i) {
@@ -44255,6 +44847,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	let if_block1 = /*uniqueNameStatus*/ ctx[1] === 1 && create_if_block_1$5(ctx);
     	let if_block2 = /*uniqueNameStatus*/ ctx[1] === 3 && create_if_block$8(ctx);
     	let each_value = /*tagList*/ ctx[3];
+    	validate_each_argument(each_value);
     	let each_blocks = [];
 
     	for (let i = 0; i < each_value.length; i += 1) {
@@ -44415,7 +45008,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, div15, anchor);
     			append_dev(div15, div14);
     			append_dev(div14, div5);
@@ -44483,6 +45076,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			append_dev(div10, input5);
     			set_input_value(input5, /*$testStore*/ ctx[0].tags);
     			current = true;
+    			if (remount) run_all(dispose);
 
     			dispose = [
     				listen_dev(input0, "keydown", /*onInput*/ ctx[5], false, false, false),
@@ -44559,6 +45153,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     			if (dirty & /*tagList*/ 8) {
     				each_value = /*tagList*/ ctx[3];
+    				validate_each_argument(each_value);
     				let i;
 
     				for (i = 0; i < each_value.length; i += 1) {
@@ -44617,7 +45212,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$m($$self, $$props, $$invalidate) {
+    function instance$q($$self, $$props, $$invalidate) {
     	let $testStore;
     	validate_store(testStore$1, "testStore");
     	component_subscribe($$self, testStore$1, $$value => $$invalidate(0, $testStore = $$value));
@@ -44699,6 +45294,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		};
     	})();
 
+    	const writable_props = [];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$c.warn(`<Test_initials> was created with unknown prop '${key}'`);
+    	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Test_initials", $$slots, []);
     	const $$binding_groups = [[]];
 
     	function input0_input_handler() {
@@ -44741,13 +45344,28 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		testStore$1.set($testStore);
     	}
 
-    	$$self.$capture_state = () => {
-    		return {};
-    	};
+    	$$self.$capture_state = () => ({
+    		apolloClient,
+    		Loader: Loader$1,
+    		getClient,
+    		query,
+    		subscribe: subscribe$2,
+    		mutate,
+    		testStore: testStore$1,
+    		alert,
+    		tagList,
+    		client,
+    		changeHandler,
+    		onInput,
+    		$testStore,
+    		uniqueNameStatus,
+    		selectedTags,
+    		hastTagString,
+    		tagsName
+    	});
 
     	$$self.$inject_state = $$props => {
     		if ("alert" in $$props) $$invalidate(2, alert = $$props.alert);
-    		if ("$testStore" in $$props) testStore$1.set($testStore = $$props.$testStore);
     		if ("uniqueNameStatus" in $$props) $$invalidate(1, uniqueNameStatus = $$props.uniqueNameStatus);
     		if ("selectedTags" in $$props) selectedTags = $$props.selectedTags;
     		if ("hastTagString" in $$props) hastTagString = $$props.hastTagString;
@@ -44758,6 +45376,10 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	let selectedTags;
     	let hastTagString;
     	let tagsName;
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
 
     	$$self.$$.update = () => {
     		if ($$self.$$.dirty & /*$testStore*/ 1) {
@@ -44797,7 +45419,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Test_initials$1 extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$m, create_fragment$q, safe_not_equal, {});
+    		init(this, options, instance$q, create_fragment$q, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
@@ -44808,7 +45430,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	}
     }
 
-    /* src/routes/update_test/all_problems.svelte generated by Svelte v3.18.1 */
+    /* src/routes/update_test/all_problems.svelte generated by Svelte v3.20.1 */
     const file$o = "src/routes/update_test/all_problems.svelte";
 
     function get_each_context$a(ctx, list, i) {
@@ -44856,6 +45478,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     function create_then_block$4(ctx) {
     	let each_1_anchor;
     	let each_value = /*result*/ ctx[5].data.allProblems;
+    	validate_each_argument(each_value);
     	let each_blocks = [];
 
     	for (let i = 0; i < each_value.length; i += 1) {
@@ -44880,6 +45503,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		p: function update(ctx, dirty) {
     			if (dirty & /*$Problems, addProblem*/ 3) {
     				each_value = /*result*/ ctx[5].data.allProblems;
+    				validate_each_argument(each_value);
     				let i;
 
     				for (i = 0; i < each_value.length; i += 1) {
@@ -44967,7 +45591,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			attr_dev(div4, "class", "flex mb mt-3 text-xl svelte-4h3zj");
     			add_location(div4, file$o, 19, 6, 823);
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, div4, anchor);
     			append_dev(div4, div1);
     			append_dev(div1, div0);
@@ -44978,6 +45602,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			append_dev(div3, div2);
     			append_dev(div2, button);
     			append_dev(div4, t3);
+    			if (remount) dispose();
     			dispose = listen_dev(button, "click", click_handler, false, false, false);
     		},
     		p: function update(new_ctx, dirty) {
@@ -45097,7 +45722,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$n($$self, $$props, $$invalidate) {
+    function instance$r($$self, $$props, $$invalidate) {
     	let $Problems;
     	let { addProblem } = $$props;
     	const client = getClient();
@@ -45109,6 +45734,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	Object.keys($$props).forEach(key => {
     		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<All_problems> was created with unknown prop '${key}'`);
     	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("All_problems", $$slots, []);
 
     	const click_handler = prob => {
     		let proble = {
@@ -45123,14 +45751,25 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		if ("addProblem" in $$props) $$invalidate(0, addProblem = $$props.addProblem);
     	};
 
-    	$$self.$capture_state = () => {
-    		return { addProblem, $Problems };
-    	};
+    	$$self.$capture_state = () => ({
+    		apolloClient,
+    		getClient,
+    		query,
+    		subscribe: subscribe$2,
+    		mutate,
+    		addProblem,
+    		client,
+    		Problems,
+    		$Problems
+    	});
 
     	$$self.$inject_state = $$props => {
     		if ("addProblem" in $$props) $$invalidate(0, addProblem = $$props.addProblem);
-    		if ("$Problems" in $$props) Problems.set($Problems = $$props.$Problems);
     	};
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
 
     	return [addProblem, $Problems, Problems, client, click_handler];
     }
@@ -45138,7 +45777,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class All_problems$1 extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$n, create_fragment$r, safe_not_equal, { addProblem: 0 });
+    		init(this, options, instance$r, create_fragment$r, safe_not_equal, { addProblem: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
@@ -45164,9 +45803,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	}
     }
 
-    /* src/routes/update_test/select_problems.svelte generated by Svelte v3.18.1 */
+    /* src/routes/update_test/select_problems.svelte generated by Svelte v3.20.1 */
 
-    const { console: console_1$5 } = globals;
+    const { console: console_1$d } = globals;
     const file$p = "src/routes/update_test/select_problems.svelte";
 
     function get_each_context$b(ctx, list, i) {
@@ -45239,7 +45878,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			attr_dev(div6, "class", "flex pb-3 svelte-z5bal3");
     			add_location(div6, file$p, 114, 14, 3840);
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, div6, anchor);
     			append_dev(div6, div1);
     			append_dev(div1, div0);
@@ -45254,6 +45893,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			append_dev(div5, div4);
     			append_dev(div4, button);
     			append_dev(div6, t4);
+    			if (remount) run_all(dispose);
 
     			dispose = [
     				listen_dev(input, "change", /*change_handler*/ ctx[7], false, false, false),
@@ -45315,6 +45955,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	let current;
     	let dispose;
     	let each_value = /*problemScore*/ ctx[0];
+    	validate_each_argument(each_value);
     	let each_blocks = [];
 
     	for (let i = 0; i < each_value.length; i += 1) {
@@ -45406,7 +46047,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, div15, anchor);
     			append_dev(div15, div13);
     			append_dev(div13, div12);
@@ -45439,11 +46080,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			append_dev(div15, div14);
     			append_dev(div14, button);
     			current = true;
+    			if (remount) dispose();
     			dispose = listen_dev(button, "click", /*click_handler_1*/ ctx[10], false, false, false);
     		},
     		p: function update(ctx, [dirty]) {
     			if (dirty & /*removeProblem, problemScore, $testStore, JSON*/ 11) {
     				each_value = /*problemScore*/ ctx[0];
+    				validate_each_argument(each_value);
     				let i;
 
     				for (i = 0; i < each_value.length; i += 1) {
@@ -45493,7 +46136,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$o($$self, $$props, $$invalidate) {
+    function instance$s($$self, $$props, $$invalidate) {
     	let $testStore;
     	validate_store(testStore$1, "testStore");
     	component_subscribe($$self, testStore$1, $$value => $$invalidate(1, $testStore = $$value));
@@ -45560,8 +46203,11 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	const writable_props = ["currentRoute"];
 
     	Object.keys($$props).forEach(key => {
-    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$5.warn(`<Select_problems> was created with unknown prop '${key}'`);
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$d.warn(`<Select_problems> was created with unknown prop '${key}'`);
     	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Select_problems", $$slots, []);
 
     	const change_handler = () => {
     		set_store_value(testStore$1, $testStore.problems = JSON.stringify(problemScore), $testStore);
@@ -45584,15 +46230,31 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		if ("currentRoute" in $$props) $$invalidate(5, currentRoute = $$props.currentRoute);
     	};
 
-    	$$self.$capture_state = () => {
-    		return { currentRoute, problemScore, $testStore };
-    	};
+    	$$self.$capture_state = () => ({
+    		testStore: testStore$1,
+    		apolloClient,
+    		getClient,
+    		query,
+    		subscribe: subscribe$2,
+    		mutate,
+    		client,
+    		currentRoute,
+    		problemScore,
+    		AllProblems: All_problems$1,
+    		addingProblem,
+    		removeProblem,
+    		submitHandler,
+    		$testStore
+    	});
 
     	$$self.$inject_state = $$props => {
     		if ("currentRoute" in $$props) $$invalidate(5, currentRoute = $$props.currentRoute);
     		if ("problemScore" in $$props) $$invalidate(0, problemScore = $$props.problemScore);
-    		if ("$testStore" in $$props) testStore$1.set($testStore = $$props.$testStore);
     	};
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
 
     	return [
     		problemScore,
@@ -45612,7 +46274,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Select_problems$1 extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$o, create_fragment$s, safe_not_equal, { currentRoute: 5 });
+    		init(this, options, instance$s, create_fragment$s, safe_not_equal, { currentRoute: 5 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
@@ -45625,7 +46287,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		const props = options.props || {};
 
     		if (/*currentRoute*/ ctx[5] === undefined && !("currentRoute" in props)) {
-    			console_1$5.warn("<Select_problems> was created without expected prop 'currentRoute'");
+    			console_1$d.warn("<Select_problems> was created without expected prop 'currentRoute'");
     		}
     	}
 
@@ -45638,7 +46300,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	}
     }
 
-    /* src/routes/update_test/select_page.svelte generated by Svelte v3.18.1 */
+    /* src/routes/update_test/select_page.svelte generated by Svelte v3.20.1 */
     const file$q = "src/routes/update_test/select_page.svelte";
 
     // (9:2) {#if pageNum === 1}
@@ -45820,7 +46482,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$p($$self, $$props, $$invalidate) {
+    function instance$t($$self, $$props, $$invalidate) {
     	let { pageNum = 1 } = $$props;
     	let { currentRoute } = $$props;
     	const writable_props = ["pageNum", "currentRoute"];
@@ -45829,19 +46491,29 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<Select_page> was created with unknown prop '${key}'`);
     	});
 
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Select_page", $$slots, []);
+
     	$$self.$set = $$props => {
     		if ("pageNum" in $$props) $$invalidate(0, pageNum = $$props.pageNum);
     		if ("currentRoute" in $$props) $$invalidate(1, currentRoute = $$props.currentRoute);
     	};
 
-    	$$self.$capture_state = () => {
-    		return { pageNum, currentRoute };
-    	};
+    	$$self.$capture_state = () => ({
+    		pageNum,
+    		currentRoute,
+    		TestInitials: Test_initials$1,
+    		TestProblems: Select_problems$1
+    	});
 
     	$$self.$inject_state = $$props => {
     		if ("pageNum" in $$props) $$invalidate(0, pageNum = $$props.pageNum);
     		if ("currentRoute" in $$props) $$invalidate(1, currentRoute = $$props.currentRoute);
     	};
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
 
     	return [pageNum, currentRoute];
     }
@@ -45849,7 +46521,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Select_page$1 extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$p, create_fragment$t, safe_not_equal, { pageNum: 0, currentRoute: 1 });
+    		init(this, options, instance$t, create_fragment$t, safe_not_equal, { pageNum: 0, currentRoute: 1 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
@@ -45883,9 +46555,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	}
     }
 
-    /* src/routes/update_test/edit_test.svelte generated by Svelte v3.18.1 */
+    /* src/routes/update_test/edit_test.svelte generated by Svelte v3.20.1 */
 
-    const { console: console_1$6 } = globals;
+    const { console: console_1$e } = globals;
     const file$r = "src/routes/update_test/edit_test.svelte";
 
     function create_fragment$u(ctx) {
@@ -45964,7 +46636,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, div2, anchor);
     			append_dev(div2, header);
     			mount_component(navbar, header, null);
@@ -45982,6 +46654,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			append_dev(footer, div1);
     			append_dev(div1, button1);
     			current = true;
+    			if (remount) run_all(dispose);
 
     			dispose = [
     				listen_dev(button0, "click", /*click_handler*/ ctx[6], false, false, false),
@@ -46030,7 +46703,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$q($$self, $$props, $$invalidate) {
+    function instance$u($$self, $$props, $$invalidate) {
     	let $test;
     	let $testStore;
     	validate_store(testStore$1, "testStore");
@@ -46060,8 +46733,11 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	const writable_props = ["currentRoute"];
 
     	Object.keys($$props).forEach(key => {
-    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$6.warn(`<Edit_test> was created with unknown prop '${key}'`);
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$e.warn(`<Edit_test> was created with unknown prop '${key}'`);
     	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Edit_test", $$slots, []);
 
     	const click_handler = () => {
     		if (pageNum === 1) {
@@ -46085,18 +46761,35 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		if ("currentRoute" in $$props) $$invalidate(0, currentRoute = $$props.currentRoute);
     	};
 
-    	$$self.$capture_state = () => {
-    		return { currentRoute, pageNum, $test, $testStore };
-    	};
+    	$$self.$capture_state = () => ({
+    		Navbar,
+    		SubNavbar: Test_navbar$1,
+    		SelectPage: Select_page$1,
+    		apolloClient,
+    		getClient,
+    		query,
+    		mutate,
+    		subscribe: subscribe$2,
+    		testStore: testStore$1,
+    		currentRoute,
+    		client,
+    		test,
+    		pageNum,
+    		$test,
+    		$testStore
+    	});
 
     	$$self.$inject_state = $$props => {
     		if ("currentRoute" in $$props) $$invalidate(0, currentRoute = $$props.currentRoute);
     		if ("pageNum" in $$props) $$invalidate(1, pageNum = $$props.pageNum);
-    		if ("$test" in $$props) test.set($test = $$props.$test);
-    		if ("$testStore" in $$props) testStore$1.set($testStore = $$props.$testStore);
     	};
 
     	let pageNum;
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
+
     	 $$invalidate(1, pageNum = 1);
 
     	return [
@@ -46114,7 +46807,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Edit_test extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$q, create_fragment$u, safe_not_equal, { currentRoute: 0 });
+    		init(this, options, instance$u, create_fragment$u, safe_not_equal, { currentRoute: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
@@ -46127,7 +46820,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		const props = options.props || {};
 
     		if (/*currentRoute*/ ctx[0] === undefined && !("currentRoute" in props)) {
-    			console_1$6.warn("<Edit_test> was created without expected prop 'currentRoute'");
+    			console_1$e.warn("<Edit_test> was created without expected prop 'currentRoute'");
     		}
     	}
 
@@ -46140,7 +46833,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	}
     }
 
-    /* src/routes/problem/problem_navbar.svelte generated by Svelte v3.18.1 */
+    /* src/routes/problem/problem_navbar.svelte generated by Svelte v3.20.1 */
 
     const file$s = "src/routes/problem/problem_navbar.svelte";
 
@@ -46287,6 +46980,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	let t8;
     	let div6;
     	let each_value = /*content*/ ctx[1];
+    	validate_each_argument(each_value);
     	let each_blocks = [];
 
     	for (let i = 0; i < each_value.length; i += 1) {
@@ -46366,6 +47060,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		p: function update(ctx, [dirty]) {
     			if (dirty & /*content, position, activeBar, activeCircle*/ 15) {
     				each_value = /*content*/ ctx[1];
+    				validate_each_argument(each_value);
     				let i;
 
     				for (i = 0; i < each_value.length; i += 1) {
@@ -46406,7 +47101,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$r($$self, $$props, $$invalidate) {
+    function instance$v($$self, $$props, $$invalidate) {
     	let { position = 1 } = $$props;
     	let content = [1, 2, 3, 4];
     	let activeCircle = "w-16 h-16 text-dark bg-elight  mx-auto rounded-full text-lg flex items-center";
@@ -46420,18 +47115,19 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<Problem_navbar> was created with unknown prop '${key}'`);
     	});
 
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Problem_navbar", $$slots, []);
+
     	$$self.$set = $$props => {
     		if ("position" in $$props) $$invalidate(0, position = $$props.position);
     	};
 
-    	$$self.$capture_state = () => {
-    		return {
-    			position,
-    			content,
-    			activeCircle,
-    			activeBar
-    		};
-    	};
+    	$$self.$capture_state = () => ({
+    		position,
+    		content,
+    		activeCircle,
+    		activeBar
+    	});
 
     	$$self.$inject_state = $$props => {
     		if ("position" in $$props) $$invalidate(0, position = $$props.position);
@@ -46440,13 +47136,17 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		if ("activeBar" in $$props) $$invalidate(3, activeBar = $$props.activeBar);
     	};
 
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
+
     	return [position, content, activeCircle, activeBar];
     }
 
     class Problem_navbar extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$r, create_fragment$v, safe_not_equal, { position: 0 });
+    		init(this, options, instance$v, create_fragment$v, safe_not_equal, { position: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
@@ -46465,7 +47165,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	}
     }
 
-    /* src/routes/problem/loader.svelte generated by Svelte v3.18.1 */
+    /* src/routes/problem/loader.svelte generated by Svelte v3.20.1 */
 
     const file$t = "src/routes/problem/loader.svelte";
 
@@ -46524,10 +47224,22 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
+    function instance$w($$self, $$props) {
+    	const writable_props = [];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<Loader> was created with unknown prop '${key}'`);
+    	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Loader", $$slots, []);
+    	return [];
+    }
+
     class Loader$2 extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, null, create_fragment$w, safe_not_equal, {});
+    		init(this, options, instance$w, create_fragment$w, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
@@ -46549,7 +47261,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
       email: 'Sample@gmail.com',
     });
 
-    /* src/routes/problem/problem_initials.svelte generated by Svelte v3.18.1 */
+    /* src/routes/problem/problem_initials.svelte generated by Svelte v3.20.1 */
+
+    const { console: console_1$f } = globals;
     const file$u = "src/routes/problem/problem_initials.svelte";
 
     function get_each_context$d(ctx, list, i) {
@@ -46749,6 +47463,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	let if_block1 = /*uniqueNameStatus*/ ctx[2] === 1 && create_if_block_1$7(ctx);
     	let if_block2 = /*uniqueNameStatus*/ ctx[2] === 3 && create_if_block$b(ctx);
     	let each_value = /*tagList*/ ctx[4];
+    	validate_each_argument(each_value);
     	let each_blocks = [];
 
     	for (let i = 0; i < each_value.length; i += 1) {
@@ -46878,7 +47593,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, div14, anchor);
     			append_dev(div14, div13);
     			append_dev(div13, div5);
@@ -46935,6 +47650,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			append_dev(div9, input3);
     			set_input_value(input3, /*hastTagString*/ ctx[0]);
     			current = true;
+    			if (remount) run_all(dispose);
 
     			dispose = [
     				listen_dev(input0, "keydown", /*onInput*/ ctx[6], false, false, false),
@@ -47001,6 +47717,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     			if (dirty & /*tagList*/ 16) {
     				each_value = /*tagList*/ ctx[4];
+    				validate_each_argument(each_value);
     				let i;
 
     				for (i = 0; i < each_value.length; i += 1) {
@@ -47056,7 +47773,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$s($$self, $$props, $$invalidate) {
+    function instance$x($$self, $$props, $$invalidate) {
     	let $problemStore;
     	validate_store(problemStore, "problemStore");
     	component_subscribe($$self, problemStore, $$value => $$invalidate(1, $problemStore = $$value));
@@ -47127,6 +47844,15 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		};
     	})();
 
+    	const writable_props = [];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$f.warn(`<Problem_initials> was created with unknown prop '${key}'`);
+    	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Problem_initials", $$slots, []);
+
     	function input0_input_handler() {
     		$problemStore.problemName = this.value;
     		problemStore.set($problemStore);
@@ -47157,19 +47883,38 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		$$invalidate(0, hastTagString);
     	}
 
-    	$$self.$capture_state = () => {
-    		return {};
-    	};
+    	$$self.$capture_state = () => ({
+    		apolloClient,
+    		Loader: Loader$2,
+    		getClient,
+    		query,
+    		subscribe: subscribe$2,
+    		mutate,
+    		problemStore,
+    		alert,
+    		tagList,
+    		client,
+    		selectedTags,
+    		hastTagString,
+    		changeHandler,
+    		onInput,
+    		$problemStore,
+    		uniqueNameStatus
+    	});
 
     	$$self.$inject_state = $$props => {
     		if ("alert" in $$props) $$invalidate(3, alert = $$props.alert);
     		if ("selectedTags" in $$props) selectedTags = $$props.selectedTags;
     		if ("hastTagString" in $$props) $$invalidate(0, hastTagString = $$props.hastTagString);
-    		if ("$problemStore" in $$props) problemStore.set($problemStore = $$props.$problemStore);
     		if ("uniqueNameStatus" in $$props) $$invalidate(2, uniqueNameStatus = $$props.uniqueNameStatus);
     	};
 
     	let uniqueNameStatus;
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
+
     	 $$invalidate(2, uniqueNameStatus = 0);
 
     	return [
@@ -47193,7 +47938,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Problem_initials extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$s, create_fragment$x, safe_not_equal, {});
+    		init(this, options, instance$x, create_fragment$x, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
@@ -47204,7 +47949,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	}
     }
 
-    /* src/routes/problem/problem_statement.svelte generated by Svelte v3.18.1 */
+    /* src/routes/problem/problem_statement.svelte generated by Svelte v3.20.1 */
     const file$v = "src/routes/problem/problem_statement.svelte";
 
     function create_fragment$y(ctx) {
@@ -47240,7 +47985,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, div2, anchor);
     			append_dev(div2, div1);
     			append_dev(div1, div0);
@@ -47248,6 +47993,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			append_dev(div0, t1);
     			append_dev(div0, textarea);
     			set_input_value(textarea, /*$problemStore*/ ctx[0].description);
+    			if (remount) dispose();
     			dispose = listen_dev(textarea, "input", /*textarea_input_handler*/ ctx[1]);
     		},
     		p: function update(ctx, [dirty]) {
@@ -47274,31 +48020,32 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$t($$self, $$props, $$invalidate) {
+    function instance$y($$self, $$props, $$invalidate) {
     	let $problemStore;
     	validate_store(problemStore, "problemStore");
     	component_subscribe($$self, problemStore, $$value => $$invalidate(0, $problemStore = $$value));
+    	const writable_props = [];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<Problem_statement> was created with unknown prop '${key}'`);
+    	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Problem_statement", $$slots, []);
 
     	function textarea_input_handler() {
     		$problemStore.description = this.value;
     		problemStore.set($problemStore);
     	}
 
-    	$$self.$capture_state = () => {
-    		return {};
-    	};
-
-    	$$self.$inject_state = $$props => {
-    		if ("$problemStore" in $$props) problemStore.set($problemStore = $$props.$problemStore);
-    	};
-
+    	$$self.$capture_state = () => ({ problemStore, $problemStore });
     	return [$problemStore, textarea_input_handler];
     }
 
     class Problem_statement extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$t, create_fragment$y, safe_not_equal, {});
+    		init(this, options, instance$y, create_fragment$y, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
@@ -47309,7 +48056,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	}
     }
 
-    /* src/routes/problem/testcase.svelte generated by Svelte v3.18.1 */
+    /* src/routes/problem/testcase.svelte generated by Svelte v3.20.1 */
+
+    const { console: console_1$g } = globals;
     const file$w = "src/routes/problem/testcase.svelte";
 
     function create_fragment$z(ctx) {
@@ -47348,7 +48097,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, div2, anchor);
     			append_dev(div2, h1);
     			append_dev(div2, t1);
@@ -47356,6 +48105,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			append_dev(div2, t2);
     			append_dev(div2, div1);
     			append_dev(div1, button);
+    			if (remount) run_all(dispose);
 
     			dispose = [
     				listen_dev(div0, "keydown", /*onInput*/ ctx[0], false, false, false),
@@ -47382,7 +48132,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$u($$self, $$props, $$invalidate) {
+    function instance$z($$self, $$props, $$invalidate) {
     	let $problemStore;
     	validate_store(problemStore, "problemStore");
     	component_subscribe($$self, problemStore, $$value => $$invalidate(3, $problemStore = $$value));
@@ -47449,18 +48199,43 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		location.replace("http://localhost:5000/admin");
     	}
 
+    	const writable_props = [];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$g.warn(`<Testcase> was created with unknown prop '${key}'`);
+    	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Testcase", $$slots, []);
+
     	const click_handler = e => {
     		submitData();
     	};
 
-    	$$self.$capture_state = () => {
-    		return {};
-    	};
+    	$$self.$capture_state = () => ({
+    		onMount,
+    		afterUpdate,
+    		beforeUpdate,
+    		problemStore,
+    		apolloClient,
+    		getClient,
+    		query,
+    		subscribe: subscribe$2,
+    		mutate,
+    		client,
+    		editor,
+    		onInput,
+    		submitData,
+    		$problemStore
+    	});
 
     	$$self.$inject_state = $$props => {
     		if ("editor" in $$props) editor = $$props.editor;
-    		if ("$problemStore" in $$props) problemStore.set($problemStore = $$props.$problemStore);
     	};
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
 
     	return [onInput, submitData, editor, $problemStore, client, click_handler];
     }
@@ -47468,7 +48243,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Testcase extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$u, create_fragment$z, safe_not_equal, {});
+    		init(this, options, instance$z, create_fragment$z, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
@@ -47479,7 +48254,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	}
     }
 
-    /* src/routes/problem/problem_solution.svelte generated by Svelte v3.18.1 */
+    /* src/routes/problem/problem_solution.svelte generated by Svelte v3.20.1 */
+
+    const { console: console_1$h } = globals;
     const file$x = "src/routes/problem/problem_solution.svelte";
 
     function create_fragment$A(ctx) {
@@ -47567,7 +48344,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, div8, anchor);
     			append_dev(div8, h1);
     			append_dev(div8, t1);
@@ -47589,6 +48366,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			append_dev(div8, t8);
     			append_dev(div8, div7);
     			append_dev(div7, button);
+    			if (remount) run_all(dispose);
 
     			dispose = [
     				listen_dev(div0, "keydown", /*onInput*/ ctx[1], false, false, false),
@@ -47621,7 +48399,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$v($$self, $$props, $$invalidate) {
+    function instance$A($$self, $$props, $$invalidate) {
     	let $problemStore;
     	validate_store(problemStore, "problemStore");
     	component_subscribe($$self, problemStore, $$value => $$invalidate(5, $problemStore = $$value));
@@ -47695,6 +48473,15 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		}
     	}
 
+    	const writable_props = [];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$h.warn(`<Problem_solution> was created with unknown prop '${key}'`);
+    	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Problem_solution", $$slots, []);
+
     	function textarea_input_handler() {
     		result = this.value;
     		$$invalidate(0, result);
@@ -47704,16 +48491,28 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		outputData();
     	};
 
-    	$$self.$capture_state = () => {
-    		return {};
-    	};
+    	$$self.$capture_state = () => ({
+    		onMount,
+    		afterUpdate,
+    		beforeUpdate,
+    		problemStore,
+    		editor,
+    		inputeditor,
+    		onInput,
+    		result,
+    		outputData,
+    		$problemStore
+    	});
 
     	$$self.$inject_state = $$props => {
     		if ("editor" in $$props) editor = $$props.editor;
     		if ("inputeditor" in $$props) inputeditor = $$props.inputeditor;
     		if ("result" in $$props) $$invalidate(0, result = $$props.result);
-    		if ("$problemStore" in $$props) problemStore.set($problemStore = $$props.$problemStore);
     	};
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
 
     	return [
     		result,
@@ -47730,7 +48529,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Problem_solution extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$v, create_fragment$A, safe_not_equal, {});
+    		init(this, options, instance$A, create_fragment$A, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
@@ -47741,7 +48540,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	}
     }
 
-    /* src/routes/problem/select_page.svelte generated by Svelte v3.18.1 */
+    /* src/routes/problem/select_page.svelte generated by Svelte v3.20.1 */
     const file$y = "src/routes/problem/select_page.svelte";
 
     // (10:2) {#if pageNum === 1}
@@ -48045,7 +48844,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$w($$self, $$props, $$invalidate) {
+    function instance$B($$self, $$props, $$invalidate) {
     	let { pageNum = 1 } = $$props;
     	const writable_props = ["pageNum"];
 
@@ -48053,17 +48852,28 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<Select_page> was created with unknown prop '${key}'`);
     	});
 
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Select_page", $$slots, []);
+
     	$$self.$set = $$props => {
     		if ("pageNum" in $$props) $$invalidate(0, pageNum = $$props.pageNum);
     	};
 
-    	$$self.$capture_state = () => {
-    		return { pageNum };
-    	};
+    	$$self.$capture_state = () => ({
+    		pageNum,
+    		ProblemInitials: Problem_initials,
+    		ProblemStatement: Problem_statement,
+    		Testcase,
+    		ProblemSolution: Problem_solution
+    	});
 
     	$$self.$inject_state = $$props => {
     		if ("pageNum" in $$props) $$invalidate(0, pageNum = $$props.pageNum);
     	};
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
 
     	return [pageNum];
     }
@@ -48071,7 +48881,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Select_page$2 extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$w, create_fragment$B, safe_not_equal, { pageNum: 0 });
+    		init(this, options, instance$B, create_fragment$B, safe_not_equal, { pageNum: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
@@ -48090,7 +48900,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	}
     }
 
-    /* src/routes/problem/add_problem.svelte generated by Svelte v3.18.1 */
+    /* src/routes/problem/add_problem.svelte generated by Svelte v3.20.1 */
+
+    const { console: console_1$i } = globals;
     const file$z = "src/routes/problem/add_problem.svelte";
 
     function create_fragment$C(ctx) {
@@ -48172,7 +48984,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, div2, anchor);
     			append_dev(div2, header);
     			mount_component(navbar, header, null);
@@ -48192,6 +49004,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			append_dev(footer, div1);
     			append_dev(div1, button1);
     			current = true;
+    			if (remount) run_all(dispose);
 
     			dispose = [
     				listen_dev(button0, "click", /*click_handler*/ ctx[1], false, false, false),
@@ -48242,7 +49055,16 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$x($$self, $$props, $$invalidate) {
+    function instance$C($$self, $$props, $$invalidate) {
+    	const writable_props = [];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$i.warn(`<Add_problem> was created with unknown prop '${key}'`);
+    	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Add_problem", $$slots, []);
+
     	const click_handler = () => {
     		if (pageNum === 1) {
     			return;
@@ -48261,15 +49083,24 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		console.log(pageNum);
     	};
 
-    	$$self.$capture_state = () => {
-    		return {};
-    	};
+    	$$self.$capture_state = () => ({
+    		Navbar,
+    		Sidebar: Side,
+    		SubNavbar: Problem_navbar,
+    		SelectPage: Select_page$2,
+    		pageNum
+    	});
 
     	$$self.$inject_state = $$props => {
     		if ("pageNum" in $$props) $$invalidate(0, pageNum = $$props.pageNum);
     	};
 
     	let pageNum;
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
+
     	 $$invalidate(0, pageNum = 1);
     	return [pageNum, click_handler, click_handler_1];
     }
@@ -48277,7 +49108,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Add_problem extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$x, create_fragment$C, safe_not_equal, {});
+    		init(this, options, instance$C, create_fragment$C, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
@@ -48288,7 +49119,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	}
     }
 
-    /* src/routes/update_problem/problem_navbar.svelte generated by Svelte v3.18.1 */
+    /* src/routes/update_problem/problem_navbar.svelte generated by Svelte v3.20.1 */
 
     const file$A = "src/routes/update_problem/problem_navbar.svelte";
 
@@ -48435,6 +49266,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	let t8;
     	let div6;
     	let each_value = /*content*/ ctx[1];
+    	validate_each_argument(each_value);
     	let each_blocks = [];
 
     	for (let i = 0; i < each_value.length; i += 1) {
@@ -48514,6 +49346,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		p: function update(ctx, [dirty]) {
     			if (dirty & /*content, position, activeBar, activeCircle*/ 15) {
     				each_value = /*content*/ ctx[1];
+    				validate_each_argument(each_value);
     				let i;
 
     				for (i = 0; i < each_value.length; i += 1) {
@@ -48554,7 +49387,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$y($$self, $$props, $$invalidate) {
+    function instance$D($$self, $$props, $$invalidate) {
     	let { position = 1 } = $$props;
     	let content = [1, 2, 3, 4];
     	let activeCircle = "w-16 h-16 text-dark bg-elight  mx-auto rounded-full text-lg flex items-center";
@@ -48568,18 +49401,19 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<Problem_navbar> was created with unknown prop '${key}'`);
     	});
 
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Problem_navbar", $$slots, []);
+
     	$$self.$set = $$props => {
     		if ("position" in $$props) $$invalidate(0, position = $$props.position);
     	};
 
-    	$$self.$capture_state = () => {
-    		return {
-    			position,
-    			content,
-    			activeCircle,
-    			activeBar
-    		};
-    	};
+    	$$self.$capture_state = () => ({
+    		position,
+    		content,
+    		activeCircle,
+    		activeBar
+    	});
 
     	$$self.$inject_state = $$props => {
     		if ("position" in $$props) $$invalidate(0, position = $$props.position);
@@ -48588,13 +49422,17 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		if ("activeBar" in $$props) $$invalidate(3, activeBar = $$props.activeBar);
     	};
 
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
+
     	return [position, content, activeCircle, activeBar];
     }
 
     class Problem_navbar$1 extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$y, create_fragment$D, safe_not_equal, { position: 0 });
+    		init(this, options, instance$D, create_fragment$D, safe_not_equal, { position: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
@@ -48613,7 +49451,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	}
     }
 
-    /* src/routes/update_problem/loader.svelte generated by Svelte v3.18.1 */
+    /* src/routes/update_problem/loader.svelte generated by Svelte v3.20.1 */
 
     const file$B = "src/routes/update_problem/loader.svelte";
 
@@ -48672,10 +49510,22 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
+    function instance$E($$self, $$props) {
+    	const writable_props = [];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<Loader> was created with unknown prop '${key}'`);
+    	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Loader", $$slots, []);
+    	return [];
+    }
+
     class Loader$3 extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, null, create_fragment$E, safe_not_equal, {});
+    		init(this, options, instance$E, create_fragment$E, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
@@ -48697,7 +49547,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
       email: 'Sample@gmail.com',
     });
 
-    /* src/routes/update_problem/problem_initials.svelte generated by Svelte v3.18.1 */
+    /* src/routes/update_problem/problem_initials.svelte generated by Svelte v3.20.1 */
+
+    const { console: console_1$j } = globals;
     const file$C = "src/routes/update_problem/problem_initials.svelte";
 
     function get_each_context$f(ctx, list, i) {
@@ -48897,6 +49749,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	let if_block1 = /*uniqueNameStatus*/ ctx[0] === 1 && create_if_block_1$9(ctx);
     	let if_block2 = /*uniqueNameStatus*/ ctx[0] === 3 && create_if_block$e(ctx);
     	let each_value = /*tagList*/ ctx[4];
+    	validate_each_argument(each_value);
     	let each_blocks = [];
 
     	for (let i = 0; i < each_value.length; i += 1) {
@@ -49027,7 +49880,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, div14, anchor);
     			append_dev(div14, div13);
     			append_dev(div13, div5);
@@ -49084,6 +49937,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			append_dev(div9, input3);
     			set_input_value(input3, /*hashTagString*/ ctx[1]);
     			current = true;
+    			if (remount) run_all(dispose);
 
     			dispose = [
     				listen_dev(input0, "keydown", /*onInput*/ ctx[6], false, false, false),
@@ -49150,6 +50004,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     			if (dirty & /*tagList*/ 16) {
     				each_value = /*tagList*/ ctx[4];
+    				validate_each_argument(each_value);
     				let i;
 
     				for (i = 0; i < each_value.length; i += 1) {
@@ -49205,7 +50060,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$z($$self, $$props, $$invalidate) {
+    function instance$F($$self, $$props, $$invalidate) {
     	let $problemStore;
     	validate_store(problemStore$1, "problemStore");
     	component_subscribe($$self, problemStore$1, $$value => $$invalidate(2, $problemStore = $$value));
@@ -49287,6 +50142,15 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		};
     	})();
 
+    	const writable_props = [];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$j.warn(`<Problem_initials> was created with unknown prop '${key}'`);
+    	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Problem_initials", $$slots, []);
+
     	function input0_input_handler() {
     		$problemStore.problemName = this.value;
     		problemStore$1.set($problemStore);
@@ -49317,16 +50181,31 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		($$invalidate(1, hashTagString), $$invalidate(2, $problemStore));
     	}
 
-    	$$self.$capture_state = () => {
-    		return {};
-    	};
+    	$$self.$capture_state = () => ({
+    		apolloClient,
+    		Loader: Loader$3,
+    		getClient,
+    		query,
+    		subscribe: subscribe$2,
+    		mutate,
+    		problemStore: problemStore$1,
+    		alert,
+    		tagList,
+    		client,
+    		changeHandler,
+    		onInput,
+    		uniqueNameStatus,
+    		selectedTags,
+    		hashTagString,
+    		$problemStore,
+    		tagsName
+    	});
 
     	$$self.$inject_state = $$props => {
     		if ("alert" in $$props) $$invalidate(3, alert = $$props.alert);
     		if ("uniqueNameStatus" in $$props) $$invalidate(0, uniqueNameStatus = $$props.uniqueNameStatus);
     		if ("selectedTags" in $$props) selectedTags = $$props.selectedTags;
     		if ("hashTagString" in $$props) $$invalidate(1, hashTagString = $$props.hashTagString);
-    		if ("$problemStore" in $$props) problemStore$1.set($problemStore = $$props.$problemStore);
     		if ("tagsName" in $$props) tagsName = $$props.tagsName;
     	};
 
@@ -49334,6 +50213,10 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	let selectedTags;
     	let hashTagString;
     	let tagsName;
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
 
     	$$self.$$.update = () => {
     		if ($$self.$$.dirty & /*$problemStore*/ 4) {
@@ -49370,7 +50253,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Problem_initials$1 extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$z, create_fragment$F, safe_not_equal, {});
+    		init(this, options, instance$F, create_fragment$F, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
@@ -49381,7 +50264,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	}
     }
 
-    /* src/routes/update_problem/problem_statement.svelte generated by Svelte v3.18.1 */
+    /* src/routes/update_problem/problem_statement.svelte generated by Svelte v3.20.1 */
     const file$D = "src/routes/update_problem/problem_statement.svelte";
 
     function create_fragment$G(ctx) {
@@ -49417,7 +50300,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, div2, anchor);
     			append_dev(div2, div1);
     			append_dev(div1, div0);
@@ -49425,6 +50308,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			append_dev(div0, t1);
     			append_dev(div0, textarea);
     			set_input_value(textarea, /*$problemStore*/ ctx[0].description);
+    			if (remount) dispose();
     			dispose = listen_dev(textarea, "input", /*textarea_input_handler*/ ctx[1]);
     		},
     		p: function update(ctx, [dirty]) {
@@ -49451,31 +50335,32 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$A($$self, $$props, $$invalidate) {
+    function instance$G($$self, $$props, $$invalidate) {
     	let $problemStore;
     	validate_store(problemStore$1, "problemStore");
     	component_subscribe($$self, problemStore$1, $$value => $$invalidate(0, $problemStore = $$value));
+    	const writable_props = [];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<Problem_statement> was created with unknown prop '${key}'`);
+    	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Problem_statement", $$slots, []);
 
     	function textarea_input_handler() {
     		$problemStore.description = this.value;
     		problemStore$1.set($problemStore);
     	}
 
-    	$$self.$capture_state = () => {
-    		return {};
-    	};
-
-    	$$self.$inject_state = $$props => {
-    		if ("$problemStore" in $$props) problemStore$1.set($problemStore = $$props.$problemStore);
-    	};
-
+    	$$self.$capture_state = () => ({ problemStore: problemStore$1, $problemStore });
     	return [$problemStore, textarea_input_handler];
     }
 
     class Problem_statement$1 extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$A, create_fragment$G, safe_not_equal, {});
+    		init(this, options, instance$G, create_fragment$G, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
@@ -49486,9 +50371,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	}
     }
 
-    /* src/routes/update_problem/testcase.svelte generated by Svelte v3.18.1 */
+    /* src/routes/update_problem/testcase.svelte generated by Svelte v3.20.1 */
 
-    const { console: console_1$7 } = globals;
+    const { console: console_1$k } = globals;
     const file$E = "src/routes/update_problem/testcase.svelte";
 
     function create_fragment$H(ctx) {
@@ -49527,7 +50412,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, div2, anchor);
     			append_dev(div2, h1);
     			append_dev(div2, t1);
@@ -49535,6 +50420,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			append_dev(div2, t2);
     			append_dev(div2, div1);
     			append_dev(div1, button);
+    			if (remount) run_all(dispose);
 
     			dispose = [
     				listen_dev(div0, "keydown", /*onInput*/ ctx[0], false, false, false),
@@ -49561,7 +50447,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$B($$self, $$props, $$invalidate) {
+    function instance$H($$self, $$props, $$invalidate) {
     	let $problemStore;
     	validate_store(problemStore$1, "problemStore");
     	component_subscribe($$self, problemStore$1, $$value => $$invalidate(4, $problemStore = $$value));
@@ -49633,8 +50519,11 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	const writable_props = ["currentRoute"];
 
     	Object.keys($$props).forEach(key => {
-    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$7.warn(`<Testcase> was created with unknown prop '${key}'`);
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$k.warn(`<Testcase> was created with unknown prop '${key}'`);
     	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Testcase", $$slots, []);
 
     	const click_handler = e => {
     		submitData();
@@ -49644,15 +50533,32 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		if ("currentRoute" in $$props) $$invalidate(2, currentRoute = $$props.currentRoute);
     	};
 
-    	$$self.$capture_state = () => {
-    		return { currentRoute, editor, $problemStore };
-    	};
+    	$$self.$capture_state = () => ({
+    		onMount,
+    		afterUpdate,
+    		beforeUpdate,
+    		problemStore: problemStore$1,
+    		apolloClient,
+    		getClient,
+    		query,
+    		subscribe: subscribe$2,
+    		mutate,
+    		currentRoute,
+    		client,
+    		editor,
+    		onInput,
+    		submitData,
+    		$problemStore
+    	});
 
     	$$self.$inject_state = $$props => {
     		if ("currentRoute" in $$props) $$invalidate(2, currentRoute = $$props.currentRoute);
     		if ("editor" in $$props) editor = $$props.editor;
-    		if ("$problemStore" in $$props) problemStore$1.set($problemStore = $$props.$problemStore);
     	};
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
 
     	return [
     		onInput,
@@ -49668,7 +50574,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Testcase$1 extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$B, create_fragment$H, safe_not_equal, { currentRoute: 2 });
+    		init(this, options, instance$H, create_fragment$H, safe_not_equal, { currentRoute: 2 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
@@ -49681,7 +50587,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		const props = options.props || {};
 
     		if (/*currentRoute*/ ctx[2] === undefined && !("currentRoute" in props)) {
-    			console_1$7.warn("<Testcase> was created without expected prop 'currentRoute'");
+    			console_1$k.warn("<Testcase> was created without expected prop 'currentRoute'");
     		}
     	}
 
@@ -49694,7 +50600,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	}
     }
 
-    /* src/routes/update_problem/problem_solution.svelte generated by Svelte v3.18.1 */
+    /* src/routes/update_problem/problem_solution.svelte generated by Svelte v3.20.1 */
+
+    const { console: console_1$l } = globals;
     const file$F = "src/routes/update_problem/problem_solution.svelte";
 
     function create_fragment$I(ctx) {
@@ -49782,7 +50690,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, div8, anchor);
     			append_dev(div8, h1);
     			append_dev(div8, t1);
@@ -49804,6 +50712,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			append_dev(div8, t8);
     			append_dev(div8, div7);
     			append_dev(div7, button);
+    			if (remount) run_all(dispose);
 
     			dispose = [
     				listen_dev(div0, "keydown", /*onInput*/ ctx[1], false, false, false),
@@ -49836,7 +50745,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$C($$self, $$props, $$invalidate) {
+    function instance$I($$self, $$props, $$invalidate) {
     	let $problemStore;
     	validate_store(problemStore$1, "problemStore");
     	component_subscribe($$self, problemStore$1, $$value => $$invalidate(5, $problemStore = $$value));
@@ -49909,6 +50818,15 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		}
     	}
 
+    	const writable_props = [];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$l.warn(`<Problem_solution> was created with unknown prop '${key}'`);
+    	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Problem_solution", $$slots, []);
+
     	function textarea_input_handler() {
     		result = this.value;
     		$$invalidate(0, result);
@@ -49918,16 +50836,28 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		outputData();
     	};
 
-    	$$self.$capture_state = () => {
-    		return {};
-    	};
+    	$$self.$capture_state = () => ({
+    		onMount,
+    		afterUpdate,
+    		beforeUpdate,
+    		problemStore: problemStore$1,
+    		editor,
+    		inputeditor,
+    		onInput,
+    		result,
+    		outputData,
+    		$problemStore
+    	});
 
     	$$self.$inject_state = $$props => {
     		if ("editor" in $$props) editor = $$props.editor;
     		if ("inputeditor" in $$props) inputeditor = $$props.inputeditor;
     		if ("result" in $$props) $$invalidate(0, result = $$props.result);
-    		if ("$problemStore" in $$props) problemStore$1.set($problemStore = $$props.$problemStore);
     	};
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
 
     	return [
     		result,
@@ -49944,7 +50874,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Problem_solution$1 extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$C, create_fragment$I, safe_not_equal, {});
+    		init(this, options, instance$I, create_fragment$I, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
@@ -49955,7 +50885,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	}
     }
 
-    /* src/routes/update_problem/select_page.svelte generated by Svelte v3.18.1 */
+    /* src/routes/update_problem/select_page.svelte generated by Svelte v3.20.1 */
     const file$G = "src/routes/update_problem/select_page.svelte";
 
     // (12:2) {#if pageNum === 1}
@@ -50269,7 +51199,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$D($$self, $$props, $$invalidate) {
+    function instance$J($$self, $$props, $$invalidate) {
     	let { pageNum = 1 } = $$props;
     	let { currentRoute } = $$props;
     	const writable_props = ["pageNum", "currentRoute"];
@@ -50278,19 +51208,31 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<Select_page> was created with unknown prop '${key}'`);
     	});
 
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Select_page", $$slots, []);
+
     	$$self.$set = $$props => {
     		if ("pageNum" in $$props) $$invalidate(0, pageNum = $$props.pageNum);
     		if ("currentRoute" in $$props) $$invalidate(1, currentRoute = $$props.currentRoute);
     	};
 
-    	$$self.$capture_state = () => {
-    		return { pageNum, currentRoute };
-    	};
+    	$$self.$capture_state = () => ({
+    		pageNum,
+    		ProblemInitials: Problem_initials$1,
+    		ProblemStatement: Problem_statement$1,
+    		Testcase: Testcase$1,
+    		ProblemSolution: Problem_solution$1,
+    		currentRoute
+    	});
 
     	$$self.$inject_state = $$props => {
     		if ("pageNum" in $$props) $$invalidate(0, pageNum = $$props.pageNum);
     		if ("currentRoute" in $$props) $$invalidate(1, currentRoute = $$props.currentRoute);
     	};
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
 
     	return [pageNum, currentRoute];
     }
@@ -50298,7 +51240,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Select_page$3 extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$D, create_fragment$J, safe_not_equal, { pageNum: 0, currentRoute: 1 });
+    		init(this, options, instance$J, create_fragment$J, safe_not_equal, { pageNum: 0, currentRoute: 1 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
@@ -50332,9 +51274,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	}
     }
 
-    /* src/routes/update_problem/edit_problem.svelte generated by Svelte v3.18.1 */
+    /* src/routes/update_problem/edit_problem.svelte generated by Svelte v3.20.1 */
 
-    const { console: console_1$8 } = globals;
+    const { console: console_1$m } = globals;
     const file$H = "src/routes/update_problem/edit_problem.svelte";
 
     function create_fragment$K(ctx) {
@@ -50413,7 +51355,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, div2, anchor);
     			append_dev(div2, header);
     			mount_component(navbar, header, null);
@@ -50431,6 +51373,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			append_dev(footer, div1);
     			append_dev(div1, button1);
     			current = true;
+    			if (remount) run_all(dispose);
 
     			dispose = [
     				listen_dev(button0, "click", /*click_handler*/ ctx[6], false, false, false),
@@ -50479,7 +51422,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$E($$self, $$props, $$invalidate) {
+    function instance$K($$self, $$props, $$invalidate) {
     	let $problem;
     	let $problemStore;
     	validate_store(problemStore$1, "problemStore");
@@ -50511,8 +51454,11 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	const writable_props = ["currentRoute"];
 
     	Object.keys($$props).forEach(key => {
-    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$8.warn(`<Edit_problem> was created with unknown prop '${key}'`);
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$m.warn(`<Edit_problem> was created with unknown prop '${key}'`);
     	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Edit_problem", $$slots, []);
 
     	const click_handler = () => {
     		if (pageNum === 1) {
@@ -50536,23 +51482,35 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		if ("currentRoute" in $$props) $$invalidate(0, currentRoute = $$props.currentRoute);
     	};
 
-    	$$self.$capture_state = () => {
-    		return {
-    			currentRoute,
-    			pageNum,
-    			$problem,
-    			$problemStore
-    		};
-    	};
+    	$$self.$capture_state = () => ({
+    		Navbar,
+    		SubNavbar: Problem_navbar$1,
+    		SelectPage: Select_page$3,
+    		apolloClient,
+    		getClient,
+    		query,
+    		mutate,
+    		subscribe: subscribe$2,
+    		problemStore: problemStore$1,
+    		currentRoute,
+    		client,
+    		problem,
+    		pageNum,
+    		$problem,
+    		$problemStore
+    	});
 
     	$$self.$inject_state = $$props => {
     		if ("currentRoute" in $$props) $$invalidate(0, currentRoute = $$props.currentRoute);
     		if ("pageNum" in $$props) $$invalidate(1, pageNum = $$props.pageNum);
-    		if ("$problem" in $$props) problem.set($problem = $$props.$problem);
-    		if ("$problemStore" in $$props) problemStore$1.set($problemStore = $$props.$problemStore);
     	};
 
     	let pageNum;
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
+
     	 $$invalidate(1, pageNum = 1);
 
     	return [
@@ -50570,7 +51528,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Edit_problem extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$E, create_fragment$K, safe_not_equal, { currentRoute: 0 });
+    		init(this, options, instance$K, create_fragment$K, safe_not_equal, { currentRoute: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
@@ -50583,7 +51541,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		const props = options.props || {};
 
     		if (/*currentRoute*/ ctx[0] === undefined && !("currentRoute" in props)) {
-    			console_1$8.warn("<Edit_problem> was created without expected prop 'currentRoute'");
+    			console_1$m.warn("<Edit_problem> was created without expected prop 'currentRoute'");
     		}
     	}
 
@@ -50596,7 +51554,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	}
     }
 
-    /* src/routes/thankyou.svelte generated by Svelte v3.18.1 */
+    /* src/routes/thankyou.svelte generated by Svelte v3.20.1 */
 
     const file$I = "src/routes/thankyou.svelte";
 
@@ -50654,10 +51612,22 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
+    function instance$L($$self, $$props) {
+    	const writable_props = [];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<Thankyou> was created with unknown prop '${key}'`);
+    	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Thankyou", $$slots, []);
+    	return [];
+    }
+
     class Thankyou extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, null, create_fragment$L, safe_not_equal, {});
+    		init(this, options, instance$L, create_fragment$L, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
@@ -50668,8 +51638,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	}
     }
 
-    /* src/components/editor_navbar.svelte generated by Svelte v3.18.1 */
+    /* src/components/editor_navbar.svelte generated by Svelte v3.20.1 */
 
+    const { console: console_1$n } = globals;
     const file$J = "src/components/editor_navbar.svelte";
 
     function create_fragment$M(ctx) {
@@ -50726,7 +51697,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, link, anchor);
     			insert_dev(target, t0, anchor);
     			insert_dev(target, nav, anchor);
@@ -50737,6 +51708,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			append_dev(div1, div0);
     			append_dev(div0, button);
     			append_dev(button, img);
+    			if (remount) dispose();
     			dispose = listen_dev(button, "click", /*click_handler*/ ctx[3], false, false, false);
     		},
     		p: noop,
@@ -50761,7 +51733,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$F($$self, $$props, $$invalidate) {
+    function instance$M($$self, $$props, $$invalidate) {
     	let themes = [
     		["#1D1F21", "#25282c", "#303030", "#c4c4c4"],
     		["#1d3e53", "#254b62", "#476d7c", "#77abb7"],
@@ -50783,6 +51755,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	console.log(number);
     	changeTheme(number);
+    	const writable_props = [];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$n.warn(`<Editor_navbar> was created with unknown prop '${key}'`);
+    	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Editor_navbar", $$slots, []);
 
     	const click_handler = () => {
     		$$invalidate(0, number++, number);
@@ -50790,14 +51770,16 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		changeTheme(number % themesize);
     	};
 
-    	$$self.$capture_state = () => {
-    		return {};
-    	};
+    	$$self.$capture_state = () => ({ themes, number, changeTheme });
 
     	$$self.$inject_state = $$props => {
     		if ("themes" in $$props) $$invalidate(1, themes = $$props.themes);
     		if ("number" in $$props) $$invalidate(0, number = $$props.number);
     	};
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
 
     	return [number, themes, changeTheme, click_handler];
     }
@@ -50805,7 +51787,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Editor_navbar extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$F, create_fragment$M, safe_not_equal, {});
+    		init(this, options, instance$M, create_fragment$M, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
@@ -50816,9 +51798,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	}
     }
 
-    /* src/routes/introduce_yourself.svelte generated by Svelte v3.18.1 */
+    /* src/routes/introduce_yourself.svelte generated by Svelte v3.20.1 */
 
-    const { console: console_1$9 } = globals;
+    const { console: console_1$o } = globals;
     const file$K = "src/routes/introduce_yourself.svelte";
 
     function create_fragment$N(ctx) {
@@ -50892,49 +51874,49 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			button = element("button");
     			button.textContent = "Submit";
     			attr_dev(h1, "class", "text-elight text-5xl my-10");
-    			add_location(h1, file$K, 76, 6, 2787);
+    			add_location(h1, file$K, 77, 6, 2844);
     			attr_dev(div0, "class", "mx-auto max-w-2xl");
-    			add_location(div0, file$K, 75, 4, 2749);
+    			add_location(div0, file$K, 76, 4, 2806);
     			attr_dev(h2, "class", "labels text-4xl svelte-gmll6w");
-    			add_location(h2, file$K, 81, 8, 2950);
-    			add_location(div1, file$K, 80, 6, 2936);
+    			add_location(h2, file$K, 82, 8, 3007);
+    			add_location(div1, file$K, 81, 6, 2993);
     			attr_dev(label0, "class", "labels svelte-gmll6w");
-    			add_location(label0, file$K, 85, 10, 3045);
+    			add_location(label0, file$K, 86, 10, 3102);
     			attr_dev(input0, "class", "unitinput svelte-gmll6w");
     			attr_dev(input0, "type", "text");
     			attr_dev(input0, "placeholder", "Enter Name");
-    			add_location(input0, file$K, 86, 10, 3090);
-    			add_location(div2, file$K, 84, 8, 3029);
+    			add_location(input0, file$K, 87, 10, 3147);
+    			add_location(div2, file$K, 85, 8, 3086);
     			attr_dev(label1, "class", "labels svelte-gmll6w");
-    			add_location(label1, file$K, 93, 10, 3265);
+    			add_location(label1, file$K, 94, 10, 3322);
     			attr_dev(input1, "class", "unitinput svelte-gmll6w");
     			attr_dev(input1, "type", "text");
     			attr_dev(input1, "placeholder", "Email");
-    			add_location(input1, file$K, 94, 10, 3322);
-    			add_location(div3, file$K, 92, 8, 3249);
+    			add_location(input1, file$K, 95, 10, 3379);
+    			add_location(div3, file$K, 93, 8, 3306);
     			attr_dev(label2, "class", "labels svelte-gmll6w");
-    			add_location(label2, file$K, 101, 10, 3493);
+    			add_location(label2, file$K, 102, 10, 3550);
     			attr_dev(input2, "class", "unitinput svelte-gmll6w");
     			attr_dev(input2, "type", "text");
     			attr_dev(input2, "placeholder", "College Name");
-    			add_location(input2, file$K, 102, 10, 3546);
-    			add_location(div4, file$K, 100, 8, 3477);
-    			add_location(div5, file$K, 83, 6, 3015);
+    			add_location(input2, file$K, 103, 10, 3603);
+    			add_location(div4, file$K, 101, 8, 3534);
+    			add_location(div5, file$K, 84, 6, 3072);
     			attr_dev(div6, "class", "border-solid border-2 mt-10 border-light p-4");
-    			add_location(div6, file$K, 79, 4, 2871);
+    			add_location(div6, file$K, 80, 4, 2928);
     			attr_dev(div7, "class", "text-edark mx-auto max-w-5xl w-full");
-    			add_location(div7, file$K, 74, 2, 2695);
+    			add_location(div7, file$K, 75, 2, 2752);
     			attr_dev(button, "class", "bg-dark hover:bg-elight hover:text-edark outline-none text-white\n      font-bold py-4 px-4 text-xl rounded-full");
-    			add_location(button, file$K, 112, 4, 3785);
+    			add_location(button, file$K, 113, 4, 3842);
     			attr_dev(div8, "class", "my-10 flex justify-center");
-    			add_location(div8, file$K, 111, 2, 3741);
+    			add_location(div8, file$K, 112, 2, 3798);
     			attr_dev(div9, "class", "mx-auto flex-col flex-grow w-full h-full bg-edark");
-    			add_location(div9, file$K, 72, 0, 2610);
+    			add_location(div9, file$K, 73, 0, 2667);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, div9, anchor);
     			mount_component(editornavbar, div9, null);
     			append_dev(div9, t0);
@@ -50968,6 +51950,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			append_dev(div9, div8);
     			append_dev(div8, button);
     			current = true;
+    			if (remount) run_all(dispose);
 
     			dispose = [
     				listen_dev(input0, "input", /*input0_input_handler*/ ctx[5]),
@@ -51016,7 +51999,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$G($$self, $$props, $$invalidate) {
+    function instance$N($$self, $$props, $$invalidate) {
     	let { currentRoute } = $$props;
 
     	let user = {
@@ -51037,6 +52020,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		}
 
     		console.log(user);
+    		cookieHandler.setCookie("access_email", user.email);
 
     		try {
     			const res = await mutate(client, {
@@ -51054,8 +52038,11 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	const writable_props = ["currentRoute"];
 
     	Object.keys($$props).forEach(key => {
-    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$9.warn(`<Introduce_yourself> was created with unknown prop '${key}'`);
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$o.warn(`<Introduce_yourself> was created with unknown prop '${key}'`);
     	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Introduce_yourself", $$slots, []);
 
     	function input0_input_handler() {
     		user.name = this.value;
@@ -51078,15 +52065,30 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		if ("currentRoute" in $$props) $$invalidate(2, currentRoute = $$props.currentRoute);
     	};
 
-    	$$self.$capture_state = () => {
-    		return { currentRoute, user, tokens };
-    	};
+    	$$self.$capture_state = () => ({
+    		apolloClient,
+    		getClient,
+    		query,
+    		subscribe: subscribe$2,
+    		mutate,
+    		cookieHandler,
+    		EditorNavbar: Editor_navbar,
+    		currentRoute,
+    		user,
+    		tokens,
+    		client,
+    		submitData
+    	});
 
     	$$self.$inject_state = $$props => {
     		if ("currentRoute" in $$props) $$invalidate(2, currentRoute = $$props.currentRoute);
     		if ("user" in $$props) $$invalidate(0, user = $$props.user);
     		if ("tokens" in $$props) tokens = $$props.tokens;
     	};
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
 
     	return [
     		user,
@@ -51104,7 +52106,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Introduce_yourself extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$G, create_fragment$N, safe_not_equal, { currentRoute: 2 });
+    		init(this, options, instance$N, create_fragment$N, safe_not_equal, { currentRoute: 2 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
@@ -51117,7 +52119,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		const props = options.props || {};
 
     		if (/*currentRoute*/ ctx[2] === undefined && !("currentRoute" in props)) {
-    			console_1$9.warn("<Introduce_yourself> was created without expected prop 'currentRoute'");
+    			console_1$o.warn("<Introduce_yourself> was created without expected prop 'currentRoute'");
     		}
     	}
 
@@ -51130,9 +52132,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	}
     }
 
-    /* src/routes/AdminPanel.svelte generated by Svelte v3.18.1 */
+    /* src/routes/AdminPanel.svelte generated by Svelte v3.20.1 */
 
-    const { console: console_1$a, document: document_1 } = globals;
+    const { console: console_1$p, document: document_1 } = globals;
     const file$L = "src/routes/AdminPanel.svelte";
 
     function get_each_context_2(ctx, list, i) {
@@ -51153,7 +52155,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return child_ctx;
     }
 
-    // (166:55) 
+    // (196:53) 
     function create_if_block_2$8(ctx) {
     	let h1;
     	let t1;
@@ -51211,35 +52213,35 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			t10 = space();
     			tbody = element("tbody");
     			info.block.c();
-    			attr_dev(h1, "class", "mb-8");
-    			add_location(h1, file$L, 167, 5, 7327);
+    			attr_dev(h1, "class", "mb-8 svelte-15oa0gb");
+    			add_location(h1, file$L, 196, 8, 7834);
     			attr_dev(input, "type", "text");
     			attr_dev(input, "id", "myInput");
     			attr_dev(input, "placeholder", "Search for users..");
     			attr_dev(input, "title", "Type in a name");
     			set_style(input, "width", "100%");
-    			attr_dev(input, "class", "svelte-1jk77du");
-    			add_location(input, file$L, 168, 6, 7368);
-    			attr_dev(th0, "class", "p-4 w-1/4");
-    			add_location(th0, file$L, 172, 7, 7647);
-    			attr_dev(th1, "class", "p-4 w-1/4");
-    			add_location(th1, file$L, 173, 7, 7691);
-    			attr_dev(th2, "class", "p-4 w-1/4");
-    			add_location(th2, file$L, 174, 7, 7738);
-    			attr_dev(th3, "class", "p-4 w-1/4");
-    			add_location(th3, file$L, 175, 7, 7782);
-    			attr_dev(tr, "class", "flex w-full mb-4");
-    			add_location(tr, file$L, 171, 6, 7610);
-    			attr_dev(thead, "class", "bg-black flex text-white w-full");
-    			add_location(thead, file$L, 170, 5, 7556);
-    			attr_dev(tbody, "class", "bg-grey-light flex flex-col items-center justify-between overflow-y-scroll w-full");
+    			attr_dev(input, "class", "svelte-15oa0gb");
+    			add_location(input, file$L, 197, 8, 7876);
+    			attr_dev(th0, "class", "p-4 w-1/4 svelte-15oa0gb");
+    			add_location(th0, file$L, 207, 14, 8236);
+    			attr_dev(th1, "class", "p-4 w-1/4 svelte-15oa0gb");
+    			add_location(th1, file$L, 208, 14, 8287);
+    			attr_dev(th2, "class", "p-4 w-1/4 svelte-15oa0gb");
+    			add_location(th2, file$L, 209, 14, 8341);
+    			attr_dev(th3, "class", "p-4 w-1/4 svelte-15oa0gb");
+    			add_location(th3, file$L, 210, 14, 8392);
+    			attr_dev(tr, "class", "flex w-full mb-4 svelte-15oa0gb");
+    			add_location(tr, file$L, 206, 12, 8192);
+    			attr_dev(thead, "class", "bg-black flex text-white w-full svelte-15oa0gb");
+    			add_location(thead, file$L, 205, 10, 8132);
+    			attr_dev(tbody, "class", "bg-grey-light flex flex-col items-center justify-between\n            overflow-y-scroll w-full svelte-15oa0gb");
     			set_style(tbody, "height", "50vh");
-    			add_location(tbody, file$L, 178, 5, 7846);
+    			add_location(tbody, file$L, 213, 10, 8472);
     			attr_dev(table, "id", "myTable");
-    			attr_dev(table, "class", "text-left w-full");
-    			add_location(table, file$L, 169, 5, 7504);
+    			attr_dev(table, "class", "text-left w-full svelte-15oa0gb");
+    			add_location(table, file$L, 204, 8, 8076);
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, h1, anchor);
     			insert_dev(target, t1, anchor);
     			insert_dev(target, input, anchor);
@@ -51259,7 +52261,8 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			info.block.m(tbody, info.anchor = null);
     			info.mount = () => tbody;
     			info.anchor = null;
-    			dispose = listen_dev(input, "keyup", myFunction$1, false, false, false);
+    			if (remount) dispose();
+    			dispose = listen_dev(input, "keyup", myFunction$2, false, false, false);
     		},
     		p: function update(new_ctx, dirty) {
     			ctx = new_ctx;
@@ -51288,14 +52291,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_if_block_2$8.name,
     		type: "if",
-    		source: "(166:55) ",
+    		source: "(196:53) ",
     		ctx
     	});
 
     	return block;
     }
 
-    // (127:53) 
+    // (146:51) 
     function create_if_block_1$b(ctx) {
     	let h1;
     	let t1;
@@ -51355,37 +52358,38 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			t10 = space();
     			tbody = element("tbody");
     			info.block.c();
-    			attr_dev(h1, "class", "mb-8");
-    			add_location(h1, file$L, 127, 5, 5769);
+    			attr_dev(h1, "class", "mb-8 svelte-15oa0gb");
+    			add_location(h1, file$L, 146, 8, 5871);
     			attr_dev(input, "type", "text");
     			attr_dev(input, "id", "myInput");
     			attr_dev(input, "placeholder", "Search for Tests..");
     			attr_dev(input, "title", "Type in a name");
     			set_style(input, "width", "90%");
-    			attr_dev(input, "class", "svelte-1jk77du");
-    			add_location(input, file$L, 129, 6, 5820);
+    			attr_dev(input, "class", "svelte-15oa0gb");
+    			add_location(input, file$L, 148, 10, 5928);
     			attr_dev(a, "href", "/newtest");
-    			attr_dev(a, "class", "add-btn svelte-1jk77du");
-    			add_location(a, file$L, 130, 6, 5956);
-    			add_location(div, file$L, 128, 5, 5808);
-    			attr_dev(th0, "class", "p-4 w-1/3");
-    			add_location(th0, file$L, 135, 7, 6167);
-    			attr_dev(th1, "class", "p-4 w-1/3");
-    			add_location(th1, file$L, 136, 7, 6211);
-    			attr_dev(th2, "class", "p-4 w-1/3");
-    			add_location(th2, file$L, 137, 7, 6256);
-    			attr_dev(tr, "class", "flex w-full mb-4");
-    			add_location(tr, file$L, 134, 6, 6130);
-    			attr_dev(thead, "class", "bg-black flex text-white w-full");
-    			add_location(thead, file$L, 133, 5, 6076);
-    			attr_dev(tbody, "class", "bg-grey-light flex flex-col items-center justify-between overflow-y-scroll w-full");
+    			attr_dev(a, "class", "add-btn svelte-15oa0gb");
+    			add_location(a, file$L, 155, 10, 6141);
+    			attr_dev(div, "class", "svelte-15oa0gb");
+    			add_location(div, file$L, 147, 8, 5912);
+    			attr_dev(th0, "class", "p-4 w-1/3 svelte-15oa0gb");
+    			add_location(th0, file$L, 160, 14, 6372);
+    			attr_dev(th1, "class", "p-4 w-1/3 svelte-15oa0gb");
+    			add_location(th1, file$L, 161, 14, 6423);
+    			attr_dev(th2, "class", "p-4 w-1/3 svelte-15oa0gb");
+    			add_location(th2, file$L, 162, 14, 6475);
+    			attr_dev(tr, "class", "flex w-full mb-4 svelte-15oa0gb");
+    			add_location(tr, file$L, 159, 12, 6328);
+    			attr_dev(thead, "class", "bg-black flex text-white w-full svelte-15oa0gb");
+    			add_location(thead, file$L, 158, 10, 6268);
+    			attr_dev(tbody, "class", "bg-grey-light flex flex-col items-center justify-between\n            overflow-y-scroll w-full svelte-15oa0gb");
     			set_style(tbody, "height", "50vh");
-    			add_location(tbody, file$L, 140, 5, 6324);
+    			add_location(tbody, file$L, 165, 10, 6559);
     			attr_dev(table, "id", "myTable");
-    			attr_dev(table, "class", "text-left w-full");
-    			add_location(table, file$L, 132, 5, 6024);
+    			attr_dev(table, "class", "text-left w-full svelte-15oa0gb");
+    			add_location(table, file$L, 157, 8, 6212);
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, h1, anchor);
     			insert_dev(target, t1, anchor);
     			insert_dev(target, div, anchor);
@@ -51406,7 +52410,8 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			info.block.m(tbody, info.anchor = null);
     			info.mount = () => tbody;
     			info.anchor = null;
-    			dispose = listen_dev(input, "keyup", myFunction$1, false, false, false);
+    			if (remount) dispose();
+    			dispose = listen_dev(input, "keyup", myFunction$2, false, false, false);
     		},
     		p: function update(new_ctx, dirty) {
     			ctx = new_ctx;
@@ -51435,14 +52440,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_if_block_1$b.name,
     		type: "if",
-    		source: "(127:53) ",
+    		source: "(146:51) ",
     		ctx
     	});
 
     	return block;
     }
 
-    // (89:7) {#if currentRoute.name ==="/showproblems"}
+    // (95:6) {#if currentRoute.name === '/admin'}
     function create_if_block$g(ctx) {
     	let h1;
     	let t1;
@@ -51507,39 +52512,40 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			t12 = space();
     			tbody = element("tbody");
     			info.block.c();
-    			attr_dev(h1, "class", "mb-8");
-    			add_location(h1, file$L, 89, 4, 4197);
+    			attr_dev(h1, "class", "mb-8 svelte-15oa0gb");
+    			add_location(h1, file$L, 95, 8, 3859);
     			attr_dev(input, "type", "text");
     			attr_dev(input, "id", "myInput");
     			attr_dev(input, "placeholder", "Search for Problems..");
     			attr_dev(input, "title", "Type in a name");
     			set_style(input, "width", "90%");
-    			attr_dev(input, "class", "svelte-1jk77du");
-    			add_location(input, file$L, 91, 5, 4249);
+    			attr_dev(input, "class", "svelte-15oa0gb");
+    			add_location(input, file$L, 97, 10, 3919);
     			attr_dev(a, "href", "/newProblem");
-    			attr_dev(a, "class", "add-btn svelte-1jk77du");
-    			add_location(a, file$L, 92, 5, 4387);
-    			add_location(div, file$L, 90, 4, 4238);
-    			attr_dev(th0, "class", "p-4 w-1/4");
-    			add_location(th0, file$L, 97, 6, 4602);
-    			attr_dev(th1, "class", "p-4 w-1/4");
-    			add_location(th1, file$L, 98, 6, 4648);
-    			attr_dev(th2, "class", "p-4 w-1/4");
-    			add_location(th2, file$L, 99, 6, 4685);
-    			attr_dev(th3, "class", "p-4 w-1/4");
-    			add_location(th3, file$L, 100, 6, 4729);
-    			attr_dev(tr, "class", "flex w-full mb-4");
-    			add_location(tr, file$L, 96, 5, 4566);
-    			attr_dev(thead, "class", "bg-black flex text-white w-full");
-    			add_location(thead, file$L, 95, 4, 4513);
-    			attr_dev(tbody, "class", "bg-grey-light flex flex-col items-center justify-between overflow-y-scroll w-full");
+    			attr_dev(a, "class", "add-btn svelte-15oa0gb");
+    			add_location(a, file$L, 104, 10, 4135);
+    			attr_dev(div, "class", "svelte-15oa0gb");
+    			add_location(div, file$L, 96, 8, 3903);
+    			attr_dev(th0, "class", "p-4 w-1/4 svelte-15oa0gb");
+    			add_location(th0, file$L, 109, 14, 4372);
+    			attr_dev(th1, "class", "p-4 w-1/4 svelte-15oa0gb");
+    			add_location(th1, file$L, 110, 14, 4426);
+    			attr_dev(th2, "class", "p-4 w-1/4 svelte-15oa0gb");
+    			add_location(th2, file$L, 111, 14, 4471);
+    			attr_dev(th3, "class", "p-4 w-1/4 svelte-15oa0gb");
+    			add_location(th3, file$L, 112, 14, 4523);
+    			attr_dev(tr, "class", "flex w-full mb-4 svelte-15oa0gb");
+    			add_location(tr, file$L, 108, 12, 4328);
+    			attr_dev(thead, "class", "bg-black flex text-white w-full svelte-15oa0gb");
+    			add_location(thead, file$L, 107, 10, 4268);
+    			attr_dev(tbody, "class", "bg-grey-light flex flex-col items-center justify-between\n            overflow-y-scroll w-full svelte-15oa0gb");
     			set_style(tbody, "height", "50vh");
-    			add_location(tbody, file$L, 103, 4, 4794);
+    			add_location(tbody, file$L, 115, 10, 4607);
     			attr_dev(table, "id", "myTable");
-    			attr_dev(table, "class", "text-left w-full");
-    			add_location(table, file$L, 94, 7, 4462);
+    			attr_dev(table, "class", "text-left w-full svelte-15oa0gb");
+    			add_location(table, file$L, 106, 8, 4212);
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, h1, anchor);
     			insert_dev(target, t1, anchor);
     			insert_dev(target, div, anchor);
@@ -51562,7 +52568,8 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			info.block.m(tbody, info.anchor = null);
     			info.mount = () => tbody;
     			info.anchor = null;
-    			dispose = listen_dev(input, "keyup", myFunction$1, false, false, false);
+    			if (remount) dispose();
+    			dispose = listen_dev(input, "keyup", myFunction$2, false, false, false);
     		},
     		p: function update(new_ctx, dirty) {
     			ctx = new_ctx;
@@ -51591,14 +52598,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_if_block$g.name,
     		type: "if",
-    		source: "(89:7) {#if currentRoute.name ===\\\"/showproblems\\\"}",
+    		source: "(95:6) {#if currentRoute.name === '/admin'}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (197:7) {:catch err}
+    // (235:12) {:catch err}
     function create_catch_block_2(ctx) {
     	let td;
 
@@ -51606,8 +52613,8 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		c: function create() {
     			td = element("td");
     			td.textContent = "Server Not responding..";
-    			attr_dev(td, "class", "p-4 w-1/4");
-    			add_location(td, file$L, 197, 8, 8629);
+    			attr_dev(td, "class", "p-4 w-1/4 svelte-15oa0gb");
+    			add_location(td, file$L, 235, 14, 9426);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, td, anchor);
@@ -51622,17 +52629,18 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_catch_block_2.name,
     		type: "catch",
-    		source: "(197:7) {:catch err}",
+    		source: "(235:12) {:catch err}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (188:7) {:then result}
+    // (226:12) {:then result}
     function create_then_block_2(ctx) {
     	let each_1_anchor;
     	let each_value_2 = /*result*/ ctx[10].data.getAllAttempt;
+    	validate_each_argument(each_value_2);
     	let each_blocks = [];
 
     	for (let i = 0; i < each_value_2.length; i += 1) {
@@ -51657,6 +52665,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		p: function update(ctx, dirty) {
     			if (dirty & /*$Attempts*/ 8) {
     				each_value_2 = /*result*/ ctx[10].data.getAllAttempt;
+    				validate_each_argument(each_value_2);
     				let i;
 
     				for (i = 0; i < each_value_2.length; i += 1) {
@@ -51688,14 +52697,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_then_block_2.name,
     		type: "then",
-    		source: "(188:7) {:then result}",
+    		source: "(226:12) {:then result}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (189:7) {#each result.data.getAllAttempt as attempt}
+    // (227:14) {#each result.data.getAllAttempt as attempt}
     function create_each_block_2(ctx) {
     	let tr;
     	let td0;
@@ -51730,17 +52739,17 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			td3 = element("td");
     			t6 = text(t6_value);
     			t7 = space();
-    			attr_dev(td0, "class", "p-4 w-1/4");
-    			add_location(td0, file$L, 190, 9, 8350);
-    			attr_dev(td1, "class", "p-4 w-1/4");
-    			add_location(td1, file$L, 191, 9, 8406);
-    			attr_dev(td2, "class", "p-4 w-1/4");
-    			add_location(td2, file$L, 192, 9, 8469);
-    			attr_dev(td3, "class", "p-4 w-1/4");
-    			add_location(td3, file$L, 193, 9, 8529);
-    			attr_dev(tr, "class", "flex w-full mb-4 svelte-1jk77du");
+    			attr_dev(td0, "class", "p-4 w-1/4 svelte-15oa0gb");
+    			add_location(td0, file$L, 228, 18, 9094);
+    			attr_dev(td1, "class", "p-4 w-1/4 svelte-15oa0gb");
+    			add_location(td1, file$L, 229, 18, 9159);
+    			attr_dev(td2, "class", "p-4 w-1/4 svelte-15oa0gb");
+    			add_location(td2, file$L, 230, 18, 9231);
+    			attr_dev(td3, "class", "p-4 w-1/4 svelte-15oa0gb");
+    			add_location(td3, file$L, 231, 18, 9300);
+    			attr_dev(tr, "class", "flex w-full mb-4 svelte-15oa0gb");
     			attr_dev(tr, "id", "pp");
-    			add_location(tr, file$L, 189, 8, 8302);
+    			add_location(tr, file$L, 227, 16, 9038);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, tr, anchor);
@@ -51772,14 +52781,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_each_block_2.name,
     		type: "each",
-    		source: "(189:7) {#each result.data.getAllAttempt as attempt}",
+    		source: "(227:14) {#each result.data.getAllAttempt as attempt}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (180:24)         <tr class="flex w-full mb-4">         <td class="p-4 w-1/4">loading..</td>         <td class="p-4 w-1/4">loading..</td>         <td class="p-4 w-1/4">loading..</td>         <td class="p-4 w-1/4">loading..</td>       </tr>        {:then result}
+    // (218:30)                 <tr class="flex w-full mb-4">                 <td class="p-4 w-1/4">loading..</td>                 <td class="p-4 w-1/4">loading..</td>                 <td class="p-4 w-1/4">loading..</td>                 <td class="p-4 w-1/4">loading..</td>               </tr>             {:then result}
     function create_pending_block_2(ctx) {
     	let tr;
     	let td0;
@@ -51804,16 +52813,16 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			t5 = space();
     			td3 = element("td");
     			td3.textContent = "loading..";
-    			attr_dev(td0, "class", "p-4 w-1/4");
-    			add_location(td0, file$L, 182, 8, 8036);
-    			attr_dev(td1, "class", "p-4 w-1/4");
-    			add_location(td1, file$L, 183, 8, 8081);
-    			attr_dev(td2, "class", "p-4 w-1/4");
-    			add_location(td2, file$L, 184, 8, 8126);
-    			attr_dev(td3, "class", "p-4 w-1/4");
-    			add_location(td3, file$L, 185, 8, 8171);
-    			attr_dev(tr, "class", "flex w-full mb-4");
-    			add_location(tr, file$L, 181, 6, 7998);
+    			attr_dev(td0, "class", "p-4 w-1/4 svelte-15oa0gb");
+    			add_location(td0, file$L, 220, 16, 8720);
+    			attr_dev(td1, "class", "p-4 w-1/4 svelte-15oa0gb");
+    			add_location(td1, file$L, 221, 16, 8773);
+    			attr_dev(td2, "class", "p-4 w-1/4 svelte-15oa0gb");
+    			add_location(td2, file$L, 222, 16, 8826);
+    			attr_dev(td3, "class", "p-4 w-1/4 svelte-15oa0gb");
+    			add_location(td3, file$L, 223, 16, 8879);
+    			attr_dev(tr, "class", "flex w-full mb-4 svelte-15oa0gb");
+    			add_location(tr, file$L, 219, 14, 8674);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, tr, anchor);
@@ -51835,14 +52844,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_pending_block_2.name,
     		type: "pending",
-    		source: "(180:24)         <tr class=\\\"flex w-full mb-4\\\">         <td class=\\\"p-4 w-1/4\\\">loading..</td>         <td class=\\\"p-4 w-1/4\\\">loading..</td>         <td class=\\\"p-4 w-1/4\\\">loading..</td>         <td class=\\\"p-4 w-1/4\\\">loading..</td>       </tr>        {:then result}",
+    		source: "(218:30)                 <tr class=\\\"flex w-full mb-4\\\">                 <td class=\\\"p-4 w-1/4\\\">loading..</td>                 <td class=\\\"p-4 w-1/4\\\">loading..</td>                 <td class=\\\"p-4 w-1/4\\\">loading..</td>                 <td class=\\\"p-4 w-1/4\\\">loading..</td>               </tr>             {:then result}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (156:7) {:catch err}
+    // (189:12) {:catch err}
     function create_catch_block_1(ctx) {
     	let td0;
     	let t1;
@@ -51860,12 +52869,12 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			t3 = space();
     			td2 = element("td");
     			td2.textContent = "Server Not responding..";
-    			attr_dev(td0, "class", "p-4 w-1/3");
-    			add_location(td0, file$L, 156, 8, 7049);
-    			attr_dev(td1, "class", "p-4 w-1/3");
-    			add_location(td1, file$L, 157, 8, 7108);
-    			attr_dev(td2, "class", "p-4 w-1/3");
-    			add_location(td2, file$L, 158, 8, 7167);
+    			attr_dev(td0, "class", "p-4 w-1/3 svelte-15oa0gb");
+    			add_location(td0, file$L, 189, 14, 7534);
+    			attr_dev(td1, "class", "p-4 w-1/3 svelte-15oa0gb");
+    			add_location(td1, file$L, 190, 14, 7599);
+    			attr_dev(td2, "class", "p-4 w-1/3 svelte-15oa0gb");
+    			add_location(td2, file$L, 191, 14, 7664);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, td0, anchor);
@@ -51888,17 +52897,18 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_catch_block_1.name,
     		type: "catch",
-    		source: "(156:7) {:catch err}",
+    		source: "(189:12) {:catch err}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (148:7) {:then result}
+    // (176:12) {:then result}
     function create_then_block_1(ctx) {
     	let each_1_anchor;
     	let each_value_1 = /*result*/ ctx[10].data.allTests;
+    	validate_each_argument(each_value_1);
     	let each_blocks = [];
 
     	for (let i = 0; i < each_value_1.length; i += 1) {
@@ -51923,6 +52933,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		p: function update(ctx, dirty) {
     			if (dirty & /*window, $Test, Date*/ 4) {
     				each_value_1 = /*result*/ ctx[10].data.allTests;
+    				validate_each_argument(each_value_1);
     				let i;
 
     				for (i = 0; i < each_value_1.length; i += 1) {
@@ -51954,14 +52965,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_then_block_1.name,
     		type: "then",
-    		source: "(148:7) {:then result}",
+    		source: "(176:12) {:then result}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (149:7) {#each result.data.allTests as tes}
+    // (177:14) {#each result.data.allTests as tes}
     function create_each_block_1$2(ctx) {
     	let tr;
     	let td0;
@@ -51994,17 +53005,17 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			td2 = element("td");
     			t4 = text(t4_value);
     			t5 = space();
-    			attr_dev(td0, "class", "p-4 w-1/3");
-    			add_location(td0, file$L, 150, 9, 6824);
-    			attr_dev(td1, "class", "p-4 w-1/3");
-    			add_location(td1, file$L, 151, 9, 6875);
-    			attr_dev(td2, "class", "p-4 w-1/3");
-    			add_location(td2, file$L, 152, 9, 6933);
-    			attr_dev(tr, "class", "flex w-full mb-4 svelte-1jk77du");
+    			attr_dev(td0, "class", "p-4 w-1/3 svelte-15oa0gb");
+    			add_location(td0, file$L, 183, 18, 7264);
+    			attr_dev(td1, "class", "p-4 w-1/3 svelte-15oa0gb");
+    			add_location(td1, file$L, 184, 18, 7324);
+    			attr_dev(td2, "class", "p-4 w-1/3 svelte-15oa0gb");
+    			add_location(td2, file$L, 185, 18, 7391);
+    			attr_dev(tr, "class", "flex w-full mb-4 svelte-15oa0gb");
     			attr_dev(tr, "id", "pp");
-    			add_location(tr, file$L, 149, 8, 6721);
+    			add_location(tr, file$L, 177, 16, 7058);
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, tr, anchor);
     			append_dev(tr, td0);
     			append_dev(td0, t0);
@@ -52015,6 +53026,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			append_dev(tr, td2);
     			append_dev(td2, t4);
     			append_dev(tr, t5);
+    			if (remount) dispose();
     			dispose = listen_dev(tr, "click", click_handler_1, false, false, false);
     		},
     		p: function update(new_ctx, dirty) {
@@ -52033,14 +53045,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_each_block_1$2.name,
     		type: "each",
-    		source: "(149:7) {#each result.data.allTests as tes}",
+    		source: "(177:14) {#each result.data.allTests as tes}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (142:20)        <tr class="flex w-full mb-4">         <td class="p-4 w-1/3">loading..</td>         <td class="p-4 w-1/3">loading..</td>         <td class="p-4 w-1/3">loading..</td>       </tr>        {:then result}
+    // (170:26)                <tr class="flex w-full mb-4">                 <td class="p-4 w-1/3">loading..</td>                 <td class="p-4 w-1/3">loading..</td>                 <td class="p-4 w-1/3">loading..</td>               </tr>             {:then result}
     function create_pending_block_1(ctx) {
     	let tr;
     	let td0;
@@ -52060,14 +53072,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			t3 = space();
     			td2 = element("td");
     			td2.textContent = "loading..";
-    			attr_dev(td0, "class", "p-4 w-1/3");
-    			add_location(td0, file$L, 143, 8, 6509);
-    			attr_dev(td1, "class", "p-4 w-1/3");
-    			add_location(td1, file$L, 144, 8, 6554);
-    			attr_dev(td2, "class", "p-4 w-1/3");
-    			add_location(td2, file$L, 145, 8, 6599);
-    			attr_dev(tr, "class", "flex w-full mb-4");
-    			add_location(tr, file$L, 142, 6, 6471);
+    			attr_dev(td0, "class", "p-4 w-1/3 svelte-15oa0gb");
+    			add_location(td0, file$L, 171, 16, 6802);
+    			attr_dev(td1, "class", "p-4 w-1/3 svelte-15oa0gb");
+    			add_location(td1, file$L, 172, 16, 6855);
+    			attr_dev(td2, "class", "p-4 w-1/3 svelte-15oa0gb");
+    			add_location(td2, file$L, 173, 16, 6908);
+    			attr_dev(tr, "class", "flex w-full mb-4 svelte-15oa0gb");
+    			add_location(tr, file$L, 170, 14, 6756);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, tr, anchor);
@@ -52087,14 +53099,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_pending_block_1.name,
     		type: "pending",
-    		source: "(142:20)        <tr class=\\\"flex w-full mb-4\\\">         <td class=\\\"p-4 w-1/3\\\">loading..</td>         <td class=\\\"p-4 w-1/3\\\">loading..</td>         <td class=\\\"p-4 w-1/3\\\">loading..</td>       </tr>        {:then result}",
+    		source: "(170:26)                <tr class=\\\"flex w-full mb-4\\\">                 <td class=\\\"p-4 w-1/3\\\">loading..</td>                 <td class=\\\"p-4 w-1/3\\\">loading..</td>                 <td class=\\\"p-4 w-1/3\\\">loading..</td>               </tr>             {:then result}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (121:6) {:catch err}
+    // (141:12) {:catch err}
     function create_catch_block$5(ctx) {
     	let td;
 
@@ -52102,8 +53114,8 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		c: function create() {
     			td = element("td");
     			td.textContent = "Server Not responding..";
-    			attr_dev(td, "class", "p-4 w-1/4");
-    			add_location(td, file$L, 121, 7, 5604);
+    			attr_dev(td, "class", "p-4 w-1/4 svelte-15oa0gb");
+    			add_location(td, file$L, 141, 14, 5703);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, td, anchor);
@@ -52118,17 +53130,18 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_catch_block$5.name,
     		type: "catch",
-    		source: "(121:6) {:catch err}",
+    		source: "(141:12) {:catch err}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (112:6) {:then result}
+    // (127:12) {:then result}
     function create_then_block$5(ctx) {
     	let each_1_anchor;
     	let each_value = /*result*/ ctx[10].data.allProblems;
+    	validate_each_argument(each_value);
     	let each_blocks = [];
 
     	for (let i = 0; i < each_value.length; i += 1) {
@@ -52153,6 +53166,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		p: function update(ctx, dirty) {
     			if (dirty & /*window, $Problem, Date*/ 2) {
     				each_value = /*result*/ ctx[10].data.allProblems;
+    				validate_each_argument(each_value);
     				let i;
 
     				for (i = 0; i < each_value.length; i += 1) {
@@ -52184,14 +53198,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_then_block$5.name,
     		type: "then",
-    		source: "(112:6) {:then result}",
+    		source: "(127:12) {:then result}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (113:6) {#each result.data.allProblems as prob}
+    // (128:14) {#each result.data.allProblems as prob}
     function create_each_block$g(ctx) {
     	let tr;
     	let td0;
@@ -52231,19 +53245,19 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			td3 = element("td");
     			t6 = text(t6_value);
     			t7 = space();
-    			attr_dev(td0, "class", "p-4 w-1/4");
-    			add_location(td0, file$L, 114, 8, 5338);
-    			attr_dev(td1, "class", "p-4 w-1/4");
-    			add_location(td1, file$L, 115, 8, 5392);
-    			attr_dev(td2, "class", "p-4 w-1/4");
-    			add_location(td2, file$L, 116, 8, 5439);
-    			attr_dev(td3, "class", "p-4 w-1/4");
-    			add_location(td3, file$L, 117, 8, 5491);
-    			attr_dev(tr, "class", "flex w-full mb-4 svelte-1jk77du");
+    			attr_dev(td0, "class", "p-4 w-1/4 svelte-15oa0gb");
+    			add_location(td0, file$L, 134, 18, 5376);
+    			attr_dev(td1, "class", "p-4 w-1/4 svelte-15oa0gb");
+    			add_location(td1, file$L, 135, 18, 5440);
+    			attr_dev(td2, "class", "p-4 w-1/4 svelte-15oa0gb");
+    			add_location(td2, file$L, 136, 18, 5497);
+    			attr_dev(td3, "class", "p-4 w-1/4 svelte-15oa0gb");
+    			add_location(td3, file$L, 137, 18, 5559);
+    			attr_dev(tr, "class", "flex w-full mb-4 svelte-15oa0gb");
     			attr_dev(tr, "id", "pp");
-    			add_location(tr, file$L, 113, 7, 5233);
+    			add_location(tr, file$L, 128, 16, 5166);
     		},
-    		m: function mount(target, anchor) {
+    		m: function mount(target, anchor, remount) {
     			insert_dev(target, tr, anchor);
     			append_dev(tr, td0);
     			append_dev(td0, t0);
@@ -52257,6 +53271,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			append_dev(tr, td3);
     			append_dev(td3, t6);
     			append_dev(tr, t7);
+    			if (remount) dispose();
     			dispose = listen_dev(tr, "click", click_handler, false, false, false);
     		},
     		p: function update(new_ctx, dirty) {
@@ -52276,14 +53291,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_each_block$g.name,
     		type: "each",
-    		source: "(113:6) {#each result.data.allProblems as prob}",
+    		source: "(128:14) {#each result.data.allProblems as prob}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (105:22)       <tr class="flex w-full mb-4">        <td class="p-4 w-1/4">loading..</td>        <td class="p-4 w-1/4">loading..</td>        <td class="p-4 w-1/4">loading..</td>        <td class="p-4 w-1/4">loading..</td>      </tr>       {:then result}
+    // (120:29)                <tr class="flex w-full mb-4">                 <td class="p-4 w-1/4">loading..</td>                 <td class="p-4 w-1/4">loading..</td>                 <td class="p-4 w-1/4">loading..</td>                 <td class="p-4 w-1/4">loading..</td>               </tr>             {:then result}
     function create_pending_block$5(ctx) {
     	let tr;
     	let td0;
@@ -52308,16 +53323,16 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			t5 = space();
     			td3 = element("td");
     			td3.textContent = "loading..";
-    			attr_dev(td0, "class", "p-4 w-1/4");
-    			add_location(td0, file$L, 106, 7, 4979);
-    			attr_dev(td1, "class", "p-4 w-1/4");
-    			add_location(td1, file$L, 107, 7, 5023);
-    			attr_dev(td2, "class", "p-4 w-1/4");
-    			add_location(td2, file$L, 108, 7, 5067);
-    			attr_dev(td3, "class", "p-4 w-1/4");
-    			add_location(td3, file$L, 109, 7, 5111);
-    			attr_dev(tr, "class", "flex w-full mb-4");
-    			add_location(tr, file$L, 105, 5, 4942);
+    			attr_dev(td0, "class", "p-4 w-1/4 svelte-15oa0gb");
+    			add_location(td0, file$L, 121, 16, 4853);
+    			attr_dev(td1, "class", "p-4 w-1/4 svelte-15oa0gb");
+    			add_location(td1, file$L, 122, 16, 4906);
+    			attr_dev(td2, "class", "p-4 w-1/4 svelte-15oa0gb");
+    			add_location(td2, file$L, 123, 16, 4959);
+    			attr_dev(td3, "class", "p-4 w-1/4 svelte-15oa0gb");
+    			add_location(td3, file$L, 124, 16, 5012);
+    			attr_dev(tr, "class", "flex w-full mb-4 svelte-15oa0gb");
+    			add_location(tr, file$L, 120, 14, 4807);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, tr, anchor);
@@ -52339,7 +53354,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_pending_block$5.name,
     		type: "pending",
-    		source: "(105:22)       <tr class=\\\"flex w-full mb-4\\\">        <td class=\\\"p-4 w-1/4\\\">loading..</td>        <td class=\\\"p-4 w-1/4\\\">loading..</td>        <td class=\\\"p-4 w-1/4\\\">loading..</td>        <td class=\\\"p-4 w-1/4\\\">loading..</td>      </tr>       {:then result}",
+    		source: "(120:29)                <tr class=\\\"flex w-full mb-4\\\">                 <td class=\\\"p-4 w-1/4\\\">loading..</td>                 <td class=\\\"p-4 w-1/4\\\">loading..</td>                 <td class=\\\"p-4 w-1/4\\\">loading..</td>                 <td class=\\\"p-4 w-1/4\\\">loading..</td>               </tr>             {:then result}",
     		ctx
     	});
 
@@ -52351,22 +53366,25 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	let script_src_value;
     	let t1;
     	let body;
+    	let div1;
     	let header;
     	let t2;
     	let t3;
-    	let div;
+    	let div0;
+    	let t4;
     	let current;
     	const navbar = new Navbar({ $$inline: true });
     	const sidebar = new Side({ $$inline: true });
 
     	function select_block_type(ctx, dirty) {
-    		if (/*currentRoute*/ ctx[0].name === "/showproblems") return create_if_block$g;
+    		if (/*currentRoute*/ ctx[0].name === "/admin") return create_if_block$g;
     		if (/*currentRoute*/ ctx[0].name === "/showtests") return create_if_block_1$b;
     		if (/*currentRoute*/ ctx[0].name === "/showresults") return create_if_block_2$8;
     	}
 
     	let current_block_type = select_block_type(ctx);
     	let if_block = current_block_type && current_block_type(ctx);
+    	const pubnub = new Pubnub({ $$inline: true });
 
     	const block = {
     		c: function create() {
@@ -52374,19 +53392,27 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			script.textContent = "import { currentRoute } from \"./Problems.svelte\";";
     			t1 = space();
     			body = element("body");
+    			div1 = element("div");
     			header = element("header");
     			create_component(navbar.$$.fragment);
     			t2 = space();
     			create_component(sidebar.$$.fragment);
     			t3 = space();
-    			div = element("div");
+    			div0 = element("div");
     			if (if_block) if_block.c();
+    			t4 = space();
+    			create_component(pubnub.$$.fragment);
     			if (script.src !== (script_src_value = "https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.22.2/moment.min.js")) attr_dev(script, "src", script_src_value);
-    			add_location(script, file$L, 1, 1, 15);
-    			add_location(header, file$L, 83, 2, 4071);
-    			attr_dev(div, "class", "container svelte-1jk77du");
-    			add_location(div, file$L, 87, 1, 4119);
-    			add_location(body, file$L, 82, 0, 4062);
+    			attr_dev(script, "class", "svelte-15oa0gb");
+    			add_location(script, file$L, 82, 2, 3484);
+    			attr_dev(header, "class", "svelte-15oa0gb");
+    			add_location(header, file$L, 89, 4, 3722);
+    			attr_dev(div0, "class", "container svelte-15oa0gb");
+    			add_location(div0, file$L, 93, 4, 3784);
+    			attr_dev(div1, "class", "w-screen bg-edark h-screen flex flex-col svelte-15oa0gb");
+    			add_location(div1, file$L, 88, 2, 3663);
+    			attr_dev(body, "class", "svelte-15oa0gb");
+    			add_location(body, file$L, 87, 0, 3654);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -52395,13 +53421,16 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			append_dev(document_1.head, script);
     			insert_dev(target, t1, anchor);
     			insert_dev(target, body, anchor);
-    			append_dev(body, header);
+    			append_dev(body, div1);
+    			append_dev(div1, header);
     			mount_component(navbar, header, null);
     			append_dev(header, t2);
     			mount_component(sidebar, header, null);
-    			append_dev(body, t3);
-    			append_dev(body, div);
-    			if (if_block) if_block.m(div, null);
+    			append_dev(div1, t3);
+    			append_dev(div1, div0);
+    			if (if_block) if_block.m(div0, null);
+    			append_dev(div1, t4);
+    			mount_component(pubnub, div1, null);
     			current = true;
     		},
     		p: function update(ctx, [dirty]) {
@@ -52413,7 +53442,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     				if (if_block) {
     					if_block.c();
-    					if_block.m(div, null);
+    					if_block.m(div0, null);
     				}
     			}
     		},
@@ -52421,11 +53450,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			if (current) return;
     			transition_in(navbar.$$.fragment, local);
     			transition_in(sidebar.$$.fragment, local);
+    			transition_in(pubnub.$$.fragment, local);
     			current = true;
     		},
     		o: function outro(local) {
     			transition_out(navbar.$$.fragment, local);
     			transition_out(sidebar.$$.fragment, local);
+    			transition_out(pubnub.$$.fragment, local);
     			current = false;
     		},
     		d: function destroy(detaching) {
@@ -52438,6 +53469,8 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			if (if_block) {
     				if_block.d();
     			}
+
+    			destroy_component(pubnub);
     		}
     	};
 
@@ -52452,7 +53485,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function myFunction$1() {
+    function myFunction$2() {
     	//console.log("key");
     	var input, filter, table, tr, td, i, txtValue;
 
@@ -52483,7 +53516,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	}
     }
 
-    function instance$H($$self, $$props, $$invalidate) {
+    function instance$O($$self, $$props, $$invalidate) {
     	let $Problem;
     	let $Test;
     	let $Attempts;
@@ -52502,8 +53535,11 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	const writable_props = ["currentRoute"];
 
     	Object.keys($$props).forEach(key => {
-    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$a.warn(`<AdminPanel> was created with unknown prop '${key}'`);
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1$p.warn(`<AdminPanel> was created with unknown prop '${key}'`);
     	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("AdminPanel", $$slots, []);
 
     	const click_handler = prob => {
     		window.location = `/problem/${prob.id}`;
@@ -52517,16 +53553,32 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		if ("currentRoute" in $$props) $$invalidate(0, currentRoute = $$props.currentRoute);
     	};
 
-    	$$self.$capture_state = () => {
-    		return { currentRoute, $Problem, $Test, $Attempts };
-    	};
+    	$$self.$capture_state = () => ({
+    		Sidebar: Side,
+    		Navbar,
+    		onMount,
+    		apolloClient,
+    		getClient,
+    		query,
+    		Pubnub,
+    		client,
+    		Attempts,
+    		Test,
+    		Problem,
+    		currentRoute,
+    		myFunction: myFunction$2,
+    		$Problem,
+    		$Test,
+    		$Attempts
+    	});
 
     	$$self.$inject_state = $$props => {
     		if ("currentRoute" in $$props) $$invalidate(0, currentRoute = $$props.currentRoute);
-    		if ("$Problem" in $$props) Problem.set($Problem = $$props.$Problem);
-    		if ("$Test" in $$props) Test.set($Test = $$props.$Test);
-    		if ("$Attempts" in $$props) Attempts.set($Attempts = $$props.$Attempts);
     	};
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
 
     	return [
     		currentRoute,
@@ -52545,7 +53597,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class AdminPanel extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$H, create_fragment$O, safe_not_equal, { currentRoute: 0 });
+    		init(this, options, instance$O, create_fragment$O, safe_not_equal, { currentRoute: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
@@ -52558,7 +53610,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		const props = options.props || {};
 
     		if (/*currentRoute*/ ctx[0] === undefined && !("currentRoute" in props)) {
-    			console_1$a.warn("<AdminPanel> was created without expected prop 'currentRoute'");
+    			console_1$p.warn("<AdminPanel> was created without expected prop 'currentRoute'");
     		}
     	}
 
@@ -52571,67 +53623,82 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	}
     }
 
-    const routes = [
-      {
-        name: '/',
-        component: Login,
-      },
-      {
-        name: '/newtest',
-        component: Add_test,
-      },
-      {
-        name: '/newProblem',
-        component: Add_problem,
-      },
-      {
-        name: '/editProblem/:id',
-        component: Edit_problem,
-      },
-      {
-        name: '/editTest/:id',
-        component: Edit_test,
-      },
-      {
-        name: '/admin',
-        component: Admin,
-      },
-      {
-        name: '/test/:id',
-        component: Tests,
-      },
-      {
-        name: '/problem/:id',
-        component: Problems,
-      },
-      {
-        name: '/sendtest/:id',
-        component: Send_test,
-      },
-      {
-        name: '/givetest/:token',
-        component: Introduce_yourself,
-      },
-      {
-        name: '/thankyou',
-        component: Thankyou,
-      },
-      {
-        name: '/starttest/:token',
-        component: Home,
-      },
-      {
-        name: '/showproblems',
-        component: AdminPanel,
-      },
-      {
-        name: '/showtests',
-        component: AdminPanel,
-      },
-      {
-        name: '/showresults',
-        component: AdminPanel,
-      },
+    function userIsAdmin() {
+        //check if user is admin and returns true or false
+        return document.cookie ? true : false;
+    }
+
+    function notAdmin() {
+        return document.cookie ? false : true;
+    }
+
+    const routes = [{
+            name: '/',
+            component: Login,
+            onlyIf: { guard: notAdmin, redirect: '/admin' },
+        },
+        {
+            name: '/newtest',
+            component: Add_test,
+            onlyIf: { guard: userIsAdmin, redirect: '/' },
+        },
+        {
+            name: '/newProblem',
+            component: Add_problem,
+            onlyIf: { guard: userIsAdmin, redirect: '/' },
+        },
+        {
+            name: '/editProblem/:id',
+            component: Edit_problem,
+            onlyIf: { guard: userIsAdmin, redirect: '/' },
+        },
+        {
+            name: '/editTest/:id',
+            component: Edit_test,
+            onlyIf: { guard: userIsAdmin, redirect: '/' },
+        },
+        {
+            name: '/test/:id',
+            component: Tests,
+            onlyIf: { guard: userIsAdmin, redirect: '/' },
+        },
+        {
+            name: '/problem/:id',
+            component: Problems,
+            onlyIf: { guard: userIsAdmin, redirect: '/' },
+        },
+        {
+            name: '/sendtest/:id',
+            component: Send_test,
+            onlyIf: { guard: userIsAdmin, redirect: '/' },
+        },
+        {
+            name: '/givetest/:token',
+            component: Introduce_yourself,
+        },
+        {
+            name: '/thankyou',
+            component: Thankyou,
+        },
+        {
+            name: '/starttest/:token',
+            component: Home,
+        },
+        {
+            name: '/admin',
+            component: AdminPanel,
+            onlyIf: { guard: userIsAdmin, redirect: '/' },
+        },
+        {
+            name: '/showtests',
+            component: AdminPanel,
+            onlyIf: { guard: userIsAdmin, redirect: '/' },
+        },
+        {
+            name: '/showresults',
+            component: AdminPanel,
+            onlyIf: { guard: userIsAdmin, redirect: '/' },
+        },
     ];
 
     var Observable_1 = createCommonjsModule(function (module, exports) {
@@ -58013,9 +59080,72 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }(ApolloClient));
     //# sourceMappingURL=bundle.esm.js.map
 
-    /* src/App.svelte generated by Svelte v3.18.1 */
+    /* src/theme_change.svelte generated by Svelte v3.20.1 */
 
     function create_fragment$P(ctx) {
+    	const block = {
+    		c: noop,
+    		l: function claim(nodes) {
+    			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
+    		},
+    		m: noop,
+    		p: noop,
+    		i: noop,
+    		o: noop,
+    		d: noop
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_fragment$P.name,
+    		type: "component",
+    		source: "",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    function instance$P($$self, $$props, $$invalidate) {
+    	let themes = [["#1d3e53", "#254b62", "#476d7c", "#77abb7"]];
+    	const writable_props = [];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<Theme_change> was created with unknown prop '${key}'`);
+    	});
+
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("Theme_change", $$slots, []);
+    	$$self.$capture_state = () => ({ themes });
+
+    	$$self.$inject_state = $$props => {
+    		if ("themes" in $$props) themes = $$props.themes;
+    	};
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
+
+    	return [];
+    }
+
+    class Theme_change extends SvelteComponentDev {
+    	constructor(options) {
+    		super(options);
+    		init(this, options, instance$P, create_fragment$P, safe_not_equal, {});
+
+    		dispatch_dev("SvelteRegisterComponent", {
+    			component: this,
+    			tagName: "Theme_change",
+    			options,
+    			id: create_fragment$P.name
+    		});
+    	}
+    }
+
+    /* src/App.svelte generated by Svelte v3.20.1 */
+
+    function create_fragment$Q(ctx) {
     	let current;
 
     	const router = new src_6({
@@ -58058,7 +59188,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$P.name,
+    		id: create_fragment$Q.name,
     		type: "component",
     		source: "",
     		ctx
@@ -58067,7 +59197,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$I($$self, $$props, $$invalidate) {
+    function instance$Q($$self, $$props, $$invalidate) {
     	const client = new DefaultClient({ uri: "http://localhost:3000/graphql" });
     	setClient(client);
     	let { currentRoute } = $$props;
@@ -58077,13 +59207,28 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<App> was created with unknown prop '${key}'`);
     	});
 
+    	let { $$slots = {}, $$scope } = $$props;
+    	validate_slots("App", $$slots, []);
+
     	$$self.$set = $$props => {
     		if ("currentRoute" in $$props) $$invalidate(0, currentRoute = $$props.currentRoute);
     	};
 
-    	$$self.$capture_state = () => {
-    		return { currentRoute, num };
-    	};
+    	$$self.$capture_state = () => ({
+    		Router: src_6,
+    		routes,
+    		onMount,
+    		apolloClient,
+    		getClient,
+    		query,
+    		ApolloClient: DefaultClient,
+    		setClient,
+    		gql: src$1,
+    		Theme: Theme_change,
+    		client,
+    		currentRoute,
+    		num
+    	});
 
     	$$self.$inject_state = $$props => {
     		if ("currentRoute" in $$props) $$invalidate(0, currentRoute = $$props.currentRoute);
@@ -58091,6 +59236,11 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	};
 
     	let num;
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
+
     	 num = 0;
     	return [currentRoute];
     }
@@ -58098,13 +59248,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class App extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$I, create_fragment$P, safe_not_equal, { currentRoute: 0 });
+    		init(this, options, instance$Q, create_fragment$Q, safe_not_equal, { currentRoute: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "App",
     			options,
-    			id: create_fragment$P.name
+    			id: create_fragment$Q.name
     		});
 
     		const { ctx } = this.$$;

@@ -5,6 +5,9 @@
   function myFunction() {
     location.replace("http://localhost:3000/logout");
   }
+  function home() {
+    location.replace("http://localhost:5000/admin");
+  }
   let themes = [
     ["#1D1F21", "#25282c", "#303030", "#c4c4c4"],
     ["#1d3e53", "#254b62", "#476d7c", "#77abb7"],
@@ -64,7 +67,7 @@
   p-6">
 
   <div class="w-full block flex-grow lg:items-right">
-    <h1 class="welcome text-primary">Welcome Admin</h1>
+    <h1 on:click={home} class="welcome text-primary">Welcome Admin</h1>
     <div id="btn" class="flex flex-row">
 
       <div class="dropdown">

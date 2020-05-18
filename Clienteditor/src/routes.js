@@ -75,17 +75,17 @@ const routes = [{
         component: Home,
     },
     {
+        name: '/admin',
+        component: AdminPanel,
+        onlyIf: { guard: userIsAdmin, redirect: '/' },
+    },
+    {
         name: '/showtests',
         component: AdminPanel,
         onlyIf: { guard: userIsAdmin, redirect: '/' },
     },
     {
         name: '/showresults',
-        component: AdminPanel,
-        onlyIf: { guard: userIsAdmin, redirect: '/' },
-    },
-    {
-        name: '/admin',
         component: AdminPanel,
         onlyIf: { guard: userIsAdmin, redirect: '/' },
     },

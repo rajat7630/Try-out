@@ -22,7 +22,7 @@
     console.log(res);
   });
   var tokens = currentRoute.namedParams.token.split(".");
-  console.log(JSON.parse(atob(tokens[1]))); 
+  console.log(JSON.parse(atob(tokens[1])));
   cookieHandler.setCookie("attempt_id", JSON.parse(atob(tokens[1])).attempt_id);
   cookieHandler.setCookie("user_id", JSON.parse(atob(tokens[1])).user_id);
   $problems.then(res => {
@@ -199,7 +199,6 @@
 <body>
 
   {#await $problems}
-    {pubbie()}
     <h1>Test is being loaded...</h1>
   {:then result}
     <div class="flex flex-col w-full">

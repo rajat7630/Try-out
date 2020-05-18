@@ -40,6 +40,9 @@
 </script>
 
 <style>
+  ::-webkit-scrollbar {
+    width: 0px;
+  }
   #myInput {
     background-image: url("/css/searchicon.png");
     background-position: 10px 10px;
@@ -78,157 +81,159 @@
   </script>
 </svelte:head>
 <body>
-  <header>
-    <Navbar />
-    <Sidebar />
-  </header>
-  <div class="container">
-    {#if currentRoute.name === '/admin'}
-      <h1 class="mb-8">All Problems:</h1>
-      <div>
+  <div class="w-screen bg-edark h-screen flex flex-col">
+    <header>
+      <Navbar />
+      <Sidebar />
+    </header>
+    <div class="container">
+      {#if currentRoute.name === '/admin'}
+        <h1 class="mb-8">All Problems:</h1>
+        <div>
+          <input
+            type="text"
+            id="myInput"
+            on:keyup={myFunction}
+            placeholder="Search for Problems.."
+            title="Type in a name"
+            style="width:90%" />
+          <a href="/newProblem" class="add-btn">Add Problem</a>
+        </div>
+        <table id="myTable" class="text-left w-full">
+          <thead class="bg-black flex text-white w-full">
+            <tr class="flex w-full mb-4">
+              <th class="p-4 w-1/4">Problem Name</th>
+              <th class="p-4 w-1/4">Tag</th>
+              <th class="p-4 w-1/4">Time Limit</th>
+              <th class="p-4 w-1/4">CreatedAt</th>
+            </tr>
+          </thead>
+          <tbody
+            class="bg-grey-light flex flex-col items-center justify-between
+            overflow-y-scroll w-full"
+            style="height: 50vh;">
+            {#await $Problem}
+              <tr class="flex w-full mb-4">
+                <td class="p-4 w-1/4">loading..</td>
+                <td class="p-4 w-1/4">loading..</td>
+                <td class="p-4 w-1/4">loading..</td>
+                <td class="p-4 w-1/4">loading..</td>
+              </tr>
+            {:then result}
+              {#each result.data.allProblems as prob}
+                <tr
+                  class="flex w-full mb-4"
+                  on:click={() => {
+                    window.location = `/problem/${prob.id}`;
+                  }}
+                  id="pp">
+                  <td class="p-4 w-1/4">{prob.problemName}</td>
+                  <td class="p-4 w-1/4">{prob.tags}</td>
+                  <td class="p-4 w-1/4">{prob.timelimit}</td>
+                  <td class="p-4 w-1/4">{new Date(prob.createdAt * 1000)}</td>
+                </tr>
+              {/each}
+            {:catch err}
+              <td class="p-4 w-1/4">Server Not responding..</td>
+            {/await}
+          </tbody>
+        </table>
+      {:else if currentRoute.name === '/showtests'}
+        <h1 class="mb-8">All Tests:</h1>
+        <div>
+          <input
+            type="text"
+            id="myInput"
+            on:keyup={myFunction}
+            placeholder="Search for Tests.."
+            title="Type in a name"
+            style="width:90%" />
+          <a href="/newtest" class="add-btn">Add Test</a>
+        </div>
+        <table id="myTable" class="text-left w-full">
+          <thead class="bg-black flex text-white w-full">
+            <tr class="flex w-full mb-4">
+              <th class="p-4 w-1/3">Test Name</th>
+              <th class="p-4 w-1/3">Difficulty</th>
+              <th class="p-4 w-1/3">CreatedAt</th>
+            </tr>
+          </thead>
+          <tbody
+            class="bg-grey-light flex flex-col items-center justify-between
+            overflow-y-scroll w-full"
+            style="height: 50vh;">
+            {#await $Test}
+              <tr class="flex w-full mb-4">
+                <td class="p-4 w-1/3">loading..</td>
+                <td class="p-4 w-1/3">loading..</td>
+                <td class="p-4 w-1/3">loading..</td>
+              </tr>
+            {:then result}
+              {#each result.data.allTests as tes}
+                <tr
+                  class="flex w-full mb-4"
+                  id="pp"
+                  on:click={() => {
+                    window.location = `/test/${tes.id}`;
+                  }}>
+                  <td class="p-4 w-1/3">{tes.testName}</td>
+                  <td class="p-4 w-1/3">{tes.difficultyLevel}</td>
+                  <td class="p-4 w-1/3">{new Date(tes.createdAt * 1000)}</td>
+                </tr>
+              {/each}
+            {:catch err}
+              <td class="p-4 w-1/3">Server Not responding..</td>
+              <td class="p-4 w-1/3">Server Not responding..</td>
+              <td class="p-4 w-1/3">Server Not responding..</td>
+            {/await}
+          </tbody>
+        </table>
+      {:else if currentRoute.name === '/showresults'}
+        <h1 class="mb-8">Scoreboard:</h1>
         <input
           type="text"
           id="myInput"
           on:keyup={myFunction}
-          placeholder="Search for Problems.."
+          placeholder="Search for users.."
           title="Type in a name"
-          style="width:90%" />
-        <a href="/newProblem" class="add-btn">Add Problem</a>
-      </div>
-      <table id="myTable" class="text-left w-full">
-        <thead class="bg-black flex text-white w-full">
-          <tr class="flex w-full mb-4">
-            <th class="p-4 w-1/4">Problem Name</th>
-            <th class="p-4 w-1/4">Tag</th>
-            <th class="p-4 w-1/4">Time Limit</th>
-            <th class="p-4 w-1/4">CreatedAt</th>
-          </tr>
-        </thead>
-        <tbody
-          class="bg-grey-light flex flex-col items-center justify-between
-          overflow-y-scroll w-full"
-          style="height: 50vh;">
-          {#await $Problem}
+          style="width:100%" />
+        <table id="myTable" class="text-left w-full">
+          <thead class="bg-black flex text-white w-full">
             <tr class="flex w-full mb-4">
-              <td class="p-4 w-1/4">loading..</td>
-              <td class="p-4 w-1/4">loading..</td>
-              <td class="p-4 w-1/4">loading..</td>
-              <td class="p-4 w-1/4">loading..</td>
+              <th class="p-4 w-1/4">User Name</th>
+              <th class="p-4 w-1/4">College Name</th>
+              <th class="p-4 w-1/4">Test Name</th>
+              <th class="p-4 w-1/4">Score</th>
             </tr>
-          {:then result}
-            {#each result.data.allProblems as prob}
-              <tr
-                class="flex w-full mb-4"
-                on:click={() => {
-                  window.location = `/problem/${prob.id}`;
-                }}
-                id="pp">
-                <td class="p-4 w-1/4">{prob.problemName}</td>
-                <td class="p-4 w-1/4">{prob.tags}</td>
-                <td class="p-4 w-1/4">{prob.timelimit}</td>
-                <td class="p-4 w-1/4">{new Date(prob.createdAt * 1000)}</td>
-              </tr>
-            {/each}
-          {:catch err}
-            <td class="p-4 w-1/4">Server Not responding..</td>
-          {/await}
-        </tbody>
-      </table>
-    {:else if currentRoute.name === '/showtests'}
-      <h1 class="mb-8">All Tests:</h1>
-      <div>
-        <input
-          type="text"
-          id="myInput"
-          on:keyup={myFunction}
-          placeholder="Search for Tests.."
-          title="Type in a name"
-          style="width:90%" />
-        <a href="/newtest" class="add-btn">Add Test</a>
-      </div>
-      <table id="myTable" class="text-left w-full">
-        <thead class="bg-black flex text-white w-full">
-          <tr class="flex w-full mb-4">
-            <th class="p-4 w-1/3">Test Name</th>
-            <th class="p-4 w-1/3">Difficulty</th>
-            <th class="p-4 w-1/3">CreatedAt</th>
-          </tr>
-        </thead>
-        <tbody
-          class="bg-grey-light flex flex-col items-center justify-between
-          overflow-y-scroll w-full"
-          style="height: 50vh;">
-          {#await $Test}
-            <tr class="flex w-full mb-4">
-              <td class="p-4 w-1/3">loading..</td>
-              <td class="p-4 w-1/3">loading..</td>
-              <td class="p-4 w-1/3">loading..</td>
-            </tr>
-          {:then result}
-            {#each result.data.allTests as tes}
-              <tr
-                class="flex w-full mb-4"
-                id="pp"
-                on:click={() => {
-                  window.location = `/test/${tes.id}`;
-                }}>
-                <td class="p-4 w-1/3">{tes.testName}</td>
-                <td class="p-4 w-1/3">{tes.difficultyLevel}</td>
-                <td class="p-4 w-1/3">{new Date(tes.createdAt * 1000)}</td>
-              </tr>
-            {/each}
-          {:catch err}
-            <td class="p-4 w-1/3">Server Not responding..</td>
-            <td class="p-4 w-1/3">Server Not responding..</td>
-            <td class="p-4 w-1/3">Server Not responding..</td>
-          {/await}
-        </tbody>
-      </table>
-    {:else if currentRoute.name === '/showresults'}
-      <h1 class="mb-8">Scoreboard:</h1>
-      <input
-        type="text"
-        id="myInput"
-        on:keyup={myFunction}
-        placeholder="Search for users.."
-        title="Type in a name"
-        style="width:100%" />
-      <table id="myTable" class="text-left w-full">
-        <thead class="bg-black flex text-white w-full">
-          <tr class="flex w-full mb-4">
-            <th class="p-4 w-1/4">User Name</th>
-            <th class="p-4 w-1/4">College Name</th>
-            <th class="p-4 w-1/4">Test Name</th>
-            <th class="p-4 w-1/4">Score</th>
-          </tr>
-        </thead>
-        <tbody
-          class="bg-grey-light flex flex-col items-center justify-between
-          overflow-y-scroll w-full"
-          style="height: 50vh;">
-          {#await $Attempts}
+          </thead>
+          <tbody
+            class="bg-grey-light flex flex-col items-center justify-between
+            overflow-y-scroll w-full"
+            style="height: 50vh;">
+            {#await $Attempts}
 
-            <tr class="flex w-full mb-4">
-              <td class="p-4 w-1/4">loading..</td>
-              <td class="p-4 w-1/4">loading..</td>
-              <td class="p-4 w-1/4">loading..</td>
-              <td class="p-4 w-1/4">loading..</td>
-            </tr>
-          {:then result}
-            {#each result.data.getAllAttempt as attempt}
-              <tr class="flex w-full mb-4" id="pp">
-                <td class="p-4 w-1/4">{attempt.user.name}</td>
-                <td class="p-4 w-1/4">{attempt.user.collegeName}</td>
-                <td class="p-4 w-1/4">{attempt.test.testName}</td>
-                <td class="p-4 w-1/4">{attempt.score}</td>
+              <tr class="flex w-full mb-4">
+                <td class="p-4 w-1/4">loading..</td>
+                <td class="p-4 w-1/4">loading..</td>
+                <td class="p-4 w-1/4">loading..</td>
+                <td class="p-4 w-1/4">loading..</td>
               </tr>
-            {/each}
-          {:catch err}
-            <td class="p-4 w-1/4">Server Not responding..</td>
-          {/await}
-        </tbody>
-      </table>
-    {/if}
+            {:then result}
+              {#each result.data.getAllAttempt as attempt}
+                <tr class="flex w-full mb-4" id="pp">
+                  <td class="p-4 w-1/4">{attempt.user.name}</td>
+                  <td class="p-4 w-1/4">{attempt.user.collegeName}</td>
+                  <td class="p-4 w-1/4">{attempt.test.testName}</td>
+                  <td class="p-4 w-1/4">{attempt.score}</td>
+                </tr>
+              {/each}
+            {:catch err}
+              <td class="p-4 w-1/4">Server Not responding..</td>
+            {/await}
+          </tbody>
+        </table>
+      {/if}
+    </div>
+    <Pubnub />
   </div>
-  <Pubnub />
 </body>
