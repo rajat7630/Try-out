@@ -1,9 +1,9 @@
 const PubNub = require('pubnub');
 
 const pubnub = new PubNub({
-  subscribeKey: 'sub-c-c4482926-7984-11ea-9770-0a12e0cf0d6e',
-  publishKey: 'pub-c-766f0388-8e3c-4b8a-952e-9679734077e8',
-  secretKey: 'sec-c-MGJjYzgxNzEtZjc5NC00MjI1LTkwN2MtYWU2M2Q3ZWI4NTU3',
+  subscribeKey: process.env.PN_SUBSCRIBE_KEY,
+  publishKey: process.env.PN_PUBLISH_KEY,
+  secretKey: process.env.PN_SECRET_KEY,
 });
 
 const userExists = async (user) => {

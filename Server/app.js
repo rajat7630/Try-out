@@ -4,7 +4,7 @@ const { ApolloServer } = require('apollo-server-express');
 const cors = require('cors');
 const authenticationRouter = require('./routes/authenticationRouter');
 
-const pubnub = require('./pubnubServer');
+const pubnub = require('./pubnub_server');
 
 const app = express();
 app.use(cors());
