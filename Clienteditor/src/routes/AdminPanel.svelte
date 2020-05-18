@@ -83,7 +83,7 @@
     <Sidebar />
   </header>
   <div class="container">
-    {#if currentRoute.name === '/showproblems'}
+    {#if currentRoute.name === '/admin'}
       <h1 class="mb-8">All Problems:</h1>
       <div>
         <input
