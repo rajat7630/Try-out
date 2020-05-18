@@ -1,10 +1,24 @@
 import axios from 'axios';
 import pubnub from './pubnubinit';
-
 export const subscribe = (email) => {
   pubnub.subscribe({
     channels: [`channel.${email}`],
     withPresence: true,
+  });
+  fetchmessages(`channel.${email}`);
+};
+export const fetchmessages = (channelName) => {
+  pubnub.history({
+    channel: channelName,
+    callback: function (messages) {
+      var arr = messages[0];
+      var newArr = [];
+      arr.forEach(function (o) {
+        newArr.push(o.text);
+      });
+      console.log(newArr);
+    },
+    count: 50,
   });
 };
 export const wildcardsubscription = () => {

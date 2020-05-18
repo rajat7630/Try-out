@@ -1,12 +1,17 @@
 <script>
-  import { publish, grantPermissions } from "../../pubnubClient.js";
+  import {
+    publish,
+    grantPermissions,
+    fetchmessages
+  } from "../../pubnubClient.js";
   import pubnub from "../../pubnubinit.js";
   let hasJoinedChat = false;
   let channels = [""];
   let username = "";
   let newMessage = "";
   let messages = "";
-  let output = [""];
+  let output = [];
+  let comment = "Offline";
   function joined() {
     hasJoinedChat = true;
   }
@@ -17,6 +22,7 @@
     var match = document.cookie.match(new RegExp("(^| )" + name + "=([^;]+)"));
     if (match) return match[2];
   }
+  //Pubnub User Initialize
   const userEmail = getCookie("access_email");
   let sEmails = userEmail.split("%");
   let userName = sEmails[0];
@@ -28,8 +34,12 @@
     ttl: 1440,
     profileUrl: null
   };
+  grantPermissions(user);
   let channelName = "channel." + userName;
-  console.log(channelName);
+  var sendMessage = Message => {
+    publish(Message, channelName);
+  };
+  //console.log(channelName);
   pubnub.addListener({
     message: function(m) {
       let flag = true;
@@ -43,19 +53,26 @@
       }
       if (flag) {
         console.log("different channel");
-        output = [m.message];
+        output = [...output, m];
         channels = [...channels, m.channel];
         newMessage = "";
       } else {
-        output = [...output, m.message];
+        output = [...output, m];
         newMessage = "";
+      }
+      console.log(output);
+    },
+    presence: function(p) {
+      console.log(p);
+      if (p.occupancy >= 1) {
+        comment = "Online";
       }
     }
   });
-  grantPermissions(user);
   //subscribe("newUserr.com");
   const changeChannel = m => {
     channelName = m.channel;
+    fetchmessages(channelName);
   };
 </script>
 
@@ -69,25 +86,6 @@
     position: absolute;
     right: 60px;
     bottom: 60px;
-  }
-  .btm2 {
-    position: absolute;
-    right: 0px;
-    bottom: 359px;
-  }
-  .header {
-    border-bottom: 1px solid #dcc;
-    padding: 20px;
-  }
-  .messages {
-    padding: 10px;
-    flex-grow: 1;
-    list-style: none;
-  }
-  #blk {
-    margin-top: 6%;
-    margin-left: 10%;
-    margin-right: 6%;
   }
   input {
     width: 66%;
@@ -150,50 +148,38 @@
 <link
   href="https://unpkg.com/tailwindcss@^1.0/dist/tailwind.min.css"
   rel="stylesheet" />
-
 <div class="container">
   {#if hasJoinedChat}
     <div class="chat flex flex-row shadow-xl rounded-lg">
       <!-- Left-->
       <div class="w-1/3 border flex flex-col">
-
         <!-- Header -->
         <div
           class="py-2 px-3 bg-grey-lighter flex flex-row justify-between
           items-center">
           <div class="flex">
-
-            <p>Active User</p>
+            <p class="text-grey-darkest">Acitve Channel</p>
           </div>
         </div>
-
         <!-- Contacts -->
         <div class="bg-grey-lighter flex-1 overflow-auto">
-
           {#each channels as channel}
             <div
               class="bg-white hover:bg-gray-400 px-3 flex items-center
               hover:bg-grey-lighter cursor-pointer"
               on:click={changeChannel({ channel })}>
-
               <div class="ml-4 flex-1 border-b border-grey-lighter py-4">
                 <div class="flex items-bottom justify-between">
                   <p class="text-grey-darkest">{channel}</p>
-
                 </div>
-
               </div>
             </div>
           {/each}
-
         </div>
-
       </div>
       <!-- Right -->
       <div class="w-2/3 border flex flex-col">
-
         <!-- //header -->
-
         <div
           class="px-3 flex-row items-center bg-grey-light cursor-pointer
           rounded-lg">
@@ -201,44 +187,44 @@
             <div class="flex items-bottom justify-between">
               <p class="text-grey-darkest">{channelName}</p>
             </div>
-            <p class="text-grey-dark mt-1 text-sm">User Assitant</p>
+            <p class="text-grey-dark mt-1 text-sm">{comment}</p>
+
           </div>
         </div>
-
         <!-- message box -->
         <div
           class="container mx-auto overflow-auto margin-bottom:10%;"
           style=" bottom: 120px; right: 55px; height: 380px; width: 390px;">
           <div class="message-form">
             <div class="flex-1 overflow-auto">
-              <div class="ml-4 flex-1 border-b border-grey-lighter py-4">
-                <div class="flex items-bottom justify-between">
-                  <p class="text-grey-darkest">Admin</p>
-
-                </div>
-                <p class="text-grey-dark mt-1 text-sm">
-                  Hey! if you need any help,Please message me
-                </p>
-              </div>
-              {#each output as message}
-                <div class="flex justify-end mb-2">
-                  <div
-                    class="rounded py-2 px-3"
-                    style="background-color: #E2F7CB">
-                    <p class="text-sm mt-1">{message}</p>
-                  </div>
-                </div>
+              {#each output as temp}
+                {#if temp.channel == channelName}
+                  {#if temp.publisher == userName}
+                    <div class="flex justify-end mb-2">
+                      <div
+                        class="rounded py-2 px-3"
+                        style="background-color: #E2F7CB">
+                        <p class="text-sm mt-1">{temp.message}</p>
+                      </div>
+                    </div>
+                  {:else}
+                    <div class="ml-4 flex-1 rounded py-4">
+                      <div class="flex items-bottom justify-between">
+                        <p class="text-grey-darkest">{temp.publisher}</p>
+                      </div>
+                      <p class="text-grey-dark mt-1 text-sm">{temp.message}</p>
+                    </div>
+                  {/if}
+                {/if}
               {/each}
             </div>
           </div>
         </div>
-
         <!-- message box end -->
-
         <!-- bottom container -->
         <div class="container block" style=" position: absolute; bottom: 0;">
           <div class="relative text-gray-600">
-            <form on:submit|preventDefault={publish(newMessage, channelName)}>
+            <form on:submit|preventDefault={sendMessage(newMessage)}>
               <input
                 type="search"
                 bind:value={newMessage}
@@ -246,19 +232,13 @@
                 placeholder="Type Message and Press Enter"
                 class="bg-white h-10 px-5 pr-10 rounded-full text-sm
                 focus:outline-none" />
-
             </form>
-
           </div>
         </div>
-
       </div>
     </div>
-
     <!-- chat end -->
-
     <!-- header end -->
-
     <!-- button half -->
     <div class="btm" on:click={close}>
       <div class="chat-notification">

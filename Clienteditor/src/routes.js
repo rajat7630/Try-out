@@ -68,10 +68,6 @@ const routes = [
     component: Thankyou,
   },
   {
-    name: '/pubnub',
-    component: Pubnub,
-  },
-  {
     name: '/starttest/:token',
     component: Home,
   },
