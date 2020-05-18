@@ -65,11 +65,7 @@ const testByToken = gql`
   query getTest($token: String) {
     testByToken(token: $token) {
       id
-      problems {
-        id
-        problemName
-        description
-      }
+      problems 
     }
   }
 `;

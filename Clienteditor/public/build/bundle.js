@@ -27337,9 +27337,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
         }),
         ...problems.map((problem, index) => {
           if (index === 0) {
-            return { ...problem, active: true, solution: 'function Solution(){}' };
+            return { ...problem, active: true, solution: 'function solution(){}' };
           }
-          return { ...problem, active: false, solution: 'function Solution(){}' };
+          return { ...problem, active: false, solution: 'function solution(){}' };
         }),
       ]);
     }
@@ -30694,11 +30694,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
   query getTest($token: String) {
     testByToken(token: $token) {
       id
-      problems {
-        id
-        problemName
-        description
-      }
+      problems 
     }
   }
 `;
@@ -32671,25 +32667,25 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			div2 = element("div");
     			div2.textContent = `${/*outputCheck*/ ctx[5]}`;
     			attr_dev(h1, "class", "question px-3 py-3 svelte-104b6dp");
-    			add_location(h1, file$2, 113, 2, 3753);
+    			add_location(h1, file$2, 113, 2, 3751);
     			attr_dev(div0, "class", "w-full bg-gray-800 sizechanger cursor-move text-bg-600 flex\n    justify-center text-3xl h-3 svelte-104b6dp");
     			set_style(div0, "line-height", "1px");
     			set_style(div0, "cursor", "ns-resize");
-    			add_location(div0, file$2, 115, 2, 3836);
+    			add_location(div0, file$2, 115, 2, 3834);
     			attr_dev(button, "class", "runButton svelte-104b6dp");
-    			add_location(button, file$2, 123, 4, 4119);
+    			add_location(button, file$2, 123, 4, 4117);
     			attr_dev(h2, "class", "text-3xl text-center title svelte-104b6dp");
-    			add_location(h2, file$2, 126, 4, 4219);
+    			add_location(h2, file$2, 131, 4, 4296);
     			attr_dev(div1, "class", "flex-1 text-gray-700 text-center px-4 py-2 outputValue svelte-104b6dp");
-    			add_location(div1, file$2, 127, 4, 4274);
+    			add_location(div1, file$2, 132, 4, 4351);
     			attr_dev(div2, "class", "flex-1 text-gray-700 text-center px-4 py-2 outputValue svelte-104b6dp");
-    			add_location(div2, file$2, 130, 4, 4377);
+    			add_location(div2, file$2, 135, 4, 4454);
     			attr_dev(div3, "class", "output svelte-104b6dp");
     			attr_dev(div3, "id", "outputid");
     			set_style(div3, "height", /*height*/ ctx[1]);
-    			add_location(div3, file$2, 122, 2, 4056);
+    			add_location(div3, file$2, 122, 2, 4054);
     			attr_dev(div4, "class", "mainDiv flex flex-col svelte-104b6dp");
-    			add_location(div4, file$2, 99, 0, 3428);
+    			add_location(div4, file$2, 99, 0, 3426);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -32778,7 +32774,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	// })
     	async function sendSolution(data) {
     		let solutions = {
-    			id: parseInt(cookieHandler.getCookie("attemptId")),
+    			id: parseInt(cookieHandler.getCookie("attempt_id")),
     			u_id: parseInt(cookieHandler.getCookie("user_id")),
     			solutions: JSON.stringify(data)
     		};
@@ -32790,8 +32786,10 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     				mutation: apolloClient.updateAttempt,
     				variables: solutions
     			});
+
+    			location.replace("http://localhost:5000/thankyou");
     		} catch(err) {
-    			console.log(err); // location.replace("http://localhost:5000/thankyou");
+    			console.log(err);
     		}
     	}
 
@@ -32807,7 +32805,10 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		$$invalidate(0, dragging = true);
     	};
 
-    	const click_handler = () => sendSolution($dataStore);
+    	const click_handler = () => {
+    		console.log(JSON.stringify($dataStore));
+    		sendSolution($dataStore);
+    	};
 
     	const mousemove_handler = evt => {
     		if (dragging) {
@@ -32881,7 +32882,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	let div;
     	let li;
     	let t0;
-    	let t1_value = /*tab*/ ctx[2].id + "";
+    	let t1_value = /*index*/ ctx[4] + 1 + "";
     	let t1;
     	let t2;
     	let dispose;
@@ -32913,7 +32914,6 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		},
     		p: function update(new_ctx, dirty) {
     			ctx = new_ctx;
-    			if (dirty & /*$dataStore*/ 1 && t1_value !== (t1_value = /*tab*/ ctx[2].id + "")) set_data_dev(t1, t1_value);
 
     			if (dirty & /*$dataStore*/ 1) {
     				toggle_class(li, "active", /*tab*/ ctx[2].active);
@@ -34804,7 +34804,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return child_ctx;
     }
 
-    // (211:2) {:catch err}
+    // (216:2) {:catch err}
     function create_catch_block(ctx) {
     	let h1;
 
@@ -34812,7 +34812,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		c: function create() {
     			h1 = element("h1");
     			h1.textContent = "Error :- Contact Admin";
-    			add_location(h1, file$5, 211, 4, 7026);
+    			add_location(h1, file$5, 216, 4, 7233);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, h1, anchor);
@@ -34829,14 +34829,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_catch_block.name,
     		type: "catch",
-    		source: "(211:2) {:catch err}",
+    		source: "(216:2) {:catch err}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (205:2) {:then result}
+    // (210:2) {:then result}
     function create_then_block(ctx) {
     	let div;
     	let t0;
@@ -34862,7 +34862,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			t1 = space();
     			create_component(editorarea.$$.fragment);
     			attr_dev(div, "class", "flex flex-col w-full");
-    			add_location(div, file$5, 205, 4, 6866);
+    			add_location(div, file$5, 210, 4, 7073);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div, anchor);
@@ -34900,14 +34900,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_then_block.name,
     		type: "then",
-    		source: "(205:2) {:then result}",
+    		source: "(210:2) {:then result}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (202:20)      {pubbie()}
+    // (207:20)      {pubbie()}
     function create_pending_block(ctx) {
     	let t0_value = /*pubbie*/ ctx[10]() + "";
     	let t0;
@@ -34920,7 +34920,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			t1 = space();
     			h1 = element("h1");
     			h1.textContent = "Test is being loaded...";
-    			add_location(h1, file$5, 203, 4, 6812);
+    			add_location(h1, file$5, 208, 4, 7019);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, t0, anchor);
@@ -34941,14 +34941,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_pending_block.name,
     		type: "pending",
-    		source: "(202:20)      {pubbie()}",
+    		source: "(207:20)      {pubbie()}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (303:4) {:else}
+    // (308:4) {:else}
     function create_else_block_1(ctx) {
     	let div3;
     	let div2;
@@ -34973,17 +34973,17 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			attr_dev(img, "class", "chat-notification-logo svelte-1ijc3hc");
     			if (img.src !== (img_src_value = "https://img.icons8.com/cotton/50/000000/filled-chat.png")) attr_dev(img, "src", img_src_value);
     			attr_dev(img, "alt", "ChitChat Logo");
-    			add_location(img, file$5, 306, 12, 10164);
+    			add_location(img, file$5, 311, 12, 10371);
     			attr_dev(div0, "class", "chat-notification-logo-wrapper svelte-1ijc3hc");
-    			add_location(div0, file$5, 305, 10, 10107);
+    			add_location(div0, file$5, 310, 10, 10314);
     			attr_dev(h4, "class", "chat-notification-title svelte-1ijc3hc");
-    			add_location(h4, file$5, 312, 12, 10406);
+    			add_location(h4, file$5, 317, 12, 10613);
     			attr_dev(div1, "class", "chat-notification-content svelte-1ijc3hc");
-    			add_location(div1, file$5, 311, 10, 10354);
+    			add_location(div1, file$5, 316, 10, 10561);
     			attr_dev(div2, "class", "chat-notification svelte-1ijc3hc");
-    			add_location(div2, file$5, 304, 8, 10065);
+    			add_location(div2, file$5, 309, 8, 10272);
     			attr_dev(div3, "class", "btm svelte-1ijc3hc");
-    			add_location(div3, file$5, 303, 6, 10021);
+    			add_location(div3, file$5, 308, 6, 10228);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div3, anchor);
@@ -35006,14 +35006,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_else_block_1.name,
     		type: "else",
-    		source: "(303:4) {:else}",
+    		source: "(308:4) {:else}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (216:4) {#if hasJoinedChat}
+    // (221:4) {#if hasJoinedChat}
     function create_if_block$1(ctx) {
     	let div9;
     	let div3;
@@ -35086,52 +35086,52 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			attr_dev(img0, "alt", "admin photo");
     			attr_dev(img0, "class", "h-12 w-12 rounded-full");
     			if (img0.src !== (img0_src_value = "https://darrenjameseeley.files.wordpress.com/2014/09/expendables3.jpeg")) attr_dev(img0, "src", img0_src_value);
-    			add_location(img0, file$5, 222, 12, 7316);
-    			add_location(div0, file$5, 221, 10, 7298);
+    			add_location(img0, file$5, 227, 12, 7523);
+    			add_location(div0, file$5, 226, 10, 7505);
     			attr_dev(p0, "class", "text-grey-darkest");
-    			add_location(p0, file$5, 229, 14, 7653);
+    			add_location(p0, file$5, 234, 14, 7860);
     			attr_dev(div1, "class", "flex items-bottom justify-between");
-    			add_location(div1, file$5, 228, 12, 7591);
+    			add_location(div1, file$5, 233, 12, 7798);
     			attr_dev(p1, "class", "text-grey-dark mt-1 text-sm");
-    			add_location(p1, file$5, 231, 12, 7726);
+    			add_location(p1, file$5, 236, 12, 7933);
     			attr_dev(div2, "class", "ml-4 flex-1 border-b border-grey-lighter py-4");
-    			add_location(div2, file$5, 227, 10, 7519);
+    			add_location(div2, file$5, 232, 10, 7726);
     			attr_dev(div3, "class", "px-3 flex items-center bg-grey-light cursor-pointer rounded-lg");
-    			add_location(div3, file$5, 219, 8, 7201);
+    			add_location(div3, file$5, 224, 8, 7408);
     			attr_dev(div4, "class", "flex-1 overflow-auto");
-    			add_location(div4, file$5, 240, 12, 8049);
+    			add_location(div4, file$5, 245, 12, 8256);
     			attr_dev(div5, "class", "message-form");
-    			add_location(div5, file$5, 239, 10, 8010);
+    			add_location(div5, file$5, 244, 10, 8217);
     			attr_dev(div6, "class", "container mx-auto overflow-auto margin-bottom:10%;");
     			set_style(div6, "bottom", "120px");
     			set_style(div6, "right", "55px");
     			set_style(div6, "height", "280px");
     			set_style(div6, "width", "295px");
-    			add_location(div6, file$5, 236, 8, 7849);
+    			add_location(div6, file$5, 241, 8, 8056);
     			attr_dev(input, "type", "search");
     			attr_dev(input, "name", "serch");
     			attr_dev(input, "placeholder", "Type Message and Press Enter");
     			attr_dev(input, "class", "bg-white h-10 px-5 pr-10 rounded-full text-sm\n                focus:outline-none svelte-1ijc3hc");
-    			add_location(input, file$5, 272, 14, 9219);
-    			add_location(form, file$5, 270, 12, 9114);
+    			add_location(input, file$5, 277, 14, 9426);
+    			add_location(form, file$5, 275, 12, 9321);
     			attr_dev(div7, "class", "relative text-gray-600");
-    			add_location(div7, file$5, 269, 10, 9065);
+    			add_location(div7, file$5, 274, 10, 9272);
     			attr_dev(div8, "class", "container block");
     			set_style(div8, "position", "absolute");
     			set_style(div8, "bottom", "0");
-    			add_location(div8, file$5, 268, 8, 8985);
+    			add_location(div8, file$5, 273, 8, 9192);
     			attr_dev(div9, "class", "chat shadow-xl rounded-lg svelte-1ijc3hc");
-    			add_location(div9, file$5, 216, 6, 7126);
+    			add_location(div9, file$5, 221, 6, 7333);
     			attr_dev(img1, "class", "chat-notification-logo svelte-1ijc3hc");
     			if (img1.src !== (img1_src_value = "https://img.icons8.com/cute-clipart/50/000000/close-window.png")) attr_dev(img1, "src", img1_src_value);
     			attr_dev(img1, "alt", "ChitChat Logo");
-    			add_location(img1, file$5, 295, 12, 9788);
+    			add_location(img1, file$5, 300, 12, 9995);
     			attr_dev(div10, "class", "chat-notification-logo-wrapper svelte-1ijc3hc");
-    			add_location(div10, file$5, 294, 10, 9731);
+    			add_location(div10, file$5, 299, 10, 9938);
     			attr_dev(div11, "class", "chat-notification svelte-1ijc3hc");
-    			add_location(div11, file$5, 293, 8, 9689);
+    			add_location(div11, file$5, 298, 8, 9896);
     			attr_dev(div12, "class", "btm svelte-1ijc3hc");
-    			add_location(div12, file$5, 292, 6, 9646);
+    			add_location(div12, file$5, 297, 6, 9853);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div9, anchor);
@@ -35225,14 +35225,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_if_block$1.name,
     		type: "if",
-    		source: "(216:4) {#if hasJoinedChat}",
+    		source: "(221:4) {#if hasJoinedChat}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (252:16) {:else}
+    // (257:16) {:else}
     function create_else_block(ctx) {
     	let div1;
     	let div0;
@@ -35254,13 +35254,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			t2 = text(t2_value);
     			t3 = space();
     			attr_dev(p0, "class", "text-grey-darkest");
-    			add_location(p0, file$5, 254, 22, 8643);
+    			add_location(p0, file$5, 259, 22, 8850);
     			attr_dev(div0, "class", "flex items-bottom justify-between");
-    			add_location(div0, file$5, 253, 20, 8573);
+    			add_location(div0, file$5, 258, 20, 8780);
     			attr_dev(p1, "class", "text-grey-dark mt-1 text-sm");
-    			add_location(p1, file$5, 257, 20, 8730);
+    			add_location(p1, file$5, 262, 20, 8937);
     			attr_dev(div1, "class", "ml-4 flex-1 rounded py-4");
-    			add_location(div1, file$5, 252, 18, 8514);
+    			add_location(div1, file$5, 257, 18, 8721);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div1, anchor);
@@ -35283,14 +35283,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_else_block.name,
     		type: "else",
-    		source: "(252:16) {:else}",
+    		source: "(257:16) {:else}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (244:16) {#if temp.publisher == userName}
+    // (249:16) {#if temp.publisher == userName}
     function create_if_block_1$1(ctx) {
     	let div1;
     	let div0;
@@ -35307,12 +35307,12 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			t0 = text(t0_value);
     			t1 = space();
     			attr_dev(p, "class", "text-sm mt-1");
-    			add_location(p, file$5, 248, 22, 8377);
+    			add_location(p, file$5, 253, 22, 8584);
     			attr_dev(div0, "class", "rounded py-2 px-3");
     			set_style(div0, "background-color", "#E2F7CB");
-    			add_location(div0, file$5, 245, 20, 8245);
+    			add_location(div0, file$5, 250, 20, 8452);
     			attr_dev(div1, "class", "flex justify-end mb-2");
-    			add_location(div1, file$5, 244, 18, 8189);
+    			add_location(div1, file$5, 249, 18, 8396);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div1, anchor);
@@ -35333,14 +35333,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_if_block_1$1.name,
     		type: "if",
-    		source: "(244:16) {#if temp.publisher == userName}",
+    		source: "(249:16) {#if temp.publisher == userName}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (243:14) {#each output as temp}
+    // (248:14) {#each output as temp}
     function create_each_block$1(ctx) {
     	let if_block_anchor;
 
@@ -35384,7 +35384,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_each_block$1.name,
     		type: "each",
-    		source: "(243:14) {#each output as temp}",
+    		source: "(248:14) {#each output as temp}",
     		ctx
     	});
 
@@ -35428,8 +35428,8 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			div = element("div");
     			if_block.c();
     			attr_dev(div, "class", "container");
-    			add_location(div, file$5, 214, 2, 7072);
-    			add_location(body, file$5, 199, 0, 6764);
+    			add_location(div, file$5, 219, 2, 7279);
+    			add_location(body, file$5, 204, 0, 6971);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -35505,15 +35505,22 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	console.log(currentRoute);
     	const client = getClient();
 
-    	const problems = subscribe$2(client, {
+    	const problems = query(client, {
     		query: apolloClient.testByToken,
     		variables: { token: currentRoute.namedParams.token }
     	});
 
     	validate_store(problems, "problems");
     	component_subscribe($$self, problems, value => $$invalidate(5, $problems = value));
+
+    	$problems.then(res => {
+    		console.log(res);
+    	});
+
     	var tokens = currentRoute.namedParams.token.split(".");
     	console.log(JSON.parse(atob(tokens[1])));
+    	cookieHandler.setCookie("attempt_id", JSON.parse(atob(tokens[1])).attempt_id);
+    	cookieHandler.setCookie("user_id", JSON.parse(atob(tokens[1])).user_id);
 
     	$problems.then(res => {
     		cookieHandler.setCookie("test_id", res.data.testByToken.id);

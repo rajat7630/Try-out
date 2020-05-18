@@ -13,13 +13,18 @@
   import pubnub from "../pubnubinit.js";
   console.log(currentRoute);
   const client = getClient();
-  const problems = subscribe(client, {
+  const problems = query(client, {
     query: apolloClient.testByToken,
     variables: { token: currentRoute.namedParams.token }
   });
-  var tokens = currentRoute.namedParams.token.split(".");
-  console.log(JSON.parse(atob(tokens[1])));
 
+  $problems.then(res => {
+    console.log(res);
+  });
+  var tokens = currentRoute.namedParams.token.split(".");
+  console.log(JSON.parse(atob(tokens[1]))); 
+  cookieHandler.setCookie("attempt_id", JSON.parse(atob(tokens[1])).attempt_id);
+  cookieHandler.setCookie("user_id", JSON.parse(atob(tokens[1])).user_id);
   $problems.then(res => {
     cookieHandler.setCookie("test_id", res.data.testByToken.id);
     dataStore.updateStore(res.data.testByToken.problems);

@@ -128,12 +128,19 @@ async function addNewUser(user) {
     name: user.name,
     collegeName: user.collegeName,
   });
-  console.log(user);
   const res2 = await Test.query().where('id', parseInt(user.testId));
-  console.log(res2[0].timelimit);
-  const token = jwt.sign({ test_id: user.testId, user_id: res.id }, 'helloo', {
-    expiresIn: 60 * 60 * parseInt(res2[0].timelimit),
+  const res1 = await getTestProblems(res2[0]);
+  const res3 = await addNewAttempt({
+    id: parseInt(user.testId),
+    problems: res1,
   });
+  const token = jwt.sign(
+    { test_id: user.testId, user_id: res.id, attempt_id: res3.id },
+    'helloo',
+    {
+      expiresIn: 60 * parseInt(res2[0].timelimit),
+    }
+  );
   return {
     success: true,
     message: 'User Added Successfully',
@@ -175,7 +182,6 @@ async function getTestProblems(test) {
     .where('testProblems.t_id', parseInt(test.id))
     .select('problems.*', 'testProblems.score');
 
-  console.log(res);
   const problems = [
     ...res.map((prob) => {
       return { problem: prob, score: prob.score };
@@ -250,9 +256,19 @@ async function getToken(id) {
 
 async function getTestByToken(token) {
   const decode = jwt.decode(token);
-  console.log(decode);
-  const res = await getTestById(parseInt(decode.testId));
-  return res;
+  console.log(decode, 'decode');
+  const res2 = await Test.query().where('id', parseInt(decode.test_id));
+  const res1 = await getTestProblems(res2[0]);
+  console.log(res1);
+  res2[0].problems = res1.map((ele) => {
+    return {
+      problemName: ele.problem.problemName,
+      id: ele.problem.id,
+      description: ele.problem.description,
+    };
+  });
+  console.log(res2[0]);
+  return res2[0];
 }
 
 function sendMail(mailDetails) {
@@ -261,7 +277,7 @@ function sendMail(mailDetails) {
     { testId: mailDetails.test_id, email: mailDetails.email },
     'helloo',
     {
-      expiresIn: 60 * 60 * 60 * parseInt(mailDetails.linktime),
+      expiresIn: 60 * 60 * parseInt(mailDetails.linktime),
     }
   );
   let mailBody = `<h1>Sourcefuse Technoogies</h1><p>This link will be active for ${mailDetails.linktime} hours</p><span>To give test click <a href="http://localhost:5000/givetest/${token}">here</a></span>`;
@@ -285,9 +301,9 @@ async function addNewAttempt(data) {
   let tt = JSON.stringify(data.problems);
   const res = await Attempt.query().insert({
     t_id: parseInt(data.id),
-    solutions: tt,
+    solutions: JSON.stringify(data.problems),
   });
-  console.log(res);
+
   return {
     success: true,
     message: 'Attempt successfully added',
@@ -296,24 +312,25 @@ async function addNewAttempt(data) {
 }
 
 async function updateAttempt(data) {
-  let res = await Attempt.query().findById(parseInt(data.id));
-  let rr = [...res.solutions];
-  let tt = [...JSON.parse(data.solutions)];
+  let res = await Attempt.query().where('id', parseInt(data.id));
+  let rr = res[0].solutions;
+  let tt = JSON.parse(data.solutions);
   console.log(rr);
+  console.log(tt);
   let score = 0;
-  rr = [
-    ...rr.map((ele, index) => {
-      let result = eval(
-        `${tt[index].solution} Solution(JSON.stringify(${ele.problemTests.testcase}))`
-      );
-      console.log(result);
-      if (result === JSON.parse(ele.problemTests.output)) {
-        score += 100;
-      }
-      return { ...ele, solution: tt[index].solution };
-    }),
-  ];
-  console.log(score);
+  rr.map((ele, index) => {
+    let result = eval(
+      `${tt[index].solution} solution(JSON.parse(${ele.problem.problemTests}))`
+    );
+    let originalResult = eval(
+      `${ele.problem.solution} solution(JSON.parse(${ele.problem.problemTests}))`
+    );
+    console.log(result, 'result', 'original', originalResult);
+    if (result === originalResult) {
+      score += parseInt(ele.score);
+    }
+    return { ...ele, userSolution: tt[index].solution };
+  });
   let res2 = await Attempt.query().patchAndFetchById(parseInt(data.id), {
     u_id: parseInt(data.u_id),
     solutions: JSON.stringify(rr),

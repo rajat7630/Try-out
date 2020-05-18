@@ -73,7 +73,7 @@
         class:active={tab.active}
         class="tab flex-grow"
         on:click={() => dataStore.activate(tab.id)}>
-        Problem {tab.id}
+        Problem {index+1}
       </li>
       <!-- <button
         class:closeButtonActive={tab.active}

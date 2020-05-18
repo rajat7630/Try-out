@@ -1,6 +1,10 @@
 const store = require('./store.js');
 module.exports = {
   Query: {
+    getTest: (_, { token }) => {
+      console.log(token, "tttttt");
+      return store.getTestByToken(token);
+    },
     getToken: (_, { id }) => {
       return store.getToken(id);
     },

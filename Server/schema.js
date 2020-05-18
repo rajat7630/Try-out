@@ -49,6 +49,7 @@ const typeDefs = gql`
     score: String
   }
   type Query {
+    getTest(token:String):Test
     getToken(id: ID!): Payload
     allProblems: [Problem]
     problemById(id: ID!): Problem

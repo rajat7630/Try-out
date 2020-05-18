@@ -26,7 +26,7 @@
 
   async function sendSolution(data) {
     let solutions = {
-      id: parseInt(cookieHandler.getCookie("attemptId")),
+      id: parseInt(cookieHandler.getCookie("attempt_id")),
       u_id: parseInt(cookieHandler.getCookie("user_id")),
       solutions: JSON.stringify(data)
     };
@@ -36,7 +36,7 @@
         mutation: apolloClient.updateAttempt,
         variables: solutions
       });
-      // location.replace("http://localhost:5000/thankyou");
+      location.replace("http://localhost:5000/thankyou");
     } catch (err) {
       console.log(err);
     }
@@ -115,7 +115,12 @@
       dragging = true;
     }} />
   <div class="output" id="outputid" style="height:{height}">
-    <button class="runButton" on:click={() => sendSolution($dataStore)}>
+    <button
+      class="runButton"
+      on:click={() => {
+        console.log(JSON.stringify($dataStore))
+        sendSolution($dataStore);
+      }}>
       Submit
     </button>
     <h2 class="text-3xl text-center title">Output</h2>

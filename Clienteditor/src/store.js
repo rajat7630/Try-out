@@ -36,9 +36,9 @@ function updateStore(problems) {
     }),
     ...problems.map((problem, index) => {
       if (index === 0) {
-        return { ...problem, active: true, solution: 'function Solution(){}' };
+        return { ...problem, active: true, solution: 'function solution(){}' };
       }
-      return { ...problem, active: false, solution: 'function Solution(){}' };
+      return { ...problem, active: false, solution: 'function solution(){}' };
     }),
   ]);
 }
