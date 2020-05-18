@@ -39,10 +39,10 @@
     position: absolute;
   }
   :root {
-    --color-ed: white;
-    --color-d: #254b62;
-    --color-l: #476d7c;
-    --color-el: #77abb7;
+    --color-ed: #1D1F21;
+    --color-d: #25282c;
+    --color-l: #303030;
+    --color-el: #c4c4c4;
   }
   .dropdown {
     position: relative;

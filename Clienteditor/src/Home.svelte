@@ -118,6 +118,12 @@
     right: 3%;
     bottom: 5%;
   }
+  :root {
+    --color-ed: #1d1f21;
+    --color-d: #25282c;
+    --color-l: #303030;
+    --color-el: #c4c4c4;
+  }
 
   .chat {
     position: fixed;

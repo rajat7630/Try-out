@@ -4,24 +4,51 @@
   import { cookieHandler } from "./helperFunctions/cookie_handler.js";
   import { apolloClient } from "./apolloClient.js";
   import { mutate, getClient } from "svelte-apollo";
-  // import NewProblem from "./newProblem.svelte";
+  import { onMount, afterUpdate, beforeUpdate } from "svelte";
+  import "ace-builds";
+  import "ace-builds/src-noconflict/ext-language_tools.js";
+  import "ace-builds/src-noconflict/snippets/text.js";
+  import "ace-builds/src-noconflict/snippets/javascript.js";
+  import "ace-builds/src-noconflict/mode-javascript.js";
+  import "ace-builds/src-noconflict/theme-tomorrow_night.js";
   import { currentTab } from "./store";
-  let outputData = "";
-  let outputCheck = "";
   let dragging = false;
   $: height = "40vh";
   const client = getClient();
+  let inputeditor;
+  let result = "";
+  onMount(() => {
+    ace.config.set("basePath", "ace-builds/src-noconflict/");
+    inputeditor = ace.edit("inputeditor");
+    inputeditor.setOptions({
+      enableBasicAutocompletion: true,
+      enableSnippets: true,
+      highlightActiveLine: true,
+      showPrintMargin: false,
+      theme: "ace/theme/tomorrow_night",
+      mode: "ace/mode/javascript",
+      enableLiveAutocompletion: true,
+      useWorker: false
+    });
+  });
   function runHandler() {
-    // fetch("http://localhost:5000/result/" + $currentTab.id, {
-    //   method:"GET"
-    // })
-    // .then(res=>{
-    //   return res.json();
-    // })
-    // .then(data=>{
-    //   outputData=data.output;
-    //   outputCheck=data.answer;
-    // })
+    try {
+      let ind = 0;
+      $dataStore.forEach((ele, index) => {
+        if (ele.id === $currentTab.id) {
+          ind = index;
+          return;
+        }
+      });
+      console.log(ind);
+      let code = $dataStore[ind].solution;
+      console.log(code);
+      console.log(inputeditor.getValue());
+      let testCase = inputeditor.getValue();
+      result = eval(`${code} solution(${testCase})`);
+    } catch (err) {
+      result = err;
+    }
   }
 
   async function sendSolution(data) {
@@ -115,20 +142,47 @@
       dragging = true;
     }} />
   <div class="output" id="outputid" style="height:{height}">
-    <button
-      class="runButton"
-      on:click={() => {
-        console.log(JSON.stringify($dataStore))
-        sendSolution($dataStore);
-      }}>
-      Submit
-    </button>
-    <h2 class="text-3xl text-center title">Output</h2>
-    <div class="flex-1 text-gray-700 text-center px-4 py-2 outputValue">
-      {outputData}
+
+    <div class="flex my-4 p-2 border-solid  border-2 border-black">
+      <div class="flex-1 mr-4 box-border">
+        <h2 class="text-xl text-white my-3 my-2">Input</h2>
+        <div class="flex-grow h-48 box-border">
+          <div
+            id="inputeditor"
+            class="inputeditor text-xl h-full box-border " />
+        </div>
+      </div>
+      <div class="flex-1 ml-4">
+        <h2 class="text-xl text-white my-3 my-2 box-border">Output</h2>
+        <div class="flex-grow h-48">
+          <textarea
+            bind:value={result}
+            class=" h-full w-full bg-gray-900 text-white text-xl box-border
+            border-none rounded py-3 px-4 mb-3 leading-tight focus:outline-none
+            resize-none"
+            id="message"
+            readonly />
+        </div>
+      </div>
     </div>
-    <div class="flex-1 text-gray-700 text-center px-4 py-2 outputValue">
-      {outputCheck}
+    <div class="float-left ml-10 text-xl">
+      <button
+        class="bg-black hover:bg-white hover:text-black mr-10 outline-none text-white
+        float-right py-2 px-4 rounded-full"
+        on:click={() => {
+          console.log(JSON.stringify($dataStore));
+          sendSolution($dataStore);
+        }}>
+        Submit
+      </button>
+      <button
+        on:click={e => {
+          runHandler(e);
+        }}
+        class="bg-black hover:bg-white hover:text-black mr-10 outline-none text-white
+        float-right py-2 px-4 rounded-full">
+        Run
+      </button>
     </div>
   </div>
 </div>
