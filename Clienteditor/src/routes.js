@@ -26,38 +26,47 @@ const routes = [
   {
     name: '/',
     component: Login,
+    onlyIf: { guard: notAdmin, redirect: '/admin' },
   },
   {
     name: '/newtest',
     component: NewTest,
+    onlyIf: { guard: userIsAdmin, redirect: '/' },
   },
   {
     name: '/newProblem',
     component: NewProblem,
+    onlyIf: { guard: userIsAdmin, redirect: '/' },
   },
   {
     name: '/editProblem/:id',
     component: EditProblem,
+    onlyIf: { guard: userIsAdmin, redirect: '/' },
   },
   {
     name: '/editTest/:id',
     component: EditTest,
+    onlyIf: { guard: userIsAdmin, redirect: '/' },
   },
   {
     name: '/admin',
     component: Admin,
+    onlyIf: { guard: userIsAdmin, redirect: '/' },
   },
   {
     name: '/test/:id',
     component: Tests,
+    onlyIf: { guard: userIsAdmin, redirect: '/' },
   },
   {
     name: '/problem/:id',
     component: Problems,
+    onlyIf: { guard: userIsAdmin, redirect: '/' },
   },
   {
     name: '/sendtest/:id',
     component: SendTest,
+    onlyIf: { guard: userIsAdmin, redirect: '/' },
   },
   {
     name: '/givetest/:token',
@@ -74,14 +83,17 @@ const routes = [
   {
     name: '/showproblems',
     component: AdminPanel,
+    onlyIf: { guard: userIsAdmin, redirect: '/' },
   },
   {
     name: '/showtests',
     component: AdminPanel,
+    onlyIf: { guard: userIsAdmin, redirect: '/' },
   },
   {
     name: '/showresults',
     component: AdminPanel,
+    onlyIf: { guard: userIsAdmin, redirect: '/' },
   },
 ];
 
