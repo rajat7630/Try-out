@@ -14,7 +14,34 @@ const getProblems = gql `
     }
   }
 `;
-
+const getSearchProblems = gql `
+  query getSearchProblems($search: String) {
+    searchProblems(search: $search) {
+      id
+      problemName
+      description
+      problemTests
+      tags
+      timelimit
+      datalimit
+      solution
+    }
+  }
+`;
+const getSearchTests = gql `
+  query getSearchTests($search: String) {
+    searchTests(search: $search) {
+      id
+      testName
+      difficultyLevel
+      email
+      createdAt
+      problems
+      tags
+      timelimit
+    }
+  }
+`;
 const problemsByAuthor = gql `
   query problemsByAuthor($email: String) {
     problemsByAuthor(email: $email) {
@@ -364,6 +391,8 @@ export const apolloClient = {
     sendMail,
     getTestById,
     getProblems,
+    getSearchProblems,
+    getSearchTests,
     getProblemById,
     testsByAuthor,
     deleteProblem,
