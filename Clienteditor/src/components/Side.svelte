@@ -14,9 +14,11 @@
 }
 
 .sidebar{
-  width: 250px;
+  width: 180px;
   height: 100%;
-  padding: 60px;
+  padding-left: 20px;
+  padding-right: 20px;
+  padding-bottom: 50px;
   padding-top: 150px;
   position: fixed;
 }
@@ -32,7 +34,7 @@
 
 .sidebar li a .icon{
   display:flex;
-  padding-left:30px;
+  padding-left:35px;
   padding-bottom: 10px;
 } 
 .sidebar li a .name{
