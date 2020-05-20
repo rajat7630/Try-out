@@ -60,6 +60,9 @@ router.get(
     res.cookie('access_token', token1, {
       httpOnly: false,
     });
+    res.cookie('mode', 'day', {
+      httpOnly: false,
+    });
     res.cookie('access_email', userEmail, {
       httpOnly: false,
     });
@@ -72,6 +75,7 @@ router.get('/logout', (req, res) => {
   req.logout();
   res.clearCookie('access_token');
   res.clearCookie('access_email');
+  res.clearCookie('mode');
   res.redirect('http://localhost:5000');
 });
 

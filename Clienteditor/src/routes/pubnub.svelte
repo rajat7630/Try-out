@@ -99,7 +99,7 @@
   }
   .chat {
     position: fixed;
-    background-color: #fff;
+
     bottom: 120px;
     right: 50px;
     height: 500px;
@@ -109,13 +109,22 @@
     border: 1px solid #dcc;
   }
   /* chit chat */
+  :global(body.dark-mode) .chat-notification {
+    background-color: #1b262c;
+    color: white;
+  }
+  :global(body.dark-mode) .chat-notification-title {
+    background-color: #1b262c;
+    color: white;
+  }
+
   .chat-notification {
     display: flex;
     max-width: 14rem;
     margin: 0 auto;
     padding: 1.5rem;
     border-radius: 0.5rem;
-    background-color: #fff;
+
     box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1),
       0 10px 10px -5px rgba(0, 0, 0, 0.04);
   }

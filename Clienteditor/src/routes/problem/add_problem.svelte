@@ -7,15 +7,13 @@
 </script>
 
 <style>
-  ::-webkit-scrollbar {
-    width: 0px;
-  }
+
 </style>
 
-<div class="w-screen bg-edark h-screen flex flex-col">
+<div class="w-screen h-screen flex flex-col">
   <header>
     <Navbar />
-     <Sidebar/>
+    <Sidebar />
     <subheader>
       <SubNavbar position={pageNum} />
     </subheader>
