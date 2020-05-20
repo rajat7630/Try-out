@@ -197,6 +197,19 @@ async function getSearchTests(search) {
     }
     return query.map((test) => testReducer(test));
 }
+
+async function getSearchAttempt(search) {
+    var res;
+    if (search) {
+        res = await Attempt.query()
+            .joinRelated('user')
+            .where(fn.lower(ref('user.name')), 'ilike', `%${(search.match(/\w+/gi) || []).join('%')}%`);
+    } else {
+        res = await Attempt.query().select('attempts.*').orderBy('attemptTime', 'DESC');
+    }
+    return res.map((attempt) => attemptReducer(attempt));
+}
+
 async function deleteProblem(id) {
     await TestProblem.query().delete().where('p_id', parseInt(id));
     await Problem.query().deleteById(parseInt(id));
@@ -343,7 +356,7 @@ async function attemptReducer(attempt) {
     return {
         id: attempt.id,
         user: user[0],
-        test: test[0].testName,
+        test: test[0],
         solutions: attempt.solutions,
         attemptTime: attempt.attemptTime,
         score: attempt.Score,
@@ -396,6 +409,7 @@ module.exports = {
     getAllProblems,
     getSearchProblems,
     getSearchTests,
+    getSearchAttempt,
     getProblemsByAuthor,
     addNewProblem,
     deleteProblem,

@@ -103,14 +103,16 @@
             on:click={() => {
               location.replace(`http://localhost:5000/editProblem/${currentRoute.namedParams.id}`);
             }}
-            class="savebutton hover:bg-white hover:text-edark font-bold py-2
-            px-4 border rounded">
+            style="color:#254b62;"
+            class="savebutton hover:bg-grey hover:text-edark font-bold py-2 px-4
+            border rounded">
             Edit
           </button>
           <button
             on:click={deleteProblemHandler}
-            class="savebutton hover:bg-white hover:text-edark font-bold py-2
-            px-4 border rounded">
+            style="color:#254b62;"
+            class="savebutton hover:bg-grey hover:text-edark font-bold py-2 px-4
+            border rounded">
             Delete
           </button>
         </div>

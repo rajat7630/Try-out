@@ -30,23 +30,20 @@
   rel="stylesheet" />
 <body>
   <style>
-    ::-webkit-scrollbar {
-      width: 0px;
-    }
     .savebutton {
-      @apply text-white ml-4 outline-none px-4;
+      @apply ml-4 outline-none px-4;
     }
     .statement {
       height: 50vh;
     }
     .labels {
-      @apply text-elight text-2xl;
+      @apply text-2xl;
     }
     .outer_box {
-      @apply p-3 flex-1 border-solid border-dark border-2 rounded;
+      @apply p-3 flex-1 border-solid  border-2 rounded;
     }
     .rows {
-      @apply mx-auto text-xl text-elight;
+      @apply mx-auto text-xl;
     }
     .boxheight2 {
       max-height: 385px;
@@ -56,14 +53,14 @@
     href="https://unpkg.com/tailwindcss@^1.0/dist/tailwind.min.css"
     rel="stylesheet" />
 
-  <div class="bg-edark h-full flex flex-col box-border">
+  <div class=" h-full flex flex-col box-border">
     <header>
       <Navbar />
     </header>
     {#await $test}
       Loading...
     {:then result}
-      <div class="bg-edark flex flex-col max-w-full overflow-auto">
+      <div class="flex flex-col max-w-full overflow-auto">
         <div class="mx-auto mt-8 max-w-full flex flex-col">
           <div class="font-bold text-2xl text-elight mx-auto">
             {result.data.testById.testName}
@@ -106,7 +103,7 @@
                       <div class="rows bg-edark rounded-full">
                         <div
                           type="string"
-                          class=" mx-auto w-10 outline-none text-white p-2">
+                          class=" mx-auto w-10 outline-none p-2">
                           {prob.score}
                         </div>
                       </div>
@@ -123,13 +120,15 @@
               on:click={() => {
                 location.replace(`http://localhost:5000/edittest/${currentRoute.namedParams.id}`);
               }}
-              class="savebutton hover:bg-white hover:text-edark font-bold py-2
+              style="color:#254b62;"
+              class="savebutton hover:bg-grey hover:text-edark font-bold py-2
               px-4 border rounded">
               Edit
             </button>
             <button
+              style="color:#254b62;"
               on:click={deleteTestHandler}
-              class="savebutton hover:bg-white hover:text-edark font-bold py-2
+              class="savebutton hover:bg-grey hover:text-edark font-bold py-2
               px-4 border rounded">
               Delete
             </button>
@@ -137,7 +136,8 @@
               on:click={() => {
                 location.replace(`http://localhost:5000/sendtest/${currentRoute.namedParams.id}`);
               }}
-              class="savebutton hover:bg-white hover:text-edark font-bold py-2
+              style="color:#254b62;"
+              class="savebutton hover:bg-grey hover:text-edark font-bold py-2
               px-4 border rounded">
               Send Test
             </button>

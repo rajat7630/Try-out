@@ -14,10 +14,10 @@
   }
 
   .sidebar {
-    width: 180px;
+    width: 122px;
     height: 100%;
     color: white;
-    padding-left: 20px;
+    padding-left: 3px;
     padding-right: 20px;
     padding-bottom: 50px;
     padding-top: 150px;
@@ -25,7 +25,7 @@
   }
 
   .sidebar li a {
-    padding: 20px;
+    padding: 15px;
     display: block;
     padding-bottom: 40px;
   }
@@ -39,12 +39,12 @@
 
   .sidebar li a .icon {
     display: flex;
-    padding-left: 35px;
+    padding-left: 15px;
     padding-bottom: 10px;
   }
   .sidebar li a .name {
     margin: auto;
-    text-align: center;
+    padding-left: 5px;
     padding-top: 10px;
   }
   .sidebar li a:hover {

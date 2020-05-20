@@ -25,6 +25,27 @@ const getSearchProblems = gql `
       timelimit
       datalimit
       solution
+      createdAt
+    }
+  }
+`;
+const getSearchAttempts = gql `
+  query getSearchAttempts($search: String) {
+    searchAttempt(search: $search) {
+      id
+      user {
+        id
+        email
+        name
+        collegeName
+      }
+      test {
+        id
+        testName
+      }
+      solutions
+      attemptTime
+      score
     }
   }
 `;
@@ -340,7 +361,10 @@ const getAllAttempts = gql `
         name
         collegeName
       }
-      test
+      test {
+        id
+        testName
+      }
       solutions
       attemptTime
       score
@@ -393,6 +417,7 @@ export const apolloClient = {
     getProblems,
     getSearchProblems,
     getSearchTests,
+    getSearchAttempts,
     getProblemById,
     testsByAuthor,
     deleteProblem,

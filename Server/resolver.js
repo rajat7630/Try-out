@@ -16,6 +16,7 @@ module.exports = {
         getAllAttempt: () => store.getAllAttempt(),
         searchProblems: (_, { search }) => store.getSearchProblems(search),
         searchTests: (_, { search }) => store.getSearchTests(search),
+        searchAttempt: (_, { search }) => store.getSearchAttempt(search),
     },
     Mutation: {
         checkTestIfExists: (_, { testName }) => store.checkTestIfExists(testName),
