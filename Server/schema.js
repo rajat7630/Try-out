@@ -41,7 +41,7 @@ const typeDefs = gql `
   }
   type Attempt {
     id: ID!
-    test:String
+    test:Test
     user: User
     solutions: JSON
     attemptTime: String
@@ -61,6 +61,7 @@ const typeDefs = gql `
     getAllAttempt: [Attempt]
     searchProblems(search: String):[Problem]
     searchTests(search: String):[Test]
+    searchAttempt(search: String):[Attempt]
   }
   type Mutation {
     checkProblemIfExists(problemName: String): checkProblemIfExistsOutput
