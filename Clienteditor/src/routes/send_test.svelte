@@ -24,7 +24,7 @@
 <link
   href="https://unpkg.com/tailwindcss@^1.0/dist/tailwind.min.css"
   rel="stylesheet" />
-<div class="bg-edark w-full h-full">
+<div class=" w-full h-full">
   <div>
     <Navbar />
   </div>
@@ -32,7 +32,7 @@
     <strong>Send Test</strong>
   </h1>
 
-  <div class="p-8 mx-64 max-w-full mt-24 items-center bg-dark">
+  <div class="p-8 mx-64 max-w-full mt-24 items-center ">
     <div class="">
 
       <div class="md:flex md:items-center mb-6">

@@ -37,18 +37,26 @@
     background-color: white;
     color: black;
     transition: background-color 0.3s;
+    --color-ed: White;
+    --color-d: #88999e;
+    --color-l: #106270;
+    --color-el: #3c7380;
   }
   :global(body.dark-mode) {
     background-color: #1b262c;
     color: #bfc2c7;
+    --color-ed: #1d1f21;
+    --color-d: #254b62;
+    --color-l: #303030;
+    --color-el: #77abb7;
   }
   :global(body.dark-mode) .day {
     background-color: #1b262c;
     color: #bfc2c7;
   }
   :global(body) .day {
-    background-color: #dae0e2;
-    color: black;
+    background-color: #77abb7;
+    color: white;
   }
   .toggle-checkbox:checked {
     right: 0;
