@@ -5,17 +5,20 @@
   import { Router } from "svelte-router-spa";
   import { routes } from "./routes";
   import { onMount } from "svelte";
+
   // import EditorArea from "./EditorArea.svelte";
   // import Tabs from "./Tabs.svelte";
   // import GiveTest from "./routes/give_test.svelte";
   // import SendTest from "./routes/send_test.svelte";
   // import { dataStore, currentTab } from "./store.js";
+
   import { apolloClient } from "./apolloClient.js";
   import { getClient, query } from "svelte-apollo";
   import ApolloClient from "apollo-boost";
   import { setClient } from "svelte-apollo";
+  import Navbar from "./components/navbar.svelte";
   import gql from "graphql-tag";
-  import Theme from "./theme_change.svelte";
+
   const client = new ApolloClient({
     uri: "http://localhost:3000/graphql"
   });
@@ -62,4 +65,5 @@
       dataStore.deleteTab(id);
     }
   }} /> -->
+
 <Router {routes} {currentRoute} />

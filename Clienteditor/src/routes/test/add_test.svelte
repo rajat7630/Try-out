@@ -2,6 +2,7 @@
   import Navbar from "../../components/navbar.svelte";
   import SubNavbar from "./test_navbar.svelte";
   import SelectPage from "./select_page.svelte";
+  import Sidebar from "../../components/Side.svelte";
   $: pageNum = 1;
 </script>
 
@@ -11,9 +12,10 @@
   }
 </style>
 
-<div class="w-screen bg-edark h-screen flex flex-col">
+<div class="w-screen h-screen flex flex-col">
   <header>
     <Navbar />
+    <Sidebar />
     <subheader>
       <SubNavbar position={pageNum} />
     </subheader>

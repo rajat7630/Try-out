@@ -1,5 +1,6 @@
 <script>
   import { cookieHandler } from "../helperFunctions/cookie_handler.js";
+
   const tokens = cookieHandler.getCookie("access_token").split(".");
   console.log(atob(tokens[1]));
   function myFunction() {
@@ -8,42 +9,63 @@
   function home() {
     location.replace("http://localhost:5000/admin");
   }
-  let themes = [
-    ["#1D1F21", "#25282c", "#303030", "#c4c4c4"],
-    ["#1d3e53", "#254b62", "#476d7c", "#77abb7"],
-    ["#1b262c", "#0f4c75", "#3282b8", "#bbe1fa"],
-    ["#071e3d", "#1f4287", "#278ea5", "#21e6c1"],
-    ["#200f21", "#382039", "#5a3d5c", "#f638dc"],
-    ["#2d132c", "#801336", "#c72c41", "#ee4540"]
-  ];
-  let number = 0;
-  function changeTheme(num) {
-    console.log(themes[num], num);
-    document.documentElement.style.setProperty("--color-ed", themes[num][0]);
-    document.documentElement.style.setProperty("--color-d", themes[num][1]);
-    document.documentElement.style.setProperty("--color-l", themes[num][2]);
-    document.documentElement.style.setProperty("--color-el", themes[num][3]);
+
+  if (cookieHandler.getCookie("mode") == "dark") {
+    console.log("Working");
+    window.document.body.classList.toggle("dark-mode");
   }
-  console.log(number);
-  changeTheme(number);
+  let theme = cookieHandler.getCookie("mode");
+  let mode;
+  if (theme == "day") {
+    mode = "Dark Mode";
+  } else {
+    mode = "Day Mode";
+  }
+
+  function toggle() {
+    if (cookieHandler.getCookie("mode") == "day") {
+      cookieHandler.setCookie("mode", "dark");
+    } else {
+      cookieHandler.setCookie("mode", "day");
+    }
+    window.document.body.classList.toggle("dark-mode");
+  }
 </script>
 
 <style>
+  :global(body) {
+    background-color: white;
+    color: black;
+    transition: background-color 0.3s;
+  }
+  :global(body.dark-mode) {
+    background-color: #1b262c;
+    color: #bfc2c7;
+  }
+  :global(body.dark-mode) .day {
+    background-color: #1b262c;
+    color: #bfc2c7;
+  }
+  :global(body) .day {
+    background-color: #dae0e2;
+    color: black;
+  }
+  .toggle-checkbox:checked {
+    right: 0;
+    border-color: #68d391;
+  }
+  :global(body.dark-mode) toggle-checkbox:checked + .toggle-label {
+    background-color: #68d391;
+  }
   #btn {
     float: right;
     margin-right: 3%;
   }
   .welcome {
     font-size: 3vh;
-    color: white;
     position: absolute;
   }
-  :root {
-    --color-ed: #1D1F21;
-    --color-d: #25282c;
-    --color-l: #303030;
-    --color-el: #c4c4c4;
-  }
+
   .dropdown {
     position: relative;
     display: inline-block;
@@ -63,8 +85,7 @@
   href="https://fonts.googleapis.com/css2?family=Jost&display=swap"
   rel="stylesheet" />
 <nav
-  class="flex shadow-2xl items-center justify-between flex-wrap bg-dark sticky
-  p-6">
+  class="flex shadow-2xl items-center justify-between day flex-wrap sticky p-6">
 
   <div class="w-full block flex-grow lg:items-right">
     <h1 on:click={home} class="welcome text-primary">Welcome Admin</h1>
@@ -87,18 +108,24 @@
         <ul class="ml-3 dropdown-content container text-gray-700 pt-1">
           <li
             class="rounded-t flex flex-row bg-gray-200 hover:bg-gray-400 py-2
-            px-4 block whitespace-no-wrap"
-            on:click={() => {
-              number++;
-              let themesize = themes.length;
-              changeTheme(number % themesize);
-            }}>
-            <img
-              alt="Theme"
-              width="25"
-              height="25"
-              src="https://img.icons8.com/material-rounded/24/000000/change.png" />
-            <p>&nbsp;&nbsp;Theme</p>
+            px-4 block whitespace-no-wrap">
+            <div
+              class="relative inline-block w-10 mr-2 align-middle select-none
+              transition duration-200 ease-in">
+              <input
+                type="checkbox"
+                on:click={toggle}
+                name="toggle"
+                id="toggle"
+                class="toggle-checkbox absolute block w-6 h-6 rounded-full
+                bg-white border-4 appearance-none cursor-pointer" />
+              <label
+                for="toggle"
+                class="toggle-label block overflow-hidden h-6 rounded-full
+                bg-gray-300 cursor-pointer" />
+            </div>
+
+            <label>&nbsp;&nbsp;{mode}</label>
           </li>
           <li
             class="bg-gray-200 flex flex-row hover:bg-gray-400 py-2 px-4 block

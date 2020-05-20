@@ -188,7 +188,7 @@ export const dataStore = {
   subscribe,
   activate,
   updateStore,
-  updateSolution
+  updateSolution,
 };
 
 export const currentTab = derived(dataStore, ($dataStore) =>
