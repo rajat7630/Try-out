@@ -8,7 +8,6 @@
   import { getClient, query } from "svelte-apollo";
   import Pubnub from "./pubnub.svelte";
   const client = getClient();
-  const attempts = query(client, { query: apolloClient.getAllAttempts });
   const searchProblems = query(client, {
     query: apolloClient.getSearchProblems,
     variables: {
@@ -17,6 +16,12 @@
   });
   const searchTests = query(client, {
     query: apolloClient.getSearchTests,
+    variables: {
+      search: ""
+    }
+  });
+   const searchAttempts = query(client, {
+    query: apolloClient.getSearchAttempts,
     variables: {
       search: ""
     }
@@ -35,6 +40,7 @@
 
   let problemSearch = "";
   let testSearch = "";
+  let attemptSearch = ""
 
   $: searchProblems.refetch({
     search: problemSearch
@@ -43,6 +49,26 @@
   $: searchTests.refetch({
     search: testSearch
   });
+
+   $: searchAttempts.refetch({
+    search: attemptSearch
+  });
+
+  function timeConverter(timestamp) {
+      let dateObj = new Date(timestamp * 1000);
+      let year = dateObj.getUTCFullYear().toString();
+      let b = dateObj.getUTCDay()
+      let month = dateObj.getUTCMonth().toString();
+      let day = dateObj.getUTCDate().toString();
+
+      let hours = dateObj.getUTCHours();  
+      let minutes = dateObj.getUTCMinutes(); 
+      let seconds = dateObj.getUTCSeconds(); 
+      let formattedTime = day + '/'+ month + '/' + year + ' '+hours.toString().padStart(2, '0') + ':' +  
+                minutes.toString().padStart(2, '0') + ':' +  
+                seconds.toString().padStart(2, '0'); 
+      return formattedTime;
+  }
 </script>
 
 <style>
@@ -52,6 +78,7 @@
     padding: 13px 9px;
     font-size: 15px;
     text-decoration: none;
+    cursor: pointer;
   }
 
   #problem-switcher-container {
@@ -157,11 +184,11 @@
               </p>
               <div class="flex w-full justify-between items-center mt-4">
                 <span class="problem__type">
-                  TimeLimit :{problem.timelimit}ms
+                  TimeLimit :{problem.timelimit} ms
                 </span>
                 <div class="text-xs ml-8">
                   <span class="font-bold">
-                    {new Date(problem.createdAt * 1000)}
+                    {timeConverter(problem.createdAt)}
                   </span>
                 </div>
               </div>
@@ -217,10 +244,61 @@
                 </span>
               </p>
               <div class="flex w-full justify-between items-center mt-4">
-                <span class="problem__type">TimeLimit :{test.timelimit}ms</span>
+                <span class="problem__type">TimeLimit :{test.timelimit} min</span>
                 <div class="text-xs ml-8">
                   <span class="font-bold">
-                    {new Date(test.createdAt * 1000)}
+                    {timeConverter(test.createdAt)}
+                  </span>
+                </div>
+              </div>
+            </div>
+          {/each}
+        </div>
+      {:catch error}
+        <Error {error} />
+      {/await}
+    </div>
+  </div>
+{:else if currentRoute.name === '/showresults'}
+  <div id="problem-switcher-container">
+
+    <div id="problem-switcher">
+      <header
+        class="w-full text-center flex flex-col justify-end py-3 md:px-16"
+        style="min-height: 234px;">
+        <h2 class="text-xl day font-semibold mt-4 mb-6">Scoreboard:</h2>
+        <div class="px-4">
+          <input
+            class="problem-search rounded-full"
+            id="problem-search"
+            name="problem-search"
+            type="text"
+            placeholder="Enter a user name"
+            bind:value={attemptSearch} />
+        </div>
+      </header>
+
+      {#await $searchAttempts}
+        <Loader />
+      {:then res}
+        <div class="problems flex flex-col text-black">
+          {#each res.data.searchAttempt as attempt}
+            <div
+              id="problem-{attempt.id}"
+              class="card-problem {'cursor-pointer'}">
+              <p class="problem__name">
+                {attempt.user.name}
+                <span class="text-xs font-normal italic lowercase">
+                  {attempt.user.collegeName}
+                </span>
+              </p>
+              <div class="flex w-full justify-between items-center mt-4">
+                <span class="problem__type">
+                  Score :{attempt.score}
+                </span>
+                <div class="text-xs ml-8">
+                  <span class="font-bold">
+                    {timeConverter(attempt.attemptTime)}
                   </span>
                 </div>
               </div>
