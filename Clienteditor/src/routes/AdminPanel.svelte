@@ -72,9 +72,16 @@
 </script>
 
 <style>
+  :global(body.dark-mode) .btun {
+    background-color: #2d393f;
+    color: white;
+  }
+  .btun {
+    background-color: #008cba;
+    color: white;
+  }
   .add-btn {
     float: right;
-    background-color: #008cba;
     padding: 13px 9px;
     font-size: 15px;
     text-decoration: none;
@@ -151,7 +158,9 @@
         style="min-height: 234px;">
         <h2 class="text-xl day font-semibold mt-4 mb-6">All Problems:</h2>
         <div class="px-4">
-          <a on:click={addProblem} class="add-btn rounded-full px-2 shadow-2xl">
+          <a
+            on:click={addProblem}
+            class="add-btn btun rounded-full px-2 shadow-2xl">
             &nbsp; Add Prob. &nbsp;
           </a>
           <input
@@ -211,7 +220,7 @@
         <div class="px-2">
           <a
             on:click={addTest}
-            class="add-btn rounded-full px-2 shadow-2xl"
+            class="add-btn btun rounded-full px-2 shadow-2xl"
             style="padding: 13px 22px">
             &nbsp; &nbsp; Add Test&nbsp; &nbsp;
           </a>
