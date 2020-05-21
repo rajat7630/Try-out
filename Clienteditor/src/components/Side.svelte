@@ -82,7 +82,7 @@
         <span class="icon">
           <Icon icon="folder" />
         </span>
-        <div class="name">Tests</div>
+        <div class="name">&nbsp;Tests</div>
       </a>
     </li>
     <li>

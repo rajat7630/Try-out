@@ -83,6 +83,12 @@
   .status {
     @apply text-elight text-6xl px-3 flex;
   }
+  .textt {
+    color: black;
+  }
+  :global(body.dark-mode) .textt {
+    color: white;
+  }
 </style>
 
 <div class="mx-auto flex-col flex-grow">
@@ -102,7 +108,7 @@
               tet-edark focus:outline-none" />
           </div>
           <div>
-            <p class="text-white text-sm my-2">{alert}</p>
+            <p class="textt text-sm my-2">{alert}</p>
           </div>
         </div>
         <div class="ml-3">
