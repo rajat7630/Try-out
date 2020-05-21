@@ -251,6 +251,7 @@
         <div class="container block" style=" position: absolute; bottom: 0;">
           <div class="relative text-gray-600">
             <form
+              autocomplete="off"
               on:submit|preventDefault={publish(newMessage, 'channel.' + userName)}>
               <input
                 type="search"

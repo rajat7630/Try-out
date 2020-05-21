@@ -25,42 +25,59 @@
   }
 </script>
 
+<style>
+  .savebutton {
+    @apply ml-4 outline-none px-4;
+  }
+  .statement {
+    height: 50vh;
+  }
+  .labels {
+    @apply text-2xl;
+  }
+  .outer_box {
+    @apply p-3 flex-1 border-solid  border-2 rounded;
+  }
+  .rows {
+    @apply mx-auto text-xl;
+  }
+  .boxheight2 {
+    max-height: 385px;
+  }
+  body {
+    --color-ed: White;
+    --color-d: #88999e;
+    --color-l: #106270;
+    --color-el: #3c7380;
+  }
+  :global(body.dark-mode) body {
+    --color-ed: #1d1f21;
+    --color-d: #254b62;
+    --color-l: #303030;
+    --color-el: #77abb7;
+  }
+  .tag {
+    color: black;
+  }
+  :global(body.dark-mode) .tag {
+    color: white;
+  }
+</style>
+
 <link
   href="https://unpkg.com/tailwindcss@^1.0/dist/tailwind.min.css"
   rel="stylesheet" />
-<body>
-  <style>
-    .savebutton {
-      @apply ml-4 outline-none px-4;
-    }
-    .statement {
-      height: 50vh;
-    }
-    .labels {
-      @apply text-2xl;
-    }
-    .outer_box {
-      @apply p-3 flex-1 border-solid  border-2 rounded;
-    }
-    .rows {
-      @apply mx-auto text-xl;
-    }
-    .boxheight2 {
-      max-height: 385px;
-    }
-  </style>
-  <link
-    href="https://unpkg.com/tailwindcss@^1.0/dist/tailwind.min.css"
-    rel="stylesheet" />
 
-  <div class=" h-full flex flex-col box-border">
-    <header>
-      <Navbar />
-    </header>
+<body>
+
+  <Navbar />
+
+  <div class="bg-edark h-full flex flex-col box-border">
+
     {#await $test}
       Loading...
     {:then result}
-      <div class="flex flex-col max-w-full overflow-auto">
+      <div class="bg-edark flex flex-col max-w-full overflow-auto">
         <div class="mx-auto mt-8 max-w-full flex flex-col">
           <div class="font-bold text-2xl text-elight mx-auto">
             {result.data.testById.testName}
@@ -149,8 +166,8 @@
           {#each result.data.testById.tags.split('#') as tag, index}
             {#if index !== 0}
               <div
-                class="text-white border-solid border-2 mr-4 mb-10 border-white
-                rounded-full p-2 px-4 ">
+                class="tag border-solid border-2 mr-4 mb-10 rounded-full p-2
+                px-4 ">
                 {tag}
               </div>
             {/if}
