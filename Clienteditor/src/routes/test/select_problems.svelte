@@ -45,7 +45,7 @@
         mutation: apolloClient.addTest,
         variables: test
       });
-      location.replace("http://localhost:5000/admin");
+      location.replace("http://localhost:5000/showtests");
     } catch (err) {
       console.log(err);
     }

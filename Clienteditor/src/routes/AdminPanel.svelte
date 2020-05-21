@@ -167,6 +167,7 @@
             class="problem-search rounded-full"
             id="problem-search"
             name="problem-search"
+            style= "width:86%"
             type="text"
             placeholder="Enter a problem name"
             bind:value={problemSearch} />
@@ -228,6 +229,7 @@
             class="problem-search rounded-full"
             id="problem-search"
             name="problem-search"
+            style= "width:86%"
             type="text"
             placeholder="Enter a Test name"
             bind:value={testSearch} />
@@ -281,6 +283,7 @@
             class="problem-search rounded-full"
             id="problem-search"
             name="problem-search"
+            style= "width:100%"
             type="text"
             placeholder="Enter a user name"
             bind:value={attemptSearch} />
@@ -294,7 +297,7 @@
           {#each res.data.searchAttempt as attempt}
             <div
               id="problem-{attempt.id}"
-              class="card-problem {'cursor-pointer'}">
+              class="card-problem">
               <p class="problem__name">
                 {attempt.user.name}
                 <span class="text-xs font-normal italic lowercase">
