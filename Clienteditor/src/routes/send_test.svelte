@@ -14,7 +14,7 @@
 <style>
   .heading {
     width: 100%;
-    padding: 1vh;
+
     text-align: center;
     font-size: 4vh;
     margin-top: 2vh;
@@ -28,7 +28,7 @@
   <div>
     <Navbar />
   </div>
-  <h1 class="heading text-elight">
+  <h1 class="heading text-elight text-center">
     <strong>Send Test</strong>
   </h1>
 
@@ -46,9 +46,9 @@
         </div>
         <div class="md:w-3/5">
           <input
-            class="bg-gray-200 appearance-none border-2 border-gray-200 rounded
-            w-full py-2 px-4 text-edark leading-tight focus:outline-none
-            focus:bg-white "
+            class="bg-gray-200 appearance-none border-2 border-gray-200
+            rounded-full w-full py-2 px-4 text-edark leading-tight
+            focus:outline-none focus:bg-white "
             id="inline-full-name"
             type="text"
             bind:value={mailInitials.email}
@@ -66,9 +66,9 @@
         </div>
         <div class="md:w-3/5">
           <input
-            class="bg-gray-200 appearance-none border-2 border-gray-200 rounded
-            w-full py-2 px-4 text-edark leading-tight focus:outline-none
-            focus:bg-white "
+            class="bg-gray-200 appearance-none border-2 border-gray-200
+            rounded-full w-full py-2 px-4 text-edark leading-tight
+            focus:outline-none focus:bg-white "
             id="inline-full-name"
             type="Number"
             bind:value={mailInitials.linktime}

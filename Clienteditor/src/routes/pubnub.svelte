@@ -97,29 +97,47 @@
     right: 3%;
     bottom: 5%;
   }
+  .night {
+    background-color: white;
+  }
+  :global(body.dark-mode) .night {
+    background-color: #1b262c;
+  }
   .chat {
     position: fixed;
-
+    background-color: #d3d3d3;
     bottom: 120px;
     right: 50px;
     height: 500px;
     display: flex;
     flex-direction: column;
     width: 600px;
-    border: 1px solid #dcc;
   }
   /* chit chat */
   :global(body.dark-mode) .chat-notification {
-    background-color: #1b262c;
+    background-color: #2d393f;
     color: white;
   }
   :global(body.dark-mode) .chat-notification-title {
-    background-color: #1b262c;
+    background-color: #2d393f;
     color: white;
+  }
+
+  :global(body.dark-mode) .chat {
+    position: fixed;
+    background-color: #1b262c;
+    bottom: 120px;
+    right: 50px;
+    height: 500px;
+    display: flex;
+    flex-direction: column;
+    width: 600px;
   }
 
   .chat-notification {
     display: flex;
+    background-color: #77abb7;
+    color: white;
     max-width: 14rem;
     margin: 0 auto;
     padding: 1.5rem;
@@ -140,7 +158,7 @@
     padding-top: 0.25rem;
   }
   .chat-notification-title {
-    color: #1a202c;
+    color: white;
     font-size: 1.25rem;
     line-height: 1;
   }
@@ -152,32 +170,55 @@
   .prob {
     list-style: none;
   }
+
+  .message-title {
+    background-color: rgba(245, 253, 255, 0.815);
+  }
+
+  :global(body.dark-mode) .message-title {
+    background-color: #2d393f;
+    color: white;
+  }
+  .message-self {
+    background-color: #e2f7cb;
+    color: #2d393f;
+  }
+  :global(body.dark-mode) .message-self {
+    background-color: #2d393f;
+    color: azure;
+  }
+  .textt {
+    color: black;
+  }
+  :global(body.darkmode) .textt {
+    color: azure;
+  }
 </style>
 
 <link
   href="https://unpkg.com/tailwindcss@^1.0/dist/tailwind.min.css"
   rel="stylesheet" />
-<div class="container">
+<div class="containe ">
   {#if hasJoinedChat}
-    <div class="chat flex flex-row shadow-xl rounded-lg">
+    <div class="chat flex rounded-sm flex-row shadow-xl rounded-lg">
       <!-- Left-->
-      <div class="w-1/3 border flex flex-col">
+      <div class="w-1/3 rounded flex flex-col">
         <!-- Header -->
         <div
-          class="py-2 px-3 bg-grey-lighter flex flex-row justify-between
+          class="py-2 px-3 rounded message-title flex flex-row justify-between
           items-center">
           <div class="flex">
-            <p class="text-grey-darkest">Acitve Channel</p>
+            <p class="textt px-6">Acitve Channel</p>
           </div>
         </div>
         <!-- Contacts -->
-        <div class="bg-grey-lighter flex-1 overflow-auto">
+        <div class="message-title rounded flex-1 overflow-auto">
           {#each channels as channel}
             <div
-              class="bg-white hover:bg-gray-400 px-3 flex items-center
+              class="night hover:bg-gray-400 px-3 border flex items-center
               hover:bg-grey-lighter cursor-pointer"
               on:click={changeChannel({ channel })}>
-              <div class="ml-4 flex-1 border-b border-grey-lighter py-4">
+              <div class="ml-4 flex-1 py-4">
                 <div class="flex items-bottom justify-between">
                   {#if channel == 'channel.' + userName}
                     <p class="text-grey-darkest">Private</p>
@@ -191,17 +232,17 @@
         </div>
       </div>
       <!-- Right -->
-      <div class="w-2/3 border flex flex-col">
+      <div class="w-2/3 flex flex-col">
         <!-- //header -->
         <div
-          class="px-3 flex-row items-center bg-grey-light cursor-pointer
-          rounded-lg">
+          class="px-3 flex-row shadow-l message-title items-center
+          cursor-pointer rounded-lg">
           <div class="ml-4 flex-1 border-b border-grey-lighter py-4">
             <div class="flex items-bottom justify-between">
               {#if channelName == 'channel.' + userName}
-                <p class="text-grey-darkest">Private</p>
+                <p class="textt">Private</p>
               {:else}
-                <p class="text-grey-darkest">{channelName}</p>
+                <p class="text-black">{channelName}</p>
               {/if}
             </div>
             <p class="text-grey-dark mt-1 text-sm">{comment}</p>
@@ -216,16 +257,16 @@
               {#each output as temp}
                 {#if temp.channel == channelName}
                   {#if temp.publisher == userName}
-                    <div class="flex justify-end mb-2">
-                      <div
-                        class="rounded py-2 px-3"
-                        style="background-color: #E2F7CB">
-                        <p class="text-sm mt-1">{temp.message}</p>
+                    <div class="flex justify-end py-2">
+                      <div class="rounded py-2 px-3 message-self ">
+                        <p class="text-sm text-grey-dark mt-1">
+                          {temp.message}
+                        </p>
                       </div>
                     </div>
                   {:else}
-                    <div class="ml-4 flex-1 rounded py-4">
-                      <div class="flex items-bottom justify-between">
+                    <div class="ml-4 flex-1 rounded py-2">
+                      <div class="flex items-bottomjustify-between">
                         <p class="text-grey-darkest">{temp.publisher}</p>
                       </div>
                       <p class="text-grey-dark mt-1 text-sm">{temp.message}</p>
@@ -240,11 +281,13 @@
         <!-- bottom container -->
         <div class="container block" style=" position: absolute; bottom: 0;">
           <div class="relative text-gray-600">
-            <form on:submit|preventDefault={sendMessage(newMessage)}>
+            <form
+              autocomplete="off"
+              on:submit|preventDefault={sendMessage(newMessage)}>
               <input
                 type="search"
                 bind:value={newMessage}
-                name="serch"
+                name="search"
                 placeholder="Type Message and Press Enter"
                 class="bg-white h-10 px-5 pr-10 rounded-full text-sm
                 focus:outline-none" />

@@ -44,53 +44,64 @@
   .unitinput {
     @apply ml-6 p-2 mb-3 text-2xl bg-elight w-full max-w-4xl box-border text-edark rounded;
   }
+
+  body {
+    --color-ed: #1d1f21;
+    --color-d: #25282c;
+    --color-l: #303030;
+    --color-el: #c4c4c4;
+  }
 </style>
 
-<div class="mx-auto flex-col flex-grow w-full h-full bg-edark">
-  <EditorNavbar />
-  <div class="text-edark mx-auto max-w-5xl w-full">
-    <div class="mx-auto max-w-2xl">
-      <h1 class="text-elight text-5xl my-10">Sourcefuse Technologies</h1>
+<body>
 
+  <div class="mx-auto flex-col flex-grow w-full h-full bg-edark">
+    <EditorNavbar />
+    <div class="text-edark mx-auto max-w-5xl w-full">
+      <div class="mx-auto max-w-2xl">
+        <h1 class="text-elight text-5xl my-10">Sourcefuse Technologies</h1>
+
+      </div>
+      <div class="border-solid border-2 mt-10 border-light p-4">
+        <div>
+          <h2 class="labels text-4xl">User Details</h2>
+        </div>
+        <div>
+          <div>
+            <label class="labels">Name</label>
+            <input
+              bind:value={user.name}
+              class="unitinput"
+              type="text"
+              placeholder="Enter Name" />
+          </div>
+          <div>
+            <label class="labels">Registered Email</label>
+            <input
+              bind:value={user.email}
+              class="unitinput"
+              type="text"
+              placeholder="Email" />
+          </div>
+          <div>
+            <label class="labels">College Name</label>
+            <input
+              bind:value={user.collegeName}
+              class="unitinput"
+              type="text"
+              placeholder="College Name" />
+          </div>
+        </div>
+      </div>
     </div>
-    <div class="border-solid border-2 mt-10 border-light p-4">
-      <div>
-        <h2 class="labels text-4xl">User Details</h2>
-      </div>
-      <div>
-        <div>
-          <label class="labels">Name</label>
-          <input
-            bind:value={user.name}
-            class="unitinput"
-            type="text"
-            placeholder="Enter Name" />
-        </div>
-        <div>
-          <label class="labels">Registered Email</label>
-          <input
-            bind:value={user.email}
-            class="unitinput"
-            type="text"
-            placeholder="Email" />
-        </div>
-        <div>
-          <label class="labels">College Name</label>
-          <input
-            bind:value={user.collegeName}
-            class="unitinput"
-            type="text"
-            placeholder="College Name" />
-        </div>
-      </div>
+    <div class="my-10 flex justify-center">
+      <button
+        on:click={() => submitData()}
+        class="bg-dark hover:bg-elight hover:text-edark outline-none text-white
+        font-bold py-4 px-4 text-xl rounded-full">
+        Submit
+      </button>
     </div>
   </div>
-  <div class="my-10 flex justify-center">
-    <button
-      on:click={() => submitData()}
-      class="bg-dark hover:bg-elight hover:text-edark outline-none text-white
-      font-bold py-4 px-4 text-xl rounded-full">
-      Submit
-    </button>
-  </div>
-</div>
+
+</body>

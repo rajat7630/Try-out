@@ -39,11 +39,11 @@
   href="https://unpkg.com/tailwindcss@^1.0/dist/tailwind.min.css"
   rel="stylesheet" />
 
-<div class="bg-edark h-full flex flex-col box-border">
+<div class="bg-edark rounded h-full flex flex-col box-border">
   <header>
     <Navbar />
   </header>
-  <div class="bg-edark flex flex-col max-w-full overflow-auto">
+  <div class="bg-edark rounded flex flex-col max-w-full overflow-auto">
     {#await $problem}
       Loading...
     {:then result}
@@ -58,9 +58,9 @@
           Time Limit :- {result.data.problemById.timelimit} ms
         </div>
       </div>
-      <div class="bg-dark max-w-full mt-12 mx-64">
+      <div class="bg-dark rounded max-w-full mt-12 mx-64">
 
-        <div class="rounded shadow-lg">
+        <div class="shadow-lg rounded">
           <div class="px-12 py-8">
             <div class="w-full h-full px-3 flex flex-col">
               <label class=" text-2xl text-elight mb-3 my-2">Description</label>

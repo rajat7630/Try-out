@@ -49,6 +49,7 @@ async function addNewTest(test) {
     };
 }
 async function deleteTest(id) {
+    await Attempt.query().delete().where('t_id', parseInt(id));
     await TestProblem.query().delete().where('t_id', parseInt(id));
     await Test.query().delete().where('id', parseInt(id));
     return {
@@ -292,6 +293,7 @@ function sendMail(mailDetails) {
     const mailBody = `<h1>Sourcefuse Technologies</h1><p>This link will be active for ${mailDetails.linktime} hours</p><span>To give test click <a href="http://localhost:5000/givetest/${token}">here</a></span>`;
     mailOptions.html = mailBody;
     mailOptions.to = mailDetails.email;
+    console.log(mailBody);
     transporter.sendMail(mailOptions, (error, info) => {
         if (error) {
             throw error;
@@ -365,7 +367,7 @@ async function attemptReducer(attempt) {
     return {
         id: attempt.id,
         user: user[0],
-        test: test[0],
+        test: testReducer(test[0]),
         solutions: attempt.solutions,
         attemptTime: attempt.attemptTime,
         score: attempt.Score,

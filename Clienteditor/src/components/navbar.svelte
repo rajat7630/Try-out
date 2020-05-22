@@ -51,8 +51,8 @@
     --color-el: #77abb7;
   }
   :global(body.dark-mode) .day {
-    background-color: #1b262c;
-    color: #bfc2c7;
+    background-color: #2d393f;
+    color: white;
   }
   :global(body) .day {
     background-color: #77abb7;
