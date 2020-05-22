@@ -20,7 +20,7 @@
       search: ""
     }
   });
-   const searchAttempts = query(client, {
+  const searchAttempts = query(client, {
     query: apolloClient.getSearchAttempts,
     variables: {
       search: ""
@@ -40,7 +40,7 @@
 
   let problemSearch = "";
   let testSearch = "";
-  let attemptSearch = ""
+  let attemptSearch = "";
 
   $: searchProblems.refetch({
     search: problemSearch
@@ -50,24 +50,33 @@
     search: testSearch
   });
 
-   $: searchAttempts.refetch({
+  $: searchAttempts.refetch({
     search: attemptSearch
   });
 
   function timeConverter(timestamp) {
-      let dateObj = new Date(timestamp * 1000);
-      let year = dateObj.getUTCFullYear().toString();
-      let b = dateObj.getUTCDay()
-      let month = dateObj.getUTCMonth().toString();
-      let day = dateObj.getUTCDate().toString();
+    let dateObj = new Date(timestamp * 1000);
+    let year = dateObj.getUTCFullYear().toString();
+    let b = dateObj.getUTCDay();
+    let month = dateObj.getUTCMonth().toString();
+    let day = dateObj.getUTCDate().toString();
 
-      let hours = dateObj.getUTCHours();  
-      let minutes = dateObj.getUTCMinutes(); 
-      let seconds = dateObj.getUTCSeconds(); 
-      let formattedTime = day + '/'+ month + '/' + year + ' '+hours.toString().padStart(2, '0') + ':' +  
-                minutes.toString().padStart(2, '0') + ':' +  
-                seconds.toString().padStart(2, '0'); 
-      return formattedTime;
+    let hours = dateObj.getUTCHours();
+    let minutes = dateObj.getUTCMinutes();
+    let seconds = dateObj.getUTCSeconds();
+    let formattedTime =
+      day +
+      "/" +
+      month +
+      "/" +
+      year +
+      " " +
+      hours.toString().padStart(2, "0") +
+      ":" +
+      minutes.toString().padStart(2, "0") +
+      ":" +
+      seconds.toString().padStart(2, "0");
+    return formattedTime;
   }
 </script>
 
@@ -244,11 +253,11 @@
                 </span>
               </p>
               <div class="flex w-full justify-between items-center mt-4">
-                <span class="problem__type">TimeLimit :{test.timelimit} min</span>
+                <span class="problem__type">
+                  TimeLimit :{test.timelimit} min
+                </span>
                 <div class="text-xs ml-8">
-                  <span class="font-bold">
-                    {timeConverter(test.createdAt)}
-                  </span>
+                  <span class="font-bold">{timeConverter(test.createdAt)}</span>
                 </div>
               </div>
             </div>
@@ -293,9 +302,7 @@
                 </span>
               </p>
               <div class="flex w-full justify-between items-center mt-4">
-                <span class="problem__type">
-                  Score :{attempt.score}
-                </span>
+                <span class="problem__type">Score :{attempt.score}</span>
                 <div class="text-xs ml-8">
                   <span class="font-bold">
                     {timeConverter(attempt.attemptTime)}

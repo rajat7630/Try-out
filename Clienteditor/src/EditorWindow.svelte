@@ -47,6 +47,7 @@
   .editor {
     width: 100%;
     font-size: 1.4rem;
+    height: 50vh;
     border-bottom: solid 2px #25282c;
   }
 </style>

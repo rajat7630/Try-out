@@ -7,6 +7,9 @@
   import "ace-builds/src-noconflict/mode-javascript.js";
   import "ace-builds/src-noconflict/theme-tomorrow_night.js";
   import { problemStore } from "./problem_store.js";
+  import { apolloClient } from "../../apolloClient.js";
+  import { getClient, query, subscribe, mutate } from "svelte-apollo";
+  const client = getClient();
   console.log($problemStore);
   let editor;
   let inputeditor;
@@ -39,7 +42,7 @@
 
   afterUpdate(() => {
     var pos = editor.session.selection.toJSON();
-    console.log($problemStore.solution)
+    console.log($problemStore.solution);
     editor.session.setValue($problemStore.solution);
     editor.session.selection.fromJSON(pos);
   });
@@ -53,16 +56,26 @@
     };
   })();
   let result = "";
-  function outputData(e) {
-    try {
-      let code = editor.getValue();
-      console.log(code);
-      $problemStore.solution = code;
-      console.log(editor.getValue());
-      let testCase = inputeditor.getValue();
-      result = eval(`${code} solution(${testCase})`);
-    } catch (err) {
-      result = err;
+  async function outputData(e) {
+    let code = editor.getValue();
+    console.log(code);
+    $problemStore.solution = code;
+    console.log(editor.getValue());
+    let testCase = inputeditor.getValue();
+    let res = `${code} solution(${testCase})`;
+    let data = await mutate(client, {
+      mutation: apolloClient.checkTimeLimit,
+      variables: { data: res, timelimit: $problemStore.timelimit }
+    });
+    console.log(data);
+    if (data.data.checkTimeLimit.success  === true) {
+      try {
+        result = eval(`${code} solution(${testCase})`);
+      } catch (err) {
+        result = err;
+      }
+    } else {
+      result = "Timelimit Exceeded";
     }
   }
 </script>

@@ -1,6 +1,6 @@
 import gql from 'graphql-tag';
 
-const getProblems = gql `
+const getProblems = gql`
   query getAllProblems {
     allProblems {
       id
@@ -14,7 +14,7 @@ const getProblems = gql `
     }
   }
 `;
-const getSearchProblems = gql `
+const getSearchProblems = gql`
   query getSearchProblems($search: String) {
     searchProblems(search: $search) {
       id
@@ -29,7 +29,7 @@ const getSearchProblems = gql `
     }
   }
 `;
-const getSearchAttempts = gql `
+const getSearchAttempts = gql`
   query getSearchAttempts($search: String) {
     searchAttempt(search: $search) {
       id
@@ -49,7 +49,7 @@ const getSearchAttempts = gql `
     }
   }
 `;
-const getSearchTests = gql `
+const getSearchTests = gql`
   query getSearchTests($search: String) {
     searchTests(search: $search) {
       id
@@ -63,7 +63,7 @@ const getSearchTests = gql `
     }
   }
 `;
-const problemsByAuthor = gql `
+const problemsByAuthor = gql`
   query problemsByAuthor($email: String) {
     problemsByAuthor(email: $email) {
       id
@@ -76,7 +76,7 @@ const problemsByAuthor = gql `
   }
 `;
 
-const getToken = gql `
+const getToken = gql`
   query getToken($id: ID!) {
     getToken(id: $id) {
       token
@@ -84,7 +84,7 @@ const getToken = gql `
   }
 `;
 
-const allTests = gql `
+const allTests = gql`
   query getTest {
     allTests {
       id
@@ -99,7 +99,7 @@ const allTests = gql `
   }
 `;
 
-const testsByAuthor = gql `
+const testsByAuthor = gql`
   query testsByAuthor($email: String) {
     testsByAuthor(email: $email) {
       id
@@ -109,7 +109,7 @@ const testsByAuthor = gql `
   }
 `;
 
-const testByToken = gql `
+const testByToken = gql`
   query getTest($token: String) {
     testByToken(token: $token) {
       id
@@ -118,7 +118,7 @@ const testByToken = gql `
   }
 `;
 
-const sendMail = gql `
+const sendMail = gql`
   mutation mailSender($linktime: String, $email: String, $test_id: String) {
     sendMail(linktime: $linktime, test_id: $test_id, email: $email) {
       success
@@ -127,7 +127,7 @@ const sendMail = gql `
   }
 `;
 
-const addProblem = gql `
+const addProblem = gql`
   mutation addNewProblem(
     $problemName: String
     $description: String
@@ -163,7 +163,7 @@ const addProblem = gql `
   }
 `;
 
-const deleteProblem = gql `
+const deleteProblem = gql`
   mutation deleteProblem($id: ID) {
     deleteProblem(id: $id) {
       id
@@ -174,7 +174,7 @@ const deleteProblem = gql `
   }
 `;
 
-const updateProblem = gql `
+const updateProblem = gql`
   mutation updateProblem(
     $id: ID!
     $problemName: String
@@ -203,7 +203,7 @@ const updateProblem = gql `
   }
 `;
 
-const addTest = gql `
+const addTest = gql`
   mutation addNewTest(
     $testName: String
     $difficultyLevel: String
@@ -228,7 +228,7 @@ const addTest = gql `
   }
 `;
 
-const deleteTest = gql `
+const deleteTest = gql`
   mutation deleteTest($id: ID) {
     deleteTest(id: $id) {
       success
@@ -236,7 +236,7 @@ const deleteTest = gql `
     }
   }
 `;
-const updateTest = gql `
+const updateTest = gql`
   mutation updateTest(
     $id: ID
     $testName: String
@@ -261,7 +261,7 @@ const updateTest = gql `
   }
 `;
 
-const addUser = gql `
+const addUser = gql`
   mutation addNewUser(
     $name: String
     $email: String
@@ -282,7 +282,7 @@ const addUser = gql `
     }
   }
 `;
-const addTestProblem = gql `
+const addTestProblem = gql`
   mutation addTestProblem($t_id: Int, $p_id: Int) {
     addTestProblem(data: { t_id: $t_id, p_id: $p_id }) {
       success
@@ -303,7 +303,7 @@ const addTestProblem = gql `
   }
 `;
 
-const getProblemById = gql `
+const getProblemById = gql`
   query getProblemById($id: ID!) {
     problemById(id: $id) {
       id
@@ -319,7 +319,7 @@ const getProblemById = gql `
   }
 `;
 
-const getTestById = gql `
+const getTestById = gql`
   query getTestById($id: ID!) {
     testById(id: $id) {
       id
@@ -334,7 +334,7 @@ const getTestById = gql `
   }
 `;
 
-const getAttempts = gql `
+const getAttempts = gql`
   query getAttempts($id: ID) {
     getAttempt(id: $id) {
       id
@@ -351,7 +351,7 @@ const getAttempts = gql `
   }
 `;
 
-const getAllAttempts = gql `
+const getAllAttempts = gql`
   query getAllAttempts {
     getAllAttempt {
       id
@@ -371,7 +371,7 @@ const getAllAttempts = gql `
     }
   }
 `;
-const updateAttempt = gql `
+const updateAttempt = gql`
   mutation updateAttempt($id: ID, $u_id: ID, $solutions: JSON) {
     updateAttempt(data: { u_id: $u_id, id: $id, solutions: $solutions }) {
       success
@@ -379,7 +379,7 @@ const updateAttempt = gql `
     }
   }
 `;
-const addAttempt = gql `
+const addAttempt = gql`
   mutation addAttempt($u_id: ID, $t_id: ID, $solutions: JSON) {
     addAttempt(data: { u_id: $u_id, t_id: $t_id, solutions: $solutions }) {
       success
@@ -389,7 +389,7 @@ const addAttempt = gql `
   }
 `;
 
-const checkIfAvailable = gql `
+const checkIfAvailable = gql`
   mutation checkIfAvailable($problemName: String) {
     checkProblemIfExists(problemName: $problemName) {
       success
@@ -397,7 +397,7 @@ const checkIfAvailable = gql `
     }
   }
 `;
-const checkTestIfAvailable = gql `
+const checkTestIfAvailable = gql`
   mutation checkTestIfAvailable($testName: String) {
     checkTestIfExists(testName: $testName) {
       success
@@ -405,31 +405,42 @@ const checkTestIfAvailable = gql `
     }
   }
 `;
+
+const checkTimeLimit = gql`
+mutation checkTimeLimit($data:String, $timelimit:String){
+  checkTimeLimit(data:$data, timelimit:$timelimit)
+  {
+    success
+    message
+  }
+}
+`;
 export const apolloClient = {
-    checkTestIfAvailable,
-    checkIfAvailable,
-    getAttempts,
-    getAllAttempts,
-    updateAttempt,
-    addAttempt,
-    sendMail,
-    getTestById,
-    getProblems,
-    getSearchProblems,
-    getSearchTests,
-    getSearchAttempts,
-    getProblemById,
-    testsByAuthor,
-    deleteProblem,
-    updateProblem,
-    updateTest,
-    allTests,
-    problemsByAuthor,
-    addProblem,
-    addTest,
-    addTestProblem,
-    deleteTest,
-    addUser,
-    getToken,
-    testByToken,
+  checkTimeLimit,
+  checkTestIfAvailable,
+  checkIfAvailable,
+  getAttempts,
+  getAllAttempts,
+  updateAttempt,
+  addAttempt,
+  sendMail,
+  getTestById,
+  getProblems,
+  getSearchProblems,
+  getSearchTests,
+  getSearchAttempts,
+  getProblemById,
+  testsByAuthor,
+  deleteProblem,
+  updateProblem,
+  updateTest,
+  allTests,
+  problemsByAuthor,
+  addProblem,
+  addTest,
+  addTestProblem,
+  deleteTest,
+  addUser,
+  getToken,
+  testByToken,
 };

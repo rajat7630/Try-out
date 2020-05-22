@@ -31,23 +31,33 @@
       useWorker: false
     });
   });
-  function runHandler() {
-    try {
-      let ind = 0;
-      $dataStore.forEach((ele, index) => {
-        if (ele.id === $currentTab.id) {
-          ind = index;
-          return;
-        }
-      });
-      console.log(ind);
-      let code = $dataStore[ind].solution;
-      console.log(code);
-      console.log(inputeditor.getValue());
-      let testCase = inputeditor.getValue();
-      result = eval(`${code} solution(${testCase})`);
-    } catch (err) {
-      result = err;
+  async function runHandler() {
+    let ind = 0;
+    $dataStore.forEach((ele, index) => {
+      if (ele.id === $currentTab.id) {
+        ind = index;
+        return;
+      }
+    });
+    console.log(ind);
+    let code = $dataStore[ind].solution;
+    console.log(code);
+    console.log(inputeditor.getValue());
+    let testCase = inputeditor.getValue();
+    let res = `${code} solution(${testCase})`;
+    let data = await mutate(client, {
+      mutation: apolloClient.checkTimeLimit,
+      variables: { data: res, timelimit: $dataStore[ind].timelimit }
+    });
+    console.log(data);
+    if (data.data.checkTimeLimit.success  === true) {
+      try {
+        result = eval(`${code} solution(${testCase})`);
+      } catch (err) {
+        result = err;
+      }
+    } else {
+      result = "Timelimit Exceeded";
     }
   }
 

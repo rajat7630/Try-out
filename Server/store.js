@@ -4,8 +4,10 @@ const Problem = require('./models/Problem');
 const TestProblem = require('./models/TestProblem');
 const Test = require('./models/Test');
 const User = require('./models/User');
+const worker = require("./worker_file.js");
 const Attempt = require('./models/Attempt');
 const { ref, fn } = require('objection');
+const { parentPort } = require("worker_threads");
 
 const transporter = nodemailer.createTransport({
     service: 'Gmail',
@@ -274,6 +276,7 @@ async function getTestByToken(token) {
     res2[0].problems = res1.map((ele) => ({
         problemName: ele.problem.problemName,
         id: ele.problem.id,
+        timelimit: ele.problem.timelimit,
         description: ele.problem.description,
     }));
     console.log(res2[0]);
@@ -322,17 +325,23 @@ async function updateAttempt(data) {
     const tt = JSON.parse(data.solutions);
 
     let score = 0;
-    rr.map((ele, index) => {
-        const result = eval(
-            `${tt[index].solution} solution(JSON.parse(${ele.problem.problemTests}))`
-        );
-        const originalResult = eval(
-            `${ele.problem.solution} solution(JSON.parse(${ele.problem.problemTests}))`
-        );
-        console.log("result", result, "original", originalResult);
-        if (result === originalResult) {
-            score += parseInt(ele.score);
-        }
+    rr.map(async (ele, index) => {
+        let ree = `${tt[index].solution} solution(JSON.parse(${ele.problem.problemTests}))`;
+        await worker(ree, ele.problem.timelimit, (data) => {
+            console.log(data);
+            if (data === true) {
+                const result = eval(
+                    `${tt[index].solution} solution(JSON.parse(${ele.problem.problemTests}))`
+                );
+                const originalResult = eval(
+                    `${ele.problem.solution} solution(JSON.parse(${ele.problem.problemTests}))`
+                );
+                console.log("result", result, "original", originalResult);
+                if (result === originalResult) {
+                    score += parseInt(ele.score);
+                }
+            }
+        });
         return { ...ele, userSolution: tt[index].solution };
     });
     const res2 = await Attempt.query().patchAndFetchById(parseInt(data.id), {
@@ -399,7 +408,18 @@ async function checkTestIfExists(testName) {
         message: 'Test Name exist',
     };
 }
+async function checkTimeLimit(data, timelimit) {
+    let status;
+    await worker(data, timelimit, (check) => {
+        status = check;
+    });
+    return {
+        success: status,
+        message: "proceed"
+    }
+}
 module.exports = {
+    checkTimeLimit,
     checkTestIfExists,
     checkProblemIfExists,
     getAttempt,

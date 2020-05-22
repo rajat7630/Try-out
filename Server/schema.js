@@ -1,5 +1,5 @@
 const { gql } = require('apollo-server');
-const typeDefs = gql `
+const typeDefs = gql`
   scalar JSON
   scalar JSONObject
 
@@ -77,6 +77,11 @@ const typeDefs = gql `
     sendMail(linktime: String, test_id: String, email: String): mailSent
     addTestProblem(data: addTestProblemsInputs): testProblemOutput!
     updateAttempt(data: updateAttemptInput): updateAttemptOutput
+    checkTimeLimit(data:String, timelimit: String):timeLimitOutput
+  }
+  type timeLimitOutput{
+    success: Boolean
+    message: String
   }
   type deleteTestOutput{
     success:Boolean

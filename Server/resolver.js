@@ -31,11 +31,9 @@ module.exports = {
         deleteTest: (parent, { id }, ctx, info) => store.deleteTest(id),
         updateTest: (parent, { id, data }, ctx, info) => store.updateTest(id, data),
         addUser: (parent, { data }, ctx, info) => store.addNewUser(data),
-
         addTestProblem: (parent, { data }, ctx, info) => store.addTestProblem(data),
-
         sendMail: (_, mailDetails) => store.sendMail(mailDetails),
-
         updateAttempt: (_, { data }) => store.updateAttempt(data),
+        checkTimeLimit: (_, { data, timelimit }) => store.checkTimeLimit(data, timelimit),
     },
 };
