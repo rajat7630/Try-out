@@ -1,5 +1,5 @@
 const { gql } = require('apollo-server');
-const typeDefs = gql`
+const typeDefs = gql `
   scalar JSON
   scalar JSONObject
 
@@ -59,7 +59,7 @@ const typeDefs = gql`
     testByToken(token: String): Test
     getAttempt(id: ID): [Attempt]
     getAllAttempt: [Attempt]
-    searchProblems(search: String):[Problem]
+    searchProblems(search: String, page: Int, pageSize: Int):[Problem]
     searchTests(search: String):[Test]
     searchAttempt(search: String):[Attempt]
   }

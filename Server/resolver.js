@@ -14,7 +14,7 @@ module.exports = {
         problemsByAuthor: (_, { email }) => store.getProblemsByAuthor(email),
         getAttempt: (_, { id }) => store.getAttempt(id),
         getAllAttempt: () => store.getAllAttempt(),
-        searchProblems: (_, { search }) => store.getSearchProblems(search),
+        searchProblems: (_, { search, page = 1, pageSize = 15 }) => store.getSearchProblems(search, page, pageSize),
         searchTests: (_, { search }) => store.getSearchTests(search),
         searchAttempt: (_, { search }) => store.getSearchAttempt(search),
     },
