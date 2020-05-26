@@ -53,7 +53,7 @@
   }
 </style>
 
-<body>
+<body style=" width: 100vw; height: 100vh;">
 
   <div class="mx-auto flex-col flex-grow w-full h-full bg-edark">
     <EditorNavbar />

@@ -114,7 +114,7 @@
   }
   .chat {
     position: fixed;
-    background-color: #fff;
+    background-color: #f1f1f1;
     bottom: 120px;
     right: 50px;
     height: 400px;
