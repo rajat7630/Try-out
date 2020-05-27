@@ -60,8 +60,8 @@ const typeDefs = gql `
     getAttempt(id: ID): [Attempt]
     getAllAttempt: [Attempt]
     searchProblems(search: String, page: Int, pageSize: Int):[Problem]
-    searchTests(search: String):[Test]
-    searchAttempt(search: String):[Attempt]
+    searchTests(search: String, page: Int, pageSize: Int):[Test]
+    searchAttempt(search: String, page: Int, pageSize: Int):[Attempt]
   }
   type Mutation {
     checkProblemIfExists(problemName: String): checkProblemIfExistsOutput

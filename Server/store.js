@@ -193,26 +193,31 @@ async function getSearchProblems(search, page, pageSize) {
     return query.results.map((problem) => problemReducer(problem));
 }
 
-async function getSearchTests(search) {
+async function getSearchTests(search, page, pageSize) {
     let query = Test.query().select('tests.*');
     if (search) {
-        query = await query.where(fn.lower(ref('testName')), 'ilike', `%${(search.match(/\w+/gi) || []).join('%')}%`);
+        query = await query.where(fn.lower(ref('testName')), 'ilike', `%${(search.match(/\w+/gi) || []).join('%')}%`)
+            .orderBy('createdAt', 'DESC')
+            .page(page - 1, pageSize);
     } else {
-        query = await query.orderBy('createdAt', 'DESC');
+        query = await query.orderBy('createdAt', 'DESC').page(page - 1, pageSize);
     }
-    return query.map((test) => testReducer(test));
+    return query.results.map((test) => testReducer(test));
 }
 
-async function getSearchAttempt(search) {
+async function getSearchAttempt(search, page, pageSize) {
     var res;
     if (search) {
         res = await Attempt.query()
             .joinRelated('user')
-            .where(fn.lower(ref('user.name')), 'ilike', `%${(search.match(/\w+/gi) || []).join('%')}%`);
+            .where(fn.lower(ref('user.name')), 'ilike', `%${(search.match(/\w+/gi) || []).join('%')}%`)
+            .orderBy('attemptTime', 'DESC')
+            .page(page - 1, pageSize);
     } else {
-        res = await Attempt.query().select('attempts.*').orderBy('attemptTime', 'DESC');
+        res = await Attempt.query().select('attempts.*').orderBy('attemptTime', 'DESC')
+            .page(page - 1, pageSize);
     }
-    return res.map((attempt) => attemptReducer(attempt));
+    return res.results.map((attempt) => attemptReducer(attempt));
 }
 
 async function deleteProblem(id) {
