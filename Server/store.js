@@ -96,8 +96,8 @@ async function addNewUser(user) {
     });
     const token = jwt.sign({ test_id: user.testId, user_id: res.id, attempt_id: res3.id },
         'helloo', {
-            expiresIn: 60 * parseInt(res2[0].timelimit),
-        }
+        expiresIn: 60 * parseInt(res2[0].timelimit),
+    }
     );
     return {
         success: true,
@@ -189,8 +189,9 @@ async function getSearchProblems(search, page, pageSize) {
             .page(page - 1, pageSize);
     } else {
         query = await query.orderBy('createdAt', 'DESC').page(page - 1, pageSize);
+        console.log(query);
     }
-    return query.results.map((problem) => problemReducer(problem));
+    return { problems: query.results.map((problem) => problemReducer(problem)), total: query.total };
 }
 
 async function getSearchTests(search, page, pageSize) {
@@ -202,7 +203,7 @@ async function getSearchTests(search, page, pageSize) {
     } else {
         query = await query.orderBy('createdAt', 'DESC').page(page - 1, pageSize);
     }
-    return query.results.map((test) => testReducer(test));
+    return { tests: query.results.map((test) => testReducer(test)), total: query.total };
 }
 
 async function getSearchAttempt(search, page, pageSize) {
@@ -217,7 +218,7 @@ async function getSearchAttempt(search, page, pageSize) {
         res = await Attempt.query().select('attempts.*').orderBy('attemptTime', 'DESC')
             .page(page - 1, pageSize);
     }
-    return res.results.map((attempt) => attemptReducer(attempt));
+    return { attempts: res.results.map((attempt) => attemptReducer(attempt)), total: res.total };
 }
 
 async function deleteProblem(id) {
@@ -294,8 +295,8 @@ async function getTestByToken(token) {
 function sendMail(mailDetails) {
     const token = jwt.sign({ testId: mailDetails.test_id, email: mailDetails.email },
         'helloo', {
-            expiresIn: 60 * 60 * parseInt(mailDetails.linktime),
-        }
+        expiresIn: 60 * 60 * parseInt(mailDetails.linktime),
+    }
     );
     const mailBody = `<h1>Sourcefuse Technologies</h1><p>This link will be active for ${mailDetails.linktime} hours</p><span>To give test click <a href="http://localhost:5000/givetest/${token}">here</a></span>`;
     mailOptions.html = mailBody;
@@ -334,7 +335,7 @@ async function updateAttempt(data) {
     const tt = JSON.parse(data.solutions);
 
     let score = 0;
-    rr.map(async(ele, index) => {
+    rr.map(async (ele, index) => {
         let ree = `${tt[index].solution} solution(JSON.parse(${ele.problem.problemTests}))`;
         await worker(ree, ele.problem.timelimit, (data) => {
             console.log(data);
@@ -351,7 +352,7 @@ async function updateAttempt(data) {
                 }
             }
         });
-        return {...ele, userSolution: tt[index].solution };
+        return { ...ele, userSolution: tt[index].solution };
     });
     const res2 = await Attempt.query().patchAndFetchById(parseInt(data.id), {
         u_id: parseInt(data.u_id),

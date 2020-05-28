@@ -15,9 +15,9 @@ const getProblems = gql`
   }
 `;
 const getSearchProblems = gql`
-  query getSearchProblems($search: String) {
-    searchProblems(search: $search) {
-      id
+  query getSearchProblems($search: String, $page: Int, $pageSize: Int) {
+    searchProblems(search: $search , page:$page, pageSize: $pageSize) {
+      problems{id
       problemName
       description
       problemTests
@@ -25,14 +25,15 @@ const getSearchProblems = gql`
       timelimit
       datalimit
       solution
-      createdAt
+      createdAt}
+      total
     }
   }
 `;
 const getSearchAttempts = gql`
-  query getSearchAttempts($search: String) {
-    searchAttempt(search: $search) {
-      id
+  query getSearchAttempts($search: String, $page: Int, $pageSize: Int) {
+    searchAttempt(search: $search , page:$page, pageSize: $pageSize) {
+      attempts{id
       user {
         id
         email
@@ -45,21 +46,23 @@ const getSearchAttempts = gql`
       }
       solutions
       attemptTime
-      score
+      score}
+      total
     }
   }
 `;
 const getSearchTests = gql`
-  query getSearchTests($search: String) {
-    searchTests(search: $search) {
-      id
+  query getSearchTests($search: String, $page: Int, $pageSize: Int) {
+    searchTests(search: $search , page:$page, pageSize: $pageSize) {
+      tests{id
       testName
       difficultyLevel
       email
       createdAt
       problems
       tags
-      timelimit
+      timelimit}
+      total
     }
   }
 `;

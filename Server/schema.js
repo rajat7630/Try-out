@@ -1,5 +1,5 @@
 const { gql } = require('apollo-server');
-const typeDefs = gql `
+const typeDefs = gql`
   scalar JSON
   scalar JSONObject
 
@@ -59,9 +59,9 @@ const typeDefs = gql `
     testByToken(token: String): Test
     getAttempt(id: ID): [Attempt]
     getAllAttempt: [Attempt]
-    searchProblems(search: String, page: Int, pageSize: Int):[Problem]
-    searchTests(search: String, page: Int, pageSize: Int):[Test]
-    searchAttempt(search: String, page: Int, pageSize: Int):[Attempt]
+    searchProblems(search: String, page: Int, pageSize: Int) : searchProblemOutput
+    searchTests(search: String, page: Int, pageSize: Int):searchTestOutput
+    searchAttempt(search: String, page: Int, pageSize: Int):searchAttemptOutput
   }
   type Mutation {
     checkProblemIfExists(problemName: String): checkProblemIfExistsOutput
@@ -78,6 +78,21 @@ const typeDefs = gql `
     addTestProblem(data: addTestProblemsInputs): testProblemOutput!
     updateAttempt(data: updateAttemptInput): updateAttemptOutput
     checkTimeLimit(data:String, timelimit: String):timeLimitOutput
+  }
+  type searchProblemOutput
+  {
+    problems: [Problem]
+    total: Int
+  }
+  type searchTestOutput
+  {
+    tests: [Test]
+    total: Int
+  }
+  type searchAttemptOutput
+  {
+    attempts: [Attempt]
+    total: Int
   }
   type timeLimitOutput{
     success: Boolean

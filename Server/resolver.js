@@ -14,9 +14,9 @@ module.exports = {
         problemsByAuthor: (_, { email }) => store.getProblemsByAuthor(email),
         getAttempt: (_, { id }) => store.getAttempt(id),
         getAllAttempt: () => store.getAllAttempt(),
-        searchProblems: (_, { search, page = 1, pageSize = 15 }) => store.getSearchProblems(search, page, pageSize),
-        searchTests: (_, { search, page = 1, pageSize = 15 }) => store.getSearchTests(search, page, pageSize),
-        searchAttempt: (_, { search, page = 1, pageSize = 15 }) => store.getSearchAttempt(search, page, pageSize),
+        searchProblems: (_, { search, page, pageSize }) => store.getSearchProblems(search, page, pageSize),
+        searchTests: (_, { search, page, pageSize }) => store.getSearchTests(search, page, pageSize),
+        searchAttempt: (_, { search, page, pageSize }) => store.getSearchAttempt(search, page, pageSize),
     },
     Mutation: {
         checkTestIfExists: (_, { testName }) => store.checkTestIfExists(testName),

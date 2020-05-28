@@ -10,7 +10,7 @@ import NewProblem from './routes/problem/add_problem.svelte';
 import EditProblem from './routes/update_problem/edit_problem.svelte';
 import Thankyou from './routes/thankyou.svelte';
 import Introduce from './routes/introduce_yourself.svelte';
-import AdminPanel from './routes/AdminPanel.svelte';
+import AdminPanel from './routes/admin_panel/AdminPanel.svelte';
 
 function userIsAdmin() {
   //check if user is admin and returns true or false

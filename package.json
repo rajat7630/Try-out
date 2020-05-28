@@ -8,6 +8,7 @@
         "dev": "concurrently \"npm run server \" \"npm run client \" "
     },
     "dependencies": {
+        "@modular-css/svelte": "^25.7.0",
         "apollo-boost": "^0.4.7",
         "apollo-server-express": "^2.13.0",
         "aws-sdk": "^2.644.0",
