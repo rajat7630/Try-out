@@ -3,7 +3,7 @@ const router = express.Router();
 const passportClient = require('passport');
 const authenticateClient = require('./client_login.js');
 router.get(
-  '/',
+  '/auth/google',
   passportClient.authenticate('google-alt', { scope: ['profile', 'email'] }),
   (req, res) => {
     console.log('reached');

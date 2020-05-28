@@ -11,7 +11,7 @@ app.use(cors());
 app.use(bodyParser());
 
 const indexRouter = require('./routes/index');
-const clientLogin = require('./routes/client_routes.js');
+// const clientLogin = require('./routes/client_routes.js');
 
 app.post(
   '/pubnubadmin',
@@ -32,7 +32,7 @@ app.post(
 );
 
 app.use('/', indexRouter);
-app.use('/test', clientLogin);
+// app.use('/test', clientLogin);
 
 app.get('/', (req, res) => {
   res.send('server started');
