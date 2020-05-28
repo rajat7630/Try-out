@@ -24,6 +24,8 @@
 <link
   href="https://unpkg.com/tailwindcss@^1.0/dist/tailwind.min.css"
   rel="stylesheet" />
+
+<body />
 <div class=" w-full h-full">
   <div>
     <Navbar />
@@ -47,8 +49,8 @@
         <div class="md:w-3/5">
           <input
             class="bg-gray-200 appearance-none border-2 border-gray-200
-            rounded-full w-full py-2 px-4 text-edark leading-tight
-            focus:outline-none focus:bg-white "
+            rounded-full w-full py-2 px-4 text-black leading-tight
+            focus:outline-none focus:bg-white focus:text-black"
             id="inline-full-name"
             type="text"
             bind:value={mailInitials.email}

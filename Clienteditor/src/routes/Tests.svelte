@@ -18,7 +18,7 @@
         mutation: apolloClient.deleteTest,
         variables: { id: currentRoute.namedParams.id }
       });
-      location.replace("http://localhost:5000/showtests");
+      location.replace("http://localhost:5000/admin");
     } catch (err) {
       Error: -{ err };
     }
@@ -51,7 +51,7 @@
     --color-el: #3c7380;
   }
   :global(body.dark-mode) body {
-    --color-ed: #1d1f21;
+    --color-ed: #1b262c;
     --color-d: #254b62;
     --color-l: #303030;
     --color-el: #77abb7;

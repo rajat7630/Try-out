@@ -34959,8 +34959,8 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     		c: function create() {
     			h1 = element("h1");
     			h1.textContent = "Error :- Contact Admin";
-    			attr_dev(h1, "class", "svelte-tbxbgk");
-    			add_location(h1, file$5, 210, 4, 7512);
+    			attr_dev(h1, "class", "svelte-1qx8m28");
+    			add_location(h1, file$5, 210, 4, 7519);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, h1, anchor);
@@ -35009,8 +35009,8 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     			create_component(tabs.$$.fragment);
     			t1 = space();
     			create_component(editorarea.$$.fragment);
-    			attr_dev(div, "class", "flex flex-col w-full svelte-tbxbgk");
-    			add_location(div, file$5, 204, 4, 7352);
+    			attr_dev(div, "class", "flex flex-col w-full svelte-1qx8m28");
+    			add_location(div, file$5, 204, 4, 7359);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div, anchor);
@@ -35063,8 +35063,8 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     		c: function create() {
     			h1 = element("h1");
     			h1.textContent = "Test is being loaded...";
-    			attr_dev(h1, "class", "svelte-tbxbgk");
-    			add_location(h1, file$5, 202, 4, 7298);
+    			attr_dev(h1, "class", "svelte-1qx8m28");
+    			add_location(h1, file$5, 202, 4, 7305);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, h1, anchor);
@@ -35110,20 +35110,20 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     			div1 = element("div");
     			h4 = element("h4");
     			h4.textContent = "Helpdesk";
-    			attr_dev(img, "class", "chat-notification-logo svelte-tbxbgk");
+    			attr_dev(img, "class", "chat-notification-logo svelte-1qx8m28");
     			if (img.src !== (img_src_value = "https://img.icons8.com/cotton/50/000000/filled-chat.png")) attr_dev(img, "src", img_src_value);
     			attr_dev(img, "alt", "ChitChat Logo");
-    			add_location(img, file$5, 293, 12, 10709);
-    			attr_dev(div0, "class", "chat-notification-logo-wrapper svelte-tbxbgk");
-    			add_location(div0, file$5, 292, 10, 10652);
-    			attr_dev(h4, "class", "chat-notification-title svelte-tbxbgk");
-    			add_location(h4, file$5, 299, 12, 10951);
-    			attr_dev(div1, "class", "chat-notification-content svelte-tbxbgk");
-    			add_location(div1, file$5, 298, 10, 10899);
-    			attr_dev(div2, "class", "chat-notification svelte-tbxbgk");
-    			add_location(div2, file$5, 291, 8, 10610);
-    			attr_dev(div3, "class", "btm svelte-tbxbgk");
-    			add_location(div3, file$5, 290, 6, 10566);
+    			add_location(img, file$5, 293, 12, 10716);
+    			attr_dev(div0, "class", "chat-notification-logo-wrapper svelte-1qx8m28");
+    			add_location(div0, file$5, 292, 10, 10659);
+    			attr_dev(h4, "class", "chat-notification-title svelte-1qx8m28");
+    			add_location(h4, file$5, 299, 12, 10958);
+    			attr_dev(div1, "class", "chat-notification-content svelte-1qx8m28");
+    			add_location(div1, file$5, 298, 10, 10906);
+    			attr_dev(div2, "class", "chat-notification svelte-1qx8m28");
+    			add_location(div2, file$5, 291, 8, 10617);
+    			attr_dev(div3, "class", "btm svelte-1qx8m28");
+    			add_location(div3, file$5, 290, 6, 10573);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div3, anchor);
@@ -35224,57 +35224,57 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     			div10 = element("div");
     			img1 = element("img");
     			attr_dev(img0, "alt", "admin photo");
-    			attr_dev(img0, "class", "h-12 w-12 rounded-full svelte-tbxbgk");
+    			attr_dev(img0, "class", "h-12 w-12 rounded-full svelte-1qx8m28");
     			if (img0.src !== (img0_src_value = "https://lh3.googleusercontent.com/-q_zoC0qD1wk/AAAAAAAAAAI/AAAAAAAAAAA/X44tu0L9iy4/s44-p-k-no-ns-nd/photo.jpg")) attr_dev(img0, "src", img0_src_value);
-    			add_location(img0, file$5, 219, 12, 7800);
-    			attr_dev(div0, "class", "svelte-tbxbgk");
-    			add_location(div0, file$5, 218, 10, 7782);
-    			attr_dev(p0, "class", "text-grey-darkest svelte-tbxbgk");
-    			add_location(p0, file$5, 226, 14, 8176);
-    			attr_dev(div1, "class", "flex items-bottom justify-between svelte-tbxbgk");
-    			add_location(div1, file$5, 225, 12, 8114);
-    			attr_dev(p1, "class", "text-grey-dark mt-1 text-sm svelte-tbxbgk");
-    			add_location(p1, file$5, 228, 12, 8249);
-    			attr_dev(div2, "class", "ml-4 flex-1 border-b border-grey-lighter py-4 svelte-tbxbgk");
-    			add_location(div2, file$5, 224, 10, 8042);
-    			attr_dev(div3, "class", "px-3 flex items-center bg-grey-light cursor-pointer rounded-lg svelte-tbxbgk");
-    			add_location(div3, file$5, 216, 8, 7685);
-    			attr_dev(div4, "class", "flex-1 overflow-auto svelte-tbxbgk");
-    			add_location(div4, file$5, 236, 12, 8571);
-    			attr_dev(div5, "class", "message-form svelte-tbxbgk");
-    			add_location(div5, file$5, 235, 10, 8532);
-    			attr_dev(div6, "class", "container mx-auto overflow-auto margin-bottom:10%; svelte-tbxbgk");
+    			add_location(img0, file$5, 219, 12, 7807);
+    			attr_dev(div0, "class", "svelte-1qx8m28");
+    			add_location(div0, file$5, 218, 10, 7789);
+    			attr_dev(p0, "class", "text-grey-darkest svelte-1qx8m28");
+    			add_location(p0, file$5, 226, 14, 8183);
+    			attr_dev(div1, "class", "flex items-bottom justify-between svelte-1qx8m28");
+    			add_location(div1, file$5, 225, 12, 8121);
+    			attr_dev(p1, "class", "text-grey-dark mt-1 text-sm svelte-1qx8m28");
+    			add_location(p1, file$5, 228, 12, 8256);
+    			attr_dev(div2, "class", "ml-4 flex-1 border-b border-grey-lighter py-4 svelte-1qx8m28");
+    			add_location(div2, file$5, 224, 10, 8049);
+    			attr_dev(div3, "class", "px-3 flex items-center bg-grey-light cursor-pointer rounded-lg svelte-1qx8m28");
+    			add_location(div3, file$5, 216, 8, 7692);
+    			attr_dev(div4, "class", "flex-1 overflow-auto svelte-1qx8m28");
+    			add_location(div4, file$5, 236, 12, 8578);
+    			attr_dev(div5, "class", "message-form svelte-1qx8m28");
+    			add_location(div5, file$5, 235, 10, 8539);
+    			attr_dev(div6, "class", "container mx-auto overflow-auto margin-bottom:10%; svelte-1qx8m28");
     			set_style(div6, "bottom", "120px");
     			set_style(div6, "right", "55px");
     			set_style(div6, "height", "280px");
     			set_style(div6, "width", "295px");
-    			add_location(div6, file$5, 232, 8, 8371);
+    			add_location(div6, file$5, 232, 8, 8378);
     			attr_dev(input, "type", "search");
     			attr_dev(input, "name", "serch");
     			attr_dev(input, "placeholder", "Type Message and Press Enter");
-    			attr_dev(input, "class", "bg-white h-10 px-5 pr-10 rounded-full text-sm\n                focus:outline-none svelte-tbxbgk");
-    			add_location(input, file$5, 265, 14, 9770);
+    			attr_dev(input, "class", "bg-white h-10 px-5 pr-10 rounded-full text-sm\n                focus:outline-none svelte-1qx8m28");
+    			add_location(input, file$5, 265, 14, 9777);
     			attr_dev(form, "autocomplete", "off");
-    			attr_dev(form, "class", "svelte-tbxbgk");
-    			add_location(form, file$5, 262, 12, 9632);
-    			attr_dev(div7, "class", "relative text-gray-600 svelte-tbxbgk");
-    			add_location(div7, file$5, 261, 10, 9583);
-    			attr_dev(div8, "class", "container block svelte-tbxbgk");
+    			attr_dev(form, "class", "svelte-1qx8m28");
+    			add_location(form, file$5, 262, 12, 9639);
+    			attr_dev(div7, "class", "relative text-gray-600 svelte-1qx8m28");
+    			add_location(div7, file$5, 261, 10, 9590);
+    			attr_dev(div8, "class", "container block svelte-1qx8m28");
     			set_style(div8, "position", "absolute");
     			set_style(div8, "bottom", "0");
-    			add_location(div8, file$5, 260, 8, 9503);
-    			attr_dev(div9, "class", "chat shadow-xl rounded-lg svelte-tbxbgk");
-    			add_location(div9, file$5, 214, 6, 7611);
-    			attr_dev(img1, "class", "chat-notification-logo svelte-tbxbgk");
+    			add_location(div8, file$5, 260, 8, 9510);
+    			attr_dev(div9, "class", "chat shadow-xl rounded-lg svelte-1qx8m28");
+    			add_location(div9, file$5, 214, 6, 7618);
+    			attr_dev(img1, "class", "chat-notification-logo svelte-1qx8m28");
     			if (img1.src !== (img1_src_value = "https://img.icons8.com/cute-clipart/50/000000/close-window.png")) attr_dev(img1, "src", img1_src_value);
     			attr_dev(img1, "alt", "ChitChat Logo");
-    			add_location(img1, file$5, 282, 12, 10333);
-    			attr_dev(div10, "class", "chat-notification-logo-wrapper svelte-tbxbgk");
-    			add_location(div10, file$5, 281, 10, 10276);
-    			attr_dev(div11, "class", "chat-notification svelte-tbxbgk");
-    			add_location(div11, file$5, 280, 8, 10234);
-    			attr_dev(div12, "class", "btm svelte-tbxbgk");
-    			add_location(div12, file$5, 279, 6, 10191);
+    			add_location(img1, file$5, 282, 12, 10340);
+    			attr_dev(div10, "class", "chat-notification-logo-wrapper svelte-1qx8m28");
+    			add_location(div10, file$5, 281, 10, 10283);
+    			attr_dev(div11, "class", "chat-notification svelte-1qx8m28");
+    			add_location(div11, file$5, 280, 8, 10241);
+    			attr_dev(div12, "class", "btm svelte-1qx8m28");
+    			add_location(div12, file$5, 279, 6, 10198);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div9, anchor);
@@ -35396,14 +35396,14 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     			p1 = element("p");
     			t2 = text(t2_value);
     			t3 = space();
-    			attr_dev(p0, "class", "text-grey-darkest svelte-tbxbgk");
-    			add_location(p0, file$5, 249, 22, 9164);
-    			attr_dev(div0, "class", "flex items-bottom justify-between svelte-tbxbgk");
-    			add_location(div0, file$5, 248, 20, 9094);
-    			attr_dev(p1, "class", "text-grey-dark mt-1 text-sm svelte-tbxbgk");
-    			add_location(p1, file$5, 251, 20, 9250);
-    			attr_dev(div1, "class", "ml-4 flex-1 rounded py-4 svelte-tbxbgk");
-    			add_location(div1, file$5, 247, 18, 9035);
+    			attr_dev(p0, "class", "text-grey-darkest svelte-1qx8m28");
+    			add_location(p0, file$5, 249, 22, 9171);
+    			attr_dev(div0, "class", "flex items-bottom justify-between svelte-1qx8m28");
+    			add_location(div0, file$5, 248, 20, 9101);
+    			attr_dev(p1, "class", "text-grey-dark mt-1 text-sm svelte-1qx8m28");
+    			add_location(p1, file$5, 251, 20, 9257);
+    			attr_dev(div1, "class", "ml-4 flex-1 rounded py-4 svelte-1qx8m28");
+    			add_location(div1, file$5, 247, 18, 9042);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div1, anchor);
@@ -35449,13 +35449,13 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     			p = element("p");
     			t0 = text(t0_value);
     			t1 = space();
-    			attr_dev(p, "class", "text-sm mt-1 svelte-tbxbgk");
-    			add_location(p, file$5, 243, 22, 8898);
-    			attr_dev(div0, "class", "rounded py-2 px-3 svelte-tbxbgk");
+    			attr_dev(p, "class", "text-sm mt-1 svelte-1qx8m28");
+    			add_location(p, file$5, 243, 22, 8905);
+    			attr_dev(div0, "class", "rounded py-2 px-3 svelte-1qx8m28");
     			set_style(div0, "background-color", "#E2F7CB");
-    			add_location(div0, file$5, 240, 20, 8766);
-    			attr_dev(div1, "class", "flex justify-end mb-2 svelte-tbxbgk");
-    			add_location(div1, file$5, 239, 18, 8710);
+    			add_location(div0, file$5, 240, 20, 8773);
+    			attr_dev(div1, "class", "flex justify-end mb-2 svelte-1qx8m28");
+    			add_location(div1, file$5, 239, 18, 8717);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div1, anchor);
@@ -35570,10 +35570,10 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     			t = space();
     			div = element("div");
     			if_block.c();
-    			attr_dev(div, "class", "container svelte-tbxbgk");
-    			add_location(div, file$5, 212, 2, 7557);
-    			attr_dev(body, "class", "svelte-tbxbgk");
-    			add_location(body, file$5, 200, 0, 7266);
+    			attr_dev(div, "class", "container svelte-1qx8m28");
+    			add_location(div, file$5, 212, 2, 7564);
+    			attr_dev(body, "class", "svelte-1qx8m28");
+    			add_location(body, file$5, 200, 0, 7273);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -38785,20 +38785,20 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     			div1 = element("div");
     			h4 = element("h4");
     			h4.textContent = "User Support";
-    			attr_dev(img, "class", "chat-notification-logo svelte-idrpa6");
+    			attr_dev(img, "class", "chat-notification-logo svelte-13ce433");
     			if (img.src !== (img_src_value = "https://img.icons8.com/cotton/50/000000/filled-chat.png")) attr_dev(img, "src", img_src_value);
     			attr_dev(img, "alt", "ChitChat Logo");
-    			add_location(img, file$8, 333, 10, 12518);
-    			attr_dev(div0, "class", "chat-notification-logo-wrapper svelte-idrpa6");
-    			add_location(div0, file$8, 332, 8, 12463);
-    			attr_dev(h4, "class", "chat-notification-title svelte-idrpa6");
-    			add_location(h4, file$8, 339, 10, 12748);
-    			attr_dev(div1, "class", "chat-notification-content svelte-idrpa6");
-    			add_location(div1, file$8, 338, 8, 12698);
-    			attr_dev(div2, "class", "chat-notification svelte-idrpa6");
-    			add_location(div2, file$8, 331, 6, 12423);
-    			attr_dev(div3, "class", "btm svelte-idrpa6");
-    			add_location(div3, file$8, 330, 4, 12381);
+    			add_location(img, file$8, 333, 10, 12530);
+    			attr_dev(div0, "class", "chat-notification-logo-wrapper svelte-13ce433");
+    			add_location(div0, file$8, 332, 8, 12475);
+    			attr_dev(h4, "class", "chat-notification-title svelte-13ce433");
+    			add_location(h4, file$8, 339, 10, 12760);
+    			attr_dev(div1, "class", "chat-notification-content svelte-13ce433");
+    			add_location(div1, file$8, 338, 8, 12710);
+    			attr_dev(div2, "class", "chat-notification svelte-13ce433");
+    			add_location(div2, file$8, 331, 6, 12435);
+    			attr_dev(div3, "class", "btm svelte-13ce433");
+    			add_location(div3, file$8, 330, 4, 12393);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div3, anchor);
@@ -38925,61 +38925,61 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     			div15 = element("div");
     			div14 = element("div");
     			img = element("img");
-    			attr_dev(p0, "class", "textt px-6 svelte-idrpa6");
+    			attr_dev(p0, "class", "textt px-6 svelte-13ce433");
     			add_location(p0, file$8, 228, 12, 8574);
     			attr_dev(div0, "class", "flex");
     			add_location(div0, file$8, 227, 10, 8543);
-    			attr_dev(div1, "class", "py-2 px-3 rounded message-title flex flex-row justify-between\n          items-center svelte-idrpa6");
+    			attr_dev(div1, "class", "py-2 px-3 rounded message-title flex flex-row justify-between\n          items-center svelte-13ce433");
     			add_location(div1, file$8, 224, 8, 8424);
-    			attr_dev(div2, "class", "message-title rounded flex-1 overflow-auto svelte-idrpa6");
+    			attr_dev(div2, "class", "message-title rounded flex-1 overflow-auto svelte-13ce433");
     			add_location(div2, file$8, 232, 8, 8681);
     			attr_dev(div3, "class", "w-1/3 rounded flex flex-col");
     			add_location(div3, file$8, 222, 6, 8350);
     			attr_dev(div4, "class", "flex items-bottom justify-between");
     			add_location(div4, file$8, 258, 12, 9709);
     			attr_dev(p1, "class", "text-grey-dark mt-1 text-sm");
-    			add_location(p1, file$8, 265, 12, 9988);
+    			add_location(p1, file$8, 265, 12, 10000);
     			attr_dev(div5, "class", "ml-4 flex-1 border-b border-grey-lighter py-4");
     			add_location(div5, file$8, 257, 10, 9637);
-    			attr_dev(div6, "class", "px-3 flex-row shadow-l message-title items-center\n          cursor-pointer rounded-lg svelte-idrpa6");
+    			attr_dev(div6, "class", "px-3 flex-row shadow-l message-title items-center\n          cursor-pointer rounded-lg svelte-13ce433");
     			add_location(div6, file$8, 254, 8, 9517);
     			attr_dev(div7, "class", "flex-1 overflow-auto");
-    			add_location(div7, file$8, 273, 12, 10310);
+    			add_location(div7, file$8, 273, 12, 10322);
     			attr_dev(div8, "class", "message-form");
-    			add_location(div8, file$8, 272, 10, 10271);
+    			add_location(div8, file$8, 272, 10, 10283);
     			attr_dev(div9, "class", "container mx-auto overflow-auto margin-bottom:10%;");
     			set_style(div9, "bottom", "120px");
     			set_style(div9, "right", "55px");
     			set_style(div9, "height", "380px");
     			set_style(div9, "width", "390px");
-    			add_location(div9, file$8, 269, 8, 10110);
+    			add_location(div9, file$8, 269, 8, 10122);
     			attr_dev(input, "type", "search");
     			attr_dev(input, "name", "search");
     			attr_dev(input, "placeholder", "Type Message and Press Enter");
-    			attr_dev(input, "class", "bg-white h-10 px-5 pr-10 rounded-full text-sm\n                focus:outline-none svelte-idrpa6");
-    			add_location(input, file$8, 304, 14, 11603);
+    			attr_dev(input, "class", "bg-white h-10 px-5 pr-10 rounded-full text-sm\n                focus:outline-none svelte-13ce433");
+    			add_location(input, file$8, 304, 14, 11615);
     			attr_dev(form, "autocomplete", "off");
-    			add_location(form, file$8, 301, 12, 11484);
+    			add_location(form, file$8, 301, 12, 11496);
     			attr_dev(div10, "class", "relative text-gray-600");
-    			add_location(div10, file$8, 300, 10, 11435);
+    			add_location(div10, file$8, 300, 10, 11447);
     			attr_dev(div11, "class", "container block");
     			set_style(div11, "position", "absolute");
     			set_style(div11, "bottom", "0");
-    			add_location(div11, file$8, 299, 8, 11355);
+    			add_location(div11, file$8, 299, 8, 11367);
     			attr_dev(div12, "class", "w-2/3 flex flex-col");
     			add_location(div12, file$8, 252, 6, 9449);
-    			attr_dev(div13, "class", "chat flex rounded-sm flex-row shadow-xl rounded-lg svelte-idrpa6");
+    			attr_dev(div13, "class", "chat flex rounded-sm flex-row shadow-xl rounded-lg svelte-13ce433");
     			add_location(div13, file$8, 220, 4, 8260);
-    			attr_dev(img, "class", "chat-notification-logo svelte-idrpa6");
+    			attr_dev(img, "class", "chat-notification-logo svelte-13ce433");
     			if (img.src !== (img_src_value = "https://img.icons8.com/cute-clipart/50/000000/close-window.png")) attr_dev(img, "src", img_src_value);
     			attr_dev(img, "alt", "ChitChat Logo");
-    			add_location(img, file$8, 322, 10, 12164);
-    			attr_dev(div14, "class", "chat-notification-logo-wrapper svelte-idrpa6");
-    			add_location(div14, file$8, 321, 8, 12109);
-    			attr_dev(div15, "class", "chat-notification svelte-idrpa6");
-    			add_location(div15, file$8, 320, 6, 12069);
-    			attr_dev(div16, "class", "btm svelte-idrpa6");
-    			add_location(div16, file$8, 319, 4, 12028);
+    			add_location(img, file$8, 322, 10, 12176);
+    			attr_dev(div14, "class", "chat-notification-logo-wrapper svelte-13ce433");
+    			add_location(div14, file$8, 321, 8, 12121);
+    			attr_dev(div15, "class", "chat-notification svelte-13ce433");
+    			add_location(div15, file$8, 320, 6, 12081);
+    			attr_dev(div16, "class", "btm svelte-13ce433");
+    			add_location(div16, file$8, 319, 4, 12040);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div13, anchor);
@@ -39222,7 +39222,7 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     			add_location(div0, file$8, 239, 16, 9034);
     			attr_dev(div1, "class", "ml-4 flex-1 py-4");
     			add_location(div1, file$8, 238, 14, 8987);
-    			attr_dev(div2, "class", "night hover:bg-gray-400 px-3 border flex items-center\n              hover:bg-grey-lighter cursor-pointer svelte-idrpa6");
+    			attr_dev(div2, "class", "night hover:bg-gray-400 px-3 border flex items-center\n              hover:bg-grey-lighter cursor-pointer svelte-13ce433");
     			add_location(div2, file$8, 234, 12, 8788);
     		},
     		m: function mount(target, anchor) {
@@ -39286,7 +39286,7 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     			p = element("p");
     			t = text(/*channelName*/ ctx[5]);
     			attr_dev(p, "class", "text-black");
-    			add_location(p, file$8, 262, 16, 9897);
+    			add_location(p, file$8, 262, 16, 9909);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, p, anchor);
@@ -39319,7 +39319,7 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     		c: function create() {
     			p = element("p");
     			p.textContent = "Private";
-    			attr_dev(p, "class", "textt svelte-idrpa6");
+    			attr_dev(p, "class", "text-grey-darkest");
     			add_location(p, file$8, 260, 16, 9830);
     		},
     		m: function mount(target, anchor) {
@@ -39417,13 +39417,13 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     			t2 = text(t2_value);
     			t3 = space();
     			attr_dev(p0, "class", "text-grey-darkest");
-    			add_location(p0, file$8, 287, 24, 10975);
+    			add_location(p0, file$8, 287, 24, 10987);
     			attr_dev(div0, "class", "flex items-bottomjustify-between");
-    			add_location(div0, file$8, 286, 22, 10904);
+    			add_location(div0, file$8, 286, 22, 10916);
     			attr_dev(p1, "class", "text-grey-dark mt-1 text-sm");
-    			add_location(p1, file$8, 289, 22, 11076);
+    			add_location(p1, file$8, 289, 22, 11088);
     			attr_dev(div1, "class", "ml-4 flex-1 rounded py-2");
-    			add_location(div1, file$8, 285, 20, 10843);
+    			add_location(div1, file$8, 285, 20, 10855);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div1, anchor);
@@ -39472,11 +39472,11 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     			t0 = text(t0_value);
     			t1 = space();
     			attr_dev(p, "class", "text-sm text-grey-dark mt-1");
-    			add_location(p, file$8, 279, 24, 10631);
-    			attr_dev(div0, "class", "rounded py-2 px-3 message-self  svelte-idrpa6");
-    			add_location(div0, file$8, 278, 22, 10561);
+    			add_location(p, file$8, 279, 24, 10643);
+    			attr_dev(div0, "class", "rounded py-2 px-3 message-self  svelte-13ce433");
+    			add_location(div0, file$8, 278, 22, 10573);
     			attr_dev(div1, "class", "flex justify-end py-2");
-    			add_location(div1, file$8, 277, 20, 10503);
+    			add_location(div1, file$8, 277, 20, 10515);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div1, anchor);
@@ -40615,54 +40615,54 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     			}
 
     			attr_dev(div0, "class", "font-bold text-2xl text-elight mx-auto");
-    			add_location(div0, file$b, 99, 10, 3397);
+    			add_location(div0, file$b, 99, 10, 3393);
     			attr_dev(div1, "class", " text-xl text-elight mx-auto");
-    			add_location(div1, file$b, 102, 10, 3521);
+    			add_location(div1, file$b, 102, 10, 3517);
     			attr_dev(div2, "class", " text-xl text-elight mx-auto");
-    			add_location(div2, file$b, 105, 10, 3653);
+    			add_location(div2, file$b, 105, 10, 3649);
     			attr_dev(div3, "class", "mx-auto mt-8 max-w-full flex flex-col");
-    			add_location(div3, file$b, 98, 8, 3335);
-    			attr_dev(h1, "class", "labels svelte-7oagh3");
-    			add_location(h1, file$b, 113, 14, 3955);
+    			add_location(div3, file$b, 98, 8, 3331);
+    			attr_dev(h1, "class", "labels svelte-9jxxc4");
+    			add_location(h1, file$b, 113, 14, 3951);
     			attr_dev(div4, "class", "mx-auto mb-4 w-32");
-    			add_location(div4, file$b, 112, 12, 3909);
-    			attr_dev(div5, "class", "rows mx-4 svelte-7oagh3");
-    			add_location(div5, file$b, 118, 18, 4136);
+    			add_location(div4, file$b, 112, 12, 3905);
+    			attr_dev(div5, "class", "rows mx-4 svelte-9jxxc4");
+    			add_location(div5, file$b, 118, 18, 4132);
     			attr_dev(div6, "class", "w-10/12");
-    			add_location(div6, file$b, 117, 16, 4096);
-    			attr_dev(div7, "class", "rows mx-4 svelte-7oagh3");
-    			add_location(div7, file$b, 121, 18, 4256);
+    			add_location(div6, file$b, 117, 16, 4092);
+    			attr_dev(div7, "class", "rows mx-4 svelte-9jxxc4");
+    			add_location(div7, file$b, 121, 18, 4252);
     			attr_dev(div8, "class", "w-2/12");
-    			add_location(div8, file$b, 120, 16, 4217);
+    			add_location(div8, file$b, 120, 16, 4213);
     			attr_dev(div9, "class", "flex mb-6");
-    			add_location(div9, file$b, 116, 14, 4056);
-    			attr_dev(div10, "class", "boxheight2 flex flex-col flex-grow overflow-auto svelte-7oagh3");
-    			add_location(div10, file$b, 124, 14, 4349);
+    			add_location(div9, file$b, 116, 14, 4052);
+    			attr_dev(div10, "class", "boxheight2 flex flex-col flex-grow overflow-auto svelte-9jxxc4");
+    			add_location(div10, file$b, 124, 14, 4345);
     			attr_dev(div11, "class", "flex-col");
-    			add_location(div11, file$b, 115, 12, 4019);
-    			attr_dev(div12, "class", "outer_box flex-col h-full svelte-7oagh3");
-    			add_location(div12, file$b, 111, 10, 3857);
+    			add_location(div11, file$b, 115, 12, 4015);
+    			attr_dev(div12, "class", "outer_box flex-col h-full svelte-9jxxc4");
+    			add_location(div12, file$b, 111, 10, 3853);
     			attr_dev(div13, "class", "bg-dark max-w-full mt-12 mx-64");
-    			add_location(div13, file$b, 109, 8, 3801);
+    			add_location(div13, file$b, 109, 8, 3797);
     			set_style(button0, "color", "#254b62");
-    			attr_dev(button0, "class", "savebutton hover:bg-grey hover:text-edark font-bold py-2\n              px-4 border rounded svelte-7oagh3");
-    			add_location(button0, file$b, 153, 12, 5558);
+    			attr_dev(button0, "class", "savebutton hover:bg-grey hover:text-edark font-bold py-2\n              px-4 border rounded svelte-9jxxc4");
+    			add_location(button0, file$b, 153, 12, 5554);
     			set_style(button1, "color", "#254b62");
-    			attr_dev(button1, "class", "savebutton hover:bg-grey hover:text-edark font-bold py-2\n              px-4 border rounded svelte-7oagh3");
-    			add_location(button1, file$b, 162, 12, 5918);
+    			attr_dev(button1, "class", "savebutton hover:bg-grey hover:text-edark font-bold py-2\n              px-4 border rounded svelte-9jxxc4");
+    			add_location(button1, file$b, 162, 12, 5914);
     			set_style(button2, "color", "#254b62");
-    			attr_dev(button2, "class", "savebutton hover:bg-grey hover:text-edark font-bold py-2\n              px-4 border rounded svelte-7oagh3");
-    			add_location(button2, file$b, 169, 12, 6175);
+    			attr_dev(button2, "class", "savebutton hover:bg-grey hover:text-edark font-bold py-2\n              px-4 border rounded svelte-9jxxc4");
+    			add_location(button2, file$b, 169, 12, 6171);
     			attr_dev(div14, "class", "float-right ");
-    			add_location(div14, file$b, 152, 10, 5519);
+    			add_location(div14, file$b, 152, 10, 5515);
     			attr_dev(div15, "class", "max-w-6xl my-4 mb-32 flex flex-col mx-auto");
-    			add_location(div15, file$b, 151, 8, 5452);
+    			add_location(div15, file$b, 151, 8, 5448);
     			attr_dev(div16, "class", "bg-edark flex flex-col max-w-full overflow-auto");
-    			add_location(div16, file$b, 97, 6, 3265);
+    			add_location(div16, file$b, 97, 6, 3261);
     			attr_dev(div17, "class", "flex bottom-0 absolute w-auto");
-    			add_location(div17, file$b, 182, 8, 6640);
+    			add_location(div17, file$b, 182, 8, 6636);
     			attr_dev(div18, "class", " flex-grow align-bottom relative mx-64");
-    			add_location(div18, file$b, 181, 6, 6579);
+    			add_location(div18, file$b, 181, 6, 6575);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div16, anchor);
@@ -40824,20 +40824,20 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     			t3 = space();
     			attr_dev(a, "href", a_href_value = "http://localhost:5000/problem/" + /*prob*/ ctx[12].problem.id);
     			attr_dev(a, "class", "no-underline px-3 text-elight");
-    			add_location(a, file$b, 129, 24, 4671);
-    			attr_dev(div0, "class", "rows bg-edark rounded-full p-2 px-4 mx-2 svelte-7oagh3");
-    			add_location(div0, file$b, 128, 22, 4592);
+    			add_location(a, file$b, 129, 24, 4667);
+    			attr_dev(div0, "class", "rows bg-edark rounded-full p-2 px-4 mx-2 svelte-9jxxc4");
+    			add_location(div0, file$b, 128, 22, 4588);
     			attr_dev(div1, "class", "w-10/12");
-    			add_location(div1, file$b, 127, 20, 4548);
+    			add_location(div1, file$b, 127, 20, 4544);
     			attr_dev(div2, "type", "string");
     			attr_dev(div2, "class", " mx-auto w-10 outline-none p-2");
-    			add_location(div2, file$b, 138, 24, 5086);
-    			attr_dev(div3, "class", "rows bg-edark rounded-full svelte-7oagh3");
-    			add_location(div3, file$b, 137, 22, 5021);
+    			add_location(div2, file$b, 138, 24, 5082);
+    			attr_dev(div3, "class", "rows bg-edark rounded-full svelte-9jxxc4");
+    			add_location(div3, file$b, 137, 22, 5017);
     			attr_dev(div4, "class", "w-2/12");
-    			add_location(div4, file$b, 136, 20, 4978);
+    			add_location(div4, file$b, 136, 20, 4974);
     			attr_dev(div5, "class", "flex pb-3");
-    			add_location(div5, file$b, 126, 18, 4504);
+    			add_location(div5, file$b, 126, 18, 4500);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div5, anchor);
@@ -40889,8 +40889,8 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     			div = element("div");
     			t0 = text(t0_value);
     			t1 = space();
-    			attr_dev(div, "class", "tag border-solid border-2 mr-4 mb-10 rounded-full p-2\n                px-4  svelte-7oagh3");
-    			add_location(div, file$b, 185, 14, 6797);
+    			attr_dev(div, "class", "tag border-solid border-2 mr-4 mb-10 rounded-full p-2\n                px-4  svelte-9jxxc4");
+    			add_location(div, file$b, 185, 14, 6793);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div, anchor);
@@ -41012,11 +41012,11 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     			info.block.c();
     			attr_dev(link, "href", "https://unpkg.com/tailwindcss@^1.0/dist/tailwind.min.css");
     			attr_dev(link, "rel", "stylesheet");
-    			add_location(link, file$b, 84, 0, 3029);
+    			add_location(link, file$b, 84, 0, 3025);
     			attr_dev(div, "class", "bg-edark h-full flex flex-col box-border");
-    			add_location(div, file$b, 92, 2, 3148);
-    			attr_dev(body, "class", "svelte-7oagh3");
-    			add_location(body, file$b, 88, 0, 3124);
+    			add_location(div, file$b, 92, 2, 3144);
+    			attr_dev(body, "class", "svelte-9jxxc4");
+    			add_location(body, file$b, 88, 0, 3120);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -41101,7 +41101,7 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     				variables: { id: currentRoute.namedParams.id }
     			});
 
-    			location.replace("http://localhost:5000/showtests");
+    			location.replace("http://localhost:5000/admin");
     		} catch(err) {
     		}
     	}
@@ -41181,28 +41181,30 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     function create_fragment$f(ctx) {
     	let link;
     	let t0;
+    	let body;
+    	let t1;
     	let div11;
     	let div0;
-    	let t1;
+    	let t2;
     	let h1;
     	let strong;
-    	let t3;
+    	let t4;
     	let div8;
     	let div7;
     	let div3;
     	let div1;
     	let label0;
-    	let t5;
+    	let t6;
     	let div2;
     	let input0;
-    	let t6;
+    	let t7;
     	let div6;
     	let div4;
     	let label1;
-    	let t8;
+    	let t9;
     	let div5;
     	let input1;
-    	let t9;
+    	let t10;
     	let div10;
     	let div9;
     	let button;
@@ -41214,32 +41216,34 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     		c: function create() {
     			link = element("link");
     			t0 = space();
+    			body = element("body");
+    			t1 = space();
     			div11 = element("div");
     			div0 = element("div");
     			create_component(navbar.$$.fragment);
-    			t1 = space();
+    			t2 = space();
     			h1 = element("h1");
     			strong = element("strong");
     			strong.textContent = "Send Test";
-    			t3 = space();
+    			t4 = space();
     			div8 = element("div");
     			div7 = element("div");
     			div3 = element("div");
     			div1 = element("div");
     			label0 = element("label");
     			label0.textContent = "Email";
-    			t5 = space();
+    			t6 = space();
     			div2 = element("div");
     			input0 = element("input");
-    			t6 = space();
+    			t7 = space();
     			div6 = element("div");
     			div4 = element("div");
     			label1 = element("label");
     			label1.textContent = "Link Activation Time";
-    			t8 = space();
+    			t9 = space();
     			div5 = element("div");
     			input1 = element("input");
-    			t9 = space();
+    			t10 = space();
     			div10 = element("div");
     			div9 = element("div");
     			button = element("button");
@@ -41247,50 +41251,51 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     			attr_dev(link, "href", "https://unpkg.com/tailwindcss@^1.0/dist/tailwind.min.css");
     			attr_dev(link, "rel", "stylesheet");
     			add_location(link, file$c, 22, 0, 877);
-    			add_location(div0, file$c, 26, 2, 1002);
-    			add_location(strong, file$c, 30, 4, 1083);
+    			add_location(body, file$c, 26, 0, 972);
+    			add_location(div0, file$c, 28, 2, 1012);
+    			add_location(strong, file$c, 32, 4, 1093);
     			attr_dev(h1, "class", "heading text-elight text-center svelte-16xawnw");
-    			add_location(h1, file$c, 29, 2, 1034);
+    			add_location(h1, file$c, 31, 2, 1044);
     			attr_dev(label0, "class", "block text-elight text-xl font-bold md:text-right mb-1\n            md:mb-0 pr-4");
     			attr_dev(label0, "for", "inline-full-name");
-    			add_location(label0, file$c, 38, 10, 1286);
+    			add_location(label0, file$c, 40, 10, 1296);
     			attr_dev(div1, "class", "md:w-1/5");
-    			add_location(div1, file$c, 37, 8, 1253);
-    			attr_dev(input0, "class", "bg-gray-200 appearance-none border-2 border-gray-200\n            rounded-full w-full py-2 px-4 text-edark leading-tight\n            focus:outline-none focus:bg-white ");
+    			add_location(div1, file$c, 39, 8, 1263);
+    			attr_dev(input0, "class", "bg-gray-200 appearance-none border-2 border-gray-200\n            rounded-full w-full py-2 px-4 text-black leading-tight\n            focus:outline-none focus:bg-white focus:text-black");
     			attr_dev(input0, "id", "inline-full-name");
     			attr_dev(input0, "type", "text");
     			attr_dev(input0, "placeholder", "Enter Email");
-    			add_location(input0, file$c, 46, 10, 1522);
+    			add_location(input0, file$c, 48, 10, 1532);
     			attr_dev(div2, "class", "md:w-3/5");
-    			add_location(div2, file$c, 45, 8, 1489);
+    			add_location(div2, file$c, 47, 8, 1499);
     			attr_dev(div3, "class", "md:flex md:items-center mb-6");
-    			add_location(div3, file$c, 36, 6, 1202);
+    			add_location(div3, file$c, 38, 6, 1212);
     			attr_dev(label1, "class", "block text-elight text-xl font-bold md:text-right mb-1\n            md:mb-0 pr-4");
     			attr_dev(label1, "for", "inline-full-name");
-    			add_location(label1, file$c, 58, 10, 1977);
+    			add_location(label1, file$c, 60, 10, 2003);
     			attr_dev(div4, "class", "md:w-1/5");
-    			add_location(div4, file$c, 57, 8, 1944);
+    			add_location(div4, file$c, 59, 8, 1970);
     			attr_dev(input1, "class", "bg-gray-200 appearance-none border-2 border-gray-200\n            rounded-full w-full py-2 px-4 text-edark leading-tight\n            focus:outline-none focus:bg-white ");
     			attr_dev(input1, "id", "inline-full-name");
     			attr_dev(input1, "type", "Number");
     			attr_dev(input1, "placeholder", "Enter time in hours");
-    			add_location(input1, file$c, 66, 10, 2228);
+    			add_location(input1, file$c, 68, 10, 2254);
     			attr_dev(div5, "class", "md:w-3/5");
-    			add_location(div5, file$c, 65, 8, 2195);
+    			add_location(div5, file$c, 67, 8, 2221);
     			attr_dev(div6, "class", "md:flex md:items-center mb-6");
-    			add_location(div6, file$c, 56, 6, 1893);
+    			add_location(div6, file$c, 58, 6, 1919);
     			attr_dev(div7, "class", "");
-    			add_location(div7, file$c, 34, 4, 1180);
+    			add_location(div7, file$c, 36, 4, 1190);
     			attr_dev(div8, "class", "p-8 mx-64 max-w-full mt-24 items-center ");
-    			add_location(div8, file$c, 33, 2, 1121);
+    			add_location(div8, file$c, 35, 2, 1131);
     			attr_dev(button, "class", "bg-dark hover:bg-elight text-white hover:text-edark font-bold\n        py-2 px-4 border border-white rounded");
-    			add_location(button, file$c, 80, 6, 2710);
+    			add_location(button, file$c, 82, 6, 2736);
     			attr_dev(div9, "class", "flex buttonbox mx-auto w-48 mt-10");
-    			add_location(div9, file$c, 79, 4, 2656);
+    			add_location(div9, file$c, 81, 4, 2682);
     			attr_dev(div10, "class", "px-4 py-2");
-    			add_location(div10, file$c, 78, 2, 2628);
+    			add_location(div10, file$c, 80, 2, 2654);
     			attr_dev(div11, "class", " w-full h-full");
-    			add_location(div11, file$c, 25, 0, 971);
+    			add_location(div11, file$c, 27, 0, 981);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -41298,31 +41303,33 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     		m: function mount(target, anchor) {
     			insert_dev(target, link, anchor);
     			insert_dev(target, t0, anchor);
+    			insert_dev(target, body, anchor);
+    			insert_dev(target, t1, anchor);
     			insert_dev(target, div11, anchor);
     			append_dev(div11, div0);
     			mount_component(navbar, div0, null);
-    			append_dev(div11, t1);
+    			append_dev(div11, t2);
     			append_dev(div11, h1);
     			append_dev(h1, strong);
-    			append_dev(div11, t3);
+    			append_dev(div11, t4);
     			append_dev(div11, div8);
     			append_dev(div8, div7);
     			append_dev(div7, div3);
     			append_dev(div3, div1);
     			append_dev(div1, label0);
-    			append_dev(div3, t5);
+    			append_dev(div3, t6);
     			append_dev(div3, div2);
     			append_dev(div2, input0);
     			set_input_value(input0, /*mailInitials*/ ctx[1].email);
-    			append_dev(div7, t6);
+    			append_dev(div7, t7);
     			append_dev(div7, div6);
     			append_dev(div6, div4);
     			append_dev(div4, label1);
-    			append_dev(div6, t8);
+    			append_dev(div6, t9);
     			append_dev(div6, div5);
     			append_dev(div5, input1);
     			set_input_value(input1, /*mailInitials*/ ctx[1].linktime);
-    			append_dev(div11, t9);
+    			append_dev(div11, t10);
     			append_dev(div11, div10);
     			append_dev(div10, div9);
     			append_dev(div9, button);
@@ -41355,6 +41362,8 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     		d: function destroy(detaching) {
     			if (detaching) detach_dev(link);
     			if (detaching) detach_dev(t0);
+    			if (detaching) detach_dev(body);
+    			if (detaching) detach_dev(t1);
     			if (detaching) detach_dev(div11);
     			destroy_component(navbar);
     			run_all(dispose);
@@ -43607,21 +43616,19 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     	let div2;
     	let header;
     	let t0;
-    	let t1;
     	let subheader;
-    	let t2;
+    	let t1;
     	let main;
-    	let t3;
+    	let t2;
     	let footer;
     	let div0;
     	let button0;
-    	let t5;
+    	let t4;
     	let div1;
     	let button1;
     	let current;
     	let dispose;
     	const navbar = new Navbar({ $$inline: true });
-    	const sidebar = new Side({ $$inline: true });
 
     	const subnavbar = new Test_navbar({
     			props: { position: /*pageNum*/ ctx[0] },
@@ -43642,40 +43649,38 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     			header = element("header");
     			create_component(navbar.$$.fragment);
     			t0 = space();
-    			create_component(sidebar.$$.fragment);
-    			t1 = space();
     			subheader = element("subheader");
     			create_component(subnavbar.$$.fragment);
-    			t2 = space();
+    			t1 = space();
     			main = element("main");
     			create_component(selectpage.$$.fragment);
-    			t3 = space();
+    			t2 = space();
     			footer = element("footer");
     			div0 = element("div");
     			button0 = element("button");
     			button0.textContent = "Prev";
-    			t5 = space();
+    			t4 = space();
     			div1 = element("div");
     			button1 = element("button");
     			button1.textContent = "Next";
     			attr_dev(subheader, "class", "svelte-sxkr2r");
-    			add_location(subheader, file$j, 18, 4, 725);
+    			add_location(subheader, file$j, 17, 4, 709);
     			attr_dev(header, "class", "svelte-sxkr2r");
     			add_location(header, file$j, 15, 2, 681);
     			attr_dev(main, "class", " mx-auto w-full flex-grow overflow-auto svelte-sxkr2r");
-    			add_location(main, file$j, 22, 2, 807);
+    			add_location(main, file$j, 21, 2, 791);
     			attr_dev(button0, "id", "prevbutton");
     			attr_dev(button0, "class", "py-4 px-6 float-left shadow-md no-underline rounded-full bg-dark\n        text-white font-sans font-semibold text-sm border-white btn-primary\n        hover:text-white text-xl hover:bg-elight focus:outline-none\n        active:shadow-none mr-2 svelte-sxkr2r");
-    			add_location(button0, file$j, 27, 6, 1008);
+    			add_location(button0, file$j, 26, 6, 992);
     			attr_dev(div0, "class", "flex-1  svelte-sxkr2r");
-    			add_location(div0, file$j, 26, 4, 980);
+    			add_location(div0, file$j, 25, 4, 964);
     			attr_dev(button1, "id", "nextbutton");
     			attr_dev(button1, "class", "py-4 px-6 shadow-md text-xl float-right no-underline rounded-full\n        bg-dark text-white font-sans font-semibold text-sm border-white\n        btn-primary hover:text-dark hover:bg-elight focus:outline-none\n        active:shadow-none mr-2 svelte-sxkr2r");
-    			add_location(button1, file$j, 44, 6, 1522);
+    			add_location(button1, file$j, 43, 6, 1506);
     			attr_dev(div1, "class", "flex-1 svelte-sxkr2r");
-    			add_location(div1, file$j, 43, 4, 1495);
+    			add_location(div1, file$j, 42, 4, 1479);
     			attr_dev(footer, "class", " footer my-8 w-full px-20 mx-auto sticky svelte-sxkr2r");
-    			add_location(footer, file$j, 25, 2, 918);
+    			add_location(footer, file$j, 24, 2, 902);
     			attr_dev(div2, "class", "w-screen h-screen flex flex-col svelte-sxkr2r");
     			add_location(div2, file$j, 14, 0, 633);
     		},
@@ -43687,18 +43692,16 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     			append_dev(div2, header);
     			mount_component(navbar, header, null);
     			append_dev(header, t0);
-    			mount_component(sidebar, header, null);
-    			append_dev(header, t1);
     			append_dev(header, subheader);
     			mount_component(subnavbar, subheader, null);
-    			append_dev(div2, t2);
+    			append_dev(div2, t1);
     			append_dev(div2, main);
     			mount_component(selectpage, main, null);
-    			append_dev(div2, t3);
+    			append_dev(div2, t2);
     			append_dev(div2, footer);
     			append_dev(footer, div0);
     			append_dev(div0, button0);
-    			append_dev(footer, t5);
+    			append_dev(footer, t4);
     			append_dev(footer, div1);
     			append_dev(div1, button1);
     			current = true;
@@ -43719,14 +43722,12 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     		i: function intro(local) {
     			if (current) return;
     			transition_in(navbar.$$.fragment, local);
-    			transition_in(sidebar.$$.fragment, local);
     			transition_in(subnavbar.$$.fragment, local);
     			transition_in(selectpage.$$.fragment, local);
     			current = true;
     		},
     		o: function outro(local) {
     			transition_out(navbar.$$.fragment, local);
-    			transition_out(sidebar.$$.fragment, local);
     			transition_out(subnavbar.$$.fragment, local);
     			transition_out(selectpage.$$.fragment, local);
     			current = false;
@@ -43734,7 +43735,6 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     		d: function destroy(detaching) {
     			if (detaching) detach_dev(div2);
     			destroy_component(navbar);
-    			destroy_component(sidebar);
     			destroy_component(subnavbar);
     			destroy_component(selectpage);
     			run_all(dispose);
@@ -48256,21 +48256,19 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     	let div2;
     	let header;
     	let t0;
-    	let t1;
     	let subheader;
-    	let t2;
+    	let t1;
     	let main;
-    	let t3;
+    	let t2;
     	let footer;
     	let div0;
     	let button0;
-    	let t5;
+    	let t4;
     	let div1;
     	let button1;
     	let current;
     	let dispose;
     	const navbar = new Navbar({ $$inline: true });
-    	const sidebar = new Side({ $$inline: true });
 
     	const subnavbar = new Problem_navbar({
     			props: { position: /*pageNum*/ ctx[0] },
@@ -48291,38 +48289,36 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     			header = element("header");
     			create_component(navbar.$$.fragment);
     			t0 = space();
-    			create_component(sidebar.$$.fragment);
-    			t1 = space();
     			subheader = element("subheader");
     			create_component(subnavbar.$$.fragment);
-    			t2 = space();
+    			t1 = space();
     			main = element("main");
     			create_component(selectpage.$$.fragment);
-    			t3 = space();
+    			t2 = space();
     			footer = element("footer");
     			div0 = element("div");
     			button0 = element("button");
     			button0.textContent = "Prev";
-    			t5 = space();
+    			t4 = space();
     			div1 = element("div");
     			button1 = element("button");
     			button1.textContent = "Next";
-    			add_location(subheader, file$y, 17, 4, 544);
+    			add_location(subheader, file$y, 16, 4, 528);
     			add_location(header, file$y, 14, 2, 500);
     			attr_dev(main, "class", " mx-auto w-full flex-grow overflow-auto");
-    			add_location(main, file$y, 21, 2, 626);
+    			add_location(main, file$y, 20, 2, 610);
     			attr_dev(button0, "id", "prevbutton");
     			attr_dev(button0, "class", "py-4 px-6 float-left shadow-md no-underline rounded-full bg-dark\n        text-white font-sans font-semibold text-sm border-white btn-primary\n        hover:text-white text-xl hover:bg-elight focus:outline-none\n        active:shadow-none mr-2");
-    			add_location(button0, file$y, 26, 6, 827);
+    			add_location(button0, file$y, 25, 6, 811);
     			attr_dev(div0, "class", "flex-1 ");
-    			add_location(div0, file$y, 25, 4, 799);
+    			add_location(div0, file$y, 24, 4, 783);
     			attr_dev(button1, "id", "nextbutton");
     			attr_dev(button1, "class", "py-4 px-6 shadow-md text-xl float-right no-underline rounded-full\n        bg-dark text-white font-sans font-semibold text-sm border-white\n        btn-primary hover:text-dark hover:bg-elight focus:outline-none\n        active:shadow-none mr-2");
-    			add_location(button1, file$y, 43, 6, 1341);
+    			add_location(button1, file$y, 42, 6, 1325);
     			attr_dev(div1, "class", "flex-1");
-    			add_location(div1, file$y, 42, 4, 1314);
+    			add_location(div1, file$y, 41, 4, 1298);
     			attr_dev(footer, "class", " footer my-8 w-full px-20 mx-auto sticky");
-    			add_location(footer, file$y, 24, 2, 737);
+    			add_location(footer, file$y, 23, 2, 721);
     			attr_dev(div2, "class", "w-screen h-screen flex flex-col");
     			add_location(div2, file$y, 13, 0, 452);
     		},
@@ -48334,18 +48330,16 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     			append_dev(div2, header);
     			mount_component(navbar, header, null);
     			append_dev(header, t0);
-    			mount_component(sidebar, header, null);
-    			append_dev(header, t1);
     			append_dev(header, subheader);
     			mount_component(subnavbar, subheader, null);
-    			append_dev(div2, t2);
+    			append_dev(div2, t1);
     			append_dev(div2, main);
     			mount_component(selectpage, main, null);
-    			append_dev(div2, t3);
+    			append_dev(div2, t2);
     			append_dev(div2, footer);
     			append_dev(footer, div0);
     			append_dev(div0, button0);
-    			append_dev(footer, t5);
+    			append_dev(footer, t4);
     			append_dev(footer, div1);
     			append_dev(div1, button1);
     			current = true;
@@ -48366,14 +48360,12 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     		i: function intro(local) {
     			if (current) return;
     			transition_in(navbar.$$.fragment, local);
-    			transition_in(sidebar.$$.fragment, local);
     			transition_in(subnavbar.$$.fragment, local);
     			transition_in(selectpage.$$.fragment, local);
     			current = true;
     		},
     		o: function outro(local) {
     			transition_out(navbar.$$.fragment, local);
-    			transition_out(sidebar.$$.fragment, local);
     			transition_out(subnavbar.$$.fragment, local);
     			transition_out(selectpage.$$.fragment, local);
     			current = false;
@@ -48381,7 +48373,6 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     		d: function destroy(detaching) {
     			if (detaching) detach_dev(div2);
     			destroy_component(navbar);
-    			destroy_component(sidebar);
     			destroy_component(subnavbar);
     			destroy_component(selectpage);
     			run_all(dispose);
@@ -50985,44 +50976,46 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     			button = element("button");
     			button.textContent = "Submit";
     			attr_dev(h1, "class", "text-elight text-5xl my-10");
-    			add_location(h1, file$J, 72, 8, 2694);
+    			add_location(h1, file$J, 72, 8, 2732);
     			attr_dev(div0, "class", "mx-auto max-w-2xl");
-    			add_location(div0, file$J, 71, 6, 2654);
+    			add_location(div0, file$J, 71, 6, 2692);
     			attr_dev(h2, "class", "labels text-4xl svelte-1doxgn");
-    			add_location(h2, file$J, 77, 10, 2865);
-    			add_location(div1, file$J, 76, 8, 2849);
+    			add_location(h2, file$J, 77, 10, 2903);
+    			add_location(div1, file$J, 76, 8, 2887);
     			attr_dev(label0, "class", "labels svelte-1doxgn");
-    			add_location(label0, file$J, 81, 12, 2968);
+    			add_location(label0, file$J, 81, 12, 3006);
     			attr_dev(input0, "class", "unitinput svelte-1doxgn");
     			attr_dev(input0, "type", "text");
     			attr_dev(input0, "placeholder", "Enter Name");
-    			add_location(input0, file$J, 82, 12, 3015);
-    			add_location(div2, file$J, 80, 10, 2950);
+    			add_location(input0, file$J, 82, 12, 3053);
+    			add_location(div2, file$J, 80, 10, 2988);
     			attr_dev(label1, "class", "labels svelte-1doxgn");
-    			add_location(label1, file$J, 89, 12, 3204);
+    			add_location(label1, file$J, 89, 12, 3242);
     			attr_dev(input1, "class", "unitinput svelte-1doxgn");
     			attr_dev(input1, "type", "text");
     			attr_dev(input1, "placeholder", "Email");
-    			add_location(input1, file$J, 90, 12, 3263);
-    			add_location(div3, file$J, 88, 10, 3186);
+    			add_location(input1, file$J, 90, 12, 3301);
+    			add_location(div3, file$J, 88, 10, 3224);
     			attr_dev(label2, "class", "labels svelte-1doxgn");
-    			add_location(label2, file$J, 97, 12, 3448);
+    			add_location(label2, file$J, 97, 12, 3486);
     			attr_dev(input2, "class", "unitinput svelte-1doxgn");
     			attr_dev(input2, "type", "text");
     			attr_dev(input2, "placeholder", "College Name");
-    			add_location(input2, file$J, 98, 12, 3503);
-    			add_location(div4, file$J, 96, 10, 3430);
-    			add_location(div5, file$J, 79, 8, 2934);
+    			add_location(input2, file$J, 98, 12, 3541);
+    			add_location(div4, file$J, 96, 10, 3468);
+    			add_location(div5, file$J, 79, 8, 2972);
     			attr_dev(div6, "class", "border-solid border-2 mt-10 border-light p-4");
-    			add_location(div6, file$J, 75, 6, 2782);
+    			add_location(div6, file$J, 75, 6, 2820);
     			attr_dev(div7, "class", "text-edark mx-auto max-w-5xl w-full");
-    			add_location(div7, file$J, 70, 4, 2598);
+    			add_location(div7, file$J, 70, 4, 2636);
     			attr_dev(button, "class", "bg-dark hover:bg-elight hover:text-edark outline-none text-white\n        font-bold py-4 px-4 text-xl rounded-full");
-    			add_location(button, file$J, 108, 6, 3762);
+    			add_location(button, file$J, 108, 6, 3800);
     			attr_dev(div8, "class", "my-10 flex justify-center");
-    			add_location(div8, file$J, 107, 4, 3716);
+    			add_location(div8, file$J, 107, 4, 3754);
     			attr_dev(div9, "class", "mx-auto flex-col flex-grow w-full h-full bg-edark");
-    			add_location(div9, file$J, 68, 2, 2509);
+    			add_location(div9, file$J, 68, 2, 2547);
+    			set_style(body, "width", "100vw");
+    			set_style(body, "height", "100vh");
     			attr_dev(body, "class", "svelte-1doxgn");
     			add_location(body, file$J, 66, 0, 2499);
     		},
@@ -52153,7 +52146,7 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     			t3 = space();
     			div1 = element("div");
     			span1 = element("span");
-    			t4 = text("Score :");
+    			t4 = text("Score: ");
     			t5 = text(t5_value);
     			t6 = space();
     			div0 = element("div");
@@ -52419,9 +52412,9 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     			t3 = space();
     			div1 = element("div");
     			span1 = element("span");
-    			t4 = text("TimeLimit :");
+    			t4 = text("Time_limit: ");
     			t5 = text(t5_value);
-    			t6 = text(" min");
+    			t6 = text("min");
     			t7 = space();
     			div0 = element("div");
     			span2 = element("span");
@@ -52690,9 +52683,9 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     			t3 = space();
     			div1 = element("div");
     			span1 = element("span");
-    			t4 = text("TimeLimit :");
+    			t4 = text("Time_limit: ");
     			t5 = text(t5_value);
-    			t6 = text(" ms");
+    			t6 = text("ms");
     			t7 = space();
     			div0 = element("div");
     			span2 = element("span");

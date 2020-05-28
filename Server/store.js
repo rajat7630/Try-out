@@ -96,8 +96,8 @@ async function addNewUser(user) {
     });
     const token = jwt.sign({ test_id: user.testId, user_id: res.id, attempt_id: res3.id },
         'helloo', {
-        expiresIn: 60 * parseInt(res2[0].timelimit),
-    }
+            expiresIn: 60 * parseInt(res2[0].timelimit),
+        }
     );
     return {
         success: true,
@@ -181,36 +181,43 @@ async function getAllProblems() {
     return res.map((problem) => problemReducer(problem));
 }
 
-async function getSearchProblems(search) {
+async function getSearchProblems(search, page, pageSize) {
     let query = Problem.query().select('problems.*');
     if (search) {
-        query = await query.where(fn.lower(ref('problemName')), 'ilike', `%${(search.match(/\w+/gi) || []).join('%')}%`);
+        query = await query.where(fn.lower(ref('problemName')), 'ilike', `%${(search.match(/\w+/gi) || []).join('%')}%`)
+            .orderBy('createdAt', 'DESC')
+            .page(page - 1, pageSize);
     } else {
-        query = await query.orderBy('createdAt', 'DESC');
+        query = await query.orderBy('createdAt', 'DESC').page(page - 1, pageSize);
     }
-    return query.map((problem) => problemReducer(problem));
+    return query.results.map((problem) => problemReducer(problem));
 }
 
-async function getSearchTests(search) {
+async function getSearchTests(search, page, pageSize) {
     let query = Test.query().select('tests.*');
     if (search) {
-        query = await query.where(fn.lower(ref('testName')), 'ilike', `%${(search.match(/\w+/gi) || []).join('%')}%`);
+        query = await query.where(fn.lower(ref('testName')), 'ilike', `%${(search.match(/\w+/gi) || []).join('%')}%`)
+            .orderBy('createdAt', 'DESC')
+            .page(page - 1, pageSize);
     } else {
-        query = await query.orderBy('createdAt', 'DESC');
+        query = await query.orderBy('createdAt', 'DESC').page(page - 1, pageSize);
     }
-    return query.map((test) => testReducer(test));
+    return query.results.map((test) => testReducer(test));
 }
 
-async function getSearchAttempt(search) {
+async function getSearchAttempt(search, page, pageSize) {
     var res;
     if (search) {
         res = await Attempt.query()
             .joinRelated('user')
-            .where(fn.lower(ref('user.name')), 'ilike', `%${(search.match(/\w+/gi) || []).join('%')}%`);
+            .where(fn.lower(ref('user.name')), 'ilike', `%${(search.match(/\w+/gi) || []).join('%')}%`)
+            .orderBy('attemptTime', 'DESC')
+            .page(page - 1, pageSize);
     } else {
-        res = await Attempt.query().select('attempts.*').orderBy('attemptTime', 'DESC');
+        res = await Attempt.query().select('attempts.*').orderBy('attemptTime', 'DESC')
+            .page(page - 1, pageSize);
     }
-    return res.map((attempt) => attemptReducer(attempt));
+    return res.results.map((attempt) => attemptReducer(attempt));
 }
 
 async function deleteProblem(id) {
@@ -287,8 +294,8 @@ async function getTestByToken(token) {
 function sendMail(mailDetails) {
     const token = jwt.sign({ testId: mailDetails.test_id, email: mailDetails.email },
         'helloo', {
-        expiresIn: 60 * 60 * parseInt(mailDetails.linktime),
-    }
+            expiresIn: 60 * 60 * parseInt(mailDetails.linktime),
+        }
     );
     const mailBody = `<h1>Sourcefuse Technologies</h1><p>This link will be active for ${mailDetails.linktime} hours</p><span>To give test click <a href="http://localhost:5000/givetest/${token}">here</a></span>`;
     mailOptions.html = mailBody;
@@ -327,7 +334,7 @@ async function updateAttempt(data) {
     const tt = JSON.parse(data.solutions);
 
     let score = 0;
-    rr.map(async (ele, index) => {
+    rr.map(async(ele, index) => {
         let ree = `${tt[index].solution} solution(JSON.parse(${ele.problem.problemTests}))`;
         await worker(ree, ele.problem.timelimit, (data) => {
             console.log(data);
@@ -344,7 +351,7 @@ async function updateAttempt(data) {
                 }
             }
         });
-        return { ...ele, userSolution: tt[index].solution };
+        return {...ele, userSolution: tt[index].solution };
     });
     const res2 = await Attempt.query().patchAndFetchById(parseInt(data.id), {
         u_id: parseInt(data.u_id),

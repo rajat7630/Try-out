@@ -203,7 +203,7 @@
               </p>
               <div class="flex w-full justify-between items-center mt-4">
                 <span class="problem__type">
-                  TimeLimit :{problem.timelimit} ms
+                  Time_limit: {problem.timelimit}ms
                 </span>
                 <div class="text-xs ml-8">
                   <span class="font-bold">
@@ -265,7 +265,7 @@
               </p>
               <div class="flex w-full justify-between items-center mt-4">
                 <span class="problem__type">
-                  TimeLimit :{test.timelimit} min
+                  Time_limit: {test.timelimit}min
                 </span>
                 <div class="text-xs ml-8">
                   <span class="font-bold">{timeConverter(test.createdAt)}</span>
@@ -314,7 +314,7 @@
                 </span>
               </p>
               <div class="flex w-full justify-between items-center mt-4">
-                <span class="problem__type">Score :{attempt.score}</span>
+                <span class="problem__type">Score: {attempt.score}</span>
                 <div class="text-xs ml-8">
                   <span class="font-bold">
                     {timeConverter(attempt.attemptTime)}

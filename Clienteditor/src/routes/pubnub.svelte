@@ -191,7 +191,7 @@
     color: black;
   }
   :global(body.darkmode) .textt {
-    color: azure;
+    color: white;
   }
 </style>
 
@@ -240,7 +240,7 @@
           <div class="ml-4 flex-1 border-b border-grey-lighter py-4">
             <div class="flex items-bottom justify-between">
               {#if channelName == 'channel.' + userName}
-                <p class="textt">Private</p>
+                <p class="text-grey-darkest">Private</p>
               {:else}
                 <p class="text-black">{channelName}</p>
               {/if}

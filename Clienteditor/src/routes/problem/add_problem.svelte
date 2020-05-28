@@ -13,7 +13,6 @@
 <div class="w-screen h-screen flex flex-col">
   <header>
     <Navbar />
-    <Sidebar />
     <subheader>
       <SubNavbar position={pageNum} />
     </subheader>
