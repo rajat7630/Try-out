@@ -27498,8 +27498,8 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		c: function create() {
     			div = element("div");
     			attr_dev(div, "id", "editor");
-    			attr_dev(div, "class", "editor flex-grow svelte-wxlfxg");
-    			add_location(div, file$1, 53, 0, 1805);
+    			attr_dev(div, "class", "editor flex-grow svelte-117uaep");
+    			add_location(div, file$1, 54, 0, 1857);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -30620,7 +30620,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     var src$1 = gql;
 
-    const getProblems = src$1 `
+    const getProblems = src$1`
   query getAllProblems {
     allProblems {
       id
@@ -30634,7 +30634,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
   }
 `;
-    const getSearchProblems = src$1 `
+    const getSearchProblems = src$1`
   query getSearchProblems($search: String) {
     searchProblems(search: $search) {
       id
@@ -30645,10 +30645,31 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
       timelimit
       datalimit
       solution
+      createdAt
     }
   }
 `;
-    const getSearchTests = src$1 `
+    const getSearchAttempts = src$1`
+  query getSearchAttempts($search: String) {
+    searchAttempt(search: $search) {
+      id
+      user {
+        id
+        email
+        name
+        collegeName
+      }
+      test {
+        id
+        testName
+      }
+      solutions
+      attemptTime
+      score
+    }
+  }
+`;
+    const getSearchTests = src$1`
   query getSearchTests($search: String) {
     searchTests(search: $search) {
       id
@@ -30662,7 +30683,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
   }
 `;
-    const problemsByAuthor = src$1 `
+    const problemsByAuthor = src$1`
   query problemsByAuthor($email: String) {
     problemsByAuthor(email: $email) {
       id
@@ -30675,7 +30696,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
   }
 `;
 
-    const getToken = src$1 `
+    const getToken = src$1`
   query getToken($id: ID!) {
     getToken(id: $id) {
       token
@@ -30683,7 +30704,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
   }
 `;
 
-    const allTests = src$1 `
+    const allTests = src$1`
   query getTest {
     allTests {
       id
@@ -30698,7 +30719,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
   }
 `;
 
-    const testsByAuthor = src$1 `
+    const testsByAuthor = src$1`
   query testsByAuthor($email: String) {
     testsByAuthor(email: $email) {
       id
@@ -30708,7 +30729,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
   }
 `;
 
-    const testByToken = src$1 `
+    const testByToken = src$1`
   query getTest($token: String) {
     testByToken(token: $token) {
       id
@@ -30717,7 +30738,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
   }
 `;
 
-    const sendMail = src$1 `
+    const sendMail = src$1`
   mutation mailSender($linktime: String, $email: String, $test_id: String) {
     sendMail(linktime: $linktime, test_id: $test_id, email: $email) {
       success
@@ -30726,7 +30747,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
   }
 `;
 
-    const addProblem = src$1 `
+    const addProblem = src$1`
   mutation addNewProblem(
     $problemName: String
     $description: String
@@ -30762,7 +30783,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
   }
 `;
 
-    const deleteProblem = src$1 `
+    const deleteProblem = src$1`
   mutation deleteProblem($id: ID) {
     deleteProblem(id: $id) {
       id
@@ -30773,7 +30794,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
   }
 `;
 
-    const updateProblem = src$1 `
+    const updateProblem = src$1`
   mutation updateProblem(
     $id: ID!
     $problemName: String
@@ -30802,7 +30823,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
   }
 `;
 
-    const addTest = src$1 `
+    const addTest = src$1`
   mutation addNewTest(
     $testName: String
     $difficultyLevel: String
@@ -30827,7 +30848,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
   }
 `;
 
-    const deleteTest = src$1 `
+    const deleteTest = src$1`
   mutation deleteTest($id: ID) {
     deleteTest(id: $id) {
       success
@@ -30835,7 +30856,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
   }
 `;
-    const updateTest = src$1 `
+    const updateTest = src$1`
   mutation updateTest(
     $id: ID
     $testName: String
@@ -30860,7 +30881,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
   }
 `;
 
-    const addUser = src$1 `
+    const addUser = src$1`
   mutation addNewUser(
     $name: String
     $email: String
@@ -30881,7 +30902,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
   }
 `;
-    const addTestProblem = src$1 `
+    const addTestProblem = src$1`
   mutation addTestProblem($t_id: Int, $p_id: Int) {
     addTestProblem(data: { t_id: $t_id, p_id: $p_id }) {
       success
@@ -30902,7 +30923,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
   }
 `;
 
-    const getProblemById = src$1 `
+    const getProblemById = src$1`
   query getProblemById($id: ID!) {
     problemById(id: $id) {
       id
@@ -30918,7 +30939,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
   }
 `;
 
-    const getTestById = src$1 `
+    const getTestById = src$1`
   query getTestById($id: ID!) {
     testById(id: $id) {
       id
@@ -30933,7 +30954,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
   }
 `;
 
-    const getAttempts = src$1 `
+    const getAttempts = src$1`
   query getAttempts($id: ID) {
     getAttempt(id: $id) {
       id
@@ -30950,7 +30971,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
   }
 `;
 
-    const getAllAttempts = src$1 `
+    const getAllAttempts = src$1`
   query getAllAttempts {
     getAllAttempt {
       id
@@ -30960,14 +30981,17 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
         name
         collegeName
       }
-      test
+      test {
+        id
+        testName
+      }
       solutions
       attemptTime
       score
     }
   }
 `;
-    const updateAttempt = src$1 `
+    const updateAttempt = src$1`
   mutation updateAttempt($id: ID, $u_id: ID, $solutions: JSON) {
     updateAttempt(data: { u_id: $u_id, id: $id, solutions: $solutions }) {
       success
@@ -30975,7 +30999,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
   }
 `;
-    const addAttempt = src$1 `
+    const addAttempt = src$1`
   mutation addAttempt($u_id: ID, $t_id: ID, $solutions: JSON) {
     addAttempt(data: { u_id: $u_id, t_id: $t_id, solutions: $solutions }) {
       success
@@ -30985,7 +31009,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
   }
 `;
 
-    const checkIfAvailable = src$1 `
+    const checkIfAvailable = src$1`
   mutation checkIfAvailable($problemName: String) {
     checkProblemIfExists(problemName: $problemName) {
       success
@@ -30993,7 +31017,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
   }
 `;
-    const checkTestIfAvailable = src$1 `
+    const checkTestIfAvailable = src$1`
   mutation checkTestIfAvailable($testName: String) {
     checkTestIfExists(testName: $testName) {
       success
@@ -31001,32 +31025,44 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
   }
 `;
+
+    const checkTimeLimit = src$1`
+mutation checkTimeLimit($data:String, $timelimit:String){
+  checkTimeLimit(data:$data, timelimit:$timelimit)
+  {
+    success
+    message
+  }
+}
+`;
     const apolloClient = {
-        checkTestIfAvailable,
-        checkIfAvailable,
-        getAttempts,
-        getAllAttempts,
-        updateAttempt,
-        addAttempt,
-        sendMail,
-        getTestById,
-        getProblems,
-        getSearchProblems,
-        getSearchTests,
-        getProblemById,
-        testsByAuthor,
-        deleteProblem,
-        updateProblem,
-        updateTest,
-        allTests,
-        problemsByAuthor,
-        addProblem,
-        addTest,
-        addTestProblem,
-        deleteTest,
-        addUser,
-        getToken,
-        testByToken,
+      checkTimeLimit,
+      checkTestIfAvailable,
+      checkIfAvailable,
+      getAttempts,
+      getAllAttempts,
+      updateAttempt,
+      addAttempt,
+      sendMail,
+      getTestById,
+      getProblems,
+      getSearchProblems,
+      getSearchTests,
+      getSearchAttempts,
+      getProblemById,
+      testsByAuthor,
+      deleteProblem,
+      updateProblem,
+      updateTest,
+      allTests,
+      problemsByAuthor,
+      addProblem,
+      addTest,
+      addTestProblem,
+      deleteTest,
+      addUser,
+      getToken,
+      testByToken,
     };
 
     var QueryDocumentKeys = {
@@ -32670,44 +32706,44 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			button1 = element("button");
     			button1.textContent = "Run";
     			attr_dev(h1, "class", "question px-3 py-3 svelte-1h6cltn");
-    			add_location(h1, file$2, 118, 2, 3841);
+    			add_location(h1, file$2, 128, 2, 4173);
     			attr_dev(div0, "class", "w-full bg-gray-800 sizechanger cursor-move text-bg-600 flex\n    justify-center text-3xl h-3 svelte-1h6cltn");
     			set_style(div0, "line-height", "1px");
     			set_style(div0, "cursor", "ns-resize");
-    			add_location(div0, file$2, 120, 2, 3924);
+    			add_location(div0, file$2, 130, 2, 4256);
     			attr_dev(h20, "class", "text-xl text-white my-3 my-2");
-    			add_location(h20, file$2, 131, 8, 4322);
+    			add_location(h20, file$2, 141, 8, 4654);
     			attr_dev(div1, "id", "inputeditor");
     			attr_dev(div1, "class", "inputeditor text-xl h-full box-border ");
-    			add_location(div1, file$2, 133, 10, 4432);
+    			add_location(div1, file$2, 143, 10, 4764);
     			attr_dev(div2, "class", "flex-grow h-48 box-border");
-    			add_location(div2, file$2, 132, 8, 4382);
+    			add_location(div2, file$2, 142, 8, 4714);
     			attr_dev(div3, "class", "flex-1 mr-4 box-border");
-    			add_location(div3, file$2, 130, 6, 4277);
+    			add_location(div3, file$2, 140, 6, 4609);
     			attr_dev(h21, "class", "text-xl text-white my-3 my-2 box-border");
-    			add_location(h21, file$2, 139, 8, 4596);
+    			add_location(h21, file$2, 149, 8, 4928);
     			attr_dev(textarea, "class", " h-full w-full bg-gray-900 text-white text-xl box-border\n            border-none rounded py-3 px-4 mb-3 leading-tight focus:outline-none\n            resize-none");
     			attr_dev(textarea, "id", "message");
     			textarea.readOnly = true;
-    			add_location(textarea, file$2, 141, 10, 4707);
+    			add_location(textarea, file$2, 151, 10, 5039);
     			attr_dev(div4, "class", "flex-grow h-48");
-    			add_location(div4, file$2, 140, 8, 4668);
+    			add_location(div4, file$2, 150, 8, 5000);
     			attr_dev(div5, "class", "flex-1 ml-4");
-    			add_location(div5, file$2, 138, 6, 4562);
+    			add_location(div5, file$2, 148, 6, 4894);
     			attr_dev(div6, "class", "flex my-4 p-2 border-solid border-2 border-black");
-    			add_location(div6, file$2, 129, 4, 4208);
+    			add_location(div6, file$2, 139, 4, 4540);
     			attr_dev(button0, "class", "bg-black hover:bg-white hover:text-black mr-10 outline-none\n        text-white float-right py-2 px-4 rounded-full");
-    			add_location(button0, file$2, 152, 6, 5067);
+    			add_location(button0, file$2, 162, 6, 5399);
     			attr_dev(button1, "class", "bg-black hover:bg-white hover:text-black mr-10 outline-none\n        text-white float-right py-2 px-4 rounded-full");
-    			add_location(button1, file$2, 161, 6, 5367);
+    			add_location(button1, file$2, 171, 6, 5699);
     			attr_dev(div7, "class", "float-left ml-10 text-xl");
-    			add_location(div7, file$2, 151, 4, 5022);
+    			add_location(div7, file$2, 161, 4, 5354);
     			attr_dev(div8, "class", "output svelte-1h6cltn");
     			attr_dev(div8, "id", "outputid");
     			set_style(div8, "height", /*height*/ ctx[2]);
-    			add_location(div8, file$2, 127, 2, 4144);
+    			add_location(div8, file$2, 137, 2, 4476);
     			attr_dev(div9, "class", "mainDiv flex flex-col svelte-1h6cltn");
-    			add_location(div9, file$2, 104, 0, 3516);
+    			add_location(div9, file$2, 114, 0, 3848);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -32818,25 +32854,41 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		});
     	});
 
-    	function runHandler() {
-    		try {
-    			let ind = 0;
+    	async function runHandler() {
+    		let ind = 0;
 
-    			$dataStore.forEach((ele, index) => {
-    				if (ele.id === $currentTab.id) {
-    					ind = index;
-    					return;
-    				}
-    			});
+    		$dataStore.forEach((ele, index) => {
+    			if (ele.id === $currentTab.id) {
+    				ind = index;
+    				return;
+    			}
+    		});
 
-    			console.log(ind);
-    			let code = $dataStore[ind].solution;
-    			console.log(code);
-    			console.log(inputeditor.getValue());
-    			let testCase = inputeditor.getValue();
-    			$$invalidate(1, result = eval(`${code} solution(${testCase})`));
-    		} catch(err) {
-    			$$invalidate(1, result = err);
+    		console.log(ind);
+    		let code = $dataStore[ind].solution;
+    		console.log(code);
+    		console.log(inputeditor.getValue());
+    		let testCase = inputeditor.getValue();
+    		let res = `${code} solution(${testCase})`;
+
+    		let data = await mutate(client, {
+    			mutation: apolloClient.checkTimeLimit,
+    			variables: {
+    				data: res,
+    				timelimit: $dataStore[ind].timelimit
+    			}
+    		});
+
+    		console.log(data);
+
+    		if (data.data.checkTimeLimit.success === true) {
+    			try {
+    				$$invalidate(1, result = eval(`${code} solution(${testCase})`));
+    			} catch(err) {
+    				$$invalidate(1, result = err);
+    			}
+    		} else {
+    			$$invalidate(1, result = "Timelimit Exceeded");
     		}
     	}
 
@@ -35036,7 +35088,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    // (289:4) {:else}
+    // (290:4) {:else}
     function create_else_block_1(ctx) {
     	let div3;
     	let div2;
@@ -35061,17 +35113,17 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			attr_dev(img, "class", "chat-notification-logo svelte-tbxbgk");
     			if (img.src !== (img_src_value = "https://img.icons8.com/cotton/50/000000/filled-chat.png")) attr_dev(img, "src", img_src_value);
     			attr_dev(img, "alt", "ChitChat Logo");
-    			add_location(img, file$5, 292, 12, 10637);
+    			add_location(img, file$5, 293, 12, 10709);
     			attr_dev(div0, "class", "chat-notification-logo-wrapper svelte-tbxbgk");
-    			add_location(div0, file$5, 291, 10, 10580);
+    			add_location(div0, file$5, 292, 10, 10652);
     			attr_dev(h4, "class", "chat-notification-title svelte-tbxbgk");
-    			add_location(h4, file$5, 298, 12, 10879);
+    			add_location(h4, file$5, 299, 12, 10951);
     			attr_dev(div1, "class", "chat-notification-content svelte-tbxbgk");
-    			add_location(div1, file$5, 297, 10, 10827);
+    			add_location(div1, file$5, 298, 10, 10899);
     			attr_dev(div2, "class", "chat-notification svelte-tbxbgk");
-    			add_location(div2, file$5, 290, 8, 10538);
+    			add_location(div2, file$5, 291, 8, 10610);
     			attr_dev(div3, "class", "btm svelte-tbxbgk");
-    			add_location(div3, file$5, 289, 6, 10494);
+    			add_location(div3, file$5, 290, 6, 10566);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div3, anchor);
@@ -35094,7 +35146,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_else_block_1.name,
     		type: "else",
-    		source: "(289:4) {:else}",
+    		source: "(290:4) {:else}",
     		ctx
     	});
 
@@ -35173,55 +35225,56 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			img1 = element("img");
     			attr_dev(img0, "alt", "admin photo");
     			attr_dev(img0, "class", "h-12 w-12 rounded-full svelte-tbxbgk");
-    			if (img0.src !== (img0_src_value = "https://darrenjameseeley.files.wordpress.com/2014/09/expendables3.jpeg")) attr_dev(img0, "src", img0_src_value);
+    			if (img0.src !== (img0_src_value = "https://lh3.googleusercontent.com/-q_zoC0qD1wk/AAAAAAAAAAI/AAAAAAAAAAA/X44tu0L9iy4/s44-p-k-no-ns-nd/photo.jpg")) attr_dev(img0, "src", img0_src_value);
     			add_location(img0, file$5, 219, 12, 7800);
     			attr_dev(div0, "class", "svelte-tbxbgk");
     			add_location(div0, file$5, 218, 10, 7782);
     			attr_dev(p0, "class", "text-grey-darkest svelte-tbxbgk");
-    			add_location(p0, file$5, 226, 14, 8137);
+    			add_location(p0, file$5, 226, 14, 8176);
     			attr_dev(div1, "class", "flex items-bottom justify-between svelte-tbxbgk");
-    			add_location(div1, file$5, 225, 12, 8075);
+    			add_location(div1, file$5, 225, 12, 8114);
     			attr_dev(p1, "class", "text-grey-dark mt-1 text-sm svelte-tbxbgk");
-    			add_location(p1, file$5, 228, 12, 8210);
+    			add_location(p1, file$5, 228, 12, 8249);
     			attr_dev(div2, "class", "ml-4 flex-1 border-b border-grey-lighter py-4 svelte-tbxbgk");
-    			add_location(div2, file$5, 224, 10, 8003);
+    			add_location(div2, file$5, 224, 10, 8042);
     			attr_dev(div3, "class", "px-3 flex items-center bg-grey-light cursor-pointer rounded-lg svelte-tbxbgk");
     			add_location(div3, file$5, 216, 8, 7685);
     			attr_dev(div4, "class", "flex-1 overflow-auto svelte-tbxbgk");
-    			add_location(div4, file$5, 236, 12, 8532);
+    			add_location(div4, file$5, 236, 12, 8571);
     			attr_dev(div5, "class", "message-form svelte-tbxbgk");
-    			add_location(div5, file$5, 235, 10, 8493);
+    			add_location(div5, file$5, 235, 10, 8532);
     			attr_dev(div6, "class", "container mx-auto overflow-auto margin-bottom:10%; svelte-tbxbgk");
     			set_style(div6, "bottom", "120px");
     			set_style(div6, "right", "55px");
     			set_style(div6, "height", "280px");
     			set_style(div6, "width", "295px");
-    			add_location(div6, file$5, 232, 8, 8332);
+    			add_location(div6, file$5, 232, 8, 8371);
     			attr_dev(input, "type", "search");
     			attr_dev(input, "name", "serch");
     			attr_dev(input, "placeholder", "Type Message and Press Enter");
     			attr_dev(input, "class", "bg-white h-10 px-5 pr-10 rounded-full text-sm\n                focus:outline-none svelte-tbxbgk");
-    			add_location(input, file$5, 264, 14, 9698);
+    			add_location(input, file$5, 265, 14, 9770);
+    			attr_dev(form, "autocomplete", "off");
     			attr_dev(form, "class", "svelte-tbxbgk");
-    			add_location(form, file$5, 262, 12, 9593);
+    			add_location(form, file$5, 262, 12, 9632);
     			attr_dev(div7, "class", "relative text-gray-600 svelte-tbxbgk");
-    			add_location(div7, file$5, 261, 10, 9544);
+    			add_location(div7, file$5, 261, 10, 9583);
     			attr_dev(div8, "class", "container block svelte-tbxbgk");
     			set_style(div8, "position", "absolute");
     			set_style(div8, "bottom", "0");
-    			add_location(div8, file$5, 260, 8, 9464);
+    			add_location(div8, file$5, 260, 8, 9503);
     			attr_dev(div9, "class", "chat shadow-xl rounded-lg svelte-tbxbgk");
     			add_location(div9, file$5, 214, 6, 7611);
     			attr_dev(img1, "class", "chat-notification-logo svelte-tbxbgk");
     			if (img1.src !== (img1_src_value = "https://img.icons8.com/cute-clipart/50/000000/close-window.png")) attr_dev(img1, "src", img1_src_value);
     			attr_dev(img1, "alt", "ChitChat Logo");
-    			add_location(img1, file$5, 281, 12, 10261);
+    			add_location(img1, file$5, 282, 12, 10333);
     			attr_dev(div10, "class", "chat-notification-logo-wrapper svelte-tbxbgk");
-    			add_location(div10, file$5, 280, 10, 10204);
+    			add_location(div10, file$5, 281, 10, 10276);
     			attr_dev(div11, "class", "chat-notification svelte-tbxbgk");
-    			add_location(div11, file$5, 279, 8, 10162);
+    			add_location(div11, file$5, 280, 8, 10234);
     			attr_dev(div12, "class", "btm svelte-tbxbgk");
-    			add_location(div12, file$5, 278, 6, 10119);
+    			add_location(div12, file$5, 279, 6, 10191);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div9, anchor);
@@ -35344,13 +35397,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			t2 = text(t2_value);
     			t3 = space();
     			attr_dev(p0, "class", "text-grey-darkest svelte-tbxbgk");
-    			add_location(p0, file$5, 249, 22, 9125);
+    			add_location(p0, file$5, 249, 22, 9164);
     			attr_dev(div0, "class", "flex items-bottom justify-between svelte-tbxbgk");
-    			add_location(div0, file$5, 248, 20, 9055);
+    			add_location(div0, file$5, 248, 20, 9094);
     			attr_dev(p1, "class", "text-grey-dark mt-1 text-sm svelte-tbxbgk");
-    			add_location(p1, file$5, 251, 20, 9211);
+    			add_location(p1, file$5, 251, 20, 9250);
     			attr_dev(div1, "class", "ml-4 flex-1 rounded py-4 svelte-tbxbgk");
-    			add_location(div1, file$5, 247, 18, 8996);
+    			add_location(div1, file$5, 247, 18, 9035);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div1, anchor);
@@ -35397,12 +35450,12 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			t0 = text(t0_value);
     			t1 = space();
     			attr_dev(p, "class", "text-sm mt-1 svelte-tbxbgk");
-    			add_location(p, file$5, 243, 22, 8859);
+    			add_location(p, file$5, 243, 22, 8898);
     			attr_dev(div0, "class", "rounded py-2 px-3 svelte-tbxbgk");
     			set_style(div0, "background-color", "#E2F7CB");
-    			add_location(div0, file$5, 240, 20, 8727);
+    			add_location(div0, file$5, 240, 20, 8766);
     			attr_dev(div1, "class", "flex justify-end mb-2 svelte-tbxbgk");
-    			add_location(div1, file$5, 239, 18, 8671);
+    			add_location(div1, file$5, 239, 18, 8710);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div1, anchor);
@@ -35864,50 +35917,50 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			p1.textContent = "  Logout";
     			attr_dev(link, "href", "https://fonts.googleapis.com/css2?family=Jost&display=swap");
     			attr_dev(link, "rel", "stylesheet");
-    			add_location(link, file$6, 90, 0, 3488);
-    			attr_dev(h1, "class", "welcome text-primary svelte-o6ojuz");
-    			add_location(h1, file$6, 97, 4, 3729);
+    			add_location(link, file$6, 98, 0, 4048);
+    			attr_dev(h1, "class", "welcome text-primary svelte-ywgye7");
+    			add_location(h1, file$6, 105, 4, 4289);
     			attr_dev(img0, "alt", "admin");
     			attr_dev(img0, "width", "25");
     			attr_dev(img0, "height", "25");
     			if (img0.src !== (img0_src_value = "https://img.icons8.com/carbon-copy/64/000000/user.png")) attr_dev(img0, "src", img0_src_value);
-    			add_location(img0, file$6, 105, 10, 4126);
+    			add_location(img0, file$6, 113, 10, 4686);
     			set_style(p0, "font-family", "'Jost', sans-serif");
-    			add_location(p0, file$6, 110, 10, 4287);
+    			add_location(p0, file$6, 118, 10, 4847);
     			attr_dev(button, "class", "container bg-white mx-3 flex flex-row hover:bg-light text-dark\n          font-semibold hover:text-white py-4 px-6 border border-white-500\n          rounded hover:border-white hover:border-transparent rounded-full");
-    			add_location(button, file$6, 101, 8, 3876);
+    			add_location(button, file$6, 109, 8, 4436);
     			attr_dev(input, "type", "checkbox");
     			attr_dev(input, "name", "toggle");
     			attr_dev(input, "id", "toggle");
-    			attr_dev(input, "class", "toggle-checkbox absolute block w-6 h-6 rounded-full\n                bg-white border-4 appearance-none cursor-pointer svelte-o6ojuz");
-    			add_location(input, file$6, 121, 14, 4793);
+    			attr_dev(input, "class", "toggle-checkbox absolute block w-6 h-6 rounded-full\n                bg-white border-4 appearance-none cursor-pointer svelte-ywgye7");
+    			add_location(input, file$6, 129, 14, 5353);
     			attr_dev(label0, "for", "toggle");
-    			attr_dev(label0, "class", "toggle-label block overflow-hidden h-6 rounded-full\n                bg-gray-300 cursor-pointer svelte-o6ojuz");
-    			add_location(label0, file$6, 128, 14, 5082);
+    			attr_dev(label0, "class", "toggle-label block overflow-hidden h-6 rounded-full\n                bg-gray-300 cursor-pointer svelte-ywgye7");
+    			add_location(label0, file$6, 136, 14, 5642);
     			attr_dev(div0, "class", "relative inline-block w-10 mr-2 align-middle select-none\n              transition duration-200 ease-in");
-    			add_location(div0, file$6, 118, 12, 4648);
-    			add_location(label1, file$6, 134, 12, 5272);
+    			add_location(div0, file$6, 126, 12, 5208);
+    			add_location(label1, file$6, 142, 12, 5832);
     			attr_dev(li0, "class", "rounded-t flex flex-row bg-gray-200 hover:bg-gray-400 py-2\n            px-4 block whitespace-no-wrap");
-    			add_location(li0, file$6, 115, 10, 4510);
+    			add_location(li0, file$6, 123, 10, 5070);
     			attr_dev(img1, "alt", "logout");
     			attr_dev(img1, "width", "25");
     			attr_dev(img1, "height", "25");
     			if (img1.src !== (img1_src_value = "https://img.icons8.com/pastel-glyph/64/000000/logout-rounded-down.png")) attr_dev(img1, "src", img1_src_value);
-    			add_location(img1, file$6, 141, 12, 5495);
-    			add_location(p1, file$6, 146, 12, 5683);
+    			add_location(img1, file$6, 149, 12, 6055);
+    			add_location(p1, file$6, 154, 12, 6243);
     			attr_dev(li1, "class", "bg-gray-200 flex flex-row hover:bg-gray-400 py-2 px-4 block\n            whitespace-no-wrap");
-    			add_location(li1, file$6, 136, 10, 5332);
-    			attr_dev(ul, "class", "ml-3 dropdown-content container text-gray-700 pt-1 svelte-o6ojuz");
-    			add_location(ul, file$6, 114, 8, 4436);
-    			attr_dev(div1, "class", "dropdown svelte-o6ojuz");
-    			add_location(div1, file$6, 100, 6, 3845);
+    			add_location(li1, file$6, 144, 10, 5892);
+    			attr_dev(ul, "class", "ml-3 dropdown-content container text-gray-700 pt-1 svelte-ywgye7");
+    			add_location(ul, file$6, 122, 8, 4996);
+    			attr_dev(div1, "class", "dropdown svelte-ywgye7");
+    			add_location(div1, file$6, 108, 6, 4405);
     			attr_dev(div2, "id", "btn");
-    			attr_dev(div2, "class", "flex flex-row svelte-o6ojuz");
-    			add_location(div2, file$6, 98, 4, 3801);
+    			attr_dev(div2, "class", "flex flex-row svelte-ywgye7");
+    			add_location(div2, file$6, 106, 4, 4361);
     			attr_dev(div3, "class", "w-full block flex-grow lg:items-right");
-    			add_location(div3, file$6, 96, 2, 3673);
-    			attr_dev(nav, "class", "flex shadow-2xl items-center justify-between day flex-wrap sticky p-6 svelte-o6ojuz");
-    			add_location(nav, file$6, 93, 0, 3584);
+    			add_location(div3, file$6, 104, 2, 4233);
+    			attr_dev(nav, "class", "flex shadow-2xl items-center justify-between day flex-wrap sticky p-6 svelte-ywgye7");
+    			add_location(nav, file$6, 101, 0, 4144);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -38579,7 +38632,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			create_component(icon1.$$.fragment);
     			t3 = space();
     			div1 = element("div");
-    			div1.textContent = "Tests";
+    			div1.textContent = " Tests";
     			t5 = space();
     			li2 = element("li");
     			a2 = element("a");
@@ -38588,37 +38641,37 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			t6 = space();
     			div2 = element("div");
     			div2.textContent = "Results";
-    			attr_dev(span0, "class", "icon svelte-cb8whl");
-    			add_location(span0, file$7, 77, 8, 3387);
-    			attr_dev(div0, "class", "name svelte-cb8whl");
-    			add_location(div0, file$7, 80, 8, 3464);
+    			attr_dev(span0, "class", "icon svelte-p2mmgi");
+    			add_location(span0, file$7, 77, 8, 3381);
+    			attr_dev(div0, "class", "name svelte-p2mmgi");
+    			add_location(div0, file$7, 80, 8, 3458);
     			attr_dev(a0, "href", "/admin");
-    			attr_dev(a0, "class", "svelte-cb8whl");
-    			add_location(a0, file$7, 76, 6, 3361);
-    			attr_dev(li0, "class", "svelte-cb8whl");
-    			add_location(li0, file$7, 75, 4, 3350);
-    			attr_dev(span1, "class", "icon svelte-cb8whl");
-    			add_location(span1, file$7, 85, 8, 3563);
-    			attr_dev(div1, "class", "name svelte-cb8whl");
-    			add_location(div1, file$7, 88, 8, 3640);
+    			attr_dev(a0, "class", "svelte-p2mmgi");
+    			add_location(a0, file$7, 76, 6, 3355);
+    			attr_dev(li0, "class", "svelte-p2mmgi");
+    			add_location(li0, file$7, 75, 4, 3344);
+    			attr_dev(span1, "class", "icon svelte-p2mmgi");
+    			add_location(span1, file$7, 85, 8, 3557);
+    			attr_dev(div1, "class", "name svelte-p2mmgi");
+    			add_location(div1, file$7, 88, 8, 3634);
     			attr_dev(a1, "href", "/showtests");
-    			attr_dev(a1, "class", "svelte-cb8whl");
-    			add_location(a1, file$7, 84, 6, 3533);
-    			attr_dev(li1, "class", "svelte-cb8whl");
-    			add_location(li1, file$7, 83, 4, 3522);
-    			attr_dev(span2, "class", "icon svelte-cb8whl");
+    			attr_dev(a1, "class", "svelte-p2mmgi");
+    			add_location(a1, file$7, 84, 6, 3527);
+    			attr_dev(li1, "class", "svelte-p2mmgi");
+    			add_location(li1, file$7, 83, 4, 3516);
+    			attr_dev(span2, "class", "icon svelte-p2mmgi");
     			add_location(span2, file$7, 93, 8, 3738);
-    			attr_dev(div2, "class", "name svelte-cb8whl");
+    			attr_dev(div2, "class", "name svelte-p2mmgi");
     			add_location(div2, file$7, 96, 8, 3819);
     			attr_dev(a2, "href", "/showresults");
-    			attr_dev(a2, "class", "svelte-cb8whl");
+    			attr_dev(a2, "class", "svelte-p2mmgi");
     			add_location(a2, file$7, 92, 6, 3706);
-    			attr_dev(li2, "class", "svelte-cb8whl");
+    			attr_dev(li2, "class", "svelte-p2mmgi");
     			add_location(li2, file$7, 91, 4, 3695);
-    			attr_dev(ul, "class", "svelte-cb8whl");
-    			add_location(ul, file$7, 74, 2, 3341);
-    			attr_dev(div3, "class", "sidebar svelte-cb8whl");
-    			add_location(div3, file$7, 73, 0, 3317);
+    			attr_dev(ul, "class", "svelte-p2mmgi");
+    			add_location(ul, file$7, 74, 2, 3335);
+    			attr_dev(div3, "class", "sidebar svelte-p2mmgi");
+    			add_location(div3, file$7, 73, 0, 3311);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -38710,7 +38763,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return child_ctx;
     }
 
-    // (280:2) {:else}
+    // (330:2) {:else}
     function create_else_block_3(ctx) {
     	let div3;
     	let div2;
@@ -38732,20 +38785,20 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			div1 = element("div");
     			h4 = element("h4");
     			h4.textContent = "User Support";
-    			attr_dev(img, "class", "chat-notification-logo svelte-18yl1tz");
+    			attr_dev(img, "class", "chat-notification-logo svelte-idrpa6");
     			if (img.src !== (img_src_value = "https://img.icons8.com/cotton/50/000000/filled-chat.png")) attr_dev(img, "src", img_src_value);
     			attr_dev(img, "alt", "ChitChat Logo");
-    			add_location(img, file$8, 283, 10, 10298);
-    			attr_dev(div0, "class", "chat-notification-logo-wrapper svelte-18yl1tz");
-    			add_location(div0, file$8, 282, 8, 10243);
-    			attr_dev(h4, "class", "chat-notification-title svelte-18yl1tz");
-    			add_location(h4, file$8, 289, 10, 10528);
-    			attr_dev(div1, "class", "chat-notification-content svelte-18yl1tz");
-    			add_location(div1, file$8, 288, 8, 10478);
-    			attr_dev(div2, "class", "chat-notification svelte-18yl1tz");
-    			add_location(div2, file$8, 281, 6, 10203);
-    			attr_dev(div3, "class", "btm svelte-18yl1tz");
-    			add_location(div3, file$8, 280, 4, 10161);
+    			add_location(img, file$8, 333, 10, 12518);
+    			attr_dev(div0, "class", "chat-notification-logo-wrapper svelte-idrpa6");
+    			add_location(div0, file$8, 332, 8, 12463);
+    			attr_dev(h4, "class", "chat-notification-title svelte-idrpa6");
+    			add_location(h4, file$8, 339, 10, 12748);
+    			attr_dev(div1, "class", "chat-notification-content svelte-idrpa6");
+    			add_location(div1, file$8, 338, 8, 12698);
+    			attr_dev(div2, "class", "chat-notification svelte-idrpa6");
+    			add_location(div2, file$8, 331, 6, 12423);
+    			attr_dev(div3, "class", "btm svelte-idrpa6");
+    			add_location(div3, file$8, 330, 4, 12381);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div3, anchor);
@@ -38768,14 +38821,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_else_block_3.name,
     		type: "else",
-    		source: "(280:2) {:else}",
+    		source: "(330:2) {:else}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (172:2) {#if hasJoinedChat}
+    // (220:2) {#if hasJoinedChat}
     function create_if_block$2(ctx) {
     	let div13;
     	let div3;
@@ -38872,60 +38925,61 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			div15 = element("div");
     			div14 = element("div");
     			img = element("img");
-    			attr_dev(p0, "class", "text-grey-darkest");
-    			add_location(p0, file$8, 180, 12, 6357);
+    			attr_dev(p0, "class", "textt px-6 svelte-idrpa6");
+    			add_location(p0, file$8, 228, 12, 8574);
     			attr_dev(div0, "class", "flex");
-    			add_location(div0, file$8, 179, 10, 6326);
-    			attr_dev(div1, "class", "py-2 px-3 bg-grey-lighter flex flex-row justify-between\n          items-center");
-    			add_location(div1, file$8, 176, 8, 6213);
-    			attr_dev(div2, "class", "bg-grey-lighter flex-1 overflow-auto");
-    			add_location(div2, file$8, 184, 8, 6471);
-    			attr_dev(div3, "class", "w-1/3 border flex flex-col");
-    			add_location(div3, file$8, 174, 6, 6140);
+    			add_location(div0, file$8, 227, 10, 8543);
+    			attr_dev(div1, "class", "py-2 px-3 rounded message-title flex flex-row justify-between\n          items-center svelte-idrpa6");
+    			add_location(div1, file$8, 224, 8, 8424);
+    			attr_dev(div2, "class", "message-title rounded flex-1 overflow-auto svelte-idrpa6");
+    			add_location(div2, file$8, 232, 8, 8681);
+    			attr_dev(div3, "class", "w-1/3 rounded flex flex-col");
+    			add_location(div3, file$8, 222, 6, 8350);
     			attr_dev(div4, "class", "flex items-bottom justify-between");
-    			add_location(div4, file$8, 210, 12, 7516);
+    			add_location(div4, file$8, 258, 12, 9709);
     			attr_dev(p1, "class", "text-grey-dark mt-1 text-sm");
-    			add_location(p1, file$8, 217, 12, 7814);
+    			add_location(p1, file$8, 265, 12, 9988);
     			attr_dev(div5, "class", "ml-4 flex-1 border-b border-grey-lighter py-4");
-    			add_location(div5, file$8, 209, 10, 7444);
-    			attr_dev(div6, "class", "px-3 flex-row items-center bg-grey-light cursor-pointer\n          rounded-lg");
-    			add_location(div6, file$8, 206, 8, 7333);
+    			add_location(div5, file$8, 257, 10, 9637);
+    			attr_dev(div6, "class", "px-3 flex-row shadow-l message-title items-center\n          cursor-pointer rounded-lg svelte-idrpa6");
+    			add_location(div6, file$8, 254, 8, 9517);
     			attr_dev(div7, "class", "flex-1 overflow-auto");
-    			add_location(div7, file$8, 225, 12, 8136);
+    			add_location(div7, file$8, 273, 12, 10310);
     			attr_dev(div8, "class", "message-form");
-    			add_location(div8, file$8, 224, 10, 8097);
+    			add_location(div8, file$8, 272, 10, 10271);
     			attr_dev(div9, "class", "container mx-auto overflow-auto margin-bottom:10%;");
     			set_style(div9, "bottom", "120px");
     			set_style(div9, "right", "55px");
     			set_style(div9, "height", "380px");
     			set_style(div9, "width", "390px");
-    			add_location(div9, file$8, 221, 8, 7936);
+    			add_location(div9, file$8, 269, 8, 10110);
     			attr_dev(input, "type", "search");
-    			attr_dev(input, "name", "serch");
+    			attr_dev(input, "name", "search");
     			attr_dev(input, "placeholder", "Type Message and Press Enter");
-    			attr_dev(input, "class", "bg-white h-10 px-5 pr-10 rounded-full text-sm\n                focus:outline-none svelte-18yl1tz");
-    			add_location(input, file$8, 254, 14, 9384);
-    			add_location(form, file$8, 253, 12, 9312);
+    			attr_dev(input, "class", "bg-white h-10 px-5 pr-10 rounded-full text-sm\n                focus:outline-none svelte-idrpa6");
+    			add_location(input, file$8, 304, 14, 11603);
+    			attr_dev(form, "autocomplete", "off");
+    			add_location(form, file$8, 301, 12, 11484);
     			attr_dev(div10, "class", "relative text-gray-600");
-    			add_location(div10, file$8, 252, 10, 9263);
+    			add_location(div10, file$8, 300, 10, 11435);
     			attr_dev(div11, "class", "container block");
     			set_style(div11, "position", "absolute");
     			set_style(div11, "bottom", "0");
-    			add_location(div11, file$8, 251, 8, 9183);
-    			attr_dev(div12, "class", "w-2/3 border flex flex-col");
-    			add_location(div12, file$8, 204, 6, 7258);
-    			attr_dev(div13, "class", "chat flex flex-row shadow-xl rounded-lg svelte-18yl1tz");
-    			add_location(div13, file$8, 172, 4, 6061);
-    			attr_dev(img, "class", "chat-notification-logo svelte-18yl1tz");
+    			add_location(div11, file$8, 299, 8, 11355);
+    			attr_dev(div12, "class", "w-2/3 flex flex-col");
+    			add_location(div12, file$8, 252, 6, 9449);
+    			attr_dev(div13, "class", "chat flex rounded-sm flex-row shadow-xl rounded-lg svelte-idrpa6");
+    			add_location(div13, file$8, 220, 4, 8260);
+    			attr_dev(img, "class", "chat-notification-logo svelte-idrpa6");
     			if (img.src !== (img_src_value = "https://img.icons8.com/cute-clipart/50/000000/close-window.png")) attr_dev(img, "src", img_src_value);
     			attr_dev(img, "alt", "ChitChat Logo");
-    			add_location(img, file$8, 272, 10, 9944);
-    			attr_dev(div14, "class", "chat-notification-logo-wrapper svelte-18yl1tz");
-    			add_location(div14, file$8, 271, 8, 9889);
-    			attr_dev(div15, "class", "chat-notification svelte-18yl1tz");
-    			add_location(div15, file$8, 270, 6, 9849);
-    			attr_dev(div16, "class", "btm svelte-18yl1tz");
-    			add_location(div16, file$8, 269, 4, 9808);
+    			add_location(img, file$8, 322, 10, 12164);
+    			attr_dev(div14, "class", "chat-notification-logo-wrapper svelte-idrpa6");
+    			add_location(div14, file$8, 321, 8, 12109);
+    			attr_dev(div15, "class", "chat-notification svelte-idrpa6");
+    			add_location(div15, file$8, 320, 6, 12069);
+    			attr_dev(div16, "class", "btm svelte-idrpa6");
+    			add_location(div16, file$8, 319, 4, 12028);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div13, anchor);
@@ -39067,14 +39121,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_if_block$2.name,
     		type: "if",
-    		source: "(172:2) {#if hasJoinedChat}",
+    		source: "(220:2) {#if hasJoinedChat}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (195:18) {:else}
+    // (243:18) {:else}
     function create_else_block_2(ctx) {
     	let p;
     	let t_value = /*channel*/ ctx[20] + "";
@@ -39085,7 +39139,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			p = element("p");
     			t = text(t_value);
     			attr_dev(p, "class", "text-grey-darkest");
-    			add_location(p, file$8, 195, 20, 7055);
+    			add_location(p, file$8, 243, 20, 9246);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, p, anchor);
@@ -39103,14 +39157,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_else_block_2.name,
     		type: "else",
-    		source: "(195:18) {:else}",
+    		source: "(243:18) {:else}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (193:18) {#if channel == 'channel.' + userName}
+    // (241:18) {#if channel == 'channel.' + userName}
     function create_if_block_4(ctx) {
     	let p;
 
@@ -39119,7 +39173,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			p = element("p");
     			p.textContent = "Private";
     			attr_dev(p, "class", "text-grey-darkest");
-    			add_location(p, file$8, 193, 20, 6968);
+    			add_location(p, file$8, 241, 20, 9159);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, p, anchor);
@@ -39134,14 +39188,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_if_block_4.name,
     		type: "if",
-    		source: "(193:18) {#if channel == 'channel.' + userName}",
+    		source: "(241:18) {#if channel == 'channel.' + userName}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (186:10) {#each channels as channel}
+    // (234:10) {#each channels as channel}
     function create_each_block_1(ctx) {
     	let div2;
     	let div1;
@@ -39165,11 +39219,11 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			if_block.c();
     			t = space();
     			attr_dev(div0, "class", "flex items-bottom justify-between");
-    			add_location(div0, file$8, 191, 16, 6843);
-    			attr_dev(div1, "class", "ml-4 flex-1 border-b border-grey-lighter py-4");
-    			add_location(div1, file$8, 190, 14, 6767);
-    			attr_dev(div2, "class", "bg-white hover:bg-gray-400 px-3 flex items-center\n              hover:bg-grey-lighter cursor-pointer");
-    			add_location(div2, file$8, 186, 12, 6572);
+    			add_location(div0, file$8, 239, 16, 9034);
+    			attr_dev(div1, "class", "ml-4 flex-1 py-4");
+    			add_location(div1, file$8, 238, 14, 8987);
+    			attr_dev(div2, "class", "night hover:bg-gray-400 px-3 border flex items-center\n              hover:bg-grey-lighter cursor-pointer svelte-idrpa6");
+    			add_location(div2, file$8, 234, 12, 8788);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div2, anchor);
@@ -39215,14 +39269,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_each_block_1.name,
     		type: "each",
-    		source: "(186:10) {#each channels as channel}",
+    		source: "(234:10) {#each channels as channel}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (214:14) {:else}
+    // (262:14) {:else}
     function create_else_block_1$1(ctx) {
     	let p;
     	let t;
@@ -39231,8 +39285,8 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		c: function create() {
     			p = element("p");
     			t = text(/*channelName*/ ctx[5]);
-    			attr_dev(p, "class", "text-grey-darkest");
-    			add_location(p, file$8, 214, 16, 7716);
+    			attr_dev(p, "class", "text-black");
+    			add_location(p, file$8, 262, 16, 9897);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, p, anchor);
@@ -39250,14 +39304,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_else_block_1$1.name,
     		type: "else",
-    		source: "(214:14) {:else}",
+    		source: "(262:14) {:else}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (212:14) {#if channelName == 'channel.' + userName}
+    // (260:14) {#if channelName == 'channel.' + userName}
     function create_if_block_3(ctx) {
     	let p;
 
@@ -39265,8 +39319,8 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		c: function create() {
     			p = element("p");
     			p.textContent = "Private";
-    			attr_dev(p, "class", "text-grey-darkest");
-    			add_location(p, file$8, 212, 16, 7637);
+    			attr_dev(p, "class", "textt svelte-idrpa6");
+    			add_location(p, file$8, 260, 16, 9830);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, p, anchor);
@@ -39281,14 +39335,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_if_block_3.name,
     		type: "if",
-    		source: "(212:14) {#if channelName == 'channel.' + userName}",
+    		source: "(260:14) {#if channelName == 'channel.' + userName}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (228:16) {#if temp.channel == channelName}
+    // (276:16) {#if temp.channel == channelName}
     function create_if_block_1$2(ctx) {
     	let if_block_anchor;
 
@@ -39332,14 +39386,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_if_block_1$2.name,
     		type: "if",
-    		source: "(228:16) {#if temp.channel == channelName}",
+    		source: "(276:16) {#if temp.channel == channelName}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (237:18) {:else}
+    // (285:18) {:else}
     function create_else_block$1(ctx) {
     	let div1;
     	let div0;
@@ -39363,13 +39417,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			t2 = text(t2_value);
     			t3 = space();
     			attr_dev(p0, "class", "text-grey-darkest");
-    			add_location(p0, file$8, 239, 24, 8803);
-    			attr_dev(div0, "class", "flex items-bottom justify-between");
-    			add_location(div0, file$8, 238, 22, 8731);
+    			add_location(p0, file$8, 287, 24, 10975);
+    			attr_dev(div0, "class", "flex items-bottomjustify-between");
+    			add_location(div0, file$8, 286, 22, 10904);
     			attr_dev(p1, "class", "text-grey-dark mt-1 text-sm");
-    			add_location(p1, file$8, 241, 22, 8904);
-    			attr_dev(div1, "class", "ml-4 flex-1 rounded py-4");
-    			add_location(div1, file$8, 237, 20, 8670);
+    			add_location(p1, file$8, 289, 22, 11076);
+    			attr_dev(div1, "class", "ml-4 flex-1 rounded py-2");
+    			add_location(div1, file$8, 285, 20, 10843);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div1, anchor);
@@ -39394,14 +39448,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_else_block$1.name,
     		type: "else",
-    		source: "(237:18) {:else}",
+    		source: "(285:18) {:else}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (229:18) {#if temp.publisher == userName}
+    // (277:18) {#if temp.publisher == userName}
     function create_if_block_2$1(ctx) {
     	let div1;
     	let div0;
@@ -39417,13 +39471,12 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			p = element("p");
     			t0 = text(t0_value);
     			t1 = space();
-    			attr_dev(p, "class", "text-sm mt-1");
-    			add_location(p, file$8, 233, 24, 8525);
-    			attr_dev(div0, "class", "rounded py-2 px-3");
-    			set_style(div0, "background-color", "#E2F7CB");
-    			add_location(div0, file$8, 230, 22, 8387);
-    			attr_dev(div1, "class", "flex justify-end mb-2");
-    			add_location(div1, file$8, 229, 20, 8329);
+    			attr_dev(p, "class", "text-sm text-grey-dark mt-1");
+    			add_location(p, file$8, 279, 24, 10631);
+    			attr_dev(div0, "class", "rounded py-2 px-3 message-self  svelte-idrpa6");
+    			add_location(div0, file$8, 278, 22, 10561);
+    			attr_dev(div1, "class", "flex justify-end py-2");
+    			add_location(div1, file$8, 277, 20, 10503);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div1, anchor);
@@ -39444,14 +39497,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_if_block_2$1.name,
     		type: "if",
-    		source: "(229:18) {#if temp.publisher == userName}",
+    		source: "(277:18) {#if temp.publisher == userName}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (227:14) {#each output as temp}
+    // (275:14) {#each output as temp}
     function create_each_block$2(ctx) {
     	let if_block_anchor;
     	let if_block = /*temp*/ ctx[17].channel == /*channelName*/ ctx[5] && create_if_block_1$2(ctx);
@@ -39489,7 +39542,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_each_block$2.name,
     		type: "each",
-    		source: "(227:14) {#each output as temp}",
+    		source: "(275:14) {#each output as temp}",
     		ctx
     	});
 
@@ -39517,9 +39570,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			if_block.c();
     			attr_dev(link, "href", "https://unpkg.com/tailwindcss@^1.0/dist/tailwind.min.css");
     			attr_dev(link, "rel", "stylesheet");
-    			add_location(link, file$8, 167, 0, 5917);
-    			attr_dev(div, "class", "container");
-    			add_location(div, file$8, 170, 0, 6011);
+    			add_location(link, file$8, 215, 0, 8116);
+    			attr_dev(div, "class", "containe ");
+    			add_location(div, file$8, 218, 0, 8210);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -39889,7 +39942,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     const { console: console_1$2 } = globals;
     const file$a = "src/routes/Problems.svelte";
 
-    // (125:4) {:catch err}
+    // (127:4) {:catch err}
     function create_catch_block$1(ctx) {
     	let t0;
     	let t1_value = /*err*/ ctx[7] + "";
@@ -39917,7 +39970,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_catch_block$1.name,
     		type: "catch",
-    		source: "(125:4) {:catch err}",
+    		source: "(127:4) {:catch err}",
     		ctx
     	});
 
@@ -40032,57 +40085,59 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			button1 = element("button");
     			button1.textContent = "Delete";
     			attr_dev(div0, "class", "font-bold text-2xl text-elight mx-auto svelte-1xwh2qq");
-    			add_location(div0, file$a, 57, 8, 2026);
+    			add_location(div0, file$a, 57, 8, 2042);
     			attr_dev(div1, "class", " text-xl text-elight mx-auto svelte-1xwh2qq");
-    			add_location(div1, file$a, 60, 8, 2150);
+    			add_location(div1, file$a, 60, 8, 2166);
     			attr_dev(div2, "class", " text-xl text-elight mx-auto svelte-1xwh2qq");
-    			add_location(div2, file$a, 63, 8, 2279);
+    			add_location(div2, file$a, 63, 8, 2295);
     			attr_dev(div3, "class", "mx-auto mt-8 max-w-xl flex flex-col svelte-1xwh2qq");
-    			add_location(div3, file$a, 56, 6, 1968);
+    			add_location(div3, file$a, 56, 6, 1984);
     			attr_dev(label0, "class", " text-2xl text-elight mb-3 my-2 svelte-1xwh2qq");
-    			add_location(label0, file$a, 72, 14, 2613);
+    			add_location(label0, file$a, 72, 14, 2637);
     			attr_dev(p0, "class", "text-xl text-elight svelte-1xwh2qq");
-    			add_location(p0, file$a, 73, 14, 2694);
+    			add_location(p0, file$a, 73, 14, 2718);
     			attr_dev(div4, "class", "w-full h-full px-3 flex flex-col svelte-1xwh2qq");
-    			add_location(div4, file$a, 71, 12, 2552);
+    			add_location(div4, file$a, 71, 12, 2576);
     			attr_dev(label1, "class", " text-2xl text-elight mb-3 my-2 svelte-1xwh2qq");
-    			add_location(label1, file$a, 79, 14, 2892);
+    			add_location(label1, file$a, 79, 14, 2916);
     			textarea0.value = textarea0_value_value = JSON.parse(/*result*/ ctx[6].data.problemById.problemTests);
     			attr_dev(textarea0, "class", " w-full bg-edark flex-grow text-elight text-2xl border\n                rounded py-3 px-4 mb-3 leading-tight focus:outline-none\n                focus:border-white h-48 resize-none svelte-1xwh2qq");
     			attr_dev(textarea0, "id", "message");
     			textarea0.readOnly = true;
-    			add_location(textarea0, file$a, 80, 14, 2971);
+    			add_location(textarea0, file$a, 80, 14, 2995);
     			attr_dev(div5, "class", "w-full h-full px-3 flex flex-col svelte-1xwh2qq");
-    			add_location(div5, file$a, 78, 12, 2831);
+    			add_location(div5, file$a, 78, 12, 2855);
     			attr_dev(label2, "class", " text-2xl text-elight mb-3 my-2 svelte-1xwh2qq");
-    			add_location(label2, file$a, 89, 14, 3406);
+    			add_location(label2, file$a, 89, 14, 3430);
     			textarea1.value = textarea1_value_value = /*result*/ ctx[6].data.problemById.solution;
     			attr_dev(textarea1, "class", " flex-grow w-full bg-edark text-elight text-2xl border\n                rounded py-3 px-4 mb-3 leading-tight focus:outline-none\n                focus:border-white h-48 resize-none svelte-1xwh2qq");
     			attr_dev(textarea1, "id", "message");
     			textarea1.readOnly = true;
-    			add_location(textarea1, file$a, 90, 14, 3484);
+    			add_location(textarea1, file$a, 90, 14, 3508);
     			attr_dev(div6, "class", "flex flex-col w-full h-full px-3 svelte-1xwh2qq");
-    			add_location(div6, file$a, 88, 12, 3345);
+    			add_location(div6, file$a, 88, 12, 3369);
     			attr_dev(label3, "class", " text-2xl text-elight mb-3 my-2 svelte-1xwh2qq");
-    			add_location(label3, file$a, 100, 14, 3904);
+    			add_location(label3, file$a, 100, 14, 3928);
     			attr_dev(p1, "class", "text-xl text-elight svelte-1xwh2qq");
-    			add_location(p1, file$a, 101, 14, 3978);
+    			add_location(p1, file$a, 101, 14, 4002);
     			attr_dev(div7, "class", "w-full h-full px-3 flex flex-col svelte-1xwh2qq");
-    			add_location(div7, file$a, 99, 12, 3843);
+    			add_location(div7, file$a, 99, 12, 3867);
     			attr_dev(div8, "class", "px-12 py-8 svelte-1xwh2qq");
-    			add_location(div8, file$a, 70, 10, 2515);
-    			attr_dev(div9, "class", "rounded shadow-lg svelte-1xwh2qq");
-    			add_location(div9, file$a, 69, 8, 2473);
-    			attr_dev(div10, "class", "bg-dark max-w-full mt-12 mx-64 svelte-1xwh2qq");
-    			add_location(div10, file$a, 67, 6, 2419);
-    			attr_dev(button0, "class", "savebutton hover:bg-white hover:text-edark font-bold py-2\n            px-4 border rounded svelte-1xwh2qq");
-    			add_location(button0, file$a, 108, 10, 4216);
-    			attr_dev(button1, "class", "savebutton hover:bg-white hover:text-edark font-bold py-2\n            px-4 border rounded svelte-1xwh2qq");
-    			add_location(button1, file$a, 116, 10, 4527);
+    			add_location(div8, file$a, 70, 10, 2539);
+    			attr_dev(div9, "class", "shadow-lg rounded svelte-1xwh2qq");
+    			add_location(div9, file$a, 69, 8, 2497);
+    			attr_dev(div10, "class", "bg-dark rounded max-w-full mt-12 mx-64 svelte-1xwh2qq");
+    			add_location(div10, file$a, 67, 6, 2435);
+    			set_style(button0, "color", "#254b62");
+    			attr_dev(button0, "class", "savebutton hover:bg-grey hover:text-edark font-bold py-2 px-4\n            border rounded svelte-1xwh2qq");
+    			add_location(button0, file$a, 108, 10, 4240);
+    			set_style(button1, "color", "#254b62");
+    			attr_dev(button1, "class", "savebutton hover:bg-grey hover:text-edark font-bold py-2 px-4\n            border rounded svelte-1xwh2qq");
+    			add_location(button1, file$a, 117, 10, 4585);
     			attr_dev(div11, "class", "float-right  svelte-1xwh2qq");
-    			add_location(div11, file$a, 107, 8, 4179);
+    			add_location(div11, file$a, 107, 8, 4203);
     			attr_dev(div12, "class", "max-w-6xl my-4 mb-32 flex flex-col mx-auto svelte-1xwh2qq");
-    			add_location(div12, file$a, 106, 6, 4114);
+    			add_location(div12, file$a, 106, 6, 4138);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div3, anchor);
@@ -40239,10 +40294,10 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			attr_dev(link, "class", "svelte-1xwh2qq");
     			add_location(link, file$a, 44, 0, 1652);
     			attr_dev(header, "class", "svelte-1xwh2qq");
-    			add_location(header, file$a, 49, 2, 1804);
-    			attr_dev(div0, "class", "bg-edark flex flex-col max-w-full overflow-auto svelte-1xwh2qq");
-    			add_location(div0, file$a, 52, 2, 1842);
-    			attr_dev(div1, "class", "bg-edark h-full flex flex-col box-border svelte-1xwh2qq");
+    			add_location(header, file$a, 49, 2, 1812);
+    			attr_dev(div0, "class", "bg-edark rounded flex flex-col max-w-full overflow-auto svelte-1xwh2qq");
+    			add_location(div0, file$a, 52, 2, 1850);
+    			attr_dev(div1, "class", "bg-edark rounded h-full flex flex-col box-border svelte-1xwh2qq");
     			add_location(div1, file$a, 48, 0, 1747);
     		},
     		l: function claim(nodes) {
@@ -40408,7 +40463,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return child_ctx;
     }
 
-    // (181:4) {:catch err}
+    // (195:4) {:catch err}
     function create_catch_block$2(ctx) {
     	let t0;
     	let t1_value = /*err*/ ctx[8] + "";
@@ -40436,14 +40491,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_catch_block$2.name,
     		type: "catch",
-    		source: "(181:4) {:catch err}",
+    		source: "(195:4) {:catch err}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (86:4) {:then result}
+    // (97:4) {:then result}
     function create_then_block$2(ctx) {
     	let div16;
     	let div3;
@@ -40560,51 +40615,54 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			}
 
     			attr_dev(div0, "class", "font-bold text-2xl text-elight mx-auto");
-    			add_location(div0, file$b, 88, 10, 3032);
+    			add_location(div0, file$b, 99, 10, 3397);
     			attr_dev(div1, "class", " text-xl text-elight mx-auto");
-    			add_location(div1, file$b, 91, 10, 3156);
+    			add_location(div1, file$b, 102, 10, 3521);
     			attr_dev(div2, "class", " text-xl text-elight mx-auto");
-    			add_location(div2, file$b, 94, 10, 3288);
+    			add_location(div2, file$b, 105, 10, 3653);
     			attr_dev(div3, "class", "mx-auto mt-8 max-w-full flex flex-col");
-    			add_location(div3, file$b, 87, 8, 2970);
-    			attr_dev(h1, "class", "labels");
-    			add_location(h1, file$b, 102, 14, 3590);
+    			add_location(div3, file$b, 98, 8, 3335);
+    			attr_dev(h1, "class", "labels svelte-7oagh3");
+    			add_location(h1, file$b, 113, 14, 3955);
     			attr_dev(div4, "class", "mx-auto mb-4 w-32");
-    			add_location(div4, file$b, 101, 12, 3544);
-    			attr_dev(div5, "class", "rows mx-4");
-    			add_location(div5, file$b, 107, 18, 3771);
+    			add_location(div4, file$b, 112, 12, 3909);
+    			attr_dev(div5, "class", "rows mx-4 svelte-7oagh3");
+    			add_location(div5, file$b, 118, 18, 4136);
     			attr_dev(div6, "class", "w-10/12");
-    			add_location(div6, file$b, 106, 16, 3731);
-    			attr_dev(div7, "class", "rows mx-4");
-    			add_location(div7, file$b, 110, 18, 3891);
+    			add_location(div6, file$b, 117, 16, 4096);
+    			attr_dev(div7, "class", "rows mx-4 svelte-7oagh3");
+    			add_location(div7, file$b, 121, 18, 4256);
     			attr_dev(div8, "class", "w-2/12");
-    			add_location(div8, file$b, 109, 16, 3852);
+    			add_location(div8, file$b, 120, 16, 4217);
     			attr_dev(div9, "class", "flex mb-6");
-    			add_location(div9, file$b, 105, 14, 3691);
-    			attr_dev(div10, "class", "boxheight2 flex flex-col flex-grow overflow-auto");
-    			add_location(div10, file$b, 113, 14, 3984);
+    			add_location(div9, file$b, 116, 14, 4056);
+    			attr_dev(div10, "class", "boxheight2 flex flex-col flex-grow overflow-auto svelte-7oagh3");
+    			add_location(div10, file$b, 124, 14, 4349);
     			attr_dev(div11, "class", "flex-col");
-    			add_location(div11, file$b, 104, 12, 3654);
-    			attr_dev(div12, "class", "outer_box flex-col h-full");
-    			add_location(div12, file$b, 100, 10, 3492);
+    			add_location(div11, file$b, 115, 12, 4019);
+    			attr_dev(div12, "class", "outer_box flex-col h-full svelte-7oagh3");
+    			add_location(div12, file$b, 111, 10, 3857);
     			attr_dev(div13, "class", "bg-dark max-w-full mt-12 mx-64");
-    			add_location(div13, file$b, 98, 8, 3436);
-    			attr_dev(button0, "class", "savebutton hover:bg-white hover:text-edark font-bold py-2\n              px-4 border rounded");
-    			add_location(button0, file$b, 142, 12, 5204);
-    			attr_dev(button1, "class", "savebutton hover:bg-white hover:text-edark font-bold py-2\n              px-4 border rounded");
-    			add_location(button1, file$b, 150, 12, 5528);
-    			attr_dev(button2, "class", "savebutton hover:bg-white hover:text-edark font-bold py-2\n              px-4 border rounded");
-    			add_location(button2, file$b, 156, 12, 5749);
+    			add_location(div13, file$b, 109, 8, 3801);
+    			set_style(button0, "color", "#254b62");
+    			attr_dev(button0, "class", "savebutton hover:bg-grey hover:text-edark font-bold py-2\n              px-4 border rounded svelte-7oagh3");
+    			add_location(button0, file$b, 153, 12, 5558);
+    			set_style(button1, "color", "#254b62");
+    			attr_dev(button1, "class", "savebutton hover:bg-grey hover:text-edark font-bold py-2\n              px-4 border rounded svelte-7oagh3");
+    			add_location(button1, file$b, 162, 12, 5918);
+    			set_style(button2, "color", "#254b62");
+    			attr_dev(button2, "class", "savebutton hover:bg-grey hover:text-edark font-bold py-2\n              px-4 border rounded svelte-7oagh3");
+    			add_location(button2, file$b, 169, 12, 6175);
     			attr_dev(div14, "class", "float-right ");
-    			add_location(div14, file$b, 141, 10, 5165);
+    			add_location(div14, file$b, 152, 10, 5519);
     			attr_dev(div15, "class", "max-w-6xl my-4 mb-32 flex flex-col mx-auto");
-    			add_location(div15, file$b, 140, 8, 5098);
+    			add_location(div15, file$b, 151, 8, 5452);
     			attr_dev(div16, "class", "bg-edark flex flex-col max-w-full overflow-auto");
-    			add_location(div16, file$b, 86, 6, 2900);
+    			add_location(div16, file$b, 97, 6, 3265);
     			attr_dev(div17, "class", "flex bottom-0 absolute w-auto");
-    			add_location(div17, file$b, 168, 8, 6178);
+    			add_location(div17, file$b, 182, 8, 6640);
     			attr_dev(div18, "class", " flex-grow align-bottom relative mx-64");
-    			add_location(div18, file$b, 167, 6, 6117);
+    			add_location(div18, file$b, 181, 6, 6579);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div16, anchor);
@@ -40727,14 +40785,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_then_block$2.name,
     		type: "then",
-    		source: "(86:4) {:then result}",
+    		source: "(97:4) {:then result}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (115:16) {#each JSON.parse(result.data.testById.problems) as prob}
+    // (126:16) {#each JSON.parse(result.data.testById.problems) as prob}
     function create_each_block_1$1(ctx) {
     	let div5;
     	let div1;
@@ -40766,20 +40824,20 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			t3 = space();
     			attr_dev(a, "href", a_href_value = "http://localhost:5000/problem/" + /*prob*/ ctx[12].problem.id);
     			attr_dev(a, "class", "no-underline px-3 text-elight");
-    			add_location(a, file$b, 118, 24, 4306);
-    			attr_dev(div0, "class", "rows bg-edark rounded-full p-2 px-4 mx-2");
-    			add_location(div0, file$b, 117, 22, 4227);
+    			add_location(a, file$b, 129, 24, 4671);
+    			attr_dev(div0, "class", "rows bg-edark rounded-full p-2 px-4 mx-2 svelte-7oagh3");
+    			add_location(div0, file$b, 128, 22, 4592);
     			attr_dev(div1, "class", "w-10/12");
-    			add_location(div1, file$b, 116, 20, 4183);
+    			add_location(div1, file$b, 127, 20, 4548);
     			attr_dev(div2, "type", "string");
-    			attr_dev(div2, "class", " mx-auto w-10 outline-none text-white p-2");
-    			add_location(div2, file$b, 127, 24, 4721);
-    			attr_dev(div3, "class", "rows bg-edark rounded-full");
-    			add_location(div3, file$b, 126, 22, 4656);
+    			attr_dev(div2, "class", " mx-auto w-10 outline-none p-2");
+    			add_location(div2, file$b, 138, 24, 5086);
+    			attr_dev(div3, "class", "rows bg-edark rounded-full svelte-7oagh3");
+    			add_location(div3, file$b, 137, 22, 5021);
     			attr_dev(div4, "class", "w-2/12");
-    			add_location(div4, file$b, 125, 20, 4613);
+    			add_location(div4, file$b, 136, 20, 4978);
     			attr_dev(div5, "class", "flex pb-3");
-    			add_location(div5, file$b, 115, 18, 4139);
+    			add_location(div5, file$b, 126, 18, 4504);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div5, anchor);
@@ -40812,14 +40870,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_each_block_1$1.name,
     		type: "each",
-    		source: "(115:16) {#each JSON.parse(result.data.testById.problems) as prob}",
+    		source: "(126:16) {#each JSON.parse(result.data.testById.problems) as prob}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (171:12) {#if index !== 0}
+    // (185:12) {#if index !== 0}
     function create_if_block$3(ctx) {
     	let div;
     	let t0_value = /*tag*/ ctx[9] + "";
@@ -40831,8 +40889,8 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			div = element("div");
     			t0 = text(t0_value);
     			t1 = space();
-    			attr_dev(div, "class", "text-white border-solid border-2 mr-4 mb-10 border-white\n                rounded-full p-2 px-4 ");
-    			add_location(div, file$b, 171, 14, 6335);
+    			attr_dev(div, "class", "tag border-solid border-2 mr-4 mb-10 rounded-full p-2\n                px-4  svelte-7oagh3");
+    			add_location(div, file$b, 185, 14, 6797);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div, anchor);
@@ -40851,14 +40909,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_if_block$3.name,
     		type: "if",
-    		source: "(171:12) {#if index !== 0}",
+    		source: "(185:12) {#if index !== 0}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (170:10) {#each result.data.testById.tags.split('#') as tag, index}
+    // (184:10) {#each result.data.testById.tags.split('#') as tag, index}
     function create_each_block$3(ctx) {
     	let if_block_anchor;
     	let if_block = /*index*/ ctx[11] !== 0 && create_if_block$3(ctx);
@@ -40885,14 +40943,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_each_block$3.name,
     		type: "each",
-    		source: "(170:10) {#each result.data.testById.tags.split('#') as tag, index}",
+    		source: "(184:10) {#each result.data.testById.tags.split('#') as tag, index}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (84:18)        Loading...     {:then result}
+    // (95:18)        Loading...     {:then result}
     function create_pending_block$2(ctx) {
     	let t;
 
@@ -40913,7 +40971,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_pending_block$2.name,
     		type: "pending",
-    		source: "(84:18)        Loading...     {:then result}",
+    		source: "(95:18)        Loading...     {:then result}",
     		ctx
     	});
 
@@ -40921,16 +40979,11 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     }
 
     function create_fragment$e(ctx) {
-    	let link0;
+    	let link;
     	let t0;
     	let body;
-    	let style;
-    	let t2;
-    	let link1;
-    	let t3;
+    	let t1;
     	let div;
-    	let header;
-    	let t4;
     	let promise;
     	let current;
     	const navbar = new Navbar({ $$inline: true });
@@ -40950,46 +41003,31 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	const block = {
     		c: function create() {
-    			link0 = element("link");
+    			link = element("link");
     			t0 = space();
     			body = element("body");
-    			style = element("style");
-    			style.textContent = "::-webkit-scrollbar {\n  width: 0px;\n}\n\n.savebutton {\n  --text-opacity: 1;\n  color: #fff;\n  color: rgba(255, 255, 255, var(--text-opacity));\n  margin-left: 1rem;\n  outline: 0;\n  padding-left: 1rem;\n  padding-right: 1rem;\n}\n\n.statement {\n  height: 50vh;\n}\n\n.labels {\n  color: var(--color-el);\n  font-size: 1.5rem;\n}\n\n.outer_box {\n  padding: 0.75rem;\n  flex: 1 1 0%;\n  border-style: solid;\n  border-color: var(--color-d);\n  border-width: 2px;\n  border-radius: 0.25rem;\n}\n\n.rows {\n  margin-left: auto;\n  margin-right: auto;\n  font-size: 1.25rem;\n  color: var(--color-el);\n}\n\n.boxheight2 {\n  max-height: 385px;\n}\n  \n/*# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJzb3VyY2VzIjpbInNyYy9yb3V0ZXMvVGVzdHMuc3ZlbHRlIiwiPG5vIHNvdXJjZT4iXSwibmFtZXMiOltdLCJtYXBwaW5ncyI6IkFBQ0E7RUFDRSxVQUFVO0FBQ1o7O0FBQ0E7RUNKQSxrQkFBQTtFQUFBLFlBQUE7RUFBQSxnREFBQTtFQUFBLGtCQUFBO0VBQUEsV0FBQTtFQUFBLG1CQUFBO0VBQUEsb0JBQUE7QURNQTs7QUFDQTtFQUNFLFlBQVk7QUFDZDs7QUFDQTtFQ1ZBLHVCQUFBO0VBQUEsa0JBQUE7QURZQTs7QUFDQTtFQ2JBLGlCQUFBO0VBQUEsYUFBQTtFQUFBLG9CQUFBO0VBQUEsNkJBQUE7RUFBQSxrQkFBQTtFQUFBLHVCQUFBO0FEZUE7O0FBQ0E7RUNoQkEsa0JBQUE7RUFBQSxtQkFBQTtFQUFBLG1CQUFBO0VBQUEsdUJBQUE7QURrQkE7O0FBQ0E7RUFDRSxpQkFBaUI7QUFDbkIiLCJmaWxlIjoic3JjL3JvdXRlcy9UZXN0cy5zdmVsdGUiLCJzb3VyY2VzQ29udGVudCI6WyJcbjo6LXdlYmtpdC1zY3JvbGxiYXIge1xuICB3aWR0aDogMHB4O1xufVxuLnNhdmVidXR0b24ge1xuICBAYXBwbHkgdGV4dC13aGl0ZSBtbC00IG91dGxpbmUtbm9uZSBweC00O1xufVxuLnN0YXRlbWVudCB7XG4gIGhlaWdodDogNTB2aDtcbn1cbi5sYWJlbHMge1xuICBAYXBwbHkgdGV4dC1lbGlnaHQgdGV4dC0yeGw7XG59XG4ub3V0ZXJfYm94IHtcbiAgQGFwcGx5IHAtMyBmbGV4LTEgYm9yZGVyLXNvbGlkIGJvcmRlci1kYXJrIGJvcmRlci0yIHJvdW5kZWQ7XG59XG4ucm93cyB7XG4gIEBhcHBseSBteC1hdXRvIHRleHQteGwgdGV4dC1lbGlnaHQ7XG59XG4uYm94aGVpZ2h0MiB7XG4gIG1heC1oZWlnaHQ6IDM4NXB4O1xufVxuICAiLG51bGxdfQ== */";
-    			t2 = space();
-    			link1 = element("link");
-    			t3 = space();
-    			div = element("div");
-    			header = element("header");
     			create_component(navbar.$$.fragment);
-    			t4 = space();
+    			t1 = space();
+    			div = element("div");
     			info.block.c();
-    			attr_dev(link0, "href", "https://unpkg.com/tailwindcss@^1.0/dist/tailwind.min.css");
-    			attr_dev(link0, "rel", "stylesheet");
-    			add_location(link0, file$b, 27, 0, 750);
-    			add_location(style, file$b, 31, 2, 853);
-    			attr_dev(link1, "href", "https://unpkg.com/tailwindcss@^1.0/dist/tailwind.min.css");
-    			attr_dev(link1, "rel", "stylesheet");
-    			add_location(link1, file$b, 75, 2, 2639);
-    			add_location(header, file$b, 80, 4, 2799);
+    			attr_dev(link, "href", "https://unpkg.com/tailwindcss@^1.0/dist/tailwind.min.css");
+    			attr_dev(link, "rel", "stylesheet");
+    			add_location(link, file$b, 84, 0, 3029);
     			attr_dev(div, "class", "bg-edark h-full flex flex-col box-border");
-    			add_location(div, file$b, 79, 2, 2740);
-    			add_location(body, file$b, 30, 0, 844);
+    			add_location(div, file$b, 92, 2, 3148);
+    			attr_dev(body, "class", "svelte-7oagh3");
+    			add_location(body, file$b, 88, 0, 3124);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
     		m: function mount(target, anchor) {
-    			insert_dev(target, link0, anchor);
+    			insert_dev(target, link, anchor);
     			insert_dev(target, t0, anchor);
     			insert_dev(target, body, anchor);
-    			append_dev(body, style);
-    			append_dev(body, t2);
-    			append_dev(body, link1);
-    			append_dev(body, t3);
+    			mount_component(navbar, body, null);
+    			append_dev(body, t1);
     			append_dev(body, div);
-    			append_dev(div, header);
-    			mount_component(navbar, header, null);
-    			append_dev(div, t4);
     			info.block.m(div, info.anchor = null);
     			info.mount = () => div;
     			info.anchor = null;
@@ -41015,7 +41053,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			current = false;
     		},
     		d: function destroy(detaching) {
-    			if (detaching) detach_dev(link0);
+    			if (detaching) detach_dev(link);
     			if (detaching) detach_dev(t0);
     			if (detaching) detach_dev(body);
     			destroy_component(navbar);
@@ -41063,7 +41101,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     				variables: { id: currentRoute.namedParams.id }
     			});
 
-    			location.replace("http://localhost:5000/admin");
+    			location.replace("http://localhost:5000/showtests");
     		} catch(err) {
     		}
     	}
@@ -41208,51 +41246,51 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			button.textContent = "Send Test";
     			attr_dev(link, "href", "https://unpkg.com/tailwindcss@^1.0/dist/tailwind.min.css");
     			attr_dev(link, "rel", "stylesheet");
-    			add_location(link, file$c, 23, 0, 925);
-    			add_location(div0, file$c, 27, 2, 1058);
-    			add_location(strong, file$c, 31, 4, 1127);
-    			attr_dev(h1, "class", "heading text-elight svelte-popr1y");
-    			add_location(h1, file$c, 30, 2, 1090);
+    			add_location(link, file$c, 22, 0, 877);
+    			add_location(div0, file$c, 26, 2, 1002);
+    			add_location(strong, file$c, 30, 4, 1083);
+    			attr_dev(h1, "class", "heading text-elight text-center svelte-16xawnw");
+    			add_location(h1, file$c, 29, 2, 1034);
     			attr_dev(label0, "class", "block text-elight text-xl font-bold md:text-right mb-1\n            md:mb-0 pr-4");
     			attr_dev(label0, "for", "inline-full-name");
-    			add_location(label0, file$c, 39, 10, 1337);
+    			add_location(label0, file$c, 38, 10, 1286);
     			attr_dev(div1, "class", "md:w-1/5");
-    			add_location(div1, file$c, 38, 8, 1304);
-    			attr_dev(input0, "class", "bg-gray-200 appearance-none border-2 border-gray-200 rounded\n            w-full py-2 px-4 text-edark leading-tight focus:outline-none\n            focus:bg-white ");
+    			add_location(div1, file$c, 37, 8, 1253);
+    			attr_dev(input0, "class", "bg-gray-200 appearance-none border-2 border-gray-200\n            rounded-full w-full py-2 px-4 text-edark leading-tight\n            focus:outline-none focus:bg-white ");
     			attr_dev(input0, "id", "inline-full-name");
     			attr_dev(input0, "type", "text");
     			attr_dev(input0, "placeholder", "Enter Email");
-    			add_location(input0, file$c, 47, 10, 1573);
+    			add_location(input0, file$c, 46, 10, 1522);
     			attr_dev(div2, "class", "md:w-3/5");
-    			add_location(div2, file$c, 46, 8, 1540);
+    			add_location(div2, file$c, 45, 8, 1489);
     			attr_dev(div3, "class", "md:flex md:items-center mb-6");
-    			add_location(div3, file$c, 37, 6, 1253);
+    			add_location(div3, file$c, 36, 6, 1202);
     			attr_dev(label1, "class", "block text-elight text-xl font-bold md:text-right mb-1\n            md:mb-0 pr-4");
     			attr_dev(label1, "for", "inline-full-name");
-    			add_location(label1, file$c, 59, 10, 2023);
+    			add_location(label1, file$c, 58, 10, 1977);
     			attr_dev(div4, "class", "md:w-1/5");
-    			add_location(div4, file$c, 58, 8, 1990);
-    			attr_dev(input1, "class", "bg-gray-200 appearance-none border-2 border-gray-200 rounded\n            w-full py-2 px-4 text-edark leading-tight focus:outline-none\n            focus:bg-white ");
+    			add_location(div4, file$c, 57, 8, 1944);
+    			attr_dev(input1, "class", "bg-gray-200 appearance-none border-2 border-gray-200\n            rounded-full w-full py-2 px-4 text-edark leading-tight\n            focus:outline-none focus:bg-white ");
     			attr_dev(input1, "id", "inline-full-name");
     			attr_dev(input1, "type", "Number");
     			attr_dev(input1, "placeholder", "Enter time in hours");
-    			add_location(input1, file$c, 67, 10, 2274);
+    			add_location(input1, file$c, 66, 10, 2228);
     			attr_dev(div5, "class", "md:w-3/5");
-    			add_location(div5, file$c, 66, 8, 2241);
+    			add_location(div5, file$c, 65, 8, 2195);
     			attr_dev(div6, "class", "md:flex md:items-center mb-6");
-    			add_location(div6, file$c, 57, 6, 1939);
+    			add_location(div6, file$c, 56, 6, 1893);
     			attr_dev(div7, "class", "");
-    			add_location(div7, file$c, 35, 4, 1231);
-    			attr_dev(div8, "class", "p-8 mx-64 max-w-full mt-24 items-center bg-dark");
-    			add_location(div8, file$c, 34, 2, 1165);
+    			add_location(div7, file$c, 34, 4, 1180);
+    			attr_dev(div8, "class", "p-8 mx-64 max-w-full mt-24 items-center ");
+    			add_location(div8, file$c, 33, 2, 1121);
     			attr_dev(button, "class", "bg-dark hover:bg-elight text-white hover:text-edark font-bold\n        py-2 px-4 border border-white rounded");
-    			add_location(button, file$c, 81, 6, 2751);
+    			add_location(button, file$c, 80, 6, 2710);
     			attr_dev(div9, "class", "flex buttonbox mx-auto w-48 mt-10");
-    			add_location(div9, file$c, 80, 4, 2697);
+    			add_location(div9, file$c, 79, 4, 2656);
     			attr_dev(div10, "class", "px-4 py-2");
-    			add_location(div10, file$c, 79, 2, 2669);
-    			attr_dev(div11, "class", "bg-edark w-full h-full");
-    			add_location(div11, file$c, 26, 0, 1019);
+    			add_location(div10, file$c, 78, 2, 2628);
+    			attr_dev(div11, "class", " w-full h-full");
+    			add_location(div11, file$c, 25, 0, 971);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -42956,24 +42994,24 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			button.textContent = "X";
     			t4 = space();
     			attr_dev(div0, "class", "rows bg-dark rounded-full p-2 px-4 mx-2 svelte-1xqcozc");
-    			add_location(div0, file$h, 114, 18, 3814);
+    			add_location(div0, file$h, 114, 18, 3818);
     			attr_dev(div1, "class", "w-9/12 svelte-1xqcozc");
-    			add_location(div1, file$h, 113, 16, 3775);
+    			add_location(div1, file$h, 113, 16, 3779);
     			attr_dev(input, "type", "string");
     			attr_dev(input, "class", "w-3/4 bg-dark outline-none text-white rounded-full\n                      p-2 px-4 mx-2 svelte-1xqcozc");
-    			add_location(input, file$h, 120, 20, 4061);
+    			add_location(input, file$h, 120, 20, 4065);
     			attr_dev(div2, "class", "rows  svelte-1xqcozc");
-    			add_location(div2, file$h, 119, 18, 4021);
+    			add_location(div2, file$h, 119, 18, 4025);
     			attr_dev(div3, "class", "w-2/12 svelte-1xqcozc");
-    			add_location(div3, file$h, 118, 16, 3982);
+    			add_location(div3, file$h, 118, 16, 3986);
     			attr_dev(button, "class", "w-3/4 bg-dark outline-none text-white rounded-full\n                      p-2 px-4 mx-2 svelte-1xqcozc");
-    			add_location(button, file$h, 132, 20, 4558);
+    			add_location(button, file$h, 132, 20, 4562);
     			attr_dev(div4, "class", "rows  svelte-1xqcozc");
-    			add_location(div4, file$h, 131, 18, 4518);
+    			add_location(div4, file$h, 131, 18, 4522);
     			attr_dev(div5, "class", "w-1/12 svelte-1xqcozc");
-    			add_location(div5, file$h, 130, 16, 4479);
+    			add_location(div5, file$h, 130, 16, 4483);
     			attr_dev(div6, "class", "flex pb-3 svelte-1xqcozc");
-    			add_location(div6, file$h, 112, 14, 3735);
+    			add_location(div6, file$h, 112, 14, 3739);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div6, anchor);
@@ -43101,43 +43139,43 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			button = element("button");
     			button.textContent = "Submit";
     			attr_dev(h10, "class", "labels svelte-1xqcozc");
-    			add_location(h10, file$h, 99, 10, 3266);
+    			add_location(h10, file$h, 99, 10, 3270);
     			attr_dev(div0, "class", "mx-auto w-64 mb-4 svelte-1xqcozc");
-    			add_location(div0, file$h, 98, 8, 3224);
+    			add_location(div0, file$h, 98, 8, 3228);
     			attr_dev(div1, "class", "rows mx-4 svelte-1xqcozc");
-    			add_location(div1, file$h, 104, 14, 3435);
+    			add_location(div1, file$h, 104, 14, 3439);
     			attr_dev(div2, "class", "w-9/12 svelte-1xqcozc");
-    			add_location(div2, file$h, 103, 12, 3400);
+    			add_location(div2, file$h, 103, 12, 3404);
     			attr_dev(div3, "class", "rows mx-4 svelte-1xqcozc");
-    			add_location(div3, file$h, 107, 14, 3543);
+    			add_location(div3, file$h, 107, 14, 3547);
     			attr_dev(div4, "class", "w-3/12 svelte-1xqcozc");
-    			add_location(div4, file$h, 106, 12, 3508);
+    			add_location(div4, file$h, 106, 12, 3512);
     			attr_dev(div5, "class", "flex mb-6 svelte-1xqcozc");
-    			add_location(div5, file$h, 102, 10, 3364);
+    			add_location(div5, file$h, 102, 10, 3368);
     			attr_dev(div6, "class", "boxheight2 flex flex-col overflow-auto svelte-1xqcozc");
-    			add_location(div6, file$h, 110, 10, 3624);
+    			add_location(div6, file$h, 110, 10, 3628);
     			attr_dev(div7, "class", "flex-col svelte-1xqcozc");
-    			add_location(div7, file$h, 101, 8, 3331);
+    			add_location(div7, file$h, 101, 8, 3335);
     			attr_dev(div8, "class", "outer_box flex-col h-full svelte-1xqcozc");
-    			add_location(div8, file$h, 97, 6, 3176);
+    			add_location(div8, file$h, 97, 6, 3180);
     			attr_dev(h11, "class", "labels svelte-1xqcozc");
-    			add_location(h11, file$h, 149, 10, 5114);
+    			add_location(h11, file$h, 149, 10, 5118);
     			attr_dev(div9, "class", "mx-auto w-64 pb-2 flex flex-col svelte-1xqcozc");
-    			add_location(div9, file$h, 148, 8, 5058);
+    			add_location(div9, file$h, 148, 8, 5062);
     			attr_dev(div10, "class", " pb-4 max-w-full boxheight flex flex-col overflow-auto svelte-1xqcozc");
-    			add_location(div10, file$h, 151, 8, 5177);
+    			add_location(div10, file$h, 151, 8, 5181);
     			attr_dev(div11, "class", "outer_box flex-wrap h-full svelte-1xqcozc");
-    			add_location(div11, file$h, 147, 6, 5009);
+    			add_location(div11, file$h, 147, 6, 5013);
     			attr_dev(div12, "class", "flex mx-3 w-full mb-6 h-full svelte-1xqcozc");
-    			add_location(div12, file$h, 96, 4, 3127);
+    			add_location(div12, file$h, 96, 4, 3131);
     			attr_dev(div13, "class", "max-w-full mx-auto flex statement mb-4  svelte-1xqcozc");
-    			add_location(div13, file$h, 95, 2, 3069);
+    			add_location(div13, file$h, 95, 2, 3073);
     			attr_dev(button, "class", "bg-dark hover:bg-elight hover:text-edark outline-none text-white\n      font-bold py-4 px-4 text-xl rounded-full svelte-1xqcozc");
-    			add_location(button, file$h, 158, 4, 5393);
+    			add_location(button, file$h, 158, 4, 5397);
     			attr_dev(div14, "class", "mt-10 flex justify-center svelte-1xqcozc");
-    			add_location(div14, file$h, 157, 2, 5349);
+    			add_location(div14, file$h, 157, 2, 5353);
     			attr_dev(div15, "class", "svelte-1xqcozc");
-    			add_location(div15, file$h, 94, 0, 3061);
+    			add_location(div15, file$h, 94, 0, 3065);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -43285,7 +43323,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     				variables: test
     			});
 
-    			location.replace("http://localhost:5000/admin");
+    			location.replace("http://localhost:5000/showtests");
     		} catch(err) {
     			console.log(err);
     		}
@@ -44159,7 +44197,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return child_ctx;
     }
 
-    // (125:10) {#if uniqueNameStatus === 2}
+    // (133:10) {#if uniqueNameStatus === 2}
     function create_if_block_2$3(ctx) {
     	let current;
     	const loader = new Loader$1({ $$inline: true });
@@ -44190,14 +44228,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_if_block_2$3.name,
     		type: "if",
-    		source: "(125:10) {#if uniqueNameStatus === 2}",
+    		source: "(133:10) {#if uniqueNameStatus === 2}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (128:10) {#if uniqueNameStatus === 1}
+    // (136:10) {#if uniqueNameStatus === 1}
     function create_if_block_1$5(ctx) {
     	let i;
 
@@ -44205,8 +44243,8 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		c: function create() {
     			i = element("i");
     			i.textContent = "";
-    			attr_dev(i, "class", "material-icons status svelte-1dj45u4");
-    			add_location(i, file$m, 128, 12, 4223);
+    			attr_dev(i, "class", "material-icons status svelte-qcf6sk");
+    			add_location(i, file$m, 136, 12, 4466);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, i, anchor);
@@ -44220,14 +44258,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_if_block_1$5.name,
     		type: "if",
-    		source: "(128:10) {#if uniqueNameStatus === 1}",
+    		source: "(136:10) {#if uniqueNameStatus === 1}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (131:10) {#if uniqueNameStatus === 3}
+    // (139:10) {#if uniqueNameStatus === 3}
     function create_if_block$8(ctx) {
     	let span;
 
@@ -44235,8 +44273,8 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		c: function create() {
     			span = element("span");
     			span.textContent = "clear";
-    			attr_dev(span, "class", "status material-icons svelte-1dj45u4");
-    			add_location(span, file$m, 131, 12, 4336);
+    			attr_dev(span, "class", "status material-icons svelte-qcf6sk");
+    			add_location(span, file$m, 139, 12, 4579);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, span, anchor);
@@ -44250,14 +44288,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_if_block$8.name,
     		type: "if",
-    		source: "(131:10) {#if uniqueNameStatus === 3}",
+    		source: "(139:10) {#if uniqueNameStatus === 3}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (186:14) {#each tagList as tag, index}
+    // (194:14) {#each tagList as tag, index}
     function create_each_block$9(ctx) {
     	let option;
     	let t0_value = /*tag*/ ctx[18] + "";
@@ -44275,7 +44313,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			attr_dev(option, "name", option_name_value = /*tag*/ ctx[18]);
     			option.__value = option_value_value = /*index*/ ctx[20];
     			option.value = option.__value;
-    			add_location(option, file$m, 186, 16, 6159);
+    			add_location(option, file$m, 194, 16, 6402);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, option, anchor);
@@ -44292,7 +44330,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_each_block$9.name,
     		type: "each",
-    		source: "(186:14) {#each tagList as tag, index}",
+    		source: "(194:14) {#each tagList as tag, index}",
     		ctx
     	});
 
@@ -44437,83 +44475,83 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			t28 = space();
     			input5 = element("input");
     			attr_dev(label0, "class", "text-elight text-2xl my-3");
-    			add_location(label0, file$m, 106, 6, 3461);
+    			add_location(label0, file$m, 114, 6, 3709);
     			attr_dev(input0, "type", "search");
     			attr_dev(input0, "name", "serch");
     			attr_dev(input0, "placeholder", "Search");
     			attr_dev(input0, "class", "bg-elight h-10 px-5 pr-10 rounded-full w-full text-xl\n              tet-edark focus:outline-none");
-    			add_location(input0, file$m, 110, 12, 3642);
+    			add_location(input0, file$m, 118, 12, 3890);
     			attr_dev(div0, "class", "w-full");
-    			add_location(div0, file$m, 109, 10, 3609);
-    			attr_dev(p, "class", "text-white text-sm my-2");
-    			add_location(p, file$m, 120, 12, 3988);
-    			add_location(div1, file$m, 119, 10, 3970);
+    			add_location(div0, file$m, 117, 10, 3857);
+    			attr_dev(p, "class", "textt text-sm my-2 svelte-qcf6sk");
+    			add_location(p, file$m, 128, 12, 4236);
+    			add_location(div1, file$m, 127, 10, 4218);
     			attr_dev(div2, "class", " flex-col w-full");
-    			add_location(div2, file$m, 108, 8, 3568);
+    			add_location(div2, file$m, 116, 8, 3816);
     			attr_dev(div3, "class", "ml-3");
-    			add_location(div3, file$m, 123, 8, 4075);
+    			add_location(div3, file$m, 131, 8, 4318);
     			attr_dev(div4, "class", "flex");
-    			add_location(div4, file$m, 107, 6, 3541);
-    			add_location(div5, file$m, 105, 4, 3449);
-    			attr_dev(h2, "class", "labels text-3xl svelte-1dj45u4");
-    			add_location(h2, file$m, 138, 8, 4522);
-    			add_location(div6, file$m, 137, 6, 4508);
-    			attr_dev(label1, "class", "labels svelte-1dj45u4");
-    			add_location(label1, file$m, 142, 10, 4618);
-    			attr_dev(input1, "class", "unitinput svelte-1dj45u4");
+    			add_location(div4, file$m, 115, 6, 3789);
+    			add_location(div5, file$m, 113, 4, 3697);
+    			attr_dev(h2, "class", "labels text-3xl svelte-qcf6sk");
+    			add_location(h2, file$m, 146, 8, 4765);
+    			add_location(div6, file$m, 145, 6, 4751);
+    			attr_dev(label1, "class", "labels svelte-qcf6sk");
+    			add_location(label1, file$m, 150, 10, 4861);
+    			attr_dev(input1, "class", "unitinput svelte-qcf6sk");
     			attr_dev(input1, "type", "text");
     			attr_dev(input1, "placeholder", "in minutes");
-    			add_location(input1, file$m, 143, 10, 4675);
-    			attr_dev(span0, "class", "unit svelte-1dj45u4");
-    			add_location(span0, file$m, 148, 10, 4832);
-    			add_location(div7, file$m, 141, 8, 4602);
-    			attr_dev(label2, "class", "labels svelte-1dj45u4");
-    			add_location(label2, file$m, 152, 12, 4936);
-    			attr_dev(input2, "class", "unitinput svelte-1dj45u4");
+    			add_location(input1, file$m, 151, 10, 4918);
+    			attr_dev(span0, "class", "unit svelte-qcf6sk");
+    			add_location(span0, file$m, 156, 10, 5075);
+    			add_location(div7, file$m, 149, 8, 4845);
+    			attr_dev(label2, "class", "labels svelte-qcf6sk");
+    			add_location(label2, file$m, 160, 12, 5179);
+    			attr_dev(input2, "class", "unitinput svelte-qcf6sk");
     			attr_dev(input2, "type", "radio");
     			input2.__value = "Easy";
     			input2.value = input2.__value;
     			/*$$binding_groups*/ ctx[13][0].push(input2);
-    			add_location(input2, file$m, 153, 12, 5002);
-    			attr_dev(span1, "class", "unit text-2xl svelte-1dj45u4");
-    			add_location(span1, file$m, 158, 12, 5164);
-    			attr_dev(input3, "class", "unitinput svelte-1dj45u4");
+    			add_location(input2, file$m, 161, 12, 5245);
+    			attr_dev(span1, "class", "unit text-2xl svelte-qcf6sk");
+    			add_location(span1, file$m, 166, 12, 5407);
+    			attr_dev(input3, "class", "unitinput svelte-qcf6sk");
     			attr_dev(input3, "type", "radio");
     			input3.__value = "Medium";
     			input3.value = input3.__value;
     			/*$$binding_groups*/ ctx[13][0].push(input3);
-    			add_location(input3, file$m, 159, 12, 5216);
-    			attr_dev(span2, "class", "unit text-2xl svelte-1dj45u4");
-    			add_location(span2, file$m, 164, 12, 5380);
-    			attr_dev(input4, "class", "unitinput svelte-1dj45u4");
+    			add_location(input3, file$m, 167, 12, 5459);
+    			attr_dev(span2, "class", "unit text-2xl svelte-qcf6sk");
+    			add_location(span2, file$m, 172, 12, 5623);
+    			attr_dev(input4, "class", "unitinput svelte-qcf6sk");
     			attr_dev(input4, "type", "radio");
     			input4.__value = "Difficult";
     			input4.value = input4.__value;
     			/*$$binding_groups*/ ctx[13][0].push(input4);
-    			add_location(input4, file$m, 165, 12, 5434);
-    			attr_dev(span3, "class", "unit text-2xl svelte-1dj45u4");
-    			add_location(span3, file$m, 170, 12, 5601);
-    			add_location(div8, file$m, 151, 10, 4918);
+    			add_location(input4, file$m, 173, 12, 5677);
+    			attr_dev(span3, "class", "unit text-2xl svelte-qcf6sk");
+    			add_location(span3, file$m, 178, 12, 5844);
+    			add_location(div8, file$m, 159, 10, 5161);
     			attr_dev(div9, "class", "flex");
-    			add_location(div9, file$m, 150, 8, 4889);
-    			attr_dev(label3, "class", "labels svelte-1dj45u4");
-    			add_location(label3, file$m, 174, 10, 5702);
-    			attr_dev(select, "class", "unitinput outline-none w-64 svelte-1dj45u4");
-    			add_location(select, file$m, 176, 12, 5791);
+    			add_location(div9, file$m, 158, 8, 5132);
+    			attr_dev(label3, "class", "labels svelte-qcf6sk");
+    			add_location(label3, file$m, 182, 10, 5945);
+    			attr_dev(select, "class", "unitinput outline-none w-64 svelte-qcf6sk");
+    			add_location(select, file$m, 184, 12, 6034);
     			attr_dev(input5, "type", "text");
-    			attr_dev(input5, "class", "unitinput svelte-1dj45u4");
+    			attr_dev(input5, "class", "unitinput svelte-qcf6sk");
     			input5.readOnly = true;
-    			add_location(input5, file$m, 194, 12, 6385);
+    			add_location(input5, file$m, 202, 12, 6628);
     			attr_dev(div10, "class", "flex-col flex");
-    			add_location(div10, file$m, 175, 10, 5751);
-    			add_location(div11, file$m, 173, 8, 5686);
-    			add_location(div12, file$m, 140, 6, 4588);
+    			add_location(div10, file$m, 183, 10, 5994);
+    			add_location(div11, file$m, 181, 8, 5929);
+    			add_location(div12, file$m, 148, 6, 4831);
     			attr_dev(div13, "class", "border-solid border-2 mt-6 border-light p-4");
-    			add_location(div13, file$m, 136, 4, 4444);
+    			add_location(div13, file$m, 144, 4, 4687);
     			attr_dev(div14, "class", "text-edark mx-auto max-w-5xl w-full");
-    			add_location(div14, file$m, 104, 2, 3395);
+    			add_location(div14, file$m, 112, 2, 3643);
     			attr_dev(div15, "class", "mx-auto flex-col flex-grow");
-    			add_location(div15, file$m, 103, 0, 3352);
+    			add_location(div15, file$m, 111, 0, 3600);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -47635,37 +47673,37 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			button = element("button");
     			button.textContent = "Run";
     			attr_dev(h1, "class", "text-2xl text-elight mt-3 my-2 svelte-1da7xg3");
-    			add_location(h1, file$w, 82, 2, 2798);
+    			add_location(h1, file$w, 95, 2, 3300);
     			attr_dev(div0, "id", "editor");
     			attr_dev(div0, "class", "editor mx-60 box-border flex-grow svelte-1da7xg3");
-    			add_location(div0, file$w, 83, 2, 2863);
+    			add_location(div0, file$w, 96, 2, 3365);
     			attr_dev(h20, "class", "text-xl text-elight my-3 my-2 svelte-1da7xg3");
-    			add_location(h20, file$w, 90, 6, 3076);
+    			add_location(h20, file$w, 103, 6, 3578);
     			attr_dev(div1, "id", "inputeditor");
     			attr_dev(div1, "class", "inputeditor text-xl h-full box-border  svelte-1da7xg3");
-    			add_location(div1, file$w, 92, 8, 3183);
+    			add_location(div1, file$w, 105, 8, 3685);
     			attr_dev(div2, "class", "flex-grow h-48 box-border svelte-1da7xg3");
-    			add_location(div2, file$w, 91, 6, 3135);
+    			add_location(div2, file$w, 104, 6, 3637);
     			attr_dev(div3, "class", "flex-1 mr-4 box-border svelte-1da7xg3");
-    			add_location(div3, file$w, 89, 4, 3033);
+    			add_location(div3, file$w, 102, 4, 3535);
     			attr_dev(h21, "class", "text-xl text-elight my-3 my-2 box-border svelte-1da7xg3");
-    			add_location(h21, file$w, 99, 6, 3366);
+    			add_location(h21, file$w, 112, 6, 3868);
     			attr_dev(textarea, "class", " h-full w-full bg-dark text-elight text-xl box-border\n          border-none rounded py-3 px-4 mb-3 leading-tight focus:outline-none\n          resize-none svelte-1da7xg3");
     			attr_dev(textarea, "id", "message");
     			textarea.readOnly = true;
-    			add_location(textarea, file$w, 101, 8, 3474);
+    			add_location(textarea, file$w, 114, 8, 3976);
     			attr_dev(div4, "class", "flex-grow h-48 svelte-1da7xg3");
-    			add_location(div4, file$w, 100, 6, 3437);
+    			add_location(div4, file$w, 113, 6, 3939);
     			attr_dev(div5, "class", "flex-1 ml-4 svelte-1da7xg3");
-    			add_location(div5, file$w, 98, 4, 3334);
+    			add_location(div5, file$w, 111, 4, 3836);
     			attr_dev(div6, "class", "flex my-4 p-2 border-solid h-64 border-2 border-light svelte-1da7xg3");
-    			add_location(div6, file$w, 88, 2, 2961);
+    			add_location(div6, file$w, 101, 2, 3463);
     			attr_dev(button, "class", "bg-dark hover:bg-elight hover:text-edark outline-none text-white\n      float-right font-bold py-2 px-4 rounded-full svelte-1da7xg3");
-    			add_location(button, file$w, 112, 4, 3776);
+    			add_location(button, file$w, 125, 4, 4278);
     			attr_dev(div7, "class", "svelte-1da7xg3");
-    			add_location(div7, file$w, 111, 2, 3766);
+    			add_location(div7, file$w, 124, 2, 4268);
     			attr_dev(div8, "class", "mx-64 flex-grow editor_window box-border svelte-1da7xg3");
-    			add_location(div8, file$w, 81, 0, 2741);
+    			add_location(div8, file$w, 94, 0, 3243);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -47696,8 +47734,8 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			dispose = [
     				listen_dev(div0, "keydown", /*onInput*/ ctx[1], false, false, false),
     				listen_dev(div1, "keydown", /*onInput*/ ctx[1], false, false, false),
-    				listen_dev(textarea, "input", /*textarea_input_handler*/ ctx[6]),
-    				listen_dev(button, "click", /*click_handler*/ ctx[7], false, false, false)
+    				listen_dev(textarea, "input", /*textarea_input_handler*/ ctx[7]),
+    				listen_dev(button, "click", /*click_handler*/ ctx[8], false, false, false)
     			];
     		},
     		p: function update(ctx, [dirty]) {
@@ -47728,6 +47766,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	let $problemStore;
     	validate_store(problemStore, "problemStore");
     	component_subscribe($$self, problemStore, $$value => $$invalidate(5, $problemStore = $$value));
+    	const client = getClient();
     	console.log($problemStore);
     	let editor;
     	let inputeditor;
@@ -47785,16 +47824,32 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	let result = "";
 
-    	function outputData(e) {
-    		try {
-    			let code = editor.getValue();
-    			console.log(code);
-    			set_store_value(problemStore, $problemStore.solution = code, $problemStore);
-    			console.log(editor.getValue());
-    			let testCase = inputeditor.getValue();
-    			$$invalidate(0, result = eval(`${code} solution(${testCase})`));
-    		} catch(err) {
-    			$$invalidate(0, result = err);
+    	async function outputData(e) {
+    		let code = editor.getValue();
+    		console.log(code);
+    		set_store_value(problemStore, $problemStore.solution = code, $problemStore);
+    		console.log(editor.getValue());
+    		let testCase = inputeditor.getValue();
+    		let res = `${code} solution(${testCase})`;
+
+    		let data = await mutate(client, {
+    			mutation: apolloClient.checkTimeLimit,
+    			variables: {
+    				data: res,
+    				timelimit: $problemStore.timelimit
+    			}
+    		});
+
+    		console.log(data);
+
+    		if (data.data.checkTimeLimit.success === true) {
+    			try {
+    				$$invalidate(0, result = eval(`${code} solution(${testCase})`));
+    			} catch(err) {
+    				$$invalidate(0, result = err);
+    			}
+    		} else {
+    			$$invalidate(0, result = "Timelimit Exceeded");
     		}
     	}
 
@@ -47825,6 +47880,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		editor,
     		inputeditor,
     		$problemStore,
+    		client,
     		textarea_input_handler,
     		click_handler
     	];
@@ -48808,7 +48864,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return child_ctx;
     }
 
-    // (128:10) {#if uniqueNameStatus === 2}
+    // (136:10) {#if uniqueNameStatus === 2}
     function create_if_block_2$6(ctx) {
     	let current;
     	const loader = new Loader$3({ $$inline: true });
@@ -48839,14 +48895,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_if_block_2$6.name,
     		type: "if",
-    		source: "(128:10) {#if uniqueNameStatus === 2}",
+    		source: "(136:10) {#if uniqueNameStatus === 2}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (131:10) {#if uniqueNameStatus === 1}
+    // (139:10) {#if uniqueNameStatus === 1}
     function create_if_block_1$9(ctx) {
     	let i;
 
@@ -48854,8 +48910,8 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		c: function create() {
     			i = element("i");
     			i.textContent = "";
-    			attr_dev(i, "class", "material-icons status svelte-1nbk2ow");
-    			add_location(i, file$B, 131, 12, 4321);
+    			attr_dev(i, "class", "material-icons status svelte-1lswhuv");
+    			add_location(i, file$B, 139, 12, 4564);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, i, anchor);
@@ -48869,14 +48925,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_if_block_1$9.name,
     		type: "if",
-    		source: "(131:10) {#if uniqueNameStatus === 1}",
+    		source: "(139:10) {#if uniqueNameStatus === 1}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (134:10) {#if uniqueNameStatus === 3}
+    // (142:10) {#if uniqueNameStatus === 3}
     function create_if_block$e(ctx) {
     	let span;
 
@@ -48884,8 +48940,8 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		c: function create() {
     			span = element("span");
     			span.textContent = "clear";
-    			attr_dev(span, "class", "status material-icons svelte-1nbk2ow");
-    			add_location(span, file$B, 134, 12, 4434);
+    			attr_dev(span, "class", "status material-icons svelte-1lswhuv");
+    			add_location(span, file$B, 142, 12, 4677);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, span, anchor);
@@ -48899,14 +48955,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_if_block$e.name,
     		type: "if",
-    		source: "(134:10) {#if uniqueNameStatus === 3}",
+    		source: "(142:10) {#if uniqueNameStatus === 3}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (176:14) {#each tagList as tag, index}
+    // (184:14) {#each tagList as tag, index}
     function create_each_block$f(ctx) {
     	let option;
     	let t0_value = /*tag*/ ctx[15] + "";
@@ -48924,7 +48980,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			attr_dev(option, "name", option_name_value = /*tag*/ ctx[15]);
     			option.__value = option_value_value = /*index*/ ctx[17];
     			option.value = option.__value;
-    			add_location(option, file$B, 176, 16, 5748);
+    			add_location(option, file$B, 184, 16, 5991);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, option, anchor);
@@ -48941,7 +48997,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_each_block$f.name,
     		type: "each",
-    		source: "(176:14) {#each tagList as tag, index}",
+    		source: "(184:14) {#each tagList as tag, index}",
     		ctx
     	});
 
@@ -49066,64 +49122,64 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			t22 = space();
     			input3 = element("input");
     			attr_dev(label0, "class", "text-elight text-2xl my-3");
-    			add_location(label0, file$B, 106, 6, 3511);
+    			add_location(label0, file$B, 114, 6, 3759);
     			attr_dev(input0, "type", "search");
     			attr_dev(input0, "name", "serch");
     			attr_dev(input0, "placeholder", "Search");
     			attr_dev(input0, "class", "bg-elight h-10 px-5 pr-10 rounded-full w-full text-xl\n              tet-edark focus:outline-none");
     			input0.readOnly = true;
-    			add_location(input0, file$B, 112, 12, 3711);
+    			add_location(input0, file$B, 120, 12, 3959);
     			attr_dev(div0, "class", "w-full");
-    			add_location(div0, file$B, 111, 10, 3678);
-    			attr_dev(p, "class", "text-white text-sm my-2");
-    			add_location(p, file$B, 123, 12, 4086);
-    			add_location(div1, file$B, 122, 10, 4068);
+    			add_location(div0, file$B, 119, 10, 3926);
+    			attr_dev(p, "class", "textt text-sm my-2 svelte-1lswhuv");
+    			add_location(p, file$B, 131, 12, 4334);
+    			add_location(div1, file$B, 130, 10, 4316);
     			attr_dev(div2, "class", " flex-col w-full");
-    			add_location(div2, file$B, 110, 8, 3637);
+    			add_location(div2, file$B, 118, 8, 3885);
     			attr_dev(div3, "class", "ml-3");
-    			add_location(div3, file$B, 126, 8, 4173);
+    			add_location(div3, file$B, 134, 8, 4416);
     			attr_dev(div4, "class", "flex");
-    			add_location(div4, file$B, 109, 6, 3610);
-    			add_location(div5, file$B, 105, 4, 3499);
-    			attr_dev(h2, "class", "labels text-2xl svelte-1nbk2ow");
-    			add_location(h2, file$B, 141, 8, 4620);
-    			add_location(div6, file$B, 140, 6, 4606);
-    			attr_dev(label1, "class", "labels svelte-1nbk2ow");
-    			add_location(label1, file$B, 145, 10, 4716);
-    			attr_dev(input1, "class", "unitinput svelte-1nbk2ow");
+    			add_location(div4, file$B, 117, 6, 3858);
+    			add_location(div5, file$B, 113, 4, 3747);
+    			attr_dev(h2, "class", "labels text-2xl svelte-1lswhuv");
+    			add_location(h2, file$B, 149, 8, 4863);
+    			add_location(div6, file$B, 148, 6, 4849);
+    			attr_dev(label1, "class", "labels svelte-1lswhuv");
+    			add_location(label1, file$B, 153, 10, 4959);
+    			attr_dev(input1, "class", "unitinput svelte-1lswhuv");
     			attr_dev(input1, "type", "text");
     			attr_dev(input1, "placeholder", "in milli seconds");
-    			add_location(input1, file$B, 146, 10, 4773);
-    			attr_dev(span0, "class", "unit svelte-1nbk2ow");
-    			add_location(span0, file$B, 151, 10, 4939);
-    			add_location(div7, file$B, 144, 8, 4700);
-    			attr_dev(label2, "class", "labels svelte-1nbk2ow");
-    			add_location(label2, file$B, 154, 10, 5007);
-    			attr_dev(input2, "class", "unitinput svelte-1nbk2ow");
+    			add_location(input1, file$B, 154, 10, 5016);
+    			attr_dev(span0, "class", "unit svelte-1lswhuv");
+    			add_location(span0, file$B, 159, 10, 5182);
+    			add_location(div7, file$B, 152, 8, 4943);
+    			attr_dev(label2, "class", "labels svelte-1lswhuv");
+    			add_location(label2, file$B, 162, 10, 5250);
+    			attr_dev(input2, "class", "unitinput svelte-1lswhuv");
     			attr_dev(input2, "type", "text");
     			attr_dev(input2, "placeholder", "in Mbs");
-    			add_location(input2, file$B, 155, 10, 5066);
-    			attr_dev(span1, "class", "unit svelte-1nbk2ow");
-    			add_location(span1, file$B, 160, 10, 5222);
-    			add_location(div8, file$B, 153, 8, 4991);
-    			attr_dev(label3, "class", "labels svelte-1nbk2ow");
-    			add_location(label3, file$B, 164, 10, 5291);
-    			attr_dev(select, "class", "unitinput outline-none w-64 svelte-1nbk2ow");
-    			add_location(select, file$B, 166, 12, 5380);
+    			add_location(input2, file$B, 163, 10, 5309);
+    			attr_dev(span1, "class", "unit svelte-1lswhuv");
+    			add_location(span1, file$B, 168, 10, 5465);
+    			add_location(div8, file$B, 161, 8, 5234);
+    			attr_dev(label3, "class", "labels svelte-1lswhuv");
+    			add_location(label3, file$B, 172, 10, 5534);
+    			attr_dev(select, "class", "unitinput outline-none w-64 svelte-1lswhuv");
+    			add_location(select, file$B, 174, 12, 5623);
     			attr_dev(input3, "type", "text");
-    			attr_dev(input3, "class", "unitinput svelte-1nbk2ow");
+    			attr_dev(input3, "class", "unitinput svelte-1lswhuv");
     			input3.readOnly = true;
-    			add_location(input3, file$B, 184, 12, 5974);
+    			add_location(input3, file$B, 192, 12, 6217);
     			attr_dev(div9, "class", "flex-col flex");
-    			add_location(div9, file$B, 165, 10, 5340);
-    			add_location(div10, file$B, 163, 8, 5275);
-    			add_location(div11, file$B, 143, 6, 4686);
+    			add_location(div9, file$B, 173, 10, 5583);
+    			add_location(div10, file$B, 171, 8, 5518);
+    			add_location(div11, file$B, 151, 6, 4929);
     			attr_dev(div12, "class", "border-solid border-2 mt-6 border-light p-4");
-    			add_location(div12, file$B, 139, 4, 4542);
+    			add_location(div12, file$B, 147, 4, 4785);
     			attr_dev(div13, "class", "text-edark mx-auto max-w-5xl w-full");
-    			add_location(div13, file$B, 104, 2, 3445);
+    			add_location(div13, file$B, 112, 2, 3693);
     			attr_dev(div14, "class", "mx-auto flex-col flex-grow");
-    			add_location(div14, file$B, 103, 0, 3402);
+    			add_location(div14, file$B, 111, 0, 3650);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -50784,52 +50840,27 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	let link;
     	let t0;
     	let nav;
-    	let div2;
+    	let div;
     	let h1;
-    	let t2;
-    	let div1;
-    	let div0;
-    	let button;
-    	let img;
-    	let img_src_value;
-    	let dispose;
 
     	const block = {
     		c: function create() {
     			link = element("link");
     			t0 = space();
     			nav = element("nav");
-    			div2 = element("div");
+    			div = element("div");
     			h1 = element("h1");
-    			h1.textContent = "Welcome,";
-    			t2 = space();
-    			div1 = element("div");
-    			div0 = element("div");
-    			button = element("button");
-    			img = element("img");
+    			h1.textContent = "Welcome to Tryout";
     			attr_dev(link, "href", "https://fonts.googleapis.com/css2?family=Jost&display=swap");
     			attr_dev(link, "rel", "stylesheet");
-    			attr_dev(link, "class", "svelte-1oqgb0y");
-    			add_location(link, file$I, 50, 0, 2132);
-    			attr_dev(h1, "class", "welcome text-primary svelte-1oqgb0y");
-    			add_location(h1, file$I, 58, 4, 2379);
-    			attr_dev(img, "alt", "admin");
-    			attr_dev(img, "width", "25");
-    			attr_dev(img, "height", "25");
-    			if (img.src !== (img_src_value = "https://img.icons8.com/carbon-copy/64/000000/user.png")) attr_dev(img, "src", img_src_value);
-    			attr_dev(img, "class", "svelte-1oqgb0y");
-    			add_location(img, file$I, 71, 10, 2890);
-    			attr_dev(button, "class", "container bg-white flex outline-none flex-row hover:bg-elight\n          text-dark font-semibold hover:text-white py-4 px-6 border\n          border-white-500 rounded hover:border-white rounded-full svelte-1oqgb0y");
-    			add_location(button, file$I, 62, 8, 2505);
-    			attr_dev(div0, "class", "dropdown svelte-1oqgb0y");
-    			add_location(div0, file$I, 61, 6, 2474);
-    			attr_dev(div1, "id", "btn");
-    			attr_dev(div1, "class", "flex flex-row svelte-1oqgb0y");
-    			add_location(div1, file$I, 59, 4, 2430);
-    			attr_dev(div2, "class", "w-full block flex-grow lg:items-right svelte-1oqgb0y");
-    			add_location(div2, file$I, 57, 2, 2323);
-    			attr_dev(nav, "class", "flex shadow-2xl items-center justify-between flex-wrap bg-dark sticky\n  p-6 svelte-1oqgb0y");
-    			add_location(nav, file$I, 53, 0, 2228);
+    			add_location(link, file$I, 33, 0, 1395);
+    			attr_dev(h1, "class", "welcome text-primary my-26 svelte-1rqgvmz");
+    			add_location(h1, file$I, 41, 4, 1669);
+    			attr_dev(div, "class", "w-full block flex-grow lg:items-right");
+    			add_location(div, file$I, 40, 2, 1613);
+    			set_style(nav, "background-color", "#25282c");
+    			attr_dev(nav, "class", "flex shadow-2xl items-center justify-between flex-wrap sticky p-16");
+    			add_location(nav, file$I, 36, 0, 1491);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -50838,14 +50869,8 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			insert_dev(target, link, anchor);
     			insert_dev(target, t0, anchor);
     			insert_dev(target, nav, anchor);
-    			append_dev(nav, div2);
-    			append_dev(div2, h1);
-    			append_dev(div2, t2);
-    			append_dev(div2, div1);
-    			append_dev(div1, div0);
-    			append_dev(div0, button);
-    			append_dev(button, img);
-    			dispose = listen_dev(button, "click", /*click_handler*/ ctx[3], false, false, false);
+    			append_dev(nav, div);
+    			append_dev(div, h1);
     		},
     		p: noop,
     		i: noop,
@@ -50854,7 +50879,6 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			if (detaching) detach_dev(link);
     			if (detaching) detach_dev(t0);
     			if (detaching) detach_dev(nav);
-    			dispose();
     		}
     	};
 
@@ -50869,51 +50893,10 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$E($$self, $$props, $$invalidate) {
-    	let themes = [
-    		["#1D1F21", "#25282c", "#303030", "#c4c4c4"],
-    		["#1d3e53", "#254b62", "#476d7c", "#77abb7"],
-    		["#1b262c", "#0f4c75", "#3282b8", "#bbe1fa"],
-    		["#071e3d", "#1f4287", "#278ea5", "#21e6c1"],
-    		["#200f21", "#382039", "#5a3d5c", "#f638dc"],
-    		["#2d132c", "#801336", "#c72c41", "#ee4540"]
-    	];
-
-    	let number = 0;
-
-    	function changeTheme(num) {
-    		console.log(themes[num], num);
-    		document.documentElement.style.setProperty("--color-ed", themes[num][0]);
-    		document.documentElement.style.setProperty("--color-d", themes[num][1]);
-    		document.documentElement.style.setProperty("--color-l", themes[num][2]);
-    		document.documentElement.style.setProperty("--color-el", themes[num][3]);
-    	}
-
-    	console.log(number);
-    	changeTheme(number);
-
-    	const click_handler = () => {
-    		$$invalidate(0, number++, number);
-    		let themesize = themes.length;
-    		changeTheme(number % themesize);
-    	};
-
-    	$$self.$capture_state = () => {
-    		return {};
-    	};
-
-    	$$self.$inject_state = $$props => {
-    		if ("themes" in $$props) $$invalidate(1, themes = $$props.themes);
-    		if ("number" in $$props) $$invalidate(0, number = $$props.number);
-    	};
-
-    	return [number, themes, changeTheme, click_handler];
-    }
-
     class Editor_navbar extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$E, create_fragment$L, safe_not_equal, {});
+    		init(this, options, null, create_fragment$L, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
@@ -50930,6 +50913,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     const file$J = "src/routes/introduce_yourself.svelte";
 
     function create_fragment$M(ctx) {
+    	let body;
     	let div9;
     	let t0;
     	let div7;
@@ -50964,6 +50948,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     	const block = {
     		c: function create() {
+    			body = element("body");
     			div9 = element("div");
     			create_component(editornavbar.$$.fragment);
     			t0 = space();
@@ -51000,50 +50985,53 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			button = element("button");
     			button.textContent = "Submit";
     			attr_dev(h1, "class", "text-elight text-5xl my-10");
-    			add_location(h1, file$J, 63, 6, 2348);
+    			add_location(h1, file$J, 72, 8, 2694);
     			attr_dev(div0, "class", "mx-auto max-w-2xl");
-    			add_location(div0, file$J, 62, 4, 2310);
-    			attr_dev(h2, "class", "labels text-4xl svelte-aujzyv");
-    			add_location(h2, file$J, 68, 8, 2511);
-    			add_location(div1, file$J, 67, 6, 2497);
-    			attr_dev(label0, "class", "labels svelte-aujzyv");
-    			add_location(label0, file$J, 72, 10, 2606);
-    			attr_dev(input0, "class", "unitinput svelte-aujzyv");
+    			add_location(div0, file$J, 71, 6, 2654);
+    			attr_dev(h2, "class", "labels text-4xl svelte-1doxgn");
+    			add_location(h2, file$J, 77, 10, 2865);
+    			add_location(div1, file$J, 76, 8, 2849);
+    			attr_dev(label0, "class", "labels svelte-1doxgn");
+    			add_location(label0, file$J, 81, 12, 2968);
+    			attr_dev(input0, "class", "unitinput svelte-1doxgn");
     			attr_dev(input0, "type", "text");
     			attr_dev(input0, "placeholder", "Enter Name");
-    			add_location(input0, file$J, 73, 10, 2651);
-    			add_location(div2, file$J, 71, 8, 2590);
-    			attr_dev(label1, "class", "labels svelte-aujzyv");
-    			add_location(label1, file$J, 80, 10, 2826);
-    			attr_dev(input1, "class", "unitinput svelte-aujzyv");
+    			add_location(input0, file$J, 82, 12, 3015);
+    			add_location(div2, file$J, 80, 10, 2950);
+    			attr_dev(label1, "class", "labels svelte-1doxgn");
+    			add_location(label1, file$J, 89, 12, 3204);
+    			attr_dev(input1, "class", "unitinput svelte-1doxgn");
     			attr_dev(input1, "type", "text");
     			attr_dev(input1, "placeholder", "Email");
-    			add_location(input1, file$J, 81, 10, 2883);
-    			add_location(div3, file$J, 79, 8, 2810);
-    			attr_dev(label2, "class", "labels svelte-aujzyv");
-    			add_location(label2, file$J, 88, 10, 3054);
-    			attr_dev(input2, "class", "unitinput svelte-aujzyv");
+    			add_location(input1, file$J, 90, 12, 3263);
+    			add_location(div3, file$J, 88, 10, 3186);
+    			attr_dev(label2, "class", "labels svelte-1doxgn");
+    			add_location(label2, file$J, 97, 12, 3448);
+    			attr_dev(input2, "class", "unitinput svelte-1doxgn");
     			attr_dev(input2, "type", "text");
     			attr_dev(input2, "placeholder", "College Name");
-    			add_location(input2, file$J, 89, 10, 3107);
-    			add_location(div4, file$J, 87, 8, 3038);
-    			add_location(div5, file$J, 70, 6, 2576);
+    			add_location(input2, file$J, 98, 12, 3503);
+    			add_location(div4, file$J, 96, 10, 3430);
+    			add_location(div5, file$J, 79, 8, 2934);
     			attr_dev(div6, "class", "border-solid border-2 mt-10 border-light p-4");
-    			add_location(div6, file$J, 66, 4, 2432);
+    			add_location(div6, file$J, 75, 6, 2782);
     			attr_dev(div7, "class", "text-edark mx-auto max-w-5xl w-full");
-    			add_location(div7, file$J, 61, 2, 2256);
-    			attr_dev(button, "class", "bg-dark hover:bg-elight hover:text-edark outline-none text-white\n      font-bold py-4 px-4 text-xl rounded-full");
-    			add_location(button, file$J, 99, 4, 3346);
+    			add_location(div7, file$J, 70, 4, 2598);
+    			attr_dev(button, "class", "bg-dark hover:bg-elight hover:text-edark outline-none text-white\n        font-bold py-4 px-4 text-xl rounded-full");
+    			add_location(button, file$J, 108, 6, 3762);
     			attr_dev(div8, "class", "my-10 flex justify-center");
-    			add_location(div8, file$J, 98, 2, 3302);
+    			add_location(div8, file$J, 107, 4, 3716);
     			attr_dev(div9, "class", "mx-auto flex-col flex-grow w-full h-full bg-edark");
-    			add_location(div9, file$J, 59, 0, 2171);
+    			add_location(div9, file$J, 68, 2, 2509);
+    			attr_dev(body, "class", "svelte-1doxgn");
+    			add_location(body, file$J, 66, 0, 2499);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
     		m: function mount(target, anchor) {
-    			insert_dev(target, div9, anchor);
+    			insert_dev(target, body, anchor);
+    			append_dev(body, div9);
     			mount_component(editornavbar, div9, null);
     			append_dev(div9, t0);
     			append_dev(div9, div7);
@@ -51107,7 +51095,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			current = false;
     		},
     		d: function destroy(detaching) {
-    			if (detaching) detach_dev(div9);
+    			if (detaching) detach_dev(body);
     			destroy_component(editornavbar);
     			run_all(dispose);
     		}
@@ -51124,7 +51112,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$F($$self, $$props, $$invalidate) {
+    function instance$E($$self, $$props, $$invalidate) {
     	let { currentRoute } = $$props;
 
     	let user = {
@@ -51213,7 +51201,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Introduce_yourself extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$F, create_fragment$M, safe_not_equal, { currentRoute: 2 });
+    		init(this, options, instance$E, create_fragment$M, safe_not_equal, { currentRoute: 2 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
@@ -51535,7 +51523,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$G($$self, $$props, $$invalidate) {
+    function instance$F($$self, $$props, $$invalidate) {
     	let { error } = $$props;
     	const writable_props = ["error"];
 
@@ -51561,7 +51549,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class Error$1 extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$G, create_fragment$O, safe_not_equal, { error: 0 });
+    		init(this, options, instance$F, create_fragment$O, safe_not_equal, { error: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
@@ -51592,19 +51580,150 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     const { Error: Error_1$1, console: console_1$a } = globals;
     const file$M = "src/routes/AdminPanel.svelte";
 
+    function get_each_context_2(ctx, list, i) {
+    	const child_ctx = ctx.slice();
+    	child_ctx[24] = list[i];
+    	return child_ctx;
+    }
+
     function get_each_context_1$2(ctx, list, i) {
     	const child_ctx = ctx.slice();
-    	child_ctx[18] = list[i];
+    	child_ctx[21] = list[i];
     	return child_ctx;
     }
 
     function get_each_context$g(ctx, list, i) {
     	const child_ctx = ctx.slice();
-    	child_ctx[15] = list[i];
+    	child_ctx[18] = list[i];
     	return child_ctx;
     }
 
-    // (224:45) 
+    // (332:47) 
+    function create_if_block_2$8(ctx) {
+    	let div2;
+    	let div1;
+    	let header;
+    	let h2;
+    	let t1;
+    	let div0;
+    	let input;
+    	let t2;
+    	let promise;
+    	let current;
+    	let dispose;
+
+    	let info = {
+    		ctx,
+    		current: null,
+    		token: null,
+    		pending: create_pending_block_2,
+    		then: create_then_block_2,
+    		catch: create_catch_block_2,
+    		value: 16,
+    		error: 17,
+    		blocks: [,,,]
+    	};
+
+    	handle_promise(promise = /*$searchAttempts*/ ctx[6], info);
+
+    	const block = {
+    		c: function create() {
+    			div2 = element("div");
+    			div1 = element("div");
+    			header = element("header");
+    			h2 = element("h2");
+    			h2.textContent = "Scoreboard:";
+    			t1 = space();
+    			div0 = element("div");
+    			input = element("input");
+    			t2 = space();
+    			info.block.c();
+    			attr_dev(h2, "class", "text-xl day font-semibold mt-4 mb-6 svelte-acdsse");
+    			add_location(h2, file$M, 338, 8, 11992);
+    			attr_dev(input, "class", "problem-search rounded-full svelte-acdsse");
+    			attr_dev(input, "id", "problem-search");
+    			attr_dev(input, "name", "problem-search");
+    			set_style(input, "width", "100%");
+    			attr_dev(input, "type", "text");
+    			attr_dev(input, "placeholder", "Enter a user name");
+    			add_location(input, file$M, 340, 10, 12094);
+    			attr_dev(div0, "class", "px-4");
+    			add_location(div0, file$M, 339, 8, 12065);
+    			attr_dev(header, "class", "w-full text-center flex flex-col justify-end py-3 md:px-16");
+    			set_style(header, "min-height", "234px");
+    			add_location(header, file$M, 335, 6, 11865);
+    			attr_dev(div1, "id", "problem-switcher");
+    			attr_dev(div1, "class", "svelte-acdsse");
+    			add_location(div1, file$M, 334, 4, 11831);
+    			attr_dev(div2, "id", "problem-switcher-container");
+    			attr_dev(div2, "class", "svelte-acdsse");
+    			add_location(div2, file$M, 332, 2, 11788);
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, div2, anchor);
+    			append_dev(div2, div1);
+    			append_dev(div1, header);
+    			append_dev(header, h2);
+    			append_dev(header, t1);
+    			append_dev(header, div0);
+    			append_dev(div0, input);
+    			set_input_value(input, /*attemptSearch*/ ctx[3]);
+    			append_dev(div1, t2);
+    			info.block.m(div1, info.anchor = null);
+    			info.mount = () => div1;
+    			info.anchor = null;
+    			current = true;
+    			dispose = listen_dev(input, "input", /*input_input_handler_2*/ ctx[15]);
+    		},
+    		p: function update(new_ctx, dirty) {
+    			ctx = new_ctx;
+
+    			if (dirty & /*attemptSearch*/ 8 && input.value !== /*attemptSearch*/ ctx[3]) {
+    				set_input_value(input, /*attemptSearch*/ ctx[3]);
+    			}
+
+    			info.ctx = ctx;
+
+    			if (dirty & /*$searchAttempts*/ 64 && promise !== (promise = /*$searchAttempts*/ ctx[6]) && handle_promise(promise, info)) ; else {
+    				const child_ctx = ctx.slice();
+    				child_ctx[16] = info.resolved;
+    				info.block.p(child_ctx, dirty);
+    			}
+    		},
+    		i: function intro(local) {
+    			if (current) return;
+    			transition_in(info.block);
+    			current = true;
+    		},
+    		o: function outro(local) {
+    			for (let i = 0; i < 3; i += 1) {
+    				const block = info.blocks[i];
+    				transition_out(block);
+    			}
+
+    			current = false;
+    		},
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(div2);
+    			info.block.d();
+    			info.token = null;
+    			info = null;
+    			dispose();
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_if_block_2$8.name,
+    		type: "if",
+    		source: "(332:47) ",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (272:45) 
     function create_if_block_1$c(ctx) {
     	let div2;
     	let div1;
@@ -51627,12 +51746,12 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		pending: create_pending_block_1,
     		then: create_then_block_1,
     		catch: create_catch_block_1,
-    		value: 13,
-    		error: 14,
+    		value: 16,
+    		error: 17,
     		blocks: [,,,]
     	};
 
-    	handle_promise(promise = /*$searchTests*/ ctx[4], info);
+    	handle_promise(promise = /*$searchTests*/ ctx[5], info);
 
     	const block = {
     		c: function create() {
@@ -51649,28 +51768,29 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			input = element("input");
     			t4 = space();
     			info.block.c();
-    			attr_dev(h2, "class", "text-xl day font-semibold mt-4 mb-6 svelte-15wy8wn");
-    			add_location(h2, file$M, 230, 8, 8771);
-    			attr_dev(a, "class", "add-btn rounded-full px-2 shadow-2xl svelte-15wy8wn");
+    			attr_dev(h2, "class", "text-xl day font-semibold mt-4 mb-6 svelte-acdsse");
+    			add_location(h2, file$M, 278, 8, 10048);
+    			attr_dev(a, "class", "add-btn btun rounded-full px-2 shadow-2xl svelte-acdsse");
     			set_style(a, "padding", "13px 22px");
-    			add_location(a, file$M, 232, 10, 8872);
-    			attr_dev(input, "class", "problem-search rounded-full svelte-15wy8wn");
+    			add_location(a, file$M, 280, 10, 10149);
+    			attr_dev(input, "class", "problem-search rounded-full svelte-acdsse");
     			attr_dev(input, "id", "problem-search");
     			attr_dev(input, "name", "problem-search");
+    			set_style(input, "width", "86%");
     			attr_dev(input, "type", "text");
     			attr_dev(input, "placeholder", "Enter a Test name");
-    			add_location(input, file$M, 238, 10, 9076);
+    			add_location(input, file$M, 286, 10, 10358);
     			attr_dev(div0, "class", "px-2");
-    			add_location(div0, file$M, 231, 8, 8843);
+    			add_location(div0, file$M, 279, 8, 10120);
     			attr_dev(header, "class", "w-full text-center flex flex-col justify-end py-3 md:px-16");
     			set_style(header, "min-height", "234px");
-    			add_location(header, file$M, 227, 6, 8644);
+    			add_location(header, file$M, 275, 6, 9921);
     			attr_dev(div1, "id", "problem-switcher");
-    			attr_dev(div1, "class", "svelte-15wy8wn");
-    			add_location(div1, file$M, 226, 4, 8610);
+    			attr_dev(div1, "class", "svelte-acdsse");
+    			add_location(div1, file$M, 274, 4, 9887);
     			attr_dev(div2, "id", "problem-switcher-container");
-    			attr_dev(div2, "class", "svelte-15wy8wn");
-    			add_location(div2, file$M, 224, 2, 8567);
+    			attr_dev(div2, "class", "svelte-acdsse");
+    			add_location(div2, file$M, 272, 2, 9844);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div2, anchor);
@@ -51691,7 +51811,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     			dispose = [
     				listen_dev(a, "click", addTest$1, false, false, false),
-    				listen_dev(input, "input", /*input_input_handler_1*/ ctx[11])
+    				listen_dev(input, "input", /*input_input_handler_1*/ ctx[13])
     			];
     		},
     		p: function update(new_ctx, dirty) {
@@ -51703,9 +51823,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     			info.ctx = ctx;
 
-    			if (dirty & /*$searchTests*/ 16 && promise !== (promise = /*$searchTests*/ ctx[4]) && handle_promise(promise, info)) ; else {
+    			if (dirty & /*$searchTests*/ 32 && promise !== (promise = /*$searchTests*/ ctx[5]) && handle_promise(promise, info)) ; else {
     				const child_ctx = ctx.slice();
-    				child_ctx[13] = info.resolved;
+    				child_ctx[16] = info.resolved;
     				info.block.p(child_ctx, dirty);
     			}
     		},
@@ -51735,14 +51855,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_if_block_1$c.name,
     		type: "if",
-    		source: "(224:45) ",
+    		source: "(272:45) ",
     		ctx
     	});
 
     	return block;
     }
 
-    // (166:0) {#if currentRoute.name === '/admin'}
+    // (211:0) {#if currentRoute.name === '/admin'}
     function create_if_block$h(ctx) {
     	let div2;
     	let div1;
@@ -51765,12 +51885,12 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		pending: create_pending_block$5,
     		then: create_then_block$5,
     		catch: create_catch_block$5,
-    		value: 13,
-    		error: 14,
+    		value: 16,
+    		error: 17,
     		blocks: [,,,]
     	};
 
-    	handle_promise(promise = /*$searchProblems*/ ctx[3], info);
+    	handle_promise(promise = /*$searchProblems*/ ctx[4], info);
 
     	const block = {
     		c: function create() {
@@ -51787,27 +51907,28 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			input = element("input");
     			t4 = space();
     			info.block.c();
-    			attr_dev(h2, "class", "text-xl day font-semibold mt-4 mb-6 svelte-15wy8wn");
-    			add_location(h2, file$M, 172, 8, 6855);
-    			attr_dev(a, "class", "add-btn rounded-full px-2 shadow-2xl svelte-15wy8wn");
-    			add_location(a, file$M, 174, 10, 6959);
-    			attr_dev(input, "class", "problem-search rounded-full svelte-15wy8wn");
+    			attr_dev(h2, "class", "text-xl day font-semibold mt-4 mb-6 svelte-acdsse");
+    			add_location(h2, file$M, 217, 8, 8073);
+    			attr_dev(a, "class", "add-btn btun rounded-full px-2 shadow-2xl svelte-acdsse");
+    			add_location(a, file$M, 219, 10, 8177);
+    			attr_dev(input, "class", "problem-search rounded-full svelte-acdsse");
     			attr_dev(input, "id", "problem-search");
     			attr_dev(input, "name", "problem-search");
+    			set_style(input, "width", "86%");
     			attr_dev(input, "type", "text");
     			attr_dev(input, "placeholder", "Enter a problem name");
-    			add_location(input, file$M, 177, 10, 7091);
+    			add_location(input, file$M, 224, 10, 8338);
     			attr_dev(div0, "class", "px-4");
-    			add_location(div0, file$M, 173, 8, 6930);
+    			add_location(div0, file$M, 218, 8, 8148);
     			attr_dev(header, "class", "w-full text-center flex flex-col justify-end py-3 md:px-16");
     			set_style(header, "min-height", "234px");
-    			add_location(header, file$M, 169, 6, 6728);
+    			add_location(header, file$M, 214, 6, 7946);
     			attr_dev(div1, "id", "problem-switcher");
-    			attr_dev(div1, "class", "svelte-15wy8wn");
-    			add_location(div1, file$M, 168, 4, 6694);
+    			attr_dev(div1, "class", "svelte-acdsse");
+    			add_location(div1, file$M, 213, 4, 7912);
     			attr_dev(div2, "id", "problem-switcher-container");
-    			attr_dev(div2, "class", "svelte-15wy8wn");
-    			add_location(div2, file$M, 166, 2, 6651);
+    			attr_dev(div2, "class", "svelte-acdsse");
+    			add_location(div2, file$M, 211, 2, 7869);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div2, anchor);
@@ -51828,7 +51949,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     			dispose = [
     				listen_dev(a, "click", addProblem$1, false, false, false),
-    				listen_dev(input, "input", /*input_input_handler*/ ctx[9])
+    				listen_dev(input, "input", /*input_input_handler*/ ctx[11])
     			];
     		},
     		p: function update(new_ctx, dirty) {
@@ -51840,9 +51961,9 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
 
     			info.ctx = ctx;
 
-    			if (dirty & /*$searchProblems*/ 8 && promise !== (promise = /*$searchProblems*/ ctx[3]) && handle_promise(promise, info)) ; else {
+    			if (dirty & /*$searchProblems*/ 16 && promise !== (promise = /*$searchProblems*/ ctx[4]) && handle_promise(promise, info)) ; else {
     				const child_ctx = ctx.slice();
-    				child_ctx[13] = info.resolved;
+    				child_ctx[16] = info.resolved;
     				info.block.p(child_ctx, dirty);
     			}
     		},
@@ -51872,19 +51993,19 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_if_block$h.name,
     		type: "if",
-    		source: "(166:0) {#if currentRoute.name === '/admin'}",
+    		source: "(211:0) {#if currentRoute.name === '/admin'}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (278:6) {:catch error}
-    function create_catch_block_1(ctx) {
+    // (377:6) {:catch error}
+    function create_catch_block_2(ctx) {
     	let current;
 
     	const error = new Error$1({
-    			props: { error: /*error*/ ctx[14] },
+    			props: { error: /*error*/ ctx[17] },
     			$$inline: true
     		});
 
@@ -51898,7 +52019,266 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		},
     		p: function update(ctx, dirty) {
     			const error_changes = {};
-    			if (dirty & /*$searchTests*/ 16) error_changes.error = /*error*/ ctx[14];
+    			if (dirty & /*$searchAttempts*/ 64) error_changes.error = /*error*/ ctx[17];
+    			error.$set(error_changes);
+    		},
+    		i: function intro(local) {
+    			if (current) return;
+    			transition_in(error.$$.fragment, local);
+    			current = true;
+    		},
+    		o: function outro(local) {
+    			transition_out(error.$$.fragment, local);
+    			current = false;
+    		},
+    		d: function destroy(detaching) {
+    			destroy_component(error, detaching);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_catch_block_2.name,
+    		type: "catch",
+    		source: "(377:6) {:catch error}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (354:6) {:then res}
+    function create_then_block_2(ctx) {
+    	let div;
+    	let each_value_2 = /*res*/ ctx[16].data.searchAttempt;
+    	let each_blocks = [];
+
+    	for (let i = 0; i < each_value_2.length; i += 1) {
+    		each_blocks[i] = create_each_block_2(get_each_context_2(ctx, each_value_2, i));
+    	}
+
+    	const block = {
+    		c: function create() {
+    			div = element("div");
+
+    			for (let i = 0; i < each_blocks.length; i += 1) {
+    				each_blocks[i].c();
+    			}
+
+    			attr_dev(div, "class", "problems flex flex-col text-black svelte-acdsse");
+    			add_location(div, file$M, 354, 8, 12465);
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, div, anchor);
+
+    			for (let i = 0; i < each_blocks.length; i += 1) {
+    				each_blocks[i].m(div, null);
+    			}
+    		},
+    		p: function update(ctx, dirty) {
+    			if (dirty & /*$searchAttempts, timeConverter*/ 64) {
+    				each_value_2 = /*res*/ ctx[16].data.searchAttempt;
+    				let i;
+
+    				for (i = 0; i < each_value_2.length; i += 1) {
+    					const child_ctx = get_each_context_2(ctx, each_value_2, i);
+
+    					if (each_blocks[i]) {
+    						each_blocks[i].p(child_ctx, dirty);
+    					} else {
+    						each_blocks[i] = create_each_block_2(child_ctx);
+    						each_blocks[i].c();
+    						each_blocks[i].m(div, null);
+    					}
+    				}
+
+    				for (; i < each_blocks.length; i += 1) {
+    					each_blocks[i].d(1);
+    				}
+
+    				each_blocks.length = each_value_2.length;
+    			}
+    		},
+    		i: noop,
+    		o: noop,
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(div);
+    			destroy_each(each_blocks, detaching);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_then_block_2.name,
+    		type: "then",
+    		source: "(354:6) {:then res}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (356:10) {#each res.data.searchAttempt as attempt}
+    function create_each_block_2(ctx) {
+    	let div2;
+    	let p;
+    	let t0_value = /*attempt*/ ctx[24].user.name + "";
+    	let t0;
+    	let t1;
+    	let span0;
+    	let t2_value = /*attempt*/ ctx[24].user.collegeName + "";
+    	let t2;
+    	let t3;
+    	let div1;
+    	let span1;
+    	let t4;
+    	let t5_value = /*attempt*/ ctx[24].score + "";
+    	let t5;
+    	let t6;
+    	let div0;
+    	let span2;
+    	let t7_value = timeConverter(/*attempt*/ ctx[24].attemptTime) + "";
+    	let t7;
+    	let t8;
+    	let div2_id_value;
+
+    	const block = {
+    		c: function create() {
+    			div2 = element("div");
+    			p = element("p");
+    			t0 = text(t0_value);
+    			t1 = space();
+    			span0 = element("span");
+    			t2 = text(t2_value);
+    			t3 = space();
+    			div1 = element("div");
+    			span1 = element("span");
+    			t4 = text("Score :");
+    			t5 = text(t5_value);
+    			t6 = space();
+    			div0 = element("div");
+    			span2 = element("span");
+    			t7 = text(t7_value);
+    			t8 = space();
+    			attr_dev(span0, "class", "text-xs font-normal italic lowercase");
+    			add_location(span0, file$M, 361, 16, 12750);
+    			attr_dev(p, "class", "problem__name svelte-acdsse");
+    			add_location(p, file$M, 359, 14, 12672);
+    			attr_dev(span1, "class", "problem__type svelte-acdsse");
+    			add_location(span1, file$M, 366, 16, 12980);
+    			attr_dev(span2, "class", "font-bold");
+    			add_location(span2, file$M, 368, 18, 13099);
+    			attr_dev(div0, "class", "text-xs ml-8");
+    			add_location(div0, file$M, 367, 16, 13054);
+    			attr_dev(div1, "class", "flex w-full justify-between items-center mt-4");
+    			add_location(div1, file$M, 365, 14, 12904);
+    			attr_dev(div2, "id", div2_id_value = "problem-" + /*attempt*/ ctx[24].id);
+    			attr_dev(div2, "class", "card-problem svelte-acdsse");
+    			add_location(div2, file$M, 356, 12, 12577);
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, div2, anchor);
+    			append_dev(div2, p);
+    			append_dev(p, t0);
+    			append_dev(p, t1);
+    			append_dev(p, span0);
+    			append_dev(span0, t2);
+    			append_dev(div2, t3);
+    			append_dev(div2, div1);
+    			append_dev(div1, span1);
+    			append_dev(span1, t4);
+    			append_dev(span1, t5);
+    			append_dev(div1, t6);
+    			append_dev(div1, div0);
+    			append_dev(div0, span2);
+    			append_dev(span2, t7);
+    			append_dev(div2, t8);
+    		},
+    		p: function update(ctx, dirty) {
+    			if (dirty & /*$searchAttempts*/ 64 && t0_value !== (t0_value = /*attempt*/ ctx[24].user.name + "")) set_data_dev(t0, t0_value);
+    			if (dirty & /*$searchAttempts*/ 64 && t2_value !== (t2_value = /*attempt*/ ctx[24].user.collegeName + "")) set_data_dev(t2, t2_value);
+    			if (dirty & /*$searchAttempts*/ 64 && t5_value !== (t5_value = /*attempt*/ ctx[24].score + "")) set_data_dev(t5, t5_value);
+    			if (dirty & /*$searchAttempts*/ 64 && t7_value !== (t7_value = timeConverter(/*attempt*/ ctx[24].attemptTime) + "")) set_data_dev(t7, t7_value);
+
+    			if (dirty & /*$searchAttempts*/ 64 && div2_id_value !== (div2_id_value = "problem-" + /*attempt*/ ctx[24].id)) {
+    				attr_dev(div2, "id", div2_id_value);
+    			}
+    		},
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(div2);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_each_block_2.name,
+    		type: "each",
+    		source: "(356:10) {#each res.data.searchAttempt as attempt}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (352:30)          <Loader />       {:then res}
+    function create_pending_block_2(ctx) {
+    	let current;
+    	const loader = new Loader$4({ $$inline: true });
+
+    	const block = {
+    		c: function create() {
+    			create_component(loader.$$.fragment);
+    		},
+    		m: function mount(target, anchor) {
+    			mount_component(loader, target, anchor);
+    			current = true;
+    		},
+    		p: noop,
+    		i: function intro(local) {
+    			if (current) return;
+    			transition_in(loader.$$.fragment, local);
+    			current = true;
+    		},
+    		o: function outro(local) {
+    			transition_out(loader.$$.fragment, local);
+    			current = false;
+    		},
+    		d: function destroy(detaching) {
+    			destroy_component(loader, detaching);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_pending_block_2.name,
+    		type: "pending",
+    		source: "(352:30)          <Loader />       {:then res}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (327:6) {:catch error}
+    function create_catch_block_1(ctx) {
+    	let current;
+
+    	const error = new Error$1({
+    			props: { error: /*error*/ ctx[17] },
+    			$$inline: true
+    		});
+
+    	const block = {
+    		c: function create() {
+    			create_component(error.$$.fragment);
+    		},
+    		m: function mount(target, anchor) {
+    			mount_component(error, target, anchor);
+    			current = true;
+    		},
+    		p: function update(ctx, dirty) {
+    			const error_changes = {};
+    			if (dirty & /*$searchTests*/ 32) error_changes.error = /*error*/ ctx[17];
     			error.$set(error_changes);
     		},
     		i: function intro(local) {
@@ -51919,17 +52299,17 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_catch_block_1.name,
     		type: "catch",
-    		source: "(278:6) {:catch error}",
+    		source: "(327:6) {:catch error}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (252:6) {:then res}
+    // (301:6) {:then res}
     function create_then_block_1(ctx) {
     	let div;
-    	let each_value_1 = /*res*/ ctx[13].data.searchTests;
+    	let each_value_1 = /*res*/ ctx[16].data.searchTests;
     	let each_blocks = [];
 
     	for (let i = 0; i < each_value_1.length; i += 1) {
@@ -51944,8 +52324,8 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     				each_blocks[i].c();
     			}
 
-    			attr_dev(div, "class", "problems flex flex-col text-black svelte-15wy8wn");
-    			add_location(div, file$M, 252, 8, 9410);
+    			attr_dev(div, "class", "problems flex flex-col text-black svelte-acdsse");
+    			add_location(div, file$M, 301, 8, 10723);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div, anchor);
@@ -51955,8 +52335,8 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			}
     		},
     		p: function update(ctx, dirty) {
-    			if (dirty & /*$searchTests, window, Date*/ 16) {
-    				each_value_1 = /*res*/ ctx[13].data.searchTests;
+    			if (dirty & /*$searchTests, window, timeConverter*/ 32) {
+    				each_value_1 = /*res*/ ctx[16].data.searchTests;
     				let i;
 
     				for (i = 0; i < each_value_1.length; i += 1) {
@@ -51990,34 +52370,34 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_then_block_1.name,
     		type: "then",
-    		source: "(252:6) {:then res}",
+    		source: "(301:6) {:then res}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (254:10) {#each res.data.searchTests as test}
+    // (303:10) {#each res.data.searchTests as test}
     function create_each_block_1$2(ctx) {
     	let div2;
     	let p;
-    	let t0_value = /*test*/ ctx[18].testName + "";
+    	let t0_value = /*test*/ ctx[21].testName + "";
     	let t0;
     	let t1;
     	let span0;
-    	let t2_value = /*test*/ ctx[18].tags + "";
+    	let t2_value = /*test*/ ctx[21].tags + "";
     	let t2;
     	let t3;
     	let div1;
     	let span1;
     	let t4;
-    	let t5_value = /*test*/ ctx[18].timelimit + "";
+    	let t5_value = /*test*/ ctx[21].timelimit + "";
     	let t5;
     	let t6;
     	let t7;
     	let div0;
     	let span2;
-    	let t8_value = new Date(/*test*/ ctx[18].createdAt * 1000) + "";
+    	let t8_value = timeConverter(/*test*/ ctx[21].createdAt) + "";
     	let t8;
     	let t9;
     	let div2_id_value;
@@ -52025,7 +52405,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	let dispose;
 
     	function click_handler_1(...args) {
-    		return /*click_handler_1*/ ctx[12](/*test*/ ctx[18], ...args);
+    		return /*click_handler_1*/ ctx[14](/*test*/ ctx[21], ...args);
     	}
 
     	const block = {
@@ -52041,27 +52421,27 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			span1 = element("span");
     			t4 = text("TimeLimit :");
     			t5 = text(t5_value);
-    			t6 = text("ms");
+    			t6 = text(" min");
     			t7 = space();
     			div0 = element("div");
     			span2 = element("span");
     			t8 = text(t8_value);
     			t9 = space();
     			attr_dev(span0, "class", "text-xs font-normal italic lowercase");
-    			add_location(span0, file$M, 262, 16, 9805);
-    			attr_dev(p, "class", "problem__name svelte-15wy8wn");
-    			add_location(p, file$M, 260, 14, 9731);
-    			attr_dev(span1, "class", "problem__type svelte-15wy8wn");
-    			add_location(span1, file$M, 267, 16, 10020);
+    			add_location(span0, file$M, 311, 16, 11118);
+    			attr_dev(p, "class", "problem__name svelte-acdsse");
+    			add_location(p, file$M, 309, 14, 11044);
+    			attr_dev(span1, "class", "problem__type svelte-acdsse");
+    			add_location(span1, file$M, 316, 16, 11333);
     			attr_dev(span2, "class", "font-bold");
-    			add_location(span2, file$M, 269, 18, 10146);
+    			add_location(span2, file$M, 320, 18, 11497);
     			attr_dev(div0, "class", "text-xs ml-8");
-    			add_location(div0, file$M, 268, 16, 10101);
+    			add_location(div0, file$M, 319, 16, 11452);
     			attr_dev(div1, "class", "flex w-full justify-between items-center mt-4");
-    			add_location(div1, file$M, 266, 14, 9944);
-    			attr_dev(div2, "id", div2_id_value = "problem-" + /*test*/ ctx[18].id);
-    			attr_dev(div2, "class", div2_class_value = "card-problem " + "cursor-pointer" + " svelte-15wy8wn");
-    			add_location(div2, file$M, 254, 12, 9517);
+    			add_location(div1, file$M, 315, 14, 11257);
+    			attr_dev(div2, "id", div2_id_value = "problem-" + /*test*/ ctx[21].id);
+    			attr_dev(div2, "class", div2_class_value = "card-problem " + "cursor-pointer" + " svelte-acdsse");
+    			add_location(div2, file$M, 303, 12, 10830);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div2, anchor);
@@ -52085,12 +52465,12 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		},
     		p: function update(new_ctx, dirty) {
     			ctx = new_ctx;
-    			if (dirty & /*$searchTests*/ 16 && t0_value !== (t0_value = /*test*/ ctx[18].testName + "")) set_data_dev(t0, t0_value);
-    			if (dirty & /*$searchTests*/ 16 && t2_value !== (t2_value = /*test*/ ctx[18].tags + "")) set_data_dev(t2, t2_value);
-    			if (dirty & /*$searchTests*/ 16 && t5_value !== (t5_value = /*test*/ ctx[18].timelimit + "")) set_data_dev(t5, t5_value);
-    			if (dirty & /*$searchTests*/ 16 && t8_value !== (t8_value = new Date(/*test*/ ctx[18].createdAt * 1000) + "")) set_data_dev(t8, t8_value);
+    			if (dirty & /*$searchTests*/ 32 && t0_value !== (t0_value = /*test*/ ctx[21].testName + "")) set_data_dev(t0, t0_value);
+    			if (dirty & /*$searchTests*/ 32 && t2_value !== (t2_value = /*test*/ ctx[21].tags + "")) set_data_dev(t2, t2_value);
+    			if (dirty & /*$searchTests*/ 32 && t5_value !== (t5_value = /*test*/ ctx[21].timelimit + "")) set_data_dev(t5, t5_value);
+    			if (dirty & /*$searchTests*/ 32 && t8_value !== (t8_value = timeConverter(/*test*/ ctx[21].createdAt) + "")) set_data_dev(t8, t8_value);
 
-    			if (dirty & /*$searchTests*/ 16 && div2_id_value !== (div2_id_value = "problem-" + /*test*/ ctx[18].id)) {
+    			if (dirty & /*$searchTests*/ 32 && div2_id_value !== (div2_id_value = "problem-" + /*test*/ ctx[21].id)) {
     				attr_dev(div2, "id", div2_id_value);
     			}
     		},
@@ -52104,14 +52484,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_each_block_1$2.name,
     		type: "each",
-    		source: "(254:10) {#each res.data.searchTests as test}",
+    		source: "(303:10) {#each res.data.searchTests as test}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (250:27)          <Loader />       {:then res}
+    // (299:27)          <Loader />       {:then res}
     function create_pending_block_1(ctx) {
     	let current;
     	const loader = new Loader$4({ $$inline: true });
@@ -52143,19 +52523,19 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_pending_block_1.name,
     		type: "pending",
-    		source: "(250:27)          <Loader />       {:then res}",
+    		source: "(299:27)          <Loader />       {:then res}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (219:6) {:catch error}
+    // (267:6) {:catch error}
     function create_catch_block$5(ctx) {
     	let current;
 
     	const error = new Error$1({
-    			props: { error: /*error*/ ctx[14] },
+    			props: { error: /*error*/ ctx[17] },
     			$$inline: true
     		});
 
@@ -52169,7 +52549,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		},
     		p: function update(ctx, dirty) {
     			const error_changes = {};
-    			if (dirty & /*$searchProblems*/ 8) error_changes.error = /*error*/ ctx[14];
+    			if (dirty & /*$searchProblems*/ 16) error_changes.error = /*error*/ ctx[17];
     			error.$set(error_changes);
     		},
     		i: function intro(local) {
@@ -52190,17 +52570,17 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_catch_block$5.name,
     		type: "catch",
-    		source: "(219:6) {:catch error}",
+    		source: "(267:6) {:catch error}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (191:6) {:then res}
+    // (239:6) {:then res}
     function create_then_block$5(ctx) {
     	let div;
-    	let each_value = /*res*/ ctx[13].data.searchProblems;
+    	let each_value = /*res*/ ctx[16].data.searchProblems;
     	let each_blocks = [];
 
     	for (let i = 0; i < each_value.length; i += 1) {
@@ -52215,8 +52595,8 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     				each_blocks[i].c();
     			}
 
-    			attr_dev(div, "class", "problems flex flex-col text-black svelte-15wy8wn");
-    			add_location(div, file$M, 191, 8, 7434);
+    			attr_dev(div, "class", "problems flex flex-col text-black svelte-acdsse");
+    			add_location(div, file$M, 239, 8, 8712);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div, anchor);
@@ -52226,8 +52606,8 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			}
     		},
     		p: function update(ctx, dirty) {
-    			if (dirty & /*$searchProblems, window, Date*/ 8) {
-    				each_value = /*res*/ ctx[13].data.searchProblems;
+    			if (dirty & /*$searchProblems, window, timeConverter*/ 16) {
+    				each_value = /*res*/ ctx[16].data.searchProblems;
     				let i;
 
     				for (i = 0; i < each_value.length; i += 1) {
@@ -52261,34 +52641,34 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_then_block$5.name,
     		type: "then",
-    		source: "(191:6) {:then res}",
+    		source: "(239:6) {:then res}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (193:10) {#each res.data.searchProblems as problem}
+    // (241:10) {#each res.data.searchProblems as problem}
     function create_each_block$g(ctx) {
     	let div2;
     	let p;
-    	let t0_value = /*problem*/ ctx[15].problemName + "";
+    	let t0_value = /*problem*/ ctx[18].problemName + "";
     	let t0;
     	let t1;
     	let span0;
-    	let t2_value = /*problem*/ ctx[15].tags + "";
+    	let t2_value = /*problem*/ ctx[18].tags + "";
     	let t2;
     	let t3;
     	let div1;
     	let span1;
     	let t4;
-    	let t5_value = /*problem*/ ctx[15].timelimit + "";
+    	let t5_value = /*problem*/ ctx[18].timelimit + "";
     	let t5;
     	let t6;
     	let t7;
     	let div0;
     	let span2;
-    	let t8_value = new Date(/*problem*/ ctx[15].createdAt * 1000) + "";
+    	let t8_value = timeConverter(/*problem*/ ctx[18].createdAt) + "";
     	let t8;
     	let t9;
     	let div2_id_value;
@@ -52296,7 +52676,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	let dispose;
 
     	function click_handler(...args) {
-    		return /*click_handler*/ ctx[10](/*problem*/ ctx[15], ...args);
+    		return /*click_handler*/ ctx[12](/*problem*/ ctx[18], ...args);
     	}
 
     	const block = {
@@ -52312,27 +52692,27 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			span1 = element("span");
     			t4 = text("TimeLimit :");
     			t5 = text(t5_value);
-    			t6 = text("ms");
+    			t6 = text(" ms");
     			t7 = space();
     			div0 = element("div");
     			span2 = element("span");
     			t8 = text(t8_value);
     			t9 = space();
     			attr_dev(span0, "class", "text-xs font-normal italic lowercase");
-    			add_location(span0, file$M, 201, 16, 7850);
-    			attr_dev(p, "class", "problem__name svelte-15wy8wn");
-    			add_location(p, file$M, 199, 14, 7770);
-    			attr_dev(span1, "class", "problem__type svelte-15wy8wn");
-    			add_location(span1, file$M, 206, 16, 8068);
+    			add_location(span0, file$M, 249, 16, 9128);
+    			attr_dev(p, "class", "problem__name svelte-acdsse");
+    			add_location(p, file$M, 247, 14, 9048);
+    			attr_dev(span1, "class", "problem__type svelte-acdsse");
+    			add_location(span1, file$M, 254, 16, 9346);
     			attr_dev(span2, "class", "font-bold");
-    			add_location(span2, file$M, 210, 18, 8233);
+    			add_location(span2, file$M, 258, 18, 9512);
     			attr_dev(div0, "class", "text-xs ml-8");
-    			add_location(div0, file$M, 209, 16, 8188);
+    			add_location(div0, file$M, 257, 16, 9467);
     			attr_dev(div1, "class", "flex w-full justify-between items-center mt-4");
-    			add_location(div1, file$M, 205, 14, 7992);
-    			attr_dev(div2, "id", div2_id_value = "problem-" + /*problem*/ ctx[15].id);
-    			attr_dev(div2, "class", div2_class_value = "card-problem " + "cursor-pointer" + " svelte-15wy8wn");
-    			add_location(div2, file$M, 193, 12, 7547);
+    			add_location(div1, file$M, 253, 14, 9270);
+    			attr_dev(div2, "id", div2_id_value = "problem-" + /*problem*/ ctx[18].id);
+    			attr_dev(div2, "class", div2_class_value = "card-problem " + "cursor-pointer" + " svelte-acdsse");
+    			add_location(div2, file$M, 241, 12, 8825);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div2, anchor);
@@ -52356,12 +52736,12 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		},
     		p: function update(new_ctx, dirty) {
     			ctx = new_ctx;
-    			if (dirty & /*$searchProblems*/ 8 && t0_value !== (t0_value = /*problem*/ ctx[15].problemName + "")) set_data_dev(t0, t0_value);
-    			if (dirty & /*$searchProblems*/ 8 && t2_value !== (t2_value = /*problem*/ ctx[15].tags + "")) set_data_dev(t2, t2_value);
-    			if (dirty & /*$searchProblems*/ 8 && t5_value !== (t5_value = /*problem*/ ctx[15].timelimit + "")) set_data_dev(t5, t5_value);
-    			if (dirty & /*$searchProblems*/ 8 && t8_value !== (t8_value = new Date(/*problem*/ ctx[15].createdAt * 1000) + "")) set_data_dev(t8, t8_value);
+    			if (dirty & /*$searchProblems*/ 16 && t0_value !== (t0_value = /*problem*/ ctx[18].problemName + "")) set_data_dev(t0, t0_value);
+    			if (dirty & /*$searchProblems*/ 16 && t2_value !== (t2_value = /*problem*/ ctx[18].tags + "")) set_data_dev(t2, t2_value);
+    			if (dirty & /*$searchProblems*/ 16 && t5_value !== (t5_value = /*problem*/ ctx[18].timelimit + "")) set_data_dev(t5, t5_value);
+    			if (dirty & /*$searchProblems*/ 16 && t8_value !== (t8_value = timeConverter(/*problem*/ ctx[18].createdAt) + "")) set_data_dev(t8, t8_value);
 
-    			if (dirty & /*$searchProblems*/ 8 && div2_id_value !== (div2_id_value = "problem-" + /*problem*/ ctx[15].id)) {
+    			if (dirty & /*$searchProblems*/ 16 && div2_id_value !== (div2_id_value = "problem-" + /*problem*/ ctx[18].id)) {
     				attr_dev(div2, "id", div2_id_value);
     			}
     		},
@@ -52375,14 +52755,14 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_each_block$g.name,
     		type: "each",
-    		source: "(193:10) {#each res.data.searchProblems as problem}",
+    		source: "(241:10) {#each res.data.searchProblems as problem}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (189:30)          <Loader />       {:then res}
+    // (237:30)          <Loader />       {:then res}
     function create_pending_block$5(ctx) {
     	let current;
     	const loader = new Loader$4({ $$inline: true });
@@ -52414,7 +52794,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		block,
     		id: create_pending_block$5.name,
     		type: "pending",
-    		source: "(189:30)          <Loader />       {:then res}",
+    		source: "(237:30)          <Loader />       {:then res}",
     		ctx
     	});
 
@@ -52430,12 +52810,13 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	let current;
     	const navbar = new Navbar({ $$inline: true });
     	const sidebar = new Side({ $$inline: true });
-    	const if_block_creators = [create_if_block$h, create_if_block_1$c];
+    	const if_block_creators = [create_if_block$h, create_if_block_1$c, create_if_block_2$8];
     	const if_blocks = [];
 
     	function select_block_type(ctx, dirty) {
     		if (/*currentRoute*/ ctx[0].name === "/admin") return 0;
     		if (/*currentRoute*/ ctx[0].name === "/showtests") return 1;
+    		if (/*currentRoute*/ ctx[0].name === "/showresults") return 2;
     		return -1;
     	}
 
@@ -52555,11 +52936,24 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	location.replace("http://localhost:5000/newTest");
     }
 
-    function instance$H($$self, $$props, $$invalidate) {
+    function timeConverter(timestamp) {
+    	let dateObj = new Date(timestamp * 1000);
+    	let year = dateObj.getUTCFullYear().toString();
+    	let b = dateObj.getUTCDay();
+    	let month = dateObj.getUTCMonth().toString();
+    	let day = dateObj.getUTCDate().toString();
+    	let hours = dateObj.getUTCHours();
+    	let minutes = dateObj.getUTCMinutes();
+    	let seconds = dateObj.getUTCSeconds();
+    	let formattedTime = day + "/" + month + "/" + year + " " + hours.toString().padStart(2, "0") + ":" + minutes.toString().padStart(2, "0") + ":" + seconds.toString().padStart(2, "0");
+    	return formattedTime;
+    }
+
+    function instance$G($$self, $$props, $$invalidate) {
     	let $searchProblems;
     	let $searchTests;
+    	let $searchAttempts;
     	const client = getClient();
-    	const attempts = query(client, { query: apolloClient.getAllAttempts });
 
     	const searchProblems = query(client, {
     		query: apolloClient.getSearchProblems,
@@ -52567,7 +52961,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	});
 
     	validate_store(searchProblems, "searchProblems");
-    	component_subscribe($$self, searchProblems, value => $$invalidate(3, $searchProblems = value));
+    	component_subscribe($$self, searchProblems, value => $$invalidate(4, $searchProblems = value));
 
     	const searchTests = query(client, {
     		query: apolloClient.getSearchTests,
@@ -52575,11 +52969,20 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	});
 
     	validate_store(searchTests, "searchTests");
-    	component_subscribe($$self, searchTests, value => $$invalidate(4, $searchTests = value));
+    	component_subscribe($$self, searchTests, value => $$invalidate(5, $searchTests = value));
+
+    	const searchAttempts = query(client, {
+    		query: apolloClient.getSearchAttempts,
+    		variables: { search: "" }
+    	});
+
+    	validate_store(searchAttempts, "searchAttempts");
+    	component_subscribe($$self, searchAttempts, value => $$invalidate(6, $searchAttempts = value));
     	let { currentRoute } = $$props;
     	console.log(currentRoute);
     	let problemSearch = "";
     	let testSearch = "";
+    	let attemptSearch = "";
     	const writable_props = ["currentRoute"];
 
     	Object.keys($$props).forEach(key => {
@@ -52604,6 +53007,11 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		window.location = `/test/${test.id}`;
     	};
 
+    	function input_input_handler_2() {
+    		attemptSearch = this.value;
+    		$$invalidate(3, attemptSearch);
+    	}
+
     	$$self.$set = $$props => {
     		if ("currentRoute" in $$props) $$invalidate(0, currentRoute = $$props.currentRoute);
     	};
@@ -52613,8 +53021,10 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     			currentRoute,
     			problemSearch,
     			testSearch,
+    			attemptSearch,
     			$searchProblems,
-    			$searchTests
+    			$searchTests,
+    			$searchAttempts
     		};
     	};
 
@@ -52622,8 +53032,10 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		if ("currentRoute" in $$props) $$invalidate(0, currentRoute = $$props.currentRoute);
     		if ("problemSearch" in $$props) $$invalidate(1, problemSearch = $$props.problemSearch);
     		if ("testSearch" in $$props) $$invalidate(2, testSearch = $$props.testSearch);
+    		if ("attemptSearch" in $$props) $$invalidate(3, attemptSearch = $$props.attemptSearch);
     		if ("$searchProblems" in $$props) searchProblems.set($searchProblems = $$props.$searchProblems);
     		if ("$searchTests" in $$props) searchTests.set($searchTests = $$props.$searchTests);
+    		if ("$searchAttempts" in $$props) searchAttempts.set($searchAttempts = $$props.$searchAttempts);
     	};
 
     	$$self.$$.update = () => {
@@ -52634,29 +53046,36 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     		if ($$self.$$.dirty & /*testSearch*/ 4) {
     			 searchTests.refetch({ search: testSearch });
     		}
+
+    		if ($$self.$$.dirty & /*attemptSearch*/ 8) {
+    			 searchAttempts.refetch({ search: attemptSearch });
+    		}
     	};
 
     	return [
     		currentRoute,
     		problemSearch,
     		testSearch,
+    		attemptSearch,
     		$searchProblems,
     		$searchTests,
+    		$searchAttempts,
     		searchProblems,
     		searchTests,
+    		searchAttempts,
     		client,
-    		attempts,
     		input_input_handler,
     		click_handler,
     		input_input_handler_1,
-    		click_handler_1
+    		click_handler_1,
+    		input_input_handler_2
     	];
     }
 
     class AdminPanel extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$H, create_fragment$P, safe_not_equal, { currentRoute: 0 });
+    		init(this, options, instance$G, create_fragment$P, safe_not_equal, { currentRoute: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
@@ -58183,7 +58602,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     	return block;
     }
 
-    function instance$I($$self, $$props, $$invalidate) {
+    function instance$H($$self, $$props, $$invalidate) {
     	const client = new DefaultClient({ uri: "http://localhost:3000/graphql" });
     	setClient(client);
     	let { currentRoute } = $$props;
@@ -58214,7 +58633,7 @@ background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgb
     class App extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$I, create_fragment$Q, safe_not_equal, { currentRoute: 0 });
+    		init(this, options, instance$H, create_fragment$Q, safe_not_equal, { currentRoute: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
