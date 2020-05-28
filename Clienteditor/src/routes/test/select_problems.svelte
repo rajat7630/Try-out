@@ -133,7 +133,7 @@
         <div class="mx-auto w-64 pb-2 flex flex-col">
           <h1 class="labels">Select Problems</h1>
         </div>
-        <div class=" pb-4 max-w-full boxheight flex flex-col overflow-auto">
+        <div class=" pb-4 max-w-full flex flex-col">
           <AllProblems addProblem={addingProblem} />
         </div>
       </div>
