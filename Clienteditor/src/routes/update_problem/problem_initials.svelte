@@ -17,19 +17,13 @@
   ];
   const client = getClient();
   $: uniqueNameStatus = 0;
-  $: selectedTags = [];
-  $: hashTagString = $problemStore.tags;
-  $: tagsName = [...$problemStore.tags.split("#")];
-  setTimeout(() => {
-    tagsName.forEach(tag => {
-      tagList.forEach((tt, index) => {
-        if (tag === tt) {
-          selectedTags = [...selectedTags, index];
-          return;
-        }
-      });
-    });
-  }, 300);
+  let selectedTags = [];
+  selectedTags = [
+    ...$problemStore.tags.split("#").filter((__Directive, index) => {
+      return index !== 0;
+    })
+  ];
+  let hashTagString = "";
   function changeHandler(indexValue) {
     console.log(selectedTags.length, indexValue);
     let rr = selectedTags.length;
@@ -47,6 +41,16 @@
     });
 
     $problemStore.tags = hashTagString;
+  }
+
+  function newTagHandler(tag) {
+    selectedTags = [...selectedTags, tag];
+    hashTagString = "";
+    console.log(selectedTags);
+    $problemStore.tags = "";
+    selectedTags.forEach(tag => {
+      $problemStore.tags += "#" + tag;
+    });
   }
 
   const onInput = (function checkIfAvailable() {
@@ -70,6 +74,13 @@
 </script>
 
 <style>
+  ::-webkit-scrollbar {
+    width: 0;
+    display: none;
+  }
+  .tagwidth {
+    max-width: 80vw;
+  }
   .labels {
     @apply text-elight text-2xl mb-3;
   }
@@ -82,12 +93,6 @@
   }
   .status {
     @apply text-elight text-6xl px-3 flex;
-  }
-  .textt {
-    color: black;
-  }
-  :global(body.dark-mode) .textt {
-    color: white;
   }
 </style>
 
@@ -153,30 +158,45 @@
 
         <div>
           <label class="labels">Add Tags</label>
-          <div class="flex-col flex">
-            <select
-              class="unitinput outline-none w-64"
-              on:change={e => {
-                console.log(e.target.value);
-                if (parseInt(e.target.value) === 0) {
-                  return;
-                }
-                changeHandler(parseInt(e.target.value));
-              }}>
-              {#each tagList as tag, index}
-                <option
-                  class="text-xl px-2 text-edark"
-                  name={tag}
-                  value={index}>
+          <div
+            class="w-full border-2 border-solid border-gray flex px-5 py-2
+            rounded-full">
+            <div class="flex overflow-auto tagwidth ">
+              {#each selectedTags as tag, ind}
+                <div
+                  class="flex border-solid border-2 rounded-full p-1 px-3 text-l">
                   {tag}
-                </option>
+                  <div
+                    class="px-2 cursor-pointer"
+                    on:click={() => {
+                      selectedTags = [...selectedTags.filter((__, index) => {
+                          return ind !== index;
+                        })];
+                      hashTagString = '';
+                      $problemStore.tags = '';
+                      selectedTags.forEach(tag => {
+                        $problemStore.tags += '#' + tag;
+                      });
+                    }}>
+                    x
+                  </div>
+                </div>
               {/each}
-            </select>
+            </div>
             <input
+              on:keypress={e => {
+                if (e.key === ' ') {
+                  console.log(hashTagString);
+                  newTagHandler(hashTagString);
+                  $problemStore.tags = '';
+                  selectedTags.forEach(tag => {
+                    $problemStore.tags += '#' + tag;
+                  });
+                }
+              }}
               type="text"
-              class="unitinput"
-              bind:value={hashTagString}
-              readonly />
+              class="outline-none ml-3 w-full"
+              bind:value={hashTagString} />
           </div>
         </div>
       </div>

@@ -29,6 +29,7 @@
 <style>
   ::-webkit-scrollbar {
     width: 0px;
+    display: none;
   }
 </style>
 
@@ -39,9 +40,15 @@
       <SubNavbar position={pageNum} />
     </subheader>
   </header>
-  <main class=" mx-auto w-full flex-grow overflow-auto">
-    <SelectPage {pageNum} class="h-full" {currentRoute}/>
-  </main>
+  {#await $problem}
+    Loading...
+  {:then res}
+    <main class=" mx-auto w-full flex-grow overflow-auto">
+      <SelectPage {pageNum} class="h-full" {currentRoute} />
+    </main>
+  {:catch err}
+    Err: {err}
+  {/await}
   <footer class=" footer my-8 w-full px-20 mx-auto sticky">
     <div class="flex-1 ">
       <button

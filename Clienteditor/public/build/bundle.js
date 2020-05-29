@@ -41873,12 +41873,12 @@ mutation checkTimeLimit($data:String, $timelimit:String){
 
     function get_each_context$5(ctx, list, i) {
     	const child_ctx = ctx.slice();
-    	child_ctx[17] = list[i];
-    	child_ctx[19] = i;
+    	child_ctx[19] = list[i];
+    	child_ctx[21] = i;
     	return child_ctx;
     }
 
-    // (114:10) {#if uniqueNameStatus === 2}
+    // (137:10) {#if uniqueNameStatus === 2}
     function create_if_block_2$2(ctx) {
     	let current;
     	const loader = new Loader({ $$inline: true });
@@ -41909,14 +41909,14 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     		block,
     		id: create_if_block_2$2.name,
     		type: "if",
-    		source: "(114:10) {#if uniqueNameStatus === 2}",
+    		source: "(137:10) {#if uniqueNameStatus === 2}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (117:10) {#if uniqueNameStatus === 1}
+    // (140:10) {#if uniqueNameStatus === 1}
     function create_if_block_1$3(ctx) {
     	let i;
 
@@ -41924,8 +41924,8 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     		c: function create() {
     			i = element("i");
     			i.textContent = "";
-    			attr_dev(i, "class", "material-icons status svelte-17qxgd1");
-    			add_location(i, file$f, 117, 12, 3928);
+    			attr_dev(i, "class", "material-icons status svelte-idt1n2");
+    			add_location(i, file$f, 140, 12, 4578);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, i, anchor);
@@ -41939,14 +41939,14 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     		block,
     		id: create_if_block_1$3.name,
     		type: "if",
-    		source: "(117:10) {#if uniqueNameStatus === 1}",
+    		source: "(140:10) {#if uniqueNameStatus === 1}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (120:10) {#if uniqueNameStatus === 3}
+    // (143:10) {#if uniqueNameStatus === 3}
     function create_if_block$5(ctx) {
     	let span;
 
@@ -41954,8 +41954,8 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     		c: function create() {
     			span = element("span");
     			span.textContent = "clear";
-    			attr_dev(span, "class", "status material-icons svelte-17qxgd1");
-    			add_location(span, file$f, 120, 12, 4041);
+    			attr_dev(span, "class", "status material-icons svelte-idt1n2");
+    			add_location(span, file$f, 143, 12, 4691);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, span, anchor);
@@ -41969,41 +41969,55 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     		block,
     		id: create_if_block$5.name,
     		type: "if",
-    		source: "(120:10) {#if uniqueNameStatus === 3}",
+    		source: "(143:10) {#if uniqueNameStatus === 3}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (175:14) {#each tagList as tag, index}
+    // (192:14) {#each selectedTags as tag, ind}
     function create_each_block$5(ctx) {
-    	let option;
-    	let t0_value = /*tag*/ ctx[17] + "";
+    	let div1;
+    	let t0_value = /*tag*/ ctx[19] + "";
     	let t0;
     	let t1;
-    	let option_name_value;
-    	let option_value_value;
+    	let div0;
+    	let t3;
+    	let dispose;
+
+    	function click_handler(...args) {
+    		return /*click_handler*/ ctx[16](/*ind*/ ctx[21], ...args);
+    	}
 
     	const block = {
     		c: function create() {
-    			option = element("option");
+    			div1 = element("div");
     			t0 = text(t0_value);
     			t1 = space();
-    			attr_dev(option, "class", "text-xl px-2 text-edark");
-    			attr_dev(option, "name", option_name_value = /*tag*/ ctx[17]);
-    			option.__value = option_value_value = /*index*/ ctx[19];
-    			option.value = option.__value;
-    			add_location(option, file$f, 175, 16, 5864);
+    			div0 = element("div");
+    			div0.textContent = "x";
+    			t3 = space();
+    			attr_dev(div0, "class", "px-2 cursor-pointer svelte-idt1n2");
+    			add_location(div0, file$f, 195, 18, 6461);
+    			attr_dev(div1, "class", "flex border-solid border-2 rounded-full p-1 px-3 text-l svelte-idt1n2");
+    			add_location(div1, file$f, 192, 16, 6331);
     		},
     		m: function mount(target, anchor) {
-    			insert_dev(target, option, anchor);
-    			append_dev(option, t0);
-    			append_dev(option, t1);
+    			insert_dev(target, div1, anchor);
+    			append_dev(div1, t0);
+    			append_dev(div1, t1);
+    			append_dev(div1, div0);
+    			append_dev(div1, t3);
+    			dispose = listen_dev(div0, "click", click_handler, false, false, false);
     		},
-    		p: noop,
+    		p: function update(new_ctx, dirty) {
+    			ctx = new_ctx;
+    			if (dirty & /*selectedTags*/ 1 && t0_value !== (t0_value = /*tag*/ ctx[19] + "")) set_data_dev(t0, t0_value);
+    		},
     		d: function destroy(detaching) {
-    			if (detaching) detach_dev(option);
+    			if (detaching) detach_dev(div1);
+    			dispose();
     		}
     	};
 
@@ -42011,7 +42025,7 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     		block,
     		id: create_each_block$5.name,
     		type: "each",
-    		source: "(175:14) {#each tagList as tag, index}",
+    		source: "(192:14) {#each selectedTags as tag, ind}",
     		ctx
     	});
 
@@ -42019,8 +42033,8 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     }
 
     function create_fragment$i(ctx) {
+    	let div16;
     	let div15;
-    	let div14;
     	let div5;
     	let label0;
     	let t1;
@@ -42036,11 +42050,11 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     	let t5;
     	let t6;
     	let t7;
-    	let div13;
+    	let div14;
     	let div6;
     	let h2;
     	let t9;
-    	let div12;
+    	let div13;
     	let div7;
     	let label1;
     	let t11;
@@ -42064,19 +42078,19 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     	let t23;
     	let span3;
     	let t25;
-    	let div11;
+    	let div12;
     	let label3;
     	let t27;
+    	let div11;
     	let div10;
-    	let select;
     	let t28;
     	let input5;
     	let current;
     	let dispose;
-    	let if_block0 = /*uniqueNameStatus*/ ctx[1] === 2 && create_if_block_2$2(ctx);
-    	let if_block1 = /*uniqueNameStatus*/ ctx[1] === 1 && create_if_block_1$3(ctx);
-    	let if_block2 = /*uniqueNameStatus*/ ctx[1] === 3 && create_if_block$5(ctx);
-    	let each_value = /*tagList*/ ctx[3];
+    	let if_block0 = /*uniqueNameStatus*/ ctx[3] === 2 && create_if_block_2$2(ctx);
+    	let if_block1 = /*uniqueNameStatus*/ ctx[3] === 1 && create_if_block_1$3(ctx);
+    	let if_block2 = /*uniqueNameStatus*/ ctx[3] === 3 && create_if_block$5(ctx);
+    	let each_value = /*selectedTags*/ ctx[0];
     	let each_blocks = [];
 
     	for (let i = 0; i < each_value.length; i += 1) {
@@ -42085,8 +42099,8 @@ mutation checkTimeLimit($data:String, $timelimit:String){
 
     	const block = {
     		c: function create() {
+    			div16 = element("div");
     			div15 = element("div");
-    			div14 = element("div");
     			div5 = element("div");
     			label0 = element("label");
     			label0.textContent = "Enter a unique Test code";
@@ -42098,7 +42112,7 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     			t2 = space();
     			div1 = element("div");
     			p = element("p");
-    			p.textContent = `${/*alert*/ ctx[2]}`;
+    			p.textContent = `${/*alert*/ ctx[4]}`;
     			t4 = space();
     			div3 = element("div");
     			if (if_block0) if_block0.c();
@@ -42107,12 +42121,12 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     			t6 = space();
     			if (if_block2) if_block2.c();
     			t7 = space();
-    			div13 = element("div");
+    			div14 = element("div");
     			div6 = element("div");
     			h2 = element("h2");
     			h2.textContent = "Other Details";
     			t9 = space();
-    			div12 = element("div");
+    			div13 = element("div");
     			div7 = element("div");
     			label1 = element("label");
     			label1.textContent = "Enter Time limit";
@@ -42142,12 +42156,12 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     			span3 = element("span");
     			span3.textContent = "Difficult";
     			t25 = space();
-    			div11 = element("div");
+    			div12 = element("div");
     			label3 = element("label");
     			label3.textContent = "Add Tags";
     			t27 = space();
+    			div11 = element("div");
     			div10 = element("div");
-    			select = element("select");
 
     			for (let i = 0; i < each_blocks.length; i += 1) {
     				each_blocks[i].c();
@@ -42155,99 +42169,105 @@ mutation checkTimeLimit($data:String, $timelimit:String){
 
     			t28 = space();
     			input5 = element("input");
-    			attr_dev(label0, "class", "text-elight text-2xl my-3");
-    			add_location(label0, file$f, 95, 6, 3157);
+    			attr_dev(label0, "class", "text-elight text-2xl my-3 svelte-idt1n2");
+    			add_location(label0, file$f, 118, 6, 3807);
     			attr_dev(input0, "type", "search");
     			attr_dev(input0, "name", "serch");
     			attr_dev(input0, "placeholder", "Enter Test Name");
-    			attr_dev(input0, "class", "bg-elight h-10 px-5 pr-10 rounded-full w-full text-xl\n              tet-edark focus:outline-none");
-    			add_location(input0, file$f, 99, 12, 3338);
-    			attr_dev(div0, "class", "w-full");
-    			add_location(div0, file$f, 98, 10, 3305);
-    			attr_dev(p, "class", "text-white text-sm my-2");
-    			add_location(p, file$f, 109, 12, 3693);
-    			add_location(div1, file$f, 108, 10, 3675);
-    			attr_dev(div2, "class", " flex-col w-full");
-    			add_location(div2, file$f, 97, 8, 3264);
-    			attr_dev(div3, "class", "ml-3");
-    			add_location(div3, file$f, 112, 8, 3780);
-    			attr_dev(div4, "class", "flex");
-    			add_location(div4, file$f, 96, 6, 3237);
-    			add_location(div5, file$f, 94, 4, 3145);
-    			attr_dev(h2, "class", "labels text-3xl svelte-17qxgd1");
-    			add_location(h2, file$f, 127, 8, 4227);
-    			add_location(div6, file$f, 126, 6, 4213);
-    			attr_dev(label1, "class", "labels svelte-17qxgd1");
-    			add_location(label1, file$f, 131, 10, 4323);
-    			attr_dev(input1, "class", "unitinput svelte-17qxgd1");
+    			attr_dev(input0, "class", "bg-elight h-10 px-5 pr-10 rounded-full w-full text-xl\n              tet-edark focus:outline-none svelte-idt1n2");
+    			add_location(input0, file$f, 122, 12, 3988);
+    			attr_dev(div0, "class", "w-full svelte-idt1n2");
+    			add_location(div0, file$f, 121, 10, 3955);
+    			attr_dev(p, "class", "text-white text-sm my-2 svelte-idt1n2");
+    			add_location(p, file$f, 132, 12, 4343);
+    			attr_dev(div1, "class", "svelte-idt1n2");
+    			add_location(div1, file$f, 131, 10, 4325);
+    			attr_dev(div2, "class", " flex-col w-full svelte-idt1n2");
+    			add_location(div2, file$f, 120, 8, 3914);
+    			attr_dev(div3, "class", "ml-3 svelte-idt1n2");
+    			add_location(div3, file$f, 135, 8, 4430);
+    			attr_dev(div4, "class", "flex svelte-idt1n2");
+    			add_location(div4, file$f, 119, 6, 3887);
+    			attr_dev(div5, "class", "svelte-idt1n2");
+    			add_location(div5, file$f, 117, 4, 3795);
+    			attr_dev(h2, "class", "labels text-3xl svelte-idt1n2");
+    			add_location(h2, file$f, 150, 8, 4877);
+    			attr_dev(div6, "class", "svelte-idt1n2");
+    			add_location(div6, file$f, 149, 6, 4863);
+    			attr_dev(label1, "class", "labels svelte-idt1n2");
+    			add_location(label1, file$f, 154, 10, 4973);
+    			attr_dev(input1, "class", "unitinput svelte-idt1n2");
     			attr_dev(input1, "type", "text");
     			attr_dev(input1, "placeholder", "in minutes");
-    			add_location(input1, file$f, 132, 10, 4380);
-    			attr_dev(span0, "class", "unit svelte-17qxgd1");
-    			add_location(span0, file$f, 137, 10, 4537);
-    			add_location(div7, file$f, 130, 8, 4307);
-    			attr_dev(label2, "class", "labels svelte-17qxgd1");
-    			add_location(label2, file$f, 141, 12, 4641);
-    			attr_dev(input2, "class", "unitinput svelte-17qxgd1");
+    			add_location(input1, file$f, 155, 10, 5030);
+    			attr_dev(span0, "class", "unit svelte-idt1n2");
+    			add_location(span0, file$f, 160, 10, 5187);
+    			attr_dev(div7, "class", "svelte-idt1n2");
+    			add_location(div7, file$f, 153, 8, 4957);
+    			attr_dev(label2, "class", "labels svelte-idt1n2");
+    			add_location(label2, file$f, 164, 12, 5291);
+    			attr_dev(input2, "class", "unitinput svelte-idt1n2");
     			attr_dev(input2, "type", "radio");
     			input2.__value = "Easy";
     			input2.value = input2.__value;
-    			/*$$binding_groups*/ ctx[12][0].push(input2);
-    			add_location(input2, file$f, 142, 12, 4707);
-    			attr_dev(span1, "class", "unit text-2xl svelte-17qxgd1");
-    			add_location(span1, file$f, 147, 12, 4869);
-    			attr_dev(input3, "class", "unitinput svelte-17qxgd1");
+    			/*$$binding_groups*/ ctx[13][0].push(input2);
+    			add_location(input2, file$f, 165, 12, 5357);
+    			attr_dev(span1, "class", "unit text-2xl svelte-idt1n2");
+    			add_location(span1, file$f, 170, 12, 5519);
+    			attr_dev(input3, "class", "unitinput svelte-idt1n2");
     			attr_dev(input3, "type", "radio");
     			input3.__value = "Medium";
     			input3.value = input3.__value;
-    			/*$$binding_groups*/ ctx[12][0].push(input3);
-    			add_location(input3, file$f, 148, 12, 4921);
-    			attr_dev(span2, "class", "unit text-2xl svelte-17qxgd1");
-    			add_location(span2, file$f, 153, 12, 5085);
-    			attr_dev(input4, "class", "unitinput svelte-17qxgd1");
+    			/*$$binding_groups*/ ctx[13][0].push(input3);
+    			add_location(input3, file$f, 171, 12, 5571);
+    			attr_dev(span2, "class", "unit text-2xl svelte-idt1n2");
+    			add_location(span2, file$f, 176, 12, 5735);
+    			attr_dev(input4, "class", "unitinput svelte-idt1n2");
     			attr_dev(input4, "type", "radio");
     			input4.__value = "Difficult";
     			input4.value = input4.__value;
-    			/*$$binding_groups*/ ctx[12][0].push(input4);
-    			add_location(input4, file$f, 154, 12, 5139);
-    			attr_dev(span3, "class", "unit text-2xl svelte-17qxgd1");
-    			add_location(span3, file$f, 159, 12, 5306);
-    			add_location(div8, file$f, 140, 10, 4623);
-    			attr_dev(div9, "class", "flex");
-    			add_location(div9, file$f, 139, 8, 4594);
-    			attr_dev(label3, "class", "labels svelte-17qxgd1");
-    			add_location(label3, file$f, 163, 10, 5407);
-    			attr_dev(select, "class", "unitinput outline-none w-64 svelte-17qxgd1");
-    			add_location(select, file$f, 165, 12, 5496);
+    			/*$$binding_groups*/ ctx[13][0].push(input4);
+    			add_location(input4, file$f, 177, 12, 5789);
+    			attr_dev(span3, "class", "unit text-2xl svelte-idt1n2");
+    			add_location(span3, file$f, 182, 12, 5956);
+    			attr_dev(div8, "class", "svelte-idt1n2");
+    			add_location(div8, file$f, 163, 10, 5273);
+    			attr_dev(div9, "class", "flex svelte-idt1n2");
+    			add_location(div9, file$f, 162, 8, 5244);
+    			attr_dev(label3, "class", "labels svelte-idt1n2");
+    			add_location(label3, file$f, 186, 10, 6057);
+    			attr_dev(div10, "class", "flex overflow-auto tagwidth  svelte-idt1n2");
+    			add_location(div10, file$f, 190, 12, 6225);
     			attr_dev(input5, "type", "text");
-    			attr_dev(input5, "class", "unitinput svelte-17qxgd1");
-    			input5.readOnly = true;
-    			add_location(input5, file$f, 183, 12, 6090);
-    			attr_dev(div10, "class", "flex-col flex");
-    			add_location(div10, file$f, 164, 10, 5456);
-    			add_location(div11, file$f, 162, 8, 5391);
-    			add_location(div12, file$f, 129, 6, 4293);
-    			attr_dev(div13, "class", "border-solid border-2 mt-6 border-light p-4");
-    			add_location(div13, file$f, 125, 4, 4149);
-    			attr_dev(div14, "class", "text-edark mx-auto max-w-5xl w-full");
-    			add_location(div14, file$f, 93, 2, 3091);
-    			attr_dev(div15, "class", "mx-auto flex-col flex-grow");
-    			add_location(div15, file$f, 92, 0, 3048);
+    			attr_dev(input5, "class", "outline-none ml-3 w-full svelte-idt1n2");
+    			add_location(input5, file$f, 212, 12, 7072);
+    			attr_dev(div11, "class", "w-full border-2 border-solid border-gray flex px-5 py-2\n            rounded-full svelte-idt1n2");
+    			add_location(div11, file$f, 187, 10, 6106);
+    			attr_dev(div12, "class", "svelte-idt1n2");
+    			add_location(div12, file$f, 185, 8, 6041);
+    			attr_dev(div13, "class", "svelte-idt1n2");
+    			add_location(div13, file$f, 152, 6, 4943);
+    			attr_dev(div14, "class", "border-solid border-2 mt-6 border-light p-4 svelte-idt1n2");
+    			add_location(div14, file$f, 148, 4, 4799);
+    			attr_dev(div15, "class", "text-edark mx-auto max-w-5xl w-full svelte-idt1n2");
+    			add_location(div15, file$f, 116, 2, 3741);
+    			attr_dev(div16, "class", "mx-auto flex-col flex-grow svelte-idt1n2");
+    			add_location(div16, file$f, 115, 0, 3698);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
     		m: function mount(target, anchor) {
-    			insert_dev(target, div15, anchor);
-    			append_dev(div15, div14);
-    			append_dev(div14, div5);
+    			insert_dev(target, div16, anchor);
+    			append_dev(div16, div15);
+    			append_dev(div15, div5);
     			append_dev(div5, label0);
     			append_dev(div5, t1);
     			append_dev(div5, div4);
     			append_dev(div4, div2);
     			append_dev(div2, div0);
     			append_dev(div0, input0);
-    			set_input_value(input0, /*$testStore*/ ctx[0].testName);
+    			set_input_value(input0, /*$testStore*/ ctx[2].testName);
     			append_dev(div2, t2);
     			append_dev(div2, div1);
     			append_dev(div1, p);
@@ -42258,71 +42278,71 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     			if (if_block1) if_block1.m(div3, null);
     			append_dev(div3, t6);
     			if (if_block2) if_block2.m(div3, null);
-    			append_dev(div14, t7);
-    			append_dev(div14, div13);
-    			append_dev(div13, div6);
+    			append_dev(div15, t7);
+    			append_dev(div15, div14);
+    			append_dev(div14, div6);
     			append_dev(div6, h2);
-    			append_dev(div13, t9);
-    			append_dev(div13, div12);
-    			append_dev(div12, div7);
+    			append_dev(div14, t9);
+    			append_dev(div14, div13);
+    			append_dev(div13, div7);
     			append_dev(div7, label1);
     			append_dev(div7, t11);
     			append_dev(div7, input1);
-    			set_input_value(input1, /*$testStore*/ ctx[0].timelimit);
+    			set_input_value(input1, /*$testStore*/ ctx[2].timelimit);
     			append_dev(div7, t12);
     			append_dev(div7, span0);
-    			append_dev(div12, t14);
-    			append_dev(div12, div9);
+    			append_dev(div13, t14);
+    			append_dev(div13, div9);
     			append_dev(div9, div8);
     			append_dev(div8, label2);
     			append_dev(div8, t16);
     			append_dev(div8, input2);
-    			input2.checked = input2.__value === /*$testStore*/ ctx[0].difficultyLevel;
+    			input2.checked = input2.__value === /*$testStore*/ ctx[2].difficultyLevel;
     			append_dev(div8, t17);
     			append_dev(div8, span1);
     			append_dev(div8, t19);
     			append_dev(div8, input3);
-    			input3.checked = input3.__value === /*$testStore*/ ctx[0].difficultyLevel;
+    			input3.checked = input3.__value === /*$testStore*/ ctx[2].difficultyLevel;
     			append_dev(div8, t20);
     			append_dev(div8, span2);
     			append_dev(div8, t22);
     			append_dev(div8, input4);
-    			input4.checked = input4.__value === /*$testStore*/ ctx[0].difficultyLevel;
+    			input4.checked = input4.__value === /*$testStore*/ ctx[2].difficultyLevel;
     			append_dev(div8, t23);
     			append_dev(div8, span3);
-    			append_dev(div12, t25);
+    			append_dev(div13, t25);
+    			append_dev(div13, div12);
+    			append_dev(div12, label3);
+    			append_dev(div12, t27);
     			append_dev(div12, div11);
-    			append_dev(div11, label3);
-    			append_dev(div11, t27);
     			append_dev(div11, div10);
-    			append_dev(div10, select);
 
     			for (let i = 0; i < each_blocks.length; i += 1) {
-    				each_blocks[i].m(select, null);
+    				each_blocks[i].m(div10, null);
     			}
 
-    			append_dev(div10, t28);
-    			append_dev(div10, input5);
-    			set_input_value(input5, /*$testStore*/ ctx[0].tags);
+    			append_dev(div11, t28);
+    			append_dev(div11, input5);
+    			set_input_value(input5, /*hastTagString*/ ctx[1]);
     			current = true;
 
     			dispose = [
-    				listen_dev(input0, "keydown", /*onInput*/ ctx[5], false, false, false),
-    				listen_dev(input0, "input", /*input0_input_handler*/ ctx[9]),
-    				listen_dev(input1, "input", /*input1_input_handler*/ ctx[10]),
-    				listen_dev(input2, "change", /*input2_change_handler*/ ctx[11]),
-    				listen_dev(input3, "change", /*input3_change_handler*/ ctx[13]),
-    				listen_dev(input4, "change", /*input4_change_handler*/ ctx[14]),
-    				listen_dev(select, "change", /*change_handler*/ ctx[15], false, false, false),
-    				listen_dev(input5, "input", /*input5_input_handler*/ ctx[16])
+    				listen_dev(input0, "keydown", /*onInput*/ ctx[6], false, false, false),
+    				listen_dev(input0, "input", /*input0_input_handler*/ ctx[10]),
+    				listen_dev(input1, "input", /*input1_input_handler*/ ctx[11]),
+    				listen_dev(input2, "change", /*input2_change_handler*/ ctx[12]),
+    				listen_dev(input3, "change", /*input3_change_handler*/ ctx[14]),
+    				listen_dev(input4, "change", /*input4_change_handler*/ ctx[15]),
+    				listen_dev(input5, "keypress", /*keypress_handler*/ ctx[17], false, false, false),
+    				listen_dev(input5, "input", /*input5_input_handler*/ ctx[18])
     			];
     		},
     		p: function update(ctx, [dirty]) {
-    			if (dirty & /*$testStore*/ 1) {
-    				set_input_value(input0, /*$testStore*/ ctx[0].testName);
+    			if (dirty & /*$testStore*/ 4) {
+    				set_input_value(input0, /*$testStore*/ ctx[2].testName);
     			}
 
-    			if (/*uniqueNameStatus*/ ctx[1] === 2) {
+    			if (/*uniqueNameStatus*/ ctx[3] === 2) {
     				if (!if_block0) {
     					if_block0 = create_if_block_2$2(ctx);
     					if_block0.c();
@@ -42341,7 +42361,7 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     				check_outros();
     			}
 
-    			if (/*uniqueNameStatus*/ ctx[1] === 1) {
+    			if (/*uniqueNameStatus*/ ctx[3] === 1) {
     				if (!if_block1) {
     					if_block1 = create_if_block_1$3(ctx);
     					if_block1.c();
@@ -42352,7 +42372,7 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     				if_block1 = null;
     			}
 
-    			if (/*uniqueNameStatus*/ ctx[1] === 3) {
+    			if (/*uniqueNameStatus*/ ctx[3] === 3) {
     				if (!if_block2) {
     					if_block2 = create_if_block$5(ctx);
     					if_block2.c();
@@ -42363,24 +42383,24 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     				if_block2 = null;
     			}
 
-    			if (dirty & /*$testStore*/ 1 && input1.value !== /*$testStore*/ ctx[0].timelimit) {
-    				set_input_value(input1, /*$testStore*/ ctx[0].timelimit);
+    			if (dirty & /*$testStore*/ 4 && input1.value !== /*$testStore*/ ctx[2].timelimit) {
+    				set_input_value(input1, /*$testStore*/ ctx[2].timelimit);
     			}
 
-    			if (dirty & /*$testStore*/ 1) {
-    				input2.checked = input2.__value === /*$testStore*/ ctx[0].difficultyLevel;
+    			if (dirty & /*$testStore*/ 4) {
+    				input2.checked = input2.__value === /*$testStore*/ ctx[2].difficultyLevel;
     			}
 
-    			if (dirty & /*$testStore*/ 1) {
-    				input3.checked = input3.__value === /*$testStore*/ ctx[0].difficultyLevel;
+    			if (dirty & /*$testStore*/ 4) {
+    				input3.checked = input3.__value === /*$testStore*/ ctx[2].difficultyLevel;
     			}
 
-    			if (dirty & /*$testStore*/ 1) {
-    				input4.checked = input4.__value === /*$testStore*/ ctx[0].difficultyLevel;
+    			if (dirty & /*$testStore*/ 4) {
+    				input4.checked = input4.__value === /*$testStore*/ ctx[2].difficultyLevel;
     			}
 
-    			if (dirty & /*tagList*/ 8) {
-    				each_value = /*tagList*/ ctx[3];
+    			if (dirty & /*selectedTags, hastTagString, $testStore*/ 7) {
+    				each_value = /*selectedTags*/ ctx[0];
     				let i;
 
     				for (i = 0; i < each_value.length; i += 1) {
@@ -42391,7 +42411,7 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     					} else {
     						each_blocks[i] = create_each_block$5(child_ctx);
     						each_blocks[i].c();
-    						each_blocks[i].m(select, null);
+    						each_blocks[i].m(div10, null);
     					}
     				}
 
@@ -42402,8 +42422,8 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     				each_blocks.length = each_value.length;
     			}
 
-    			if (dirty & /*$testStore*/ 1 && input5.value !== /*$testStore*/ ctx[0].tags) {
-    				set_input_value(input5, /*$testStore*/ ctx[0].tags);
+    			if (dirty & /*hastTagString*/ 2 && input5.value !== /*hastTagString*/ ctx[1]) {
+    				set_input_value(input5, /*hastTagString*/ ctx[1]);
     			}
     		},
     		i: function intro(local) {
@@ -42416,13 +42436,13 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     			current = false;
     		},
     		d: function destroy(detaching) {
-    			if (detaching) detach_dev(div15);
+    			if (detaching) detach_dev(div16);
     			if (if_block0) if_block0.d();
     			if (if_block1) if_block1.d();
     			if (if_block2) if_block2.d();
-    			/*$$binding_groups*/ ctx[12][0].splice(/*$$binding_groups*/ ctx[12][0].indexOf(input2), 1);
-    			/*$$binding_groups*/ ctx[12][0].splice(/*$$binding_groups*/ ctx[12][0].indexOf(input3), 1);
-    			/*$$binding_groups*/ ctx[12][0].splice(/*$$binding_groups*/ ctx[12][0].indexOf(input4), 1);
+    			/*$$binding_groups*/ ctx[13][0].splice(/*$$binding_groups*/ ctx[13][0].indexOf(input2), 1);
+    			/*$$binding_groups*/ ctx[13][0].splice(/*$$binding_groups*/ ctx[13][0].indexOf(input3), 1);
+    			/*$$binding_groups*/ ctx[13][0].splice(/*$$binding_groups*/ ctx[13][0].indexOf(input4), 1);
     			destroy_each(each_blocks, detaching);
     			run_all(dispose);
     		}
@@ -42442,7 +42462,7 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     function instance$f($$self, $$props, $$invalidate) {
     	let $testStore;
     	validate_store(testStore, "testStore");
-    	component_subscribe($$self, testStore, $$value => $$invalidate(0, $testStore = $$value));
+    	component_subscribe($$self, testStore, $$value => $$invalidate(2, $testStore = $$value));
     	console.log($testStore);
     	let alert = "*Name must be in capital letters with no space in between and no special characters";
 
@@ -42460,24 +42480,41 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     	let selectedTags = [];
     	let hastTagString = "";
 
+    	selectedTags = [
+    		...$testStore.tags.split("#").filter((__Directive, index) => {
+    			return index !== 0;
+    		})
+    	];
+
+    	function newTagHandler(tag) {
+    		$$invalidate(0, selectedTags = [...selectedTags, tag]);
+    		$$invalidate(1, hastTagString = "");
+    		console.log(selectedTags);
+    		set_store_value(testStore, $testStore.tags = "", $testStore);
+
+    		selectedTags.forEach(tag => {
+    			set_store_value(testStore, $testStore.tags += "#" + tag, $testStore);
+    		});
+    	}
+
     	function changeHandler(indexValue) {
     		console.log(selectedTags.length, indexValue);
     		let rr = selectedTags.length;
 
-    		selectedTags = [
+    		$$invalidate(0, selectedTags = [
     			...selectedTags.filter(ele => {
     				return ele !== indexValue;
     			})
-    		];
+    		]);
 
     		if (rr === selectedTags.length) {
-    			selectedTags = [...selectedTags, indexValue];
+    			$$invalidate(0, selectedTags = [...selectedTags, indexValue]);
     		}
 
-    		hastTagString = "";
+    		$$invalidate(1, hastTagString = "");
 
     		selectedTags.forEach(ind => {
-    			hastTagString += "#" + tagList[ind];
+    			$$invalidate(1, hastTagString += "#" + tagList[ind]);
     		});
 
     		set_store_value(testStore, $testStore.tags = hastTagString, $testStore);
@@ -42489,7 +42526,7 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     		return e => {
     			timer = setTimeout(
     				async () => {
-    					$$invalidate(1, uniqueNameStatus = 2);
+    					$$invalidate(3, uniqueNameStatus = 2);
 
     					const res = await mutate(client, {
     						mutation: apolloClient.checkTestIfAvailable,
@@ -42499,9 +42536,9 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     					console.log(res);
 
     					if (res.data.checkTestIfExists.success === false) {
-    						$$invalidate(1, uniqueNameStatus = 1);
+    						$$invalidate(3, uniqueNameStatus = 1);
     					} else {
-    						$$invalidate(1, uniqueNameStatus = 3);
+    						$$invalidate(3, uniqueNameStatus = 3);
     					}
     				},
     				30
@@ -42536,19 +42573,36 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     		testStore.set($testStore);
     	}
 
-    	const change_handler = e => {
-    		console.log(e.target.value);
+    	const click_handler = ind => {
+    		$$invalidate(0, selectedTags = [
+    			...selectedTags.filter((__, index) => {
+    				return ind !== index;
+    			})
+    		]);
 
-    		if (parseInt(e.target.value) === 0) {
-    			return;
+    		$$invalidate(1, hastTagString = "");
+    		set_store_value(testStore, $testStore.tags = "", $testStore);
+
+    		selectedTags.forEach(tag => {
+    			set_store_value(testStore, $testStore.tags += "#" + tag, $testStore);
+    		});
+    	};
+
+    	const keypress_handler = e => {
+    		if (e.key === " ") {
+    			console.log(hastTagString);
+    			newTagHandler(hastTagString);
+    			set_store_value(testStore, $testStore.tags = "", $testStore);
+
+    			selectedTags.forEach(tag => {
+    				set_store_value(testStore, $testStore.tags += "#" + tag, $testStore);
+    			});
     		}
-
-    		changeHandler(parseInt(e.target.value));
     	};
 
     	function input5_input_handler() {
-    		$testStore.tags = this.value;
-    		testStore.set($testStore);
+    		hastTagString = this.value;
+    		$$invalidate(1, hastTagString);
     	}
 
     	$$self.$capture_state = () => {
@@ -42556,33 +42610,35 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     	};
 
     	$$self.$inject_state = $$props => {
-    		if ("alert" in $$props) $$invalidate(2, alert = $$props.alert);
-    		if ("selectedTags" in $$props) selectedTags = $$props.selectedTags;
-    		if ("hastTagString" in $$props) hastTagString = $$props.hastTagString;
+    		if ("alert" in $$props) $$invalidate(4, alert = $$props.alert);
+    		if ("selectedTags" in $$props) $$invalidate(0, selectedTags = $$props.selectedTags);
+    		if ("hastTagString" in $$props) $$invalidate(1, hastTagString = $$props.hastTagString);
     		if ("$testStore" in $$props) testStore.set($testStore = $$props.$testStore);
-    		if ("uniqueNameStatus" in $$props) $$invalidate(1, uniqueNameStatus = $$props.uniqueNameStatus);
+    		if ("uniqueNameStatus" in $$props) $$invalidate(3, uniqueNameStatus = $$props.uniqueNameStatus);
     	};
 
     	let uniqueNameStatus;
-    	 $$invalidate(1, uniqueNameStatus = 0);
+    	 $$invalidate(3, uniqueNameStatus = 0);
 
     	return [
+    		selectedTags,
+    		hastTagString,
     		$testStore,
     		uniqueNameStatus,
     		alert,
-    		tagList,
-    		changeHandler,
+    		newTagHandler,
     		onInput,
-    		selectedTags,
-    		hastTagString,
+    		tagList,
     		client,
+    		changeHandler,
     		input0_input_handler,
     		input1_input_handler,
     		input2_change_handler,
     		$$binding_groups,
     		input3_change_handler,
     		input4_change_handler,
-    		change_handler,
+    		click_handler,
+    		keypress_handler,
     		input5_input_handler
     	];
     }
@@ -44959,12 +45015,12 @@ mutation checkTimeLimit($data:String, $timelimit:String){
 
     function get_each_context$a(ctx, list, i) {
     	const child_ctx = ctx.slice();
-    	child_ctx[18] = list[i];
-    	child_ctx[20] = i;
+    	child_ctx[19] = list[i];
+    	child_ctx[21] = i;
     	return child_ctx;
     }
 
-    // (133:10) {#if uniqueNameStatus === 2}
+    // (145:10) {#if uniqueNameStatus === 2}
     function create_if_block_2$4(ctx) {
     	let current;
     	const loader = new Loader$1({ $$inline: true });
@@ -44995,14 +45051,14 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     		block,
     		id: create_if_block_2$4.name,
     		type: "if",
-    		source: "(133:10) {#if uniqueNameStatus === 2}",
+    		source: "(145:10) {#if uniqueNameStatus === 2}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (136:10) {#if uniqueNameStatus === 1}
+    // (148:10) {#if uniqueNameStatus === 1}
     function create_if_block_1$6(ctx) {
     	let i;
 
@@ -45010,8 +45066,8 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     		c: function create() {
     			i = element("i");
     			i.textContent = "";
-    			attr_dev(i, "class", "material-icons status svelte-qcf6sk");
-    			add_location(i, file$n, 136, 12, 4466);
+    			attr_dev(i, "class", "material-icons status svelte-16vz6j8");
+    			add_location(i, file$n, 148, 12, 4832);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, i, anchor);
@@ -45025,14 +45081,14 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     		block,
     		id: create_if_block_1$6.name,
     		type: "if",
-    		source: "(136:10) {#if uniqueNameStatus === 1}",
+    		source: "(148:10) {#if uniqueNameStatus === 1}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (139:10) {#if uniqueNameStatus === 3}
+    // (151:10) {#if uniqueNameStatus === 3}
     function create_if_block$9(ctx) {
     	let span;
 
@@ -45040,8 +45096,8 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     		c: function create() {
     			span = element("span");
     			span.textContent = "clear";
-    			attr_dev(span, "class", "status material-icons svelte-qcf6sk");
-    			add_location(span, file$n, 139, 12, 4579);
+    			attr_dev(span, "class", "status material-icons svelte-16vz6j8");
+    			add_location(span, file$n, 151, 12, 4945);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, span, anchor);
@@ -45055,41 +45111,55 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     		block,
     		id: create_if_block$9.name,
     		type: "if",
-    		source: "(139:10) {#if uniqueNameStatus === 3}",
+    		source: "(151:10) {#if uniqueNameStatus === 3}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (194:14) {#each tagList as tag, index}
+    // (200:14) {#each selectedTags as tag, ind}
     function create_each_block$a(ctx) {
-    	let option;
-    	let t0_value = /*tag*/ ctx[18] + "";
+    	let div1;
+    	let t0_value = /*tag*/ ctx[19] + "";
     	let t0;
     	let t1;
-    	let option_name_value;
-    	let option_value_value;
+    	let div0;
+    	let t3;
+    	let dispose;
+
+    	function click_handler(...args) {
+    		return /*click_handler*/ ctx[16](/*ind*/ ctx[21], ...args);
+    	}
 
     	const block = {
     		c: function create() {
-    			option = element("option");
+    			div1 = element("div");
     			t0 = text(t0_value);
     			t1 = space();
-    			attr_dev(option, "class", "text-xl px-2 text-edark");
-    			attr_dev(option, "name", option_name_value = /*tag*/ ctx[18]);
-    			option.__value = option_value_value = /*index*/ ctx[20];
-    			option.value = option.__value;
-    			add_location(option, file$n, 194, 16, 6402);
+    			div0 = element("div");
+    			div0.textContent = "x";
+    			t3 = space();
+    			attr_dev(div0, "class", "px-2 cursor-pointer svelte-16vz6j8");
+    			add_location(div0, file$n, 203, 18, 6715);
+    			attr_dev(div1, "class", "flex border-solid border-2 rounded-full p-1 px-3 text-l svelte-16vz6j8");
+    			add_location(div1, file$n, 200, 16, 6585);
     		},
     		m: function mount(target, anchor) {
-    			insert_dev(target, option, anchor);
-    			append_dev(option, t0);
-    			append_dev(option, t1);
+    			insert_dev(target, div1, anchor);
+    			append_dev(div1, t0);
+    			append_dev(div1, t1);
+    			append_dev(div1, div0);
+    			append_dev(div1, t3);
+    			dispose = listen_dev(div0, "click", click_handler, false, false, false);
     		},
-    		p: noop,
+    		p: function update(new_ctx, dirty) {
+    			ctx = new_ctx;
+    			if (dirty & /*selectedTags*/ 1 && t0_value !== (t0_value = /*tag*/ ctx[19] + "")) set_data_dev(t0, t0_value);
+    		},
     		d: function destroy(detaching) {
-    			if (detaching) detach_dev(option);
+    			if (detaching) detach_dev(div1);
+    			dispose();
     		}
     	};
 
@@ -45097,7 +45167,7 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     		block,
     		id: create_each_block$a.name,
     		type: "each",
-    		source: "(194:14) {#each tagList as tag, index}",
+    		source: "(200:14) {#each selectedTags as tag, ind}",
     		ctx
     	});
 
@@ -45105,8 +45175,8 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     }
 
     function create_fragment$q(ctx) {
+    	let div16;
     	let div15;
-    	let div14;
     	let div5;
     	let label0;
     	let t1;
@@ -45122,11 +45192,11 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     	let t5;
     	let t6;
     	let t7;
-    	let div13;
+    	let div14;
     	let div6;
     	let h2;
     	let t9;
-    	let div12;
+    	let div13;
     	let div7;
     	let label1;
     	let t11;
@@ -45150,19 +45220,19 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     	let t23;
     	let span3;
     	let t25;
-    	let div11;
+    	let div12;
     	let label3;
     	let t27;
+    	let div11;
     	let div10;
-    	let select;
     	let t28;
     	let input5;
     	let current;
     	let dispose;
-    	let if_block0 = /*uniqueNameStatus*/ ctx[1] === 2 && create_if_block_2$4(ctx);
-    	let if_block1 = /*uniqueNameStatus*/ ctx[1] === 1 && create_if_block_1$6(ctx);
-    	let if_block2 = /*uniqueNameStatus*/ ctx[1] === 3 && create_if_block$9(ctx);
-    	let each_value = /*tagList*/ ctx[3];
+    	let if_block0 = /*uniqueNameStatus*/ ctx[3] === 2 && create_if_block_2$4(ctx);
+    	let if_block1 = /*uniqueNameStatus*/ ctx[3] === 1 && create_if_block_1$6(ctx);
+    	let if_block2 = /*uniqueNameStatus*/ ctx[3] === 3 && create_if_block$9(ctx);
+    	let each_value = /*selectedTags*/ ctx[0];
     	let each_blocks = [];
 
     	for (let i = 0; i < each_value.length; i += 1) {
@@ -45171,8 +45241,8 @@ mutation checkTimeLimit($data:String, $timelimit:String){
 
     	const block = {
     		c: function create() {
+    			div16 = element("div");
     			div15 = element("div");
-    			div14 = element("div");
     			div5 = element("div");
     			label0 = element("label");
     			label0.textContent = "Enter a unique Test code";
@@ -45184,7 +45254,7 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     			t2 = space();
     			div1 = element("div");
     			p = element("p");
-    			p.textContent = `${/*alert*/ ctx[2]}`;
+    			p.textContent = `${/*alert*/ ctx[4]}`;
     			t4 = space();
     			div3 = element("div");
     			if (if_block0) if_block0.c();
@@ -45193,12 +45263,12 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     			t6 = space();
     			if (if_block2) if_block2.c();
     			t7 = space();
-    			div13 = element("div");
+    			div14 = element("div");
     			div6 = element("div");
     			h2 = element("h2");
     			h2.textContent = "Other Details";
     			t9 = space();
-    			div12 = element("div");
+    			div13 = element("div");
     			div7 = element("div");
     			label1 = element("label");
     			label1.textContent = "Enter Time limit";
@@ -45228,12 +45298,12 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     			span3 = element("span");
     			span3.textContent = "Difficult";
     			t25 = space();
-    			div11 = element("div");
+    			div12 = element("div");
     			label3 = element("label");
     			label3.textContent = "Add Tags";
     			t27 = space();
+    			div11 = element("div");
     			div10 = element("div");
-    			select = element("select");
 
     			for (let i = 0; i < each_blocks.length; i += 1) {
     				each_blocks[i].c();
@@ -45241,99 +45311,105 @@ mutation checkTimeLimit($data:String, $timelimit:String){
 
     			t28 = space();
     			input5 = element("input");
-    			attr_dev(label0, "class", "text-elight text-2xl my-3");
-    			add_location(label0, file$n, 114, 6, 3709);
+    			attr_dev(label0, "class", "text-elight text-2xl my-3 svelte-16vz6j8");
+    			add_location(label0, file$n, 126, 6, 4075);
     			attr_dev(input0, "type", "search");
     			attr_dev(input0, "name", "serch");
     			attr_dev(input0, "placeholder", "Search");
-    			attr_dev(input0, "class", "bg-elight h-10 px-5 pr-10 rounded-full w-full text-xl\n              tet-edark focus:outline-none");
-    			add_location(input0, file$n, 118, 12, 3890);
-    			attr_dev(div0, "class", "w-full");
-    			add_location(div0, file$n, 117, 10, 3857);
-    			attr_dev(p, "class", "textt text-sm my-2 svelte-qcf6sk");
-    			add_location(p, file$n, 128, 12, 4236);
-    			add_location(div1, file$n, 127, 10, 4218);
-    			attr_dev(div2, "class", " flex-col w-full");
-    			add_location(div2, file$n, 116, 8, 3816);
-    			attr_dev(div3, "class", "ml-3");
-    			add_location(div3, file$n, 131, 8, 4318);
-    			attr_dev(div4, "class", "flex");
-    			add_location(div4, file$n, 115, 6, 3789);
-    			add_location(div5, file$n, 113, 4, 3697);
-    			attr_dev(h2, "class", "labels text-3xl svelte-qcf6sk");
-    			add_location(h2, file$n, 146, 8, 4765);
-    			add_location(div6, file$n, 145, 6, 4751);
-    			attr_dev(label1, "class", "labels svelte-qcf6sk");
-    			add_location(label1, file$n, 150, 10, 4861);
-    			attr_dev(input1, "class", "unitinput svelte-qcf6sk");
+    			attr_dev(input0, "class", "bg-elight h-10 px-5 pr-10 rounded-full w-full text-xl\n              tet-edark focus:outline-none svelte-16vz6j8");
+    			add_location(input0, file$n, 130, 12, 4256);
+    			attr_dev(div0, "class", "w-full svelte-16vz6j8");
+    			add_location(div0, file$n, 129, 10, 4223);
+    			attr_dev(p, "class", "textt text-sm my-2 svelte-16vz6j8");
+    			add_location(p, file$n, 140, 12, 4602);
+    			attr_dev(div1, "class", "svelte-16vz6j8");
+    			add_location(div1, file$n, 139, 10, 4584);
+    			attr_dev(div2, "class", " flex-col w-full svelte-16vz6j8");
+    			add_location(div2, file$n, 128, 8, 4182);
+    			attr_dev(div3, "class", "ml-3 svelte-16vz6j8");
+    			add_location(div3, file$n, 143, 8, 4684);
+    			attr_dev(div4, "class", "flex svelte-16vz6j8");
+    			add_location(div4, file$n, 127, 6, 4155);
+    			attr_dev(div5, "class", "svelte-16vz6j8");
+    			add_location(div5, file$n, 125, 4, 4063);
+    			attr_dev(h2, "class", "labels text-3xl svelte-16vz6j8");
+    			add_location(h2, file$n, 158, 8, 5131);
+    			attr_dev(div6, "class", "svelte-16vz6j8");
+    			add_location(div6, file$n, 157, 6, 5117);
+    			attr_dev(label1, "class", "labels svelte-16vz6j8");
+    			add_location(label1, file$n, 162, 10, 5227);
+    			attr_dev(input1, "class", "unitinput svelte-16vz6j8");
     			attr_dev(input1, "type", "text");
     			attr_dev(input1, "placeholder", "in minutes");
-    			add_location(input1, file$n, 151, 10, 4918);
-    			attr_dev(span0, "class", "unit svelte-qcf6sk");
-    			add_location(span0, file$n, 156, 10, 5075);
-    			add_location(div7, file$n, 149, 8, 4845);
-    			attr_dev(label2, "class", "labels svelte-qcf6sk");
-    			add_location(label2, file$n, 160, 12, 5179);
-    			attr_dev(input2, "class", "unitinput svelte-qcf6sk");
+    			add_location(input1, file$n, 163, 10, 5284);
+    			attr_dev(span0, "class", "unit svelte-16vz6j8");
+    			add_location(span0, file$n, 168, 10, 5441);
+    			attr_dev(div7, "class", "svelte-16vz6j8");
+    			add_location(div7, file$n, 161, 8, 5211);
+    			attr_dev(label2, "class", "labels svelte-16vz6j8");
+    			add_location(label2, file$n, 172, 12, 5545);
+    			attr_dev(input2, "class", "unitinput svelte-16vz6j8");
     			attr_dev(input2, "type", "radio");
     			input2.__value = "Easy";
     			input2.value = input2.__value;
     			/*$$binding_groups*/ ctx[13][0].push(input2);
-    			add_location(input2, file$n, 161, 12, 5245);
-    			attr_dev(span1, "class", "unit text-2xl svelte-qcf6sk");
-    			add_location(span1, file$n, 166, 12, 5407);
-    			attr_dev(input3, "class", "unitinput svelte-qcf6sk");
+    			add_location(input2, file$n, 173, 12, 5611);
+    			attr_dev(span1, "class", "unit text-2xl svelte-16vz6j8");
+    			add_location(span1, file$n, 178, 12, 5773);
+    			attr_dev(input3, "class", "unitinput svelte-16vz6j8");
     			attr_dev(input3, "type", "radio");
     			input3.__value = "Medium";
     			input3.value = input3.__value;
     			/*$$binding_groups*/ ctx[13][0].push(input3);
-    			add_location(input3, file$n, 167, 12, 5459);
-    			attr_dev(span2, "class", "unit text-2xl svelte-qcf6sk");
-    			add_location(span2, file$n, 172, 12, 5623);
-    			attr_dev(input4, "class", "unitinput svelte-qcf6sk");
+    			add_location(input3, file$n, 179, 12, 5825);
+    			attr_dev(span2, "class", "unit text-2xl svelte-16vz6j8");
+    			add_location(span2, file$n, 184, 12, 5989);
+    			attr_dev(input4, "class", "unitinput svelte-16vz6j8");
     			attr_dev(input4, "type", "radio");
     			input4.__value = "Difficult";
     			input4.value = input4.__value;
     			/*$$binding_groups*/ ctx[13][0].push(input4);
-    			add_location(input4, file$n, 173, 12, 5677);
-    			attr_dev(span3, "class", "unit text-2xl svelte-qcf6sk");
-    			add_location(span3, file$n, 178, 12, 5844);
-    			add_location(div8, file$n, 159, 10, 5161);
-    			attr_dev(div9, "class", "flex");
-    			add_location(div9, file$n, 158, 8, 5132);
-    			attr_dev(label3, "class", "labels svelte-qcf6sk");
-    			add_location(label3, file$n, 182, 10, 5945);
-    			attr_dev(select, "class", "unitinput outline-none w-64 svelte-qcf6sk");
-    			add_location(select, file$n, 184, 12, 6034);
+    			add_location(input4, file$n, 185, 12, 6043);
+    			attr_dev(span3, "class", "unit text-2xl svelte-16vz6j8");
+    			add_location(span3, file$n, 190, 12, 6210);
+    			attr_dev(div8, "class", "svelte-16vz6j8");
+    			add_location(div8, file$n, 171, 10, 5527);
+    			attr_dev(div9, "class", "flex svelte-16vz6j8");
+    			add_location(div9, file$n, 170, 8, 5498);
+    			attr_dev(label3, "class", "labels svelte-16vz6j8");
+    			add_location(label3, file$n, 194, 10, 6311);
+    			attr_dev(div10, "class", "flex overflow-auto tagwidth  svelte-16vz6j8");
+    			add_location(div10, file$n, 198, 12, 6479);
     			attr_dev(input5, "type", "text");
-    			attr_dev(input5, "class", "unitinput svelte-qcf6sk");
-    			input5.readOnly = true;
-    			add_location(input5, file$n, 202, 12, 6628);
-    			attr_dev(div10, "class", "flex-col flex");
-    			add_location(div10, file$n, 183, 10, 5994);
-    			add_location(div11, file$n, 181, 8, 5929);
-    			add_location(div12, file$n, 148, 6, 4831);
-    			attr_dev(div13, "class", "border-solid border-2 mt-6 border-light p-4");
-    			add_location(div13, file$n, 144, 4, 4687);
-    			attr_dev(div14, "class", "text-edark mx-auto max-w-5xl w-full");
-    			add_location(div14, file$n, 112, 2, 3643);
-    			attr_dev(div15, "class", "mx-auto flex-col flex-grow");
-    			add_location(div15, file$n, 111, 0, 3600);
+    			attr_dev(input5, "class", "outline-none ml-3 w-full svelte-16vz6j8");
+    			add_location(input5, file$n, 220, 12, 7326);
+    			attr_dev(div11, "class", "w-full border-2 border-solid border-gray flex px-5 py-2\n            rounded-full svelte-16vz6j8");
+    			add_location(div11, file$n, 195, 10, 6360);
+    			attr_dev(div12, "class", "svelte-16vz6j8");
+    			add_location(div12, file$n, 193, 8, 6295);
+    			attr_dev(div13, "class", "svelte-16vz6j8");
+    			add_location(div13, file$n, 160, 6, 5197);
+    			attr_dev(div14, "class", "border-solid border-2 mt-6 border-light p-4 svelte-16vz6j8");
+    			add_location(div14, file$n, 156, 4, 5053);
+    			attr_dev(div15, "class", "text-edark mx-auto max-w-5xl w-full svelte-16vz6j8");
+    			add_location(div15, file$n, 124, 2, 4009);
+    			attr_dev(div16, "class", "mx-auto flex-col flex-grow svelte-16vz6j8");
+    			add_location(div16, file$n, 123, 0, 3966);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
     		m: function mount(target, anchor) {
-    			insert_dev(target, div15, anchor);
-    			append_dev(div15, div14);
-    			append_dev(div14, div5);
+    			insert_dev(target, div16, anchor);
+    			append_dev(div16, div15);
+    			append_dev(div15, div5);
     			append_dev(div5, label0);
     			append_dev(div5, t1);
     			append_dev(div5, div4);
     			append_dev(div4, div2);
     			append_dev(div2, div0);
     			append_dev(div0, input0);
-    			set_input_value(input0, /*$testStore*/ ctx[0].testName);
+    			set_input_value(input0, /*$testStore*/ ctx[2].testName);
     			append_dev(div2, t2);
     			append_dev(div2, div1);
     			append_dev(div1, p);
@@ -45344,71 +45420,71 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     			if (if_block1) if_block1.m(div3, null);
     			append_dev(div3, t6);
     			if (if_block2) if_block2.m(div3, null);
-    			append_dev(div14, t7);
-    			append_dev(div14, div13);
-    			append_dev(div13, div6);
+    			append_dev(div15, t7);
+    			append_dev(div15, div14);
+    			append_dev(div14, div6);
     			append_dev(div6, h2);
-    			append_dev(div13, t9);
-    			append_dev(div13, div12);
-    			append_dev(div12, div7);
+    			append_dev(div14, t9);
+    			append_dev(div14, div13);
+    			append_dev(div13, div7);
     			append_dev(div7, label1);
     			append_dev(div7, t11);
     			append_dev(div7, input1);
-    			set_input_value(input1, /*$testStore*/ ctx[0].timelimit);
+    			set_input_value(input1, /*$testStore*/ ctx[2].timelimit);
     			append_dev(div7, t12);
     			append_dev(div7, span0);
-    			append_dev(div12, t14);
-    			append_dev(div12, div9);
+    			append_dev(div13, t14);
+    			append_dev(div13, div9);
     			append_dev(div9, div8);
     			append_dev(div8, label2);
     			append_dev(div8, t16);
     			append_dev(div8, input2);
-    			input2.checked = input2.__value === /*$testStore*/ ctx[0].difficultyLevel;
+    			input2.checked = input2.__value === /*$testStore*/ ctx[2].difficultyLevel;
     			append_dev(div8, t17);
     			append_dev(div8, span1);
     			append_dev(div8, t19);
     			append_dev(div8, input3);
-    			input3.checked = input3.__value === /*$testStore*/ ctx[0].difficultyLevel;
+    			input3.checked = input3.__value === /*$testStore*/ ctx[2].difficultyLevel;
     			append_dev(div8, t20);
     			append_dev(div8, span2);
     			append_dev(div8, t22);
     			append_dev(div8, input4);
-    			input4.checked = input4.__value === /*$testStore*/ ctx[0].difficultyLevel;
+    			input4.checked = input4.__value === /*$testStore*/ ctx[2].difficultyLevel;
     			append_dev(div8, t23);
     			append_dev(div8, span3);
-    			append_dev(div12, t25);
+    			append_dev(div13, t25);
+    			append_dev(div13, div12);
+    			append_dev(div12, label3);
+    			append_dev(div12, t27);
     			append_dev(div12, div11);
-    			append_dev(div11, label3);
-    			append_dev(div11, t27);
     			append_dev(div11, div10);
-    			append_dev(div10, select);
 
     			for (let i = 0; i < each_blocks.length; i += 1) {
-    				each_blocks[i].m(select, null);
+    				each_blocks[i].m(div10, null);
     			}
 
-    			append_dev(div10, t28);
-    			append_dev(div10, input5);
-    			set_input_value(input5, /*$testStore*/ ctx[0].tags);
+    			append_dev(div11, t28);
+    			append_dev(div11, input5);
+    			set_input_value(input5, /*hastTagString*/ ctx[1]);
     			current = true;
 
     			dispose = [
-    				listen_dev(input0, "keydown", /*onInput*/ ctx[5], false, false, false),
+    				listen_dev(input0, "keydown", /*onInput*/ ctx[6], false, false, false),
     				listen_dev(input0, "input", /*input0_input_handler*/ ctx[10]),
     				listen_dev(input1, "input", /*input1_input_handler*/ ctx[11]),
     				listen_dev(input2, "change", /*input2_change_handler*/ ctx[12]),
     				listen_dev(input3, "change", /*input3_change_handler*/ ctx[14]),
     				listen_dev(input4, "change", /*input4_change_handler*/ ctx[15]),
-    				listen_dev(select, "change", /*change_handler*/ ctx[16], false, false, false),
-    				listen_dev(input5, "input", /*input5_input_handler*/ ctx[17])
+    				listen_dev(input5, "keypress", /*keypress_handler*/ ctx[17], false, false, false),
+    				listen_dev(input5, "input", /*input5_input_handler*/ ctx[18])
     			];
     		},
     		p: function update(ctx, [dirty]) {
-    			if (dirty & /*$testStore*/ 1) {
-    				set_input_value(input0, /*$testStore*/ ctx[0].testName);
+    			if (dirty & /*$testStore*/ 4) {
+    				set_input_value(input0, /*$testStore*/ ctx[2].testName);
     			}
 
-    			if (/*uniqueNameStatus*/ ctx[1] === 2) {
+    			if (/*uniqueNameStatus*/ ctx[3] === 2) {
     				if (!if_block0) {
     					if_block0 = create_if_block_2$4(ctx);
     					if_block0.c();
@@ -45427,7 +45503,7 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     				check_outros();
     			}
 
-    			if (/*uniqueNameStatus*/ ctx[1] === 1) {
+    			if (/*uniqueNameStatus*/ ctx[3] === 1) {
     				if (!if_block1) {
     					if_block1 = create_if_block_1$6(ctx);
     					if_block1.c();
@@ -45438,7 +45514,7 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     				if_block1 = null;
     			}
 
-    			if (/*uniqueNameStatus*/ ctx[1] === 3) {
+    			if (/*uniqueNameStatus*/ ctx[3] === 3) {
     				if (!if_block2) {
     					if_block2 = create_if_block$9(ctx);
     					if_block2.c();
@@ -45449,24 +45525,24 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     				if_block2 = null;
     			}
 
-    			if (dirty & /*$testStore*/ 1 && input1.value !== /*$testStore*/ ctx[0].timelimit) {
-    				set_input_value(input1, /*$testStore*/ ctx[0].timelimit);
+    			if (dirty & /*$testStore*/ 4 && input1.value !== /*$testStore*/ ctx[2].timelimit) {
+    				set_input_value(input1, /*$testStore*/ ctx[2].timelimit);
     			}
 
-    			if (dirty & /*$testStore*/ 1) {
-    				input2.checked = input2.__value === /*$testStore*/ ctx[0].difficultyLevel;
+    			if (dirty & /*$testStore*/ 4) {
+    				input2.checked = input2.__value === /*$testStore*/ ctx[2].difficultyLevel;
     			}
 
-    			if (dirty & /*$testStore*/ 1) {
-    				input3.checked = input3.__value === /*$testStore*/ ctx[0].difficultyLevel;
+    			if (dirty & /*$testStore*/ 4) {
+    				input3.checked = input3.__value === /*$testStore*/ ctx[2].difficultyLevel;
     			}
 
-    			if (dirty & /*$testStore*/ 1) {
-    				input4.checked = input4.__value === /*$testStore*/ ctx[0].difficultyLevel;
+    			if (dirty & /*$testStore*/ 4) {
+    				input4.checked = input4.__value === /*$testStore*/ ctx[2].difficultyLevel;
     			}
 
-    			if (dirty & /*tagList*/ 8) {
-    				each_value = /*tagList*/ ctx[3];
+    			if (dirty & /*selectedTags, hastTagString, $testStore*/ 7) {
+    				each_value = /*selectedTags*/ ctx[0];
     				let i;
 
     				for (i = 0; i < each_value.length; i += 1) {
@@ -45477,7 +45553,7 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     					} else {
     						each_blocks[i] = create_each_block$a(child_ctx);
     						each_blocks[i].c();
-    						each_blocks[i].m(select, null);
+    						each_blocks[i].m(div10, null);
     					}
     				}
 
@@ -45488,8 +45564,8 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     				each_blocks.length = each_value.length;
     			}
 
-    			if (dirty & /*$testStore*/ 1 && input5.value !== /*$testStore*/ ctx[0].tags) {
-    				set_input_value(input5, /*$testStore*/ ctx[0].tags);
+    			if (dirty & /*hastTagString*/ 2 && input5.value !== /*hastTagString*/ ctx[1]) {
+    				set_input_value(input5, /*hastTagString*/ ctx[1]);
     			}
     		},
     		i: function intro(local) {
@@ -45502,7 +45578,7 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     			current = false;
     		},
     		d: function destroy(detaching) {
-    			if (detaching) detach_dev(div15);
+    			if (detaching) detach_dev(div16);
     			if (if_block0) if_block0.d();
     			if (if_block1) if_block1.d();
     			if (if_block2) if_block2.d();
@@ -45528,7 +45604,7 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     function instance$m($$self, $$props, $$invalidate) {
     	let $testStore;
     	validate_store(testStore$1, "testStore");
-    	component_subscribe($$self, testStore$1, $$value => $$invalidate(0, $testStore = $$value));
+    	component_subscribe($$self, testStore$1, $$value => $$invalidate(2, $testStore = $$value));
     	console.log($testStore);
     	let alert = "*Name must be in capital letters with no space in between and no special characters";
 
@@ -45543,39 +45619,44 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     	];
 
     	const client = getClient();
+    	let selectedTags = [];
+    	let hastTagString = "";
 
-    	setTimeout(
-    		() => {
-    			tagsName.forEach(tag => {
-    				tagList.forEach((tt, index) => {
-    					if (tag === tt) {
-    						selectedTags = [...selectedTags, index];
-    						return;
-    					}
-    				});
-    			});
-    		},
-    		300
-    	);
+    	selectedTags = [
+    		...$testStore.tags.split("#").filter((__Directive, index) => {
+    			return index !== 0;
+    		})
+    	];
+
+    	function newTagHandler(tag) {
+    		$$invalidate(0, selectedTags = [...selectedTags, tag]);
+    		$$invalidate(1, hastTagString = "");
+    		console.log(selectedTags);
+    		set_store_value(testStore$1, $testStore.tags = "", $testStore);
+
+    		selectedTags.forEach(tag => {
+    			set_store_value(testStore$1, $testStore.tags += "#" + tag, $testStore);
+    		});
+    	}
 
     	function changeHandler(indexValue) {
     		console.log(selectedTags.length, indexValue);
     		let rr = selectedTags.length;
 
-    		selectedTags = [
+    		$$invalidate(0, selectedTags = [
     			...selectedTags.filter(ele => {
     				return ele !== indexValue;
     			})
-    		];
+    		]);
 
     		if (rr === selectedTags.length) {
-    			selectedTags = [...selectedTags, indexValue];
+    			$$invalidate(0, selectedTags = [...selectedTags, indexValue]);
     		}
 
-    		hastTagString = "";
+    		$$invalidate(1, hastTagString = "");
 
     		selectedTags.forEach(ind => {
-    			hastTagString += "#" + tagList[ind];
+    			$$invalidate(1, hastTagString += "#" + tagList[ind]);
     		});
 
     		set_store_value(testStore$1, $testStore.tags = hastTagString, $testStore);
@@ -45587,7 +45668,7 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     		return e => {
     			timer = setTimeout(
     				async () => {
-    					$$invalidate(1, uniqueNameStatus = 2);
+    					$$invalidate(3, uniqueNameStatus = 2);
 
     					const res = await mutate(client, {
     						mutation: apolloClient.checkTestIfAvailable,
@@ -45597,9 +45678,9 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     					console.log(res);
 
     					if (res.data.checkTestIfExists.success === false) {
-    						$$invalidate(1, uniqueNameStatus = 1);
+    						$$invalidate(3, uniqueNameStatus = 1);
     					} else {
-    						$$invalidate(1, uniqueNameStatus = 3);
+    						$$invalidate(3, uniqueNameStatus = 3);
     					}
     				},
     				30
@@ -45634,19 +45715,36 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     		testStore$1.set($testStore);
     	}
 
-    	const change_handler = e => {
-    		console.log(e.target.value);
+    	const click_handler = ind => {
+    		$$invalidate(0, selectedTags = [
+    			...selectedTags.filter((__, index) => {
+    				return ind !== index;
+    			})
+    		]);
 
-    		if (parseInt(e.target.value) === 0) {
-    			return;
+    		$$invalidate(1, hastTagString = "");
+    		set_store_value(testStore$1, $testStore.tags = "", $testStore);
+
+    		selectedTags.forEach(tag => {
+    			set_store_value(testStore$1, $testStore.tags += "#" + tag, $testStore);
+    		});
+    	};
+
+    	const keypress_handler = e => {
+    		if (e.key === " ") {
+    			console.log(hastTagString);
+    			newTagHandler(hastTagString);
+    			set_store_value(testStore$1, $testStore.tags = "", $testStore);
+
+    			selectedTags.forEach(tag => {
+    				set_store_value(testStore$1, $testStore.tags += "#" + tag, $testStore);
+    			});
     		}
-
-    		changeHandler(parseInt(e.target.value));
     	};
 
     	function input5_input_handler() {
-    		$testStore.tags = this.value;
-    		testStore$1.set($testStore);
+    		hastTagString = this.value;
+    		$$invalidate(1, hastTagString);
     	}
 
     	$$self.$capture_state = () => {
@@ -45654,50 +45752,35 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     	};
 
     	$$self.$inject_state = $$props => {
-    		if ("alert" in $$props) $$invalidate(2, alert = $$props.alert);
+    		if ("alert" in $$props) $$invalidate(4, alert = $$props.alert);
+    		if ("selectedTags" in $$props) $$invalidate(0, selectedTags = $$props.selectedTags);
+    		if ("hastTagString" in $$props) $$invalidate(1, hastTagString = $$props.hastTagString);
     		if ("$testStore" in $$props) testStore$1.set($testStore = $$props.$testStore);
-    		if ("uniqueNameStatus" in $$props) $$invalidate(1, uniqueNameStatus = $$props.uniqueNameStatus);
-    		if ("selectedTags" in $$props) selectedTags = $$props.selectedTags;
-    		if ("hastTagString" in $$props) hastTagString = $$props.hastTagString;
-    		if ("tagsName" in $$props) tagsName = $$props.tagsName;
+    		if ("uniqueNameStatus" in $$props) $$invalidate(3, uniqueNameStatus = $$props.uniqueNameStatus);
     	};
 
     	let uniqueNameStatus;
-    	let selectedTags;
-    	let hastTagString;
-    	let tagsName;
-
-    	$$self.$$.update = () => {
-    		if ($$self.$$.dirty & /*$testStore*/ 1) {
-    			 hastTagString = $testStore.tags;
-    		}
-
-    		if ($$self.$$.dirty & /*$testStore*/ 1) {
-    			 tagsName = [...$testStore.tags.split("#")];
-    		}
-    	};
-
-    	 $$invalidate(1, uniqueNameStatus = 0);
-    	 selectedTags = [];
+    	 $$invalidate(3, uniqueNameStatus = 0);
 
     	return [
+    		selectedTags,
+    		hastTagString,
     		$testStore,
     		uniqueNameStatus,
     		alert,
-    		tagList,
-    		changeHandler,
+    		newTagHandler,
     		onInput,
-    		selectedTags,
-    		hastTagString,
-    		tagsName,
+    		tagList,
     		client,
+    		changeHandler,
     		input0_input_handler,
     		input1_input_handler,
     		input2_change_handler,
     		$$binding_groups,
     		input3_change_handler,
     		input4_change_handler,
-    		change_handler,
+    		click_handler,
+    		keypress_handler,
     		input5_input_handler
     	];
     }
@@ -46796,13 +46879,138 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     const { console: console_1$7 } = globals;
     const file$r = "src/routes/update_test/edit_test.svelte";
 
+    // (47:2) {:catch err}
+    function create_catch_block$5(ctx) {
+    	let t0;
+    	let t1_value = /*err*/ ctx[9] + "";
+    	let t1;
+
+    	const block = {
+    		c: function create() {
+    			t0 = text("Err:- ");
+    			t1 = text(t1_value);
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, t0, anchor);
+    			insert_dev(target, t1, anchor);
+    		},
+    		p: function update(ctx, dirty) {
+    			if (dirty & /*$test*/ 4 && t1_value !== (t1_value = /*err*/ ctx[9] + "")) set_data_dev(t1, t1_value);
+    		},
+    		i: noop,
+    		o: noop,
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(t0);
+    			if (detaching) detach_dev(t1);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_catch_block$5.name,
+    		type: "catch",
+    		source: "(47:2) {:catch err}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (43:2) {:then res}
+    function create_then_block$5(ctx) {
+    	let main;
+    	let current;
+
+    	const selectpage = new Select_page$1({
+    			props: {
+    				pageNum: /*pageNum*/ ctx[1],
+    				currentRoute: /*currentRoute*/ ctx[0],
+    				class: "h-full"
+    			},
+    			$$inline: true
+    		});
+
+    	const block = {
+    		c: function create() {
+    			main = element("main");
+    			create_component(selectpage.$$.fragment);
+    			attr_dev(main, "class", " mx-auto w-full flex-grow overflow-auto svelte-wyis2u");
+    			add_location(main, file$r, 43, 4, 1542);
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, main, anchor);
+    			mount_component(selectpage, main, null);
+    			current = true;
+    		},
+    		p: function update(ctx, dirty) {
+    			const selectpage_changes = {};
+    			if (dirty & /*pageNum*/ 2) selectpage_changes.pageNum = /*pageNum*/ ctx[1];
+    			if (dirty & /*currentRoute*/ 1) selectpage_changes.currentRoute = /*currentRoute*/ ctx[0];
+    			selectpage.$set(selectpage_changes);
+    		},
+    		i: function intro(local) {
+    			if (current) return;
+    			transition_in(selectpage.$$.fragment, local);
+    			current = true;
+    		},
+    		o: function outro(local) {
+    			transition_out(selectpage.$$.fragment, local);
+    			current = false;
+    		},
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(main);
+    			destroy_component(selectpage);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_then_block$5.name,
+    		type: "then",
+    		source: "(43:2) {:then res}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (41:16)      Loading ....   {:then res}
+    function create_pending_block$5(ctx) {
+    	let t;
+
+    	const block = {
+    		c: function create() {
+    			t = text("Loading ....");
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, t, anchor);
+    		},
+    		p: noop,
+    		i: noop,
+    		o: noop,
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(t);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_pending_block$5.name,
+    		type: "pending",
+    		source: "(41:16)      Loading ....   {:then res}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
     function create_fragment$u(ctx) {
     	let div2;
     	let header;
     	let t0;
     	let subheader;
     	let t1;
-    	let main;
+    	let promise;
     	let t2;
     	let footer;
     	let div0;
@@ -46819,14 +47027,19 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     			$$inline: true
     		});
 
-    	const selectpage = new Select_page$1({
-    			props: {
-    				pageNum: /*pageNum*/ ctx[1],
-    				currentRoute: /*currentRoute*/ ctx[0],
-    				class: "h-full"
-    			},
-    			$$inline: true
-    		});
+    	let info = {
+    		ctx,
+    		current: null,
+    		token: null,
+    		pending: create_pending_block$5,
+    		then: create_then_block$5,
+    		catch: create_catch_block$5,
+    		value: 8,
+    		error: 9,
+    		blocks: [,,,]
+    	};
+
+    	handle_promise(promise = /*$test*/ ctx[2], info);
 
     	const block = {
     		c: function create() {
@@ -46837,8 +47050,7 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     			subheader = element("subheader");
     			create_component(subnavbar.$$.fragment);
     			t1 = space();
-    			main = element("main");
-    			create_component(selectpage.$$.fragment);
+    			info.block.c();
     			t2 = space();
     			footer = element("footer");
     			div0 = element("div");
@@ -46848,26 +47060,24 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     			div1 = element("div");
     			button1 = element("button");
     			button1.textContent = "Next";
-    			attr_dev(subheader, "class", "svelte-hwxovh");
-    			add_location(subheader, file$r, 35, 4, 1353);
-    			attr_dev(header, "class", "svelte-hwxovh");
-    			add_location(header, file$r, 33, 2, 1325);
-    			attr_dev(main, "class", " mx-auto w-full flex-grow overflow-auto svelte-hwxovh");
-    			add_location(main, file$r, 39, 2, 1435);
+    			attr_dev(subheader, "class", "svelte-wyis2u");
+    			add_location(subheader, file$r, 36, 4, 1410);
+    			attr_dev(header, "class", "svelte-wyis2u");
+    			add_location(header, file$r, 34, 2, 1382);
     			attr_dev(button0, "id", "prevbutton");
-    			attr_dev(button0, "class", "py-4 px-6 float-left shadow-md no-underline rounded-full bg-dark\n        text-white font-sans font-semibold text-sm border-white btn-primary\n        hover:text-white text-xl hover:bg-elight focus:outline-none\n        active:shadow-none mr-2 svelte-hwxovh");
-    			add_location(button0, file$r, 44, 6, 1651);
-    			attr_dev(div0, "class", "flex-1  svelte-hwxovh");
-    			add_location(div0, file$r, 43, 4, 1623);
+    			attr_dev(button0, "class", "py-4 px-6 float-left shadow-md no-underline rounded-full bg-dark\n        text-white font-sans font-semibold text-sm border-white btn-primary\n        hover:text-white text-xl hover:bg-elight focus:outline-none\n        active:shadow-none mr-2 svelte-wyis2u");
+    			add_location(button0, file$r, 51, 6, 1804);
+    			attr_dev(div0, "class", "flex-1  svelte-wyis2u");
+    			add_location(div0, file$r, 50, 4, 1776);
     			attr_dev(button1, "id", "nextbutton");
-    			attr_dev(button1, "class", "py-4 px-6 shadow-md text-xl float-right no-underline rounded-full\n        bg-dark text-white font-sans font-semibold text-sm border-white\n        btn-primary hover:text-dark hover:bg-elight focus:outline-none\n        active:shadow-none mr-2 svelte-hwxovh");
-    			add_location(button1, file$r, 61, 6, 2165);
-    			attr_dev(div1, "class", "flex-1 svelte-hwxovh");
-    			add_location(div1, file$r, 60, 4, 2138);
-    			attr_dev(footer, "class", " footer my-8 w-full px-20 mx-auto sticky svelte-hwxovh");
-    			add_location(footer, file$r, 42, 2, 1561);
-    			attr_dev(div2, "class", "w-screen bg-edark h-screen flex flex-col svelte-hwxovh");
-    			add_location(div2, file$r, 32, 0, 1268);
+    			attr_dev(button1, "class", "py-4 px-6 shadow-md text-xl float-right no-underline rounded-full\n        bg-dark text-white font-sans font-semibold text-sm border-white\n        btn-primary hover:text-dark hover:bg-elight focus:outline-none\n        active:shadow-none mr-2 svelte-wyis2u");
+    			add_location(button1, file$r, 68, 6, 2318);
+    			attr_dev(div1, "class", "flex-1 svelte-wyis2u");
+    			add_location(div1, file$r, 67, 4, 2291);
+    			attr_dev(footer, "class", " footer my-8 w-full px-20 mx-auto sticky svelte-wyis2u");
+    			add_location(footer, file$r, 49, 2, 1714);
+    			attr_dev(div2, "class", "w-screen bg-edark h-screen flex flex-col svelte-wyis2u");
+    			add_location(div2, file$r, 33, 0, 1325);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -46880,8 +47090,9 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     			append_dev(header, subheader);
     			mount_component(subnavbar, subheader, null);
     			append_dev(div2, t1);
-    			append_dev(div2, main);
-    			mount_component(selectpage, main, null);
+    			info.block.m(div2, info.anchor = null);
+    			info.mount = () => div2;
+    			info.anchor = t2;
     			append_dev(div2, t2);
     			append_dev(div2, footer);
     			append_dev(footer, div0);
@@ -46896,33 +47107,44 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     				listen_dev(button1, "click", /*click_handler_1*/ ctx[7], false, false, false)
     			];
     		},
-    		p: function update(ctx, [dirty]) {
+    		p: function update(new_ctx, [dirty]) {
+    			ctx = new_ctx;
     			const subnavbar_changes = {};
     			if (dirty & /*pageNum*/ 2) subnavbar_changes.position = /*pageNum*/ ctx[1];
     			subnavbar.$set(subnavbar_changes);
-    			const selectpage_changes = {};
-    			if (dirty & /*pageNum*/ 2) selectpage_changes.pageNum = /*pageNum*/ ctx[1];
-    			if (dirty & /*currentRoute*/ 1) selectpage_changes.currentRoute = /*currentRoute*/ ctx[0];
-    			selectpage.$set(selectpage_changes);
+    			info.ctx = ctx;
+
+    			if (dirty & /*$test*/ 4 && promise !== (promise = /*$test*/ ctx[2]) && handle_promise(promise, info)) ; else {
+    				const child_ctx = ctx.slice();
+    				child_ctx[8] = info.resolved;
+    				info.block.p(child_ctx, dirty);
+    			}
     		},
     		i: function intro(local) {
     			if (current) return;
     			transition_in(navbar.$$.fragment, local);
     			transition_in(subnavbar.$$.fragment, local);
-    			transition_in(selectpage.$$.fragment, local);
+    			transition_in(info.block);
     			current = true;
     		},
     		o: function outro(local) {
     			transition_out(navbar.$$.fragment, local);
     			transition_out(subnavbar.$$.fragment, local);
-    			transition_out(selectpage.$$.fragment, local);
+
+    			for (let i = 0; i < 3; i += 1) {
+    				const block = info.blocks[i];
+    				transition_out(block);
+    			}
+
     			current = false;
     		},
     		d: function destroy(detaching) {
     			if (detaching) detach_dev(div2);
     			destroy_component(navbar);
     			destroy_component(subnavbar);
-    			destroy_component(selectpage);
+    			info.block.d();
+    			info.token = null;
+    			info = null;
     			run_all(dispose);
     		}
     	};
@@ -46953,7 +47175,7 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     	});
 
     	validate_store(test, "test");
-    	component_subscribe($$self, test, value => $$invalidate(3, $test = value));
+    	component_subscribe($$self, test, value => $$invalidate(2, $test = value));
 
     	$test.then(res => {
     		let tt = res.data.testById;
@@ -47010,8 +47232,8 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     	return [
     		currentRoute,
     		pageNum,
-    		test,
     		$test,
+    		test,
     		$testStore,
     		client,
     		click_handler,
@@ -47462,12 +47684,12 @@ mutation checkTimeLimit($data:String, $timelimit:String){
 
     function get_each_context$e(ctx, list, i) {
     	const child_ctx = ctx.slice();
-    	child_ctx[14] = list[i];
-    	child_ctx[16] = i;
+    	child_ctx[16] = list[i];
+    	child_ctx[18] = i;
     	return child_ctx;
     }
 
-    // (118:10) {#if uniqueNameStatus === 2}
+    // (141:10) {#if uniqueNameStatus === 2}
     function create_if_block_2$5(ctx) {
     	let current;
     	const loader = new Loader$2({ $$inline: true });
@@ -47498,14 +47720,14 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     		block,
     		id: create_if_block_2$5.name,
     		type: "if",
-    		source: "(118:10) {#if uniqueNameStatus === 2}",
+    		source: "(141:10) {#if uniqueNameStatus === 2}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (121:10) {#if uniqueNameStatus === 1}
+    // (144:10) {#if uniqueNameStatus === 1}
     function create_if_block_1$8(ctx) {
     	let i;
 
@@ -47513,8 +47735,8 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     		c: function create() {
     			i = element("i");
     			i.textContent = "";
-    			attr_dev(i, "class", "material-icons status svelte-cftn61");
-    			add_location(i, file$u, 121, 12, 4031);
+    			attr_dev(i, "class", "material-icons status svelte-nizzxt");
+    			add_location(i, file$u, 144, 12, 4690);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, i, anchor);
@@ -47528,14 +47750,14 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     		block,
     		id: create_if_block_1$8.name,
     		type: "if",
-    		source: "(121:10) {#if uniqueNameStatus === 1}",
+    		source: "(144:10) {#if uniqueNameStatus === 1}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (124:10) {#if uniqueNameStatus === 3}
+    // (147:10) {#if uniqueNameStatus === 3}
     function create_if_block$c(ctx) {
     	let span;
 
@@ -47543,8 +47765,8 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     		c: function create() {
     			span = element("span");
     			span.textContent = "clear";
-    			attr_dev(span, "class", "status material-icons svelte-cftn61");
-    			add_location(span, file$u, 124, 12, 4144);
+    			attr_dev(span, "class", "status material-icons svelte-nizzxt");
+    			add_location(span, file$u, 147, 12, 4803);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, span, anchor);
@@ -47558,41 +47780,55 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     		block,
     		id: create_if_block$c.name,
     		type: "if",
-    		source: "(124:10) {#if uniqueNameStatus === 3}",
+    		source: "(147:10) {#if uniqueNameStatus === 3}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (166:14) {#each tagList as tag, index}
+    // (184:14) {#each selectedTags as tag, ind}
     function create_each_block$e(ctx) {
-    	let option;
-    	let t0_value = /*tag*/ ctx[14] + "";
+    	let div1;
+    	let t0_value = /*tag*/ ctx[16] + "";
     	let t0;
     	let t1;
-    	let option_name_value;
-    	let option_value_value;
+    	let div0;
+    	let t3;
+    	let dispose;
+
+    	function click_handler(...args) {
+    		return /*click_handler*/ ctx[13](/*ind*/ ctx[18], ...args);
+    	}
 
     	const block = {
     		c: function create() {
-    			option = element("option");
+    			div1 = element("div");
     			t0 = text(t0_value);
     			t1 = space();
-    			attr_dev(option, "class", "text-xl px-2 text-edark");
-    			attr_dev(option, "name", option_name_value = /*tag*/ ctx[14]);
-    			option.__value = option_value_value = /*index*/ ctx[16];
-    			option.value = option.__value;
-    			add_location(option, file$u, 166, 16, 5458);
+    			div0 = element("div");
+    			div0.textContent = "x";
+    			t3 = space();
+    			attr_dev(div0, "class", "px-2 cursor-pointer svelte-nizzxt");
+    			add_location(div0, file$u, 187, 18, 6065);
+    			attr_dev(div1, "class", "flex border-solid border-2 rounded-full p-1 px-3 text-l svelte-nizzxt");
+    			add_location(div1, file$u, 184, 16, 5935);
     		},
     		m: function mount(target, anchor) {
-    			insert_dev(target, option, anchor);
-    			append_dev(option, t0);
-    			append_dev(option, t1);
+    			insert_dev(target, div1, anchor);
+    			append_dev(div1, t0);
+    			append_dev(div1, t1);
+    			append_dev(div1, div0);
+    			append_dev(div1, t3);
+    			dispose = listen_dev(div0, "click", click_handler, false, false, false);
     		},
-    		p: noop,
+    		p: function update(new_ctx, dirty) {
+    			ctx = new_ctx;
+    			if (dirty & /*selectedTags*/ 1 && t0_value !== (t0_value = /*tag*/ ctx[16] + "")) set_data_dev(t0, t0_value);
+    		},
     		d: function destroy(detaching) {
-    			if (detaching) detach_dev(option);
+    			if (detaching) detach_dev(div1);
+    			dispose();
     		}
     	};
 
@@ -47600,7 +47836,7 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     		block,
     		id: create_each_block$e.name,
     		type: "each",
-    		source: "(166:14) {#each tagList as tag, index}",
+    		source: "(184:14) {#each selectedTags as tag, ind}",
     		ctx
     	});
 
@@ -47608,8 +47844,8 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     }
 
     function create_fragment$x(ctx) {
+    	let div15;
     	let div14;
-    	let div13;
     	let div5;
     	let label0;
     	let t1;
@@ -47625,11 +47861,11 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     	let t5;
     	let t6;
     	let t7;
-    	let div12;
+    	let div13;
     	let div6;
     	let h2;
     	let t9;
-    	let div11;
+    	let div12;
     	let div7;
     	let label1;
     	let t11;
@@ -47644,19 +47880,19 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     	let t17;
     	let span1;
     	let t19;
-    	let div10;
+    	let div11;
     	let label3;
     	let t21;
+    	let div10;
     	let div9;
-    	let select;
     	let t22;
     	let input3;
     	let current;
     	let dispose;
-    	let if_block0 = /*uniqueNameStatus*/ ctx[2] === 2 && create_if_block_2$5(ctx);
-    	let if_block1 = /*uniqueNameStatus*/ ctx[2] === 1 && create_if_block_1$8(ctx);
-    	let if_block2 = /*uniqueNameStatus*/ ctx[2] === 3 && create_if_block$c(ctx);
-    	let each_value = /*tagList*/ ctx[4];
+    	let if_block0 = /*uniqueNameStatus*/ ctx[3] === 2 && create_if_block_2$5(ctx);
+    	let if_block1 = /*uniqueNameStatus*/ ctx[3] === 1 && create_if_block_1$8(ctx);
+    	let if_block2 = /*uniqueNameStatus*/ ctx[3] === 3 && create_if_block$c(ctx);
+    	let each_value = /*selectedTags*/ ctx[0];
     	let each_blocks = [];
 
     	for (let i = 0; i < each_value.length; i += 1) {
@@ -47665,8 +47901,8 @@ mutation checkTimeLimit($data:String, $timelimit:String){
 
     	const block = {
     		c: function create() {
+    			div15 = element("div");
     			div14 = element("div");
-    			div13 = element("div");
     			div5 = element("div");
     			label0 = element("label");
     			label0.textContent = "Enter a unique Problem code";
@@ -47678,7 +47914,7 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     			t2 = space();
     			div1 = element("div");
     			p = element("p");
-    			p.textContent = `${/*alert*/ ctx[3]}`;
+    			p.textContent = `${/*alert*/ ctx[4]}`;
     			t4 = space();
     			div3 = element("div");
     			if (if_block0) if_block0.c();
@@ -47687,12 +47923,12 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     			t6 = space();
     			if (if_block2) if_block2.c();
     			t7 = space();
-    			div12 = element("div");
+    			div13 = element("div");
     			div6 = element("div");
     			h2 = element("h2");
     			h2.textContent = "Other Details";
     			t9 = space();
-    			div11 = element("div");
+    			div12 = element("div");
     			div7 = element("div");
     			label1 = element("label");
     			label1.textContent = "Enter Time limit";
@@ -47711,12 +47947,12 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     			span1 = element("span");
     			span1.textContent = "Mb";
     			t19 = space();
-    			div10 = element("div");
+    			div11 = element("div");
     			label3 = element("label");
     			label3.textContent = "Add Tags";
     			t21 = space();
+    			div10 = element("div");
     			div9 = element("div");
-    			select = element("select");
 
     			for (let i = 0; i < each_blocks.length; i += 1) {
     				each_blocks[i].c();
@@ -47724,79 +47960,85 @@ mutation checkTimeLimit($data:String, $timelimit:String){
 
     			t22 = space();
     			input3 = element("input");
-    			attr_dev(label0, "class", "text-elight text-2xl my-3");
-    			add_location(label0, file$u, 97, 6, 3232);
+    			attr_dev(label0, "class", "text-elight text-2xl my-3 svelte-nizzxt");
+    			add_location(label0, file$u, 120, 6, 3891);
     			attr_dev(input0, "type", "search");
     			attr_dev(input0, "name", "serch");
     			attr_dev(input0, "placeholder", "Enter Problem Name");
-    			attr_dev(input0, "class", "bg-elight h-10 px-5 pr-10 rounded-full w-full text-xl\n              tet-edark focus:outline-none");
-    			add_location(input0, file$u, 103, 12, 3432);
-    			attr_dev(div0, "class", "w-full");
-    			add_location(div0, file$u, 102, 10, 3399);
-    			attr_dev(p, "class", "text-white text-sm my-2");
-    			add_location(p, file$u, 113, 12, 3796);
-    			add_location(div1, file$u, 112, 10, 3778);
-    			attr_dev(div2, "class", " flex-col w-full");
-    			add_location(div2, file$u, 101, 8, 3358);
-    			attr_dev(div3, "class", "ml-3");
-    			add_location(div3, file$u, 116, 8, 3883);
-    			attr_dev(div4, "class", "flex");
-    			add_location(div4, file$u, 100, 6, 3331);
-    			add_location(div5, file$u, 96, 4, 3220);
-    			attr_dev(h2, "class", "labels text-2xl svelte-cftn61");
-    			add_location(h2, file$u, 131, 8, 4330);
-    			add_location(div6, file$u, 130, 6, 4316);
-    			attr_dev(label1, "class", "labels svelte-cftn61");
-    			add_location(label1, file$u, 135, 10, 4426);
-    			attr_dev(input1, "class", "unitinput svelte-cftn61");
+    			attr_dev(input0, "class", "bg-elight h-10 px-5 pr-10 rounded-full w-full text-xl\n              tet-edark focus:outline-none svelte-nizzxt");
+    			add_location(input0, file$u, 126, 12, 4091);
+    			attr_dev(div0, "class", "w-full svelte-nizzxt");
+    			add_location(div0, file$u, 125, 10, 4058);
+    			attr_dev(p, "class", "text-white text-sm my-2 svelte-nizzxt");
+    			add_location(p, file$u, 136, 12, 4455);
+    			attr_dev(div1, "class", "svelte-nizzxt");
+    			add_location(div1, file$u, 135, 10, 4437);
+    			attr_dev(div2, "class", " flex-col w-full svelte-nizzxt");
+    			add_location(div2, file$u, 124, 8, 4017);
+    			attr_dev(div3, "class", "ml-3 svelte-nizzxt");
+    			add_location(div3, file$u, 139, 8, 4542);
+    			attr_dev(div4, "class", "flex svelte-nizzxt");
+    			add_location(div4, file$u, 123, 6, 3990);
+    			attr_dev(div5, "class", "svelte-nizzxt");
+    			add_location(div5, file$u, 119, 4, 3879);
+    			attr_dev(h2, "class", "labels text-2xl svelte-nizzxt");
+    			add_location(h2, file$u, 154, 8, 4989);
+    			attr_dev(div6, "class", "svelte-nizzxt");
+    			add_location(div6, file$u, 153, 6, 4975);
+    			attr_dev(label1, "class", "labels svelte-nizzxt");
+    			add_location(label1, file$u, 158, 10, 5085);
+    			attr_dev(input1, "class", "unitinput svelte-nizzxt");
     			attr_dev(input1, "type", "text");
     			attr_dev(input1, "placeholder", "in milli seconds");
-    			add_location(input1, file$u, 136, 10, 4483);
-    			attr_dev(span0, "class", "unit svelte-cftn61");
-    			add_location(span0, file$u, 141, 10, 4649);
-    			add_location(div7, file$u, 134, 8, 4410);
-    			attr_dev(label2, "class", "labels svelte-cftn61");
-    			add_location(label2, file$u, 144, 10, 4717);
-    			attr_dev(input2, "class", "unitinput svelte-cftn61");
+    			add_location(input1, file$u, 159, 10, 5142);
+    			attr_dev(span0, "class", "unit svelte-nizzxt");
+    			add_location(span0, file$u, 164, 10, 5308);
+    			attr_dev(div7, "class", "svelte-nizzxt");
+    			add_location(div7, file$u, 157, 8, 5069);
+    			attr_dev(label2, "class", "labels svelte-nizzxt");
+    			add_location(label2, file$u, 167, 10, 5376);
+    			attr_dev(input2, "class", "unitinput svelte-nizzxt");
     			attr_dev(input2, "type", "text");
     			attr_dev(input2, "placeholder", "in Mbs");
-    			add_location(input2, file$u, 145, 10, 4776);
-    			attr_dev(span1, "class", "unit svelte-cftn61");
-    			add_location(span1, file$u, 150, 10, 4932);
-    			add_location(div8, file$u, 143, 8, 4701);
-    			attr_dev(label3, "class", "labels svelte-cftn61");
-    			add_location(label3, file$u, 154, 10, 5001);
-    			attr_dev(select, "class", "unitinput outline-none w-64 svelte-cftn61");
-    			add_location(select, file$u, 156, 12, 5090);
+    			add_location(input2, file$u, 168, 10, 5435);
+    			attr_dev(span1, "class", "unit svelte-nizzxt");
+    			add_location(span1, file$u, 173, 10, 5591);
+    			attr_dev(div8, "class", "svelte-nizzxt");
+    			add_location(div8, file$u, 166, 8, 5360);
+    			attr_dev(label3, "class", "labels svelte-nizzxt");
+    			add_location(label3, file$u, 177, 10, 5660);
+    			attr_dev(div9, "class", "flex overflow-auto tagwidth  svelte-nizzxt");
+    			add_location(div9, file$u, 182, 12, 5829);
     			attr_dev(input3, "type", "text");
-    			attr_dev(input3, "class", "unitinput svelte-cftn61");
-    			input3.readOnly = true;
-    			add_location(input3, file$u, 174, 12, 5684);
-    			attr_dev(div9, "class", "flex-col flex");
-    			add_location(div9, file$u, 155, 10, 5050);
-    			add_location(div10, file$u, 153, 8, 4985);
-    			add_location(div11, file$u, 133, 6, 4396);
-    			attr_dev(div12, "class", "border-solid border-2 mt-6 border-light p-4");
-    			add_location(div12, file$u, 129, 4, 4252);
-    			attr_dev(div13, "class", "text-edark mx-auto max-w-5xl w-full");
-    			add_location(div13, file$u, 95, 2, 3166);
-    			attr_dev(div14, "class", "mx-auto flex-col flex-grow");
-    			add_location(div14, file$u, 94, 0, 3123);
+    			attr_dev(input3, "class", "outline-none ml-3 w-full svelte-nizzxt");
+    			add_location(input3, file$u, 204, 12, 6682);
+    			attr_dev(div10, "class", "w-full border-2 border-solid border-gray flex px-5 py-2\n            rounded-full svelte-nizzxt");
+    			add_location(div10, file$u, 179, 10, 5710);
+    			attr_dev(div11, "class", "svelte-nizzxt");
+    			add_location(div11, file$u, 176, 8, 5644);
+    			attr_dev(div12, "class", "svelte-nizzxt");
+    			add_location(div12, file$u, 156, 6, 5055);
+    			attr_dev(div13, "class", "border-solid border-2 mt-6 border-light p-4 svelte-nizzxt");
+    			add_location(div13, file$u, 152, 4, 4911);
+    			attr_dev(div14, "class", "text-edark mx-auto max-w-5xl w-full svelte-nizzxt");
+    			add_location(div14, file$u, 118, 2, 3825);
+    			attr_dev(div15, "class", "mx-auto flex-col flex-grow svelte-nizzxt");
+    			add_location(div15, file$u, 117, 0, 3782);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
     		m: function mount(target, anchor) {
-    			insert_dev(target, div14, anchor);
-    			append_dev(div14, div13);
-    			append_dev(div13, div5);
+    			insert_dev(target, div15, anchor);
+    			append_dev(div15, div14);
+    			append_dev(div14, div5);
     			append_dev(div5, label0);
     			append_dev(div5, t1);
     			append_dev(div5, div4);
     			append_dev(div4, div2);
     			append_dev(div2, div0);
     			append_dev(div0, input0);
-    			set_input_value(input0, /*$problemStore*/ ctx[1].problemName);
+    			set_input_value(input0, /*$problemStore*/ ctx[2].problemName);
     			append_dev(div2, t2);
     			append_dev(div2, div1);
     			append_dev(div1, p);
@@ -47807,58 +48049,58 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     			if (if_block1) if_block1.m(div3, null);
     			append_dev(div3, t6);
     			if (if_block2) if_block2.m(div3, null);
-    			append_dev(div13, t7);
-    			append_dev(div13, div12);
-    			append_dev(div12, div6);
+    			append_dev(div14, t7);
+    			append_dev(div14, div13);
+    			append_dev(div13, div6);
     			append_dev(div6, h2);
-    			append_dev(div12, t9);
-    			append_dev(div12, div11);
-    			append_dev(div11, div7);
+    			append_dev(div13, t9);
+    			append_dev(div13, div12);
+    			append_dev(div12, div7);
     			append_dev(div7, label1);
     			append_dev(div7, t11);
     			append_dev(div7, input1);
-    			set_input_value(input1, /*$problemStore*/ ctx[1].timelimit);
+    			set_input_value(input1, /*$problemStore*/ ctx[2].timelimit);
     			append_dev(div7, t12);
     			append_dev(div7, span0);
-    			append_dev(div11, t14);
-    			append_dev(div11, div8);
+    			append_dev(div12, t14);
+    			append_dev(div12, div8);
     			append_dev(div8, label2);
     			append_dev(div8, t16);
     			append_dev(div8, input2);
-    			set_input_value(input2, /*$problemStore*/ ctx[1].datalimit);
+    			set_input_value(input2, /*$problemStore*/ ctx[2].datalimit);
     			append_dev(div8, t17);
     			append_dev(div8, span1);
-    			append_dev(div11, t19);
+    			append_dev(div12, t19);
+    			append_dev(div12, div11);
+    			append_dev(div11, label3);
+    			append_dev(div11, t21);
     			append_dev(div11, div10);
-    			append_dev(div10, label3);
-    			append_dev(div10, t21);
     			append_dev(div10, div9);
-    			append_dev(div9, select);
 
     			for (let i = 0; i < each_blocks.length; i += 1) {
-    				each_blocks[i].m(select, null);
+    				each_blocks[i].m(div9, null);
     			}
 
-    			append_dev(div9, t22);
-    			append_dev(div9, input3);
-    			set_input_value(input3, /*hastTagString*/ ctx[0]);
+    			append_dev(div10, t22);
+    			append_dev(div10, input3);
+    			set_input_value(input3, /*hastTagString*/ ctx[1]);
     			current = true;
 
     			dispose = [
     				listen_dev(input0, "keydown", /*onInput*/ ctx[6], false, false, false),
-    				listen_dev(input0, "input", /*input0_input_handler*/ ctx[9]),
-    				listen_dev(input1, "input", /*input1_input_handler*/ ctx[10]),
-    				listen_dev(input2, "input", /*input2_input_handler*/ ctx[11]),
-    				listen_dev(select, "change", /*change_handler*/ ctx[12], false, false, false),
-    				listen_dev(input3, "input", /*input3_input_handler*/ ctx[13])
+    				listen_dev(input0, "input", /*input0_input_handler*/ ctx[10]),
+    				listen_dev(input1, "input", /*input1_input_handler*/ ctx[11]),
+    				listen_dev(input2, "input", /*input2_input_handler*/ ctx[12]),
+    				listen_dev(input3, "keypress", /*keypress_handler*/ ctx[14], false, false, false),
+    				listen_dev(input3, "input", /*input3_input_handler*/ ctx[15])
     			];
     		},
     		p: function update(ctx, [dirty]) {
-    			if (dirty & /*$problemStore*/ 2) {
-    				set_input_value(input0, /*$problemStore*/ ctx[1].problemName);
+    			if (dirty & /*$problemStore*/ 4) {
+    				set_input_value(input0, /*$problemStore*/ ctx[2].problemName);
     			}
 
-    			if (/*uniqueNameStatus*/ ctx[2] === 2) {
+    			if (/*uniqueNameStatus*/ ctx[3] === 2) {
     				if (!if_block0) {
     					if_block0 = create_if_block_2$5(ctx);
     					if_block0.c();
@@ -47877,7 +48119,7 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     				check_outros();
     			}
 
-    			if (/*uniqueNameStatus*/ ctx[2] === 1) {
+    			if (/*uniqueNameStatus*/ ctx[3] === 1) {
     				if (!if_block1) {
     					if_block1 = create_if_block_1$8(ctx);
     					if_block1.c();
@@ -47888,7 +48130,7 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     				if_block1 = null;
     			}
 
-    			if (/*uniqueNameStatus*/ ctx[2] === 3) {
+    			if (/*uniqueNameStatus*/ ctx[3] === 3) {
     				if (!if_block2) {
     					if_block2 = create_if_block$c(ctx);
     					if_block2.c();
@@ -47899,16 +48141,16 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     				if_block2 = null;
     			}
 
-    			if (dirty & /*$problemStore*/ 2 && input1.value !== /*$problemStore*/ ctx[1].timelimit) {
-    				set_input_value(input1, /*$problemStore*/ ctx[1].timelimit);
+    			if (dirty & /*$problemStore*/ 4 && input1.value !== /*$problemStore*/ ctx[2].timelimit) {
+    				set_input_value(input1, /*$problemStore*/ ctx[2].timelimit);
     			}
 
-    			if (dirty & /*$problemStore*/ 2 && input2.value !== /*$problemStore*/ ctx[1].datalimit) {
-    				set_input_value(input2, /*$problemStore*/ ctx[1].datalimit);
+    			if (dirty & /*$problemStore*/ 4 && input2.value !== /*$problemStore*/ ctx[2].datalimit) {
+    				set_input_value(input2, /*$problemStore*/ ctx[2].datalimit);
     			}
 
-    			if (dirty & /*tagList*/ 16) {
-    				each_value = /*tagList*/ ctx[4];
+    			if (dirty & /*selectedTags, hastTagString, $problemStore*/ 7) {
+    				each_value = /*selectedTags*/ ctx[0];
     				let i;
 
     				for (i = 0; i < each_value.length; i += 1) {
@@ -47919,7 +48161,7 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     					} else {
     						each_blocks[i] = create_each_block$e(child_ctx);
     						each_blocks[i].c();
-    						each_blocks[i].m(select, null);
+    						each_blocks[i].m(div9, null);
     					}
     				}
 
@@ -47930,8 +48172,8 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     				each_blocks.length = each_value.length;
     			}
 
-    			if (dirty & /*hastTagString*/ 1 && input3.value !== /*hastTagString*/ ctx[0]) {
-    				set_input_value(input3, /*hastTagString*/ ctx[0]);
+    			if (dirty & /*hastTagString*/ 2 && input3.value !== /*hastTagString*/ ctx[1]) {
+    				set_input_value(input3, /*hastTagString*/ ctx[1]);
     			}
     		},
     		i: function intro(local) {
@@ -47944,7 +48186,7 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     			current = false;
     		},
     		d: function destroy(detaching) {
-    			if (detaching) detach_dev(div14);
+    			if (detaching) detach_dev(div15);
     			if (if_block0) if_block0.d();
     			if (if_block1) if_block1.d();
     			if (if_block2) if_block2.d();
@@ -47967,7 +48209,7 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     function instance$s($$self, $$props, $$invalidate) {
     	let $problemStore;
     	validate_store(problemStore, "problemStore");
-    	component_subscribe($$self, problemStore, $$value => $$invalidate(1, $problemStore = $$value));
+    	component_subscribe($$self, problemStore, $$value => $$invalidate(2, $problemStore = $$value));
     	console.log($problemStore);
     	let alert = "*Name must be in capital letters with no space in between and no special characters";
 
@@ -47984,29 +48226,47 @@ mutation checkTimeLimit($data:String, $timelimit:String){
 
     	const client = getClient();
     	let selectedTags = [];
+
+    	selectedTags = [
+    		...$problemStore.tags.split("#").filter((__Directive, index) => {
+    			return index !== 0;
+    		})
+    	];
+
     	let hastTagString = "";
 
     	function changeHandler(indexValue) {
     		console.log(selectedTags.length, indexValue);
     		let rr = selectedTags.length;
 
-    		selectedTags = [
+    		$$invalidate(0, selectedTags = [
     			...selectedTags.filter(ele => {
     				return ele !== indexValue;
     			})
-    		];
+    		]);
 
     		if (rr === selectedTags.length) {
-    			selectedTags = [...selectedTags, indexValue];
+    			$$invalidate(0, selectedTags = [...selectedTags, indexValue]);
     		}
 
-    		$$invalidate(0, hastTagString = "");
+    		$$invalidate(1, hastTagString = "");
 
     		selectedTags.forEach(ind => {
-    			$$invalidate(0, hastTagString += "#" + tagList[ind]);
+    			$$invalidate(1, hastTagString += "#" + tagList[ind]);
     		});
 
     		set_store_value(problemStore, $problemStore.tags = hastTagString, $problemStore);
+    	}
+
+    	function newTagHandler(tag) {
+    		$$invalidate(0, selectedTags = [...selectedTags, tag]);
+    		$$invalidate(1, hastTagString = "");
+    		console.log(selectedTags);
+    		set_store_value(problemStore, $problemStore.tags = "", $problemStore);
+
+    		selectedTags.forEach(tag => {
+    			set_store_value(problemStore, $problemStore.tags += "#" + tag, $problemStore);
+    		});
     	}
 
     	const onInput = (function checkIfAvailable() {
@@ -48015,7 +48275,7 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     		return e => {
     			timer = setTimeout(
     				async () => {
-    					$$invalidate(2, uniqueNameStatus = 2);
+    					$$invalidate(3, uniqueNameStatus = 2);
 
     					const res = await mutate(client, {
     						mutation: apolloClient.checkIfAvailable,
@@ -48025,9 +48285,9 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     					console.log(res);
 
     					if (res.data.checkProblemIfExists.success === false) {
-    						$$invalidate(2, uniqueNameStatus = 1);
+    						$$invalidate(3, uniqueNameStatus = 1);
     					} else {
-    						$$invalidate(2, uniqueNameStatus = 3);
+    						$$invalidate(3, uniqueNameStatus = 3);
     					}
     				},
     				30
@@ -48050,19 +48310,36 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     		problemStore.set($problemStore);
     	}
 
-    	const change_handler = e => {
-    		console.log(e.target.value);
+    	const click_handler = ind => {
+    		$$invalidate(0, selectedTags = [
+    			...selectedTags.filter((__, index) => {
+    				return ind !== index;
+    			})
+    		]);
 
-    		if (parseInt(e.target.value) === 0) {
-    			return;
+    		$$invalidate(1, hastTagString = "");
+    		set_store_value(problemStore, $problemStore.tags = "", $problemStore);
+
+    		selectedTags.forEach(tag => {
+    			set_store_value(problemStore, $problemStore.tags += "#" + tag, $problemStore);
+    		});
+    	};
+
+    	const keypress_handler = e => {
+    		if (e.key === " ") {
+    			console.log(hastTagString);
+    			newTagHandler(hastTagString);
+    			set_store_value(problemStore, $problemStore.tags = "", $problemStore);
+
+    			selectedTags.forEach(tag => {
+    				set_store_value(problemStore, $problemStore.tags += "#" + tag, $problemStore);
+    			});
     		}
-
-    		changeHandler(parseInt(e.target.value));
     	};
 
     	function input3_input_handler() {
     		hastTagString = this.value;
-    		$$invalidate(0, hastTagString);
+    		$$invalidate(1, hastTagString);
     	}
 
     	$$self.$capture_state = () => {
@@ -48070,30 +48347,32 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     	};
 
     	$$self.$inject_state = $$props => {
-    		if ("alert" in $$props) $$invalidate(3, alert = $$props.alert);
-    		if ("selectedTags" in $$props) selectedTags = $$props.selectedTags;
-    		if ("hastTagString" in $$props) $$invalidate(0, hastTagString = $$props.hastTagString);
+    		if ("alert" in $$props) $$invalidate(4, alert = $$props.alert);
+    		if ("selectedTags" in $$props) $$invalidate(0, selectedTags = $$props.selectedTags);
+    		if ("hastTagString" in $$props) $$invalidate(1, hastTagString = $$props.hastTagString);
     		if ("$problemStore" in $$props) problemStore.set($problemStore = $$props.$problemStore);
-    		if ("uniqueNameStatus" in $$props) $$invalidate(2, uniqueNameStatus = $$props.uniqueNameStatus);
+    		if ("uniqueNameStatus" in $$props) $$invalidate(3, uniqueNameStatus = $$props.uniqueNameStatus);
     	};
 
     	let uniqueNameStatus;
-    	 $$invalidate(2, uniqueNameStatus = 0);
+    	 $$invalidate(3, uniqueNameStatus = 0);
 
     	return [
+    		selectedTags,
     		hastTagString,
     		$problemStore,
     		uniqueNameStatus,
     		alert,
-    		tagList,
-    		changeHandler,
+    		newTagHandler,
     		onInput,
-    		selectedTags,
+    		tagList,
     		client,
+    		changeHandler,
     		input0_input_handler,
     		input1_input_handler,
     		input2_input_handler,
-    		change_handler,
+    		click_handler,
+    		keypress_handler,
     		input3_input_handler
     	];
     }
@@ -49617,12 +49896,12 @@ mutation checkTimeLimit($data:String, $timelimit:String){
 
     function get_each_context$g(ctx, list, i) {
     	const child_ctx = ctx.slice();
-    	child_ctx[15] = list[i];
-    	child_ctx[17] = i;
+    	child_ctx[16] = list[i];
+    	child_ctx[18] = i;
     	return child_ctx;
     }
 
-    // (136:10) {#if uniqueNameStatus === 2}
+    // (141:10) {#if uniqueNameStatus === 2}
     function create_if_block_2$7(ctx) {
     	let current;
     	const loader = new Loader$3({ $$inline: true });
@@ -49653,14 +49932,14 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     		block,
     		id: create_if_block_2$7.name,
     		type: "if",
-    		source: "(136:10) {#if uniqueNameStatus === 2}",
+    		source: "(141:10) {#if uniqueNameStatus === 2}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (139:10) {#if uniqueNameStatus === 1}
+    // (144:10) {#if uniqueNameStatus === 1}
     function create_if_block_1$a(ctx) {
     	let i;
 
@@ -49668,8 +49947,8 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     		c: function create() {
     			i = element("i");
     			i.textContent = "";
-    			attr_dev(i, "class", "material-icons status svelte-1lswhuv");
-    			add_location(i, file$C, 139, 12, 4564);
+    			attr_dev(i, "class", "material-icons status svelte-1x1y0u5");
+    			add_location(i, file$C, 144, 12, 4682);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, i, anchor);
@@ -49683,14 +49962,14 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     		block,
     		id: create_if_block_1$a.name,
     		type: "if",
-    		source: "(139:10) {#if uniqueNameStatus === 1}",
+    		source: "(144:10) {#if uniqueNameStatus === 1}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (142:10) {#if uniqueNameStatus === 3}
+    // (147:10) {#if uniqueNameStatus === 3}
     function create_if_block$f(ctx) {
     	let span;
 
@@ -49698,8 +49977,8 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     		c: function create() {
     			span = element("span");
     			span.textContent = "clear";
-    			attr_dev(span, "class", "status material-icons svelte-1lswhuv");
-    			add_location(span, file$C, 142, 12, 4677);
+    			attr_dev(span, "class", "status material-icons svelte-1x1y0u5");
+    			add_location(span, file$C, 147, 12, 4795);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, span, anchor);
@@ -49713,41 +49992,55 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     		block,
     		id: create_if_block$f.name,
     		type: "if",
-    		source: "(142:10) {#if uniqueNameStatus === 3}",
+    		source: "(147:10) {#if uniqueNameStatus === 3}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (184:14) {#each tagList as tag, index}
+    // (183:14) {#each selectedTags as tag, ind}
     function create_each_block$g(ctx) {
-    	let option;
-    	let t0_value = /*tag*/ ctx[15] + "";
+    	let div1;
+    	let t0_value = /*tag*/ ctx[16] + "";
     	let t0;
     	let t1;
-    	let option_name_value;
-    	let option_value_value;
+    	let div0;
+    	let t3;
+    	let dispose;
+
+    	function click_handler(...args) {
+    		return /*click_handler*/ ctx[13](/*ind*/ ctx[18], ...args);
+    	}
 
     	const block = {
     		c: function create() {
-    			option = element("option");
+    			div1 = element("div");
     			t0 = text(t0_value);
     			t1 = space();
-    			attr_dev(option, "class", "text-xl px-2 text-edark");
-    			attr_dev(option, "name", option_name_value = /*tag*/ ctx[15]);
-    			option.__value = option_value_value = /*index*/ ctx[17];
-    			option.value = option.__value;
-    			add_location(option, file$C, 184, 16, 5991);
+    			div0 = element("div");
+    			div0.textContent = "x";
+    			t3 = space();
+    			attr_dev(div0, "class", "px-2 cursor-pointer svelte-1x1y0u5");
+    			add_location(div0, file$C, 186, 18, 6056);
+    			attr_dev(div1, "class", "flex border-solid border-2 rounded-full p-1 px-3 text-l svelte-1x1y0u5");
+    			add_location(div1, file$C, 183, 16, 5926);
     		},
     		m: function mount(target, anchor) {
-    			insert_dev(target, option, anchor);
-    			append_dev(option, t0);
-    			append_dev(option, t1);
+    			insert_dev(target, div1, anchor);
+    			append_dev(div1, t0);
+    			append_dev(div1, t1);
+    			append_dev(div1, div0);
+    			append_dev(div1, t3);
+    			dispose = listen_dev(div0, "click", click_handler, false, false, false);
     		},
-    		p: noop,
+    		p: function update(new_ctx, dirty) {
+    			ctx = new_ctx;
+    			if (dirty & /*selectedTags*/ 1 && t0_value !== (t0_value = /*tag*/ ctx[16] + "")) set_data_dev(t0, t0_value);
+    		},
     		d: function destroy(detaching) {
-    			if (detaching) detach_dev(option);
+    			if (detaching) detach_dev(div1);
+    			dispose();
     		}
     	};
 
@@ -49755,7 +50048,7 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     		block,
     		id: create_each_block$g.name,
     		type: "each",
-    		source: "(184:14) {#each tagList as tag, index}",
+    		source: "(183:14) {#each selectedTags as tag, ind}",
     		ctx
     	});
 
@@ -49763,8 +50056,8 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     }
 
     function create_fragment$F(ctx) {
+    	let div15;
     	let div14;
-    	let div13;
     	let div5;
     	let label0;
     	let t1;
@@ -49780,11 +50073,11 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     	let t5;
     	let t6;
     	let t7;
-    	let div12;
+    	let div13;
     	let div6;
     	let h2;
     	let t9;
-    	let div11;
+    	let div12;
     	let div7;
     	let label1;
     	let t11;
@@ -49799,19 +50092,19 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     	let t17;
     	let span1;
     	let t19;
-    	let div10;
+    	let div11;
     	let label3;
     	let t21;
+    	let div10;
     	let div9;
-    	let select;
     	let t22;
     	let input3;
     	let current;
     	let dispose;
-    	let if_block0 = /*uniqueNameStatus*/ ctx[0] === 2 && create_if_block_2$7(ctx);
-    	let if_block1 = /*uniqueNameStatus*/ ctx[0] === 1 && create_if_block_1$a(ctx);
-    	let if_block2 = /*uniqueNameStatus*/ ctx[0] === 3 && create_if_block$f(ctx);
-    	let each_value = /*tagList*/ ctx[4];
+    	let if_block0 = /*uniqueNameStatus*/ ctx[2] === 2 && create_if_block_2$7(ctx);
+    	let if_block1 = /*uniqueNameStatus*/ ctx[2] === 1 && create_if_block_1$a(ctx);
+    	let if_block2 = /*uniqueNameStatus*/ ctx[2] === 3 && create_if_block$f(ctx);
+    	let each_value = /*selectedTags*/ ctx[0];
     	let each_blocks = [];
 
     	for (let i = 0; i < each_value.length; i += 1) {
@@ -49820,8 +50113,8 @@ mutation checkTimeLimit($data:String, $timelimit:String){
 
     	const block = {
     		c: function create() {
+    			div15 = element("div");
     			div14 = element("div");
-    			div13 = element("div");
     			div5 = element("div");
     			label0 = element("label");
     			label0.textContent = "Enter a unique Problem code";
@@ -49833,7 +50126,7 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     			t2 = space();
     			div1 = element("div");
     			p = element("p");
-    			p.textContent = `${/*alert*/ ctx[3]}`;
+    			p.textContent = `${/*alert*/ ctx[4]}`;
     			t4 = space();
     			div3 = element("div");
     			if (if_block0) if_block0.c();
@@ -49842,12 +50135,12 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     			t6 = space();
     			if (if_block2) if_block2.c();
     			t7 = space();
-    			div12 = element("div");
+    			div13 = element("div");
     			div6 = element("div");
     			h2 = element("h2");
     			h2.textContent = "Other Details";
     			t9 = space();
-    			div11 = element("div");
+    			div12 = element("div");
     			div7 = element("div");
     			label1 = element("label");
     			label1.textContent = "Enter Time limit";
@@ -49866,12 +50159,12 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     			span1 = element("span");
     			span1.textContent = "Mb";
     			t19 = space();
-    			div10 = element("div");
+    			div11 = element("div");
     			label3 = element("label");
     			label3.textContent = "Add Tags";
     			t21 = space();
+    			div10 = element("div");
     			div9 = element("div");
-    			select = element("select");
 
     			for (let i = 0; i < each_blocks.length; i += 1) {
     				each_blocks[i].c();
@@ -49879,80 +50172,86 @@ mutation checkTimeLimit($data:String, $timelimit:String){
 
     			t22 = space();
     			input3 = element("input");
-    			attr_dev(label0, "class", "text-elight text-2xl my-3");
-    			add_location(label0, file$C, 114, 6, 3759);
+    			attr_dev(label0, "class", "text-elight text-2xl my-3 svelte-1x1y0u5");
+    			add_location(label0, file$C, 119, 6, 3877);
     			attr_dev(input0, "type", "search");
     			attr_dev(input0, "name", "serch");
     			attr_dev(input0, "placeholder", "Search");
-    			attr_dev(input0, "class", "bg-elight h-10 px-5 pr-10 rounded-full w-full text-xl\n              tet-edark focus:outline-none");
+    			attr_dev(input0, "class", "bg-elight h-10 px-5 pr-10 rounded-full w-full text-xl\n              tet-edark focus:outline-none svelte-1x1y0u5");
     			input0.readOnly = true;
-    			add_location(input0, file$C, 120, 12, 3959);
-    			attr_dev(div0, "class", "w-full");
-    			add_location(div0, file$C, 119, 10, 3926);
-    			attr_dev(p, "class", "textt text-sm my-2 svelte-1lswhuv");
-    			add_location(p, file$C, 131, 12, 4334);
-    			add_location(div1, file$C, 130, 10, 4316);
-    			attr_dev(div2, "class", " flex-col w-full");
-    			add_location(div2, file$C, 118, 8, 3885);
-    			attr_dev(div3, "class", "ml-3");
-    			add_location(div3, file$C, 134, 8, 4416);
-    			attr_dev(div4, "class", "flex");
-    			add_location(div4, file$C, 117, 6, 3858);
-    			add_location(div5, file$C, 113, 4, 3747);
-    			attr_dev(h2, "class", "labels text-2xl svelte-1lswhuv");
-    			add_location(h2, file$C, 149, 8, 4863);
-    			add_location(div6, file$C, 148, 6, 4849);
-    			attr_dev(label1, "class", "labels svelte-1lswhuv");
-    			add_location(label1, file$C, 153, 10, 4959);
-    			attr_dev(input1, "class", "unitinput svelte-1lswhuv");
+    			add_location(input0, file$C, 125, 12, 4077);
+    			attr_dev(div0, "class", "w-full svelte-1x1y0u5");
+    			add_location(div0, file$C, 124, 10, 4044);
+    			attr_dev(p, "class", "textt text-sm my-2 svelte-1x1y0u5");
+    			add_location(p, file$C, 136, 12, 4452);
+    			attr_dev(div1, "class", "svelte-1x1y0u5");
+    			add_location(div1, file$C, 135, 10, 4434);
+    			attr_dev(div2, "class", " flex-col w-full svelte-1x1y0u5");
+    			add_location(div2, file$C, 123, 8, 4003);
+    			attr_dev(div3, "class", "ml-3 svelte-1x1y0u5");
+    			add_location(div3, file$C, 139, 8, 4534);
+    			attr_dev(div4, "class", "flex svelte-1x1y0u5");
+    			add_location(div4, file$C, 122, 6, 3976);
+    			attr_dev(div5, "class", "svelte-1x1y0u5");
+    			add_location(div5, file$C, 118, 4, 3865);
+    			attr_dev(h2, "class", "labels text-2xl svelte-1x1y0u5");
+    			add_location(h2, file$C, 154, 8, 4981);
+    			attr_dev(div6, "class", "svelte-1x1y0u5");
+    			add_location(div6, file$C, 153, 6, 4967);
+    			attr_dev(label1, "class", "labels svelte-1x1y0u5");
+    			add_location(label1, file$C, 158, 10, 5077);
+    			attr_dev(input1, "class", "unitinput svelte-1x1y0u5");
     			attr_dev(input1, "type", "text");
     			attr_dev(input1, "placeholder", "in milli seconds");
-    			add_location(input1, file$C, 154, 10, 5016);
-    			attr_dev(span0, "class", "unit svelte-1lswhuv");
-    			add_location(span0, file$C, 159, 10, 5182);
-    			add_location(div7, file$C, 152, 8, 4943);
-    			attr_dev(label2, "class", "labels svelte-1lswhuv");
-    			add_location(label2, file$C, 162, 10, 5250);
-    			attr_dev(input2, "class", "unitinput svelte-1lswhuv");
+    			add_location(input1, file$C, 159, 10, 5134);
+    			attr_dev(span0, "class", "unit svelte-1x1y0u5");
+    			add_location(span0, file$C, 164, 10, 5300);
+    			attr_dev(div7, "class", "svelte-1x1y0u5");
+    			add_location(div7, file$C, 157, 8, 5061);
+    			attr_dev(label2, "class", "labels svelte-1x1y0u5");
+    			add_location(label2, file$C, 167, 10, 5368);
+    			attr_dev(input2, "class", "unitinput svelte-1x1y0u5");
     			attr_dev(input2, "type", "text");
     			attr_dev(input2, "placeholder", "in Mbs");
-    			add_location(input2, file$C, 163, 10, 5309);
-    			attr_dev(span1, "class", "unit svelte-1lswhuv");
-    			add_location(span1, file$C, 168, 10, 5465);
-    			add_location(div8, file$C, 161, 8, 5234);
-    			attr_dev(label3, "class", "labels svelte-1lswhuv");
-    			add_location(label3, file$C, 172, 10, 5534);
-    			attr_dev(select, "class", "unitinput outline-none w-64 svelte-1lswhuv");
-    			add_location(select, file$C, 174, 12, 5623);
+    			add_location(input2, file$C, 168, 10, 5427);
+    			attr_dev(span1, "class", "unit svelte-1x1y0u5");
+    			add_location(span1, file$C, 173, 10, 5583);
+    			attr_dev(div8, "class", "svelte-1x1y0u5");
+    			add_location(div8, file$C, 166, 8, 5352);
+    			attr_dev(label3, "class", "labels svelte-1x1y0u5");
+    			add_location(label3, file$C, 177, 10, 5652);
+    			attr_dev(div9, "class", "flex overflow-auto tagwidth  svelte-1x1y0u5");
+    			add_location(div9, file$C, 181, 12, 5820);
     			attr_dev(input3, "type", "text");
-    			attr_dev(input3, "class", "unitinput svelte-1lswhuv");
-    			input3.readOnly = true;
-    			add_location(input3, file$C, 192, 12, 6217);
-    			attr_dev(div9, "class", "flex-col flex");
-    			add_location(div9, file$C, 173, 10, 5583);
-    			add_location(div10, file$C, 171, 8, 5518);
-    			add_location(div11, file$C, 151, 6, 4929);
-    			attr_dev(div12, "class", "border-solid border-2 mt-6 border-light p-4");
-    			add_location(div12, file$C, 147, 4, 4785);
-    			attr_dev(div13, "class", "text-edark mx-auto max-w-5xl w-full");
-    			add_location(div13, file$C, 112, 2, 3693);
-    			attr_dev(div14, "class", "mx-auto flex-col flex-grow");
-    			add_location(div14, file$C, 111, 0, 3650);
+    			attr_dev(input3, "class", "outline-none ml-3 w-full svelte-1x1y0u5");
+    			add_location(input3, file$C, 203, 12, 6673);
+    			attr_dev(div10, "class", "w-full border-2 border-solid border-gray flex px-5 py-2\n            rounded-full svelte-1x1y0u5");
+    			add_location(div10, file$C, 178, 10, 5701);
+    			attr_dev(div11, "class", "svelte-1x1y0u5");
+    			add_location(div11, file$C, 176, 8, 5636);
+    			attr_dev(div12, "class", "svelte-1x1y0u5");
+    			add_location(div12, file$C, 156, 6, 5047);
+    			attr_dev(div13, "class", "border-solid border-2 mt-6 border-light p-4 svelte-1x1y0u5");
+    			add_location(div13, file$C, 152, 4, 4903);
+    			attr_dev(div14, "class", "text-edark mx-auto max-w-5xl w-full svelte-1x1y0u5");
+    			add_location(div14, file$C, 117, 2, 3811);
+    			attr_dev(div15, "class", "mx-auto flex-col flex-grow svelte-1x1y0u5");
+    			add_location(div15, file$C, 116, 0, 3768);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
     		m: function mount(target, anchor) {
-    			insert_dev(target, div14, anchor);
-    			append_dev(div14, div13);
-    			append_dev(div13, div5);
+    			insert_dev(target, div15, anchor);
+    			append_dev(div15, div14);
+    			append_dev(div14, div5);
     			append_dev(div5, label0);
     			append_dev(div5, t1);
     			append_dev(div5, div4);
     			append_dev(div4, div2);
     			append_dev(div2, div0);
     			append_dev(div0, input0);
-    			set_input_value(input0, /*$problemStore*/ ctx[2].problemName);
+    			set_input_value(input0, /*$problemStore*/ ctx[3].problemName);
     			append_dev(div2, t2);
     			append_dev(div2, div1);
     			append_dev(div1, p);
@@ -49963,40 +50262,40 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     			if (if_block1) if_block1.m(div3, null);
     			append_dev(div3, t6);
     			if (if_block2) if_block2.m(div3, null);
-    			append_dev(div13, t7);
-    			append_dev(div13, div12);
-    			append_dev(div12, div6);
+    			append_dev(div14, t7);
+    			append_dev(div14, div13);
+    			append_dev(div13, div6);
     			append_dev(div6, h2);
-    			append_dev(div12, t9);
-    			append_dev(div12, div11);
-    			append_dev(div11, div7);
+    			append_dev(div13, t9);
+    			append_dev(div13, div12);
+    			append_dev(div12, div7);
     			append_dev(div7, label1);
     			append_dev(div7, t11);
     			append_dev(div7, input1);
-    			set_input_value(input1, /*$problemStore*/ ctx[2].timelimit);
+    			set_input_value(input1, /*$problemStore*/ ctx[3].timelimit);
     			append_dev(div7, t12);
     			append_dev(div7, span0);
-    			append_dev(div11, t14);
-    			append_dev(div11, div8);
+    			append_dev(div12, t14);
+    			append_dev(div12, div8);
     			append_dev(div8, label2);
     			append_dev(div8, t16);
     			append_dev(div8, input2);
-    			set_input_value(input2, /*$problemStore*/ ctx[2].datalimit);
+    			set_input_value(input2, /*$problemStore*/ ctx[3].datalimit);
     			append_dev(div8, t17);
     			append_dev(div8, span1);
-    			append_dev(div11, t19);
+    			append_dev(div12, t19);
+    			append_dev(div12, div11);
+    			append_dev(div11, label3);
+    			append_dev(div11, t21);
     			append_dev(div11, div10);
-    			append_dev(div10, label3);
-    			append_dev(div10, t21);
     			append_dev(div10, div9);
-    			append_dev(div9, select);
 
     			for (let i = 0; i < each_blocks.length; i += 1) {
-    				each_blocks[i].m(select, null);
+    				each_blocks[i].m(div9, null);
     			}
 
-    			append_dev(div9, t22);
-    			append_dev(div9, input3);
+    			append_dev(div10, t22);
+    			append_dev(div10, input3);
     			set_input_value(input3, /*hashTagString*/ ctx[1]);
     			current = true;
 
@@ -50005,16 +50304,16 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     				listen_dev(input0, "input", /*input0_input_handler*/ ctx[10]),
     				listen_dev(input1, "input", /*input1_input_handler*/ ctx[11]),
     				listen_dev(input2, "input", /*input2_input_handler*/ ctx[12]),
-    				listen_dev(select, "change", /*change_handler*/ ctx[13], false, false, false),
-    				listen_dev(input3, "input", /*input3_input_handler*/ ctx[14])
+    				listen_dev(input3, "keypress", /*keypress_handler*/ ctx[14], false, false, false),
+    				listen_dev(input3, "input", /*input3_input_handler*/ ctx[15])
     			];
     		},
     		p: function update(ctx, [dirty]) {
-    			if (dirty & /*$problemStore*/ 4) {
-    				set_input_value(input0, /*$problemStore*/ ctx[2].problemName);
+    			if (dirty & /*$problemStore*/ 8) {
+    				set_input_value(input0, /*$problemStore*/ ctx[3].problemName);
     			}
 
-    			if (/*uniqueNameStatus*/ ctx[0] === 2) {
+    			if (/*uniqueNameStatus*/ ctx[2] === 2) {
     				if (!if_block0) {
     					if_block0 = create_if_block_2$7(ctx);
     					if_block0.c();
@@ -50033,7 +50332,7 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     				check_outros();
     			}
 
-    			if (/*uniqueNameStatus*/ ctx[0] === 1) {
+    			if (/*uniqueNameStatus*/ ctx[2] === 1) {
     				if (!if_block1) {
     					if_block1 = create_if_block_1$a(ctx);
     					if_block1.c();
@@ -50044,7 +50343,7 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     				if_block1 = null;
     			}
 
-    			if (/*uniqueNameStatus*/ ctx[0] === 3) {
+    			if (/*uniqueNameStatus*/ ctx[2] === 3) {
     				if (!if_block2) {
     					if_block2 = create_if_block$f(ctx);
     					if_block2.c();
@@ -50055,16 +50354,16 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     				if_block2 = null;
     			}
 
-    			if (dirty & /*$problemStore*/ 4 && input1.value !== /*$problemStore*/ ctx[2].timelimit) {
-    				set_input_value(input1, /*$problemStore*/ ctx[2].timelimit);
+    			if (dirty & /*$problemStore*/ 8 && input1.value !== /*$problemStore*/ ctx[3].timelimit) {
+    				set_input_value(input1, /*$problemStore*/ ctx[3].timelimit);
     			}
 
-    			if (dirty & /*$problemStore*/ 4 && input2.value !== /*$problemStore*/ ctx[2].datalimit) {
-    				set_input_value(input2, /*$problemStore*/ ctx[2].datalimit);
+    			if (dirty & /*$problemStore*/ 8 && input2.value !== /*$problemStore*/ ctx[3].datalimit) {
+    				set_input_value(input2, /*$problemStore*/ ctx[3].datalimit);
     			}
 
-    			if (dirty & /*tagList*/ 16) {
-    				each_value = /*tagList*/ ctx[4];
+    			if (dirty & /*selectedTags, hashTagString, $problemStore*/ 11) {
+    				each_value = /*selectedTags*/ ctx[0];
     				let i;
 
     				for (i = 0; i < each_value.length; i += 1) {
@@ -50075,7 +50374,7 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     					} else {
     						each_blocks[i] = create_each_block$g(child_ctx);
     						each_blocks[i].c();
-    						each_blocks[i].m(select, null);
+    						each_blocks[i].m(div9, null);
     					}
     				}
 
@@ -50100,7 +50399,7 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     			current = false;
     		},
     		d: function destroy(detaching) {
-    			if (detaching) detach_dev(div14);
+    			if (detaching) detach_dev(div15);
     			if (if_block0) if_block0.d();
     			if (if_block1) if_block1.d();
     			if (if_block2) if_block2.d();
@@ -50123,7 +50422,7 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     function instance$z($$self, $$props, $$invalidate) {
     	let $problemStore;
     	validate_store(problemStore$1, "problemStore");
-    	component_subscribe($$self, problemStore$1, $$value => $$invalidate(2, $problemStore = $$value));
+    	component_subscribe($$self, problemStore$1, $$value => $$invalidate(3, $problemStore = $$value));
     	let alert = "*Name must be in capital letters with no space in between and no special characters";
 
     	const tagList = [
@@ -50138,33 +50437,28 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     	];
 
     	const client = getClient();
+    	let selectedTags = [];
 
-    	setTimeout(
-    		() => {
-    			tagsName.forEach(tag => {
-    				tagList.forEach((tt, index) => {
-    					if (tag === tt) {
-    						selectedTags = [...selectedTags, index];
-    						return;
-    					}
-    				});
-    			});
-    		},
-    		300
-    	);
+    	selectedTags = [
+    		...$problemStore.tags.split("#").filter((__Directive, index) => {
+    			return index !== 0;
+    		})
+    	];
+
+    	let hashTagString = "";
 
     	function changeHandler(indexValue) {
     		console.log(selectedTags.length, indexValue);
     		let rr = selectedTags.length;
 
-    		selectedTags = [
+    		$$invalidate(0, selectedTags = [
     			...selectedTags.filter(ele => {
     				return ele !== indexValue;
     			})
-    		];
+    		]);
 
     		if (rr === selectedTags.length) {
-    			selectedTags = [...selectedTags, indexValue];
+    			$$invalidate(0, selectedTags = [...selectedTags, indexValue]);
     		}
 
     		$$invalidate(1, hashTagString = "");
@@ -50176,13 +50470,24 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     		set_store_value(problemStore$1, $problemStore.tags = hashTagString, $problemStore);
     	}
 
+    	function newTagHandler(tag) {
+    		$$invalidate(0, selectedTags = [...selectedTags, tag]);
+    		$$invalidate(1, hashTagString = "");
+    		console.log(selectedTags);
+    		set_store_value(problemStore$1, $problemStore.tags = "", $problemStore);
+
+    		selectedTags.forEach(tag => {
+    			set_store_value(problemStore$1, $problemStore.tags += "#" + tag, $problemStore);
+    		});
+    	}
+
     	const onInput = (function checkIfAvailable() {
     		let timer;
 
     		return e => {
     			timer = setTimeout(
     				async () => {
-    					$$invalidate(0, uniqueNameStatus = 2);
+    					$$invalidate(2, uniqueNameStatus = 2);
 
     					const res = await mutate(client, {
     						mutation: apolloClient.checkIfAvailable,
@@ -50192,9 +50497,9 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     					console.log(res);
 
     					if (res.data.checkProblemIfExists.success === false) {
-    						$$invalidate(0, uniqueNameStatus = 1);
+    						$$invalidate(2, uniqueNameStatus = 1);
     					} else {
-    						$$invalidate(0, uniqueNameStatus = 3);
+    						$$invalidate(2, uniqueNameStatus = 3);
     					}
     				},
     				30
@@ -50217,19 +50522,36 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     		problemStore$1.set($problemStore);
     	}
 
-    	const change_handler = e => {
-    		console.log(e.target.value);
+    	const click_handler = ind => {
+    		$$invalidate(0, selectedTags = [
+    			...selectedTags.filter((__, index) => {
+    				return ind !== index;
+    			})
+    		]);
 
-    		if (parseInt(e.target.value) === 0) {
-    			return;
+    		$$invalidate(1, hashTagString = "");
+    		set_store_value(problemStore$1, $problemStore.tags = "", $problemStore);
+
+    		selectedTags.forEach(tag => {
+    			set_store_value(problemStore$1, $problemStore.tags += "#" + tag, $problemStore);
+    		});
+    	};
+
+    	const keypress_handler = e => {
+    		if (e.key === " ") {
+    			console.log(hashTagString);
+    			newTagHandler(hashTagString);
+    			set_store_value(problemStore$1, $problemStore.tags = "", $problemStore);
+
+    			selectedTags.forEach(tag => {
+    				set_store_value(problemStore$1, $problemStore.tags += "#" + tag, $problemStore);
+    			});
     		}
-
-    		changeHandler(parseInt(e.target.value));
     	};
 
     	function input3_input_handler() {
     		hashTagString = this.value;
-    		($$invalidate(1, hashTagString), $$invalidate(2, $problemStore));
+    		$$invalidate(1, hashTagString);
     	}
 
     	$$self.$capture_state = () => {
@@ -50237,47 +50559,32 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     	};
 
     	$$self.$inject_state = $$props => {
-    		if ("alert" in $$props) $$invalidate(3, alert = $$props.alert);
-    		if ("uniqueNameStatus" in $$props) $$invalidate(0, uniqueNameStatus = $$props.uniqueNameStatus);
-    		if ("selectedTags" in $$props) selectedTags = $$props.selectedTags;
+    		if ("alert" in $$props) $$invalidate(4, alert = $$props.alert);
+    		if ("selectedTags" in $$props) $$invalidate(0, selectedTags = $$props.selectedTags);
     		if ("hashTagString" in $$props) $$invalidate(1, hashTagString = $$props.hashTagString);
+    		if ("uniqueNameStatus" in $$props) $$invalidate(2, uniqueNameStatus = $$props.uniqueNameStatus);
     		if ("$problemStore" in $$props) problemStore$1.set($problemStore = $$props.$problemStore);
-    		if ("tagsName" in $$props) tagsName = $$props.tagsName;
     	};
 
     	let uniqueNameStatus;
-    	let selectedTags;
-    	let hashTagString;
-    	let tagsName;
-
-    	$$self.$$.update = () => {
-    		if ($$self.$$.dirty & /*$problemStore*/ 4) {
-    			 $$invalidate(1, hashTagString = $problemStore.tags);
-    		}
-
-    		if ($$self.$$.dirty & /*$problemStore*/ 4) {
-    			 tagsName = [...$problemStore.tags.split("#")];
-    		}
-    	};
-
-    	 $$invalidate(0, uniqueNameStatus = 0);
-    	 selectedTags = [];
+    	 $$invalidate(2, uniqueNameStatus = 0);
 
     	return [
-    		uniqueNameStatus,
+    		selectedTags,
     		hashTagString,
+    		uniqueNameStatus,
     		$problemStore,
     		alert,
-    		tagList,
-    		changeHandler,
+    		newTagHandler,
     		onInput,
-    		selectedTags,
-    		tagsName,
+    		tagList,
     		client,
+    		changeHandler,
     		input0_input_handler,
     		input1_input_handler,
     		input2_input_handler,
-    		change_handler,
+    		click_handler,
+    		keypress_handler,
     		input3_input_handler
     	];
     }
@@ -51252,13 +51559,138 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     const { console: console_1$9 } = globals;
     const file$H = "src/routes/update_problem/edit_problem.svelte";
 
+    // (49:2) {:catch err}
+    function create_catch_block$6(ctx) {
+    	let t0;
+    	let t1_value = /*err*/ ctx[9] + "";
+    	let t1;
+
+    	const block = {
+    		c: function create() {
+    			t0 = text("Err: ");
+    			t1 = text(t1_value);
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, t0, anchor);
+    			insert_dev(target, t1, anchor);
+    		},
+    		p: function update(ctx, dirty) {
+    			if (dirty & /*$problem*/ 4 && t1_value !== (t1_value = /*err*/ ctx[9] + "")) set_data_dev(t1, t1_value);
+    		},
+    		i: noop,
+    		o: noop,
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(t0);
+    			if (detaching) detach_dev(t1);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_catch_block$6.name,
+    		type: "catch",
+    		source: "(49:2) {:catch err}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (45:2) {:then res}
+    function create_then_block$6(ctx) {
+    	let main;
+    	let current;
+
+    	const selectpage = new Select_page$3({
+    			props: {
+    				pageNum: /*pageNum*/ ctx[1],
+    				class: "h-full",
+    				currentRoute: /*currentRoute*/ ctx[0]
+    			},
+    			$$inline: true
+    		});
+
+    	const block = {
+    		c: function create() {
+    			main = element("main");
+    			create_component(selectpage.$$.fragment);
+    			attr_dev(main, "class", " mx-auto w-full flex-grow overflow-auto svelte-1j4kev6");
+    			add_location(main, file$H, 45, 4, 1699);
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, main, anchor);
+    			mount_component(selectpage, main, null);
+    			current = true;
+    		},
+    		p: function update(ctx, dirty) {
+    			const selectpage_changes = {};
+    			if (dirty & /*pageNum*/ 2) selectpage_changes.pageNum = /*pageNum*/ ctx[1];
+    			if (dirty & /*currentRoute*/ 1) selectpage_changes.currentRoute = /*currentRoute*/ ctx[0];
+    			selectpage.$set(selectpage_changes);
+    		},
+    		i: function intro(local) {
+    			if (current) return;
+    			transition_in(selectpage.$$.fragment, local);
+    			current = true;
+    		},
+    		o: function outro(local) {
+    			transition_out(selectpage.$$.fragment, local);
+    			current = false;
+    		},
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(main);
+    			destroy_component(selectpage);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_then_block$6.name,
+    		type: "then",
+    		source: "(45:2) {:then res}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (43:19)      Loading...   {:then res}
+    function create_pending_block$6(ctx) {
+    	let t;
+
+    	const block = {
+    		c: function create() {
+    			t = text("Loading...");
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, t, anchor);
+    		},
+    		p: noop,
+    		i: noop,
+    		o: noop,
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(t);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_pending_block$6.name,
+    		type: "pending",
+    		source: "(43:19)      Loading...   {:then res}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
     function create_fragment$K(ctx) {
     	let div2;
     	let header;
     	let t0;
     	let subheader;
     	let t1;
-    	let main;
+    	let promise;
     	let t2;
     	let footer;
     	let div0;
@@ -51275,14 +51707,19 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     			$$inline: true
     		});
 
-    	const selectpage = new Select_page$3({
-    			props: {
-    				pageNum: /*pageNum*/ ctx[1],
-    				class: "h-full",
-    				currentRoute: /*currentRoute*/ ctx[0]
-    			},
-    			$$inline: true
-    		});
+    	let info = {
+    		ctx,
+    		current: null,
+    		token: null,
+    		pending: create_pending_block$6,
+    		then: create_then_block$6,
+    		catch: create_catch_block$6,
+    		value: 8,
+    		error: 9,
+    		blocks: [,,,]
+    	};
+
+    	handle_promise(promise = /*$problem*/ ctx[2], info);
 
     	const block = {
     		c: function create() {
@@ -51293,8 +51730,7 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     			subheader = element("subheader");
     			create_component(subnavbar.$$.fragment);
     			t1 = space();
-    			main = element("main");
-    			create_component(selectpage.$$.fragment);
+    			info.block.c();
     			t2 = space();
     			footer = element("footer");
     			div0 = element("div");
@@ -51304,26 +51740,24 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     			div1 = element("div");
     			button1 = element("button");
     			button1.textContent = "Next";
-    			attr_dev(subheader, "class", "svelte-18fkda7");
-    			add_location(subheader, file$H, 37, 4, 1509);
-    			attr_dev(header, "class", "svelte-18fkda7");
-    			add_location(header, file$H, 35, 2, 1481);
-    			attr_dev(main, "class", " mx-auto w-full flex-grow overflow-auto svelte-18fkda7");
-    			add_location(main, file$H, 41, 2, 1591);
+    			attr_dev(subheader, "class", "svelte-1j4kev6");
+    			add_location(subheader, file$H, 38, 4, 1566);
+    			attr_dev(header, "class", "svelte-1j4kev6");
+    			add_location(header, file$H, 36, 2, 1538);
     			attr_dev(button0, "id", "prevbutton");
-    			attr_dev(button0, "class", "py-4 px-6 float-left shadow-md no-underline rounded-full bg-dark\n        text-white font-sans font-semibold text-sm border-white btn-primary\n        hover:text-white text-xl hover:bg-elight focus:outline-none\n        active:shadow-none mr-2 svelte-18fkda7");
-    			add_location(button0, file$H, 46, 6, 1806);
-    			attr_dev(div0, "class", "flex-1  svelte-18fkda7");
-    			add_location(div0, file$H, 45, 4, 1778);
+    			attr_dev(button0, "class", "py-4 px-6 float-left shadow-md no-underline rounded-full bg-dark\n        text-white font-sans font-semibold text-sm border-white btn-primary\n        hover:text-white text-xl hover:bg-elight focus:outline-none\n        active:shadow-none mr-2 svelte-1j4kev6");
+    			add_location(button0, file$H, 53, 6, 1960);
+    			attr_dev(div0, "class", "flex-1  svelte-1j4kev6");
+    			add_location(div0, file$H, 52, 4, 1932);
     			attr_dev(button1, "id", "nextbutton");
-    			attr_dev(button1, "class", "py-4 px-6 shadow-md text-xl float-right no-underline rounded-full\n        bg-dark text-white font-sans font-semibold text-sm border-white\n        btn-primary hover:text-dark hover:bg-elight focus:outline-none\n        active:shadow-none mr-2 svelte-18fkda7");
-    			add_location(button1, file$H, 63, 6, 2320);
-    			attr_dev(div1, "class", "flex-1 svelte-18fkda7");
-    			add_location(div1, file$H, 62, 4, 2293);
-    			attr_dev(footer, "class", " footer my-8 w-full px-20 mx-auto sticky svelte-18fkda7");
-    			add_location(footer, file$H, 44, 2, 1716);
-    			attr_dev(div2, "class", "w-screen bg-edark h-screen flex flex-col svelte-18fkda7");
-    			add_location(div2, file$H, 34, 0, 1424);
+    			attr_dev(button1, "class", "py-4 px-6 shadow-md text-xl float-right no-underline rounded-full\n        bg-dark text-white font-sans font-semibold text-sm border-white\n        btn-primary hover:text-dark hover:bg-elight focus:outline-none\n        active:shadow-none mr-2 svelte-1j4kev6");
+    			add_location(button1, file$H, 70, 6, 2474);
+    			attr_dev(div1, "class", "flex-1 svelte-1j4kev6");
+    			add_location(div1, file$H, 69, 4, 2447);
+    			attr_dev(footer, "class", " footer my-8 w-full px-20 mx-auto sticky svelte-1j4kev6");
+    			add_location(footer, file$H, 51, 2, 1870);
+    			attr_dev(div2, "class", "w-screen bg-edark h-screen flex flex-col svelte-1j4kev6");
+    			add_location(div2, file$H, 35, 0, 1481);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -51336,8 +51770,9 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     			append_dev(header, subheader);
     			mount_component(subnavbar, subheader, null);
     			append_dev(div2, t1);
-    			append_dev(div2, main);
-    			mount_component(selectpage, main, null);
+    			info.block.m(div2, info.anchor = null);
+    			info.mount = () => div2;
+    			info.anchor = t2;
     			append_dev(div2, t2);
     			append_dev(div2, footer);
     			append_dev(footer, div0);
@@ -51352,33 +51787,44 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     				listen_dev(button1, "click", /*click_handler_1*/ ctx[7], false, false, false)
     			];
     		},
-    		p: function update(ctx, [dirty]) {
+    		p: function update(new_ctx, [dirty]) {
+    			ctx = new_ctx;
     			const subnavbar_changes = {};
     			if (dirty & /*pageNum*/ 2) subnavbar_changes.position = /*pageNum*/ ctx[1];
     			subnavbar.$set(subnavbar_changes);
-    			const selectpage_changes = {};
-    			if (dirty & /*pageNum*/ 2) selectpage_changes.pageNum = /*pageNum*/ ctx[1];
-    			if (dirty & /*currentRoute*/ 1) selectpage_changes.currentRoute = /*currentRoute*/ ctx[0];
-    			selectpage.$set(selectpage_changes);
+    			info.ctx = ctx;
+
+    			if (dirty & /*$problem*/ 4 && promise !== (promise = /*$problem*/ ctx[2]) && handle_promise(promise, info)) ; else {
+    				const child_ctx = ctx.slice();
+    				child_ctx[8] = info.resolved;
+    				info.block.p(child_ctx, dirty);
+    			}
     		},
     		i: function intro(local) {
     			if (current) return;
     			transition_in(navbar.$$.fragment, local);
     			transition_in(subnavbar.$$.fragment, local);
-    			transition_in(selectpage.$$.fragment, local);
+    			transition_in(info.block);
     			current = true;
     		},
     		o: function outro(local) {
     			transition_out(navbar.$$.fragment, local);
     			transition_out(subnavbar.$$.fragment, local);
-    			transition_out(selectpage.$$.fragment, local);
+
+    			for (let i = 0; i < 3; i += 1) {
+    				const block = info.blocks[i];
+    				transition_out(block);
+    			}
+
     			current = false;
     		},
     		d: function destroy(detaching) {
     			if (detaching) detach_dev(div2);
     			destroy_component(navbar);
     			destroy_component(subnavbar);
-    			destroy_component(selectpage);
+    			info.block.d();
+    			info.token = null;
+    			info = null;
     			run_all(dispose);
     		}
     	};
@@ -51409,7 +51855,7 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     	});
 
     	validate_store(problem, "problem");
-    	component_subscribe($$self, problem, value => $$invalidate(3, $problem = value));
+    	component_subscribe($$self, problem, value => $$invalidate(2, $problem = value));
 
     	$problem.then(res => {
     		let tt = res.data.problemById;
@@ -51473,8 +51919,8 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     	return [
     		currentRoute,
     		pageNum,
-    		problem,
     		$problem,
+    		problem,
     		$problemStore,
     		client,
     		click_handler,
@@ -52963,7 +53409,7 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     }
 
     // (244:4) {:catch error}
-    function create_catch_block$5(ctx) {
+    function create_catch_block$7(ctx) {
     	let current;
 
     	const error = new Error$1({
@@ -53000,7 +53446,7 @@ mutation checkTimeLimit($data:String, $timelimit:String){
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_catch_block$5.name,
+    		id: create_catch_block$7.name,
     		type: "catch",
     		source: "(244:4) {:catch error}",
     		ctx
@@ -53010,7 +53456,7 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     }
 
     // (209:4) {:then res}
-    function create_then_block$5(ctx) {
+    function create_then_block$7(ctx) {
     	let div0;
     	let t;
     	let div1;
@@ -53109,7 +53555,7 @@ mutation checkTimeLimit($data:String, $timelimit:String){
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_then_block$5.name,
+    		id: create_then_block$7.name,
     		type: "then",
     		source: "(209:4) {:then res}",
     		ctx
@@ -53233,7 +53679,7 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     }
 
     // (207:28)        <Loader />     {:then res}
-    function create_pending_block$5(ctx) {
+    function create_pending_block$7(ctx) {
     	let current;
     	const loader = new Loader$4({ $$inline: true });
 
@@ -53262,7 +53708,7 @@ mutation checkTimeLimit($data:String, $timelimit:String){
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_pending_block$5.name,
+    		id: create_pending_block$7.name,
     		type: "pending",
     		source: "(207:28)        <Loader />     {:then res}",
     		ctx
@@ -53290,9 +53736,9 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     		ctx,
     		current: null,
     		token: null,
-    		pending: create_pending_block$5,
-    		then: create_then_block$5,
-    		catch: create_catch_block$5,
+    		pending: create_pending_block$7,
+    		then: create_then_block$7,
+    		catch: create_catch_block$7,
     		value: 11,
     		error: 12,
     		blocks: [,,,]
@@ -53522,7 +53968,7 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     }
 
     // (237:4) {:catch error}
-    function create_catch_block$6(ctx) {
+    function create_catch_block$8(ctx) {
     	let current;
 
     	const error = new Error$1({
@@ -53559,7 +54005,7 @@ mutation checkTimeLimit($data:String, $timelimit:String){
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_catch_block$6.name,
+    		id: create_catch_block$8.name,
     		type: "catch",
     		source: "(237:4) {:catch error}",
     		ctx
@@ -53569,7 +54015,7 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     }
 
     // (206:4) {:then res}
-    function create_then_block$6(ctx) {
+    function create_then_block$8(ctx) {
     	let div0;
     	let t;
     	let div1;
@@ -53668,7 +54114,7 @@ mutation checkTimeLimit($data:String, $timelimit:String){
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_then_block$6.name,
+    		id: create_then_block$8.name,
     		type: "then",
     		source: "(206:4) {:then res}",
     		ctx
@@ -53792,7 +54238,7 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     }
 
     // (204:25)        <Loader />     {:then res}
-    function create_pending_block$6(ctx) {
+    function create_pending_block$8(ctx) {
     	let current;
     	const loader = new Loader$4({ $$inline: true });
 
@@ -53821,7 +54267,7 @@ mutation checkTimeLimit($data:String, $timelimit:String){
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_pending_block$6.name,
+    		id: create_pending_block$8.name,
     		type: "pending",
     		source: "(204:25)        <Loader />     {:then res}",
     		ctx
@@ -53849,9 +54295,9 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     		ctx,
     		current: null,
     		token: null,
-    		pending: create_pending_block$6,
-    		then: create_then_block$6,
-    		catch: create_catch_block$6,
+    		pending: create_pending_block$8,
+    		then: create_then_block$8,
+    		catch: create_catch_block$8,
     		value: 10,
     		error: 11,
     		blocks: [,,,]
@@ -54075,7 +54521,7 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     }
 
     // (227:4) {:catch error}
-    function create_catch_block$7(ctx) {
+    function create_catch_block$9(ctx) {
     	let current;
 
     	const error = new Error$1({
@@ -54112,7 +54558,7 @@ mutation checkTimeLimit($data:String, $timelimit:String){
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_catch_block$7.name,
+    		id: create_catch_block$9.name,
     		type: "catch",
     		source: "(227:4) {:catch error}",
     		ctx
@@ -54122,7 +54568,7 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     }
 
     // (199:4) {:then res}
-    function create_then_block$7(ctx) {
+    function create_then_block$9(ctx) {
     	let div0;
     	let t;
     	let div1;
@@ -54221,7 +54667,7 @@ mutation checkTimeLimit($data:String, $timelimit:String){
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_then_block$7.name,
+    		id: create_then_block$9.name,
     		type: "then",
     		source: "(199:4) {:then res}",
     		ctx
@@ -54333,7 +54779,7 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     }
 
     // (197:28)        <Loader />     {:then res}
-    function create_pending_block$7(ctx) {
+    function create_pending_block$9(ctx) {
     	let current;
     	const loader = new Loader$4({ $$inline: true });
 
@@ -54362,7 +54808,7 @@ mutation checkTimeLimit($data:String, $timelimit:String){
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_pending_block$7.name,
+    		id: create_pending_block$9.name,
     		type: "pending",
     		source: "(197:28)        <Loader />     {:then res}",
     		ctx
@@ -54388,9 +54834,9 @@ mutation checkTimeLimit($data:String, $timelimit:String){
     		ctx,
     		current: null,
     		token: null,
-    		pending: create_pending_block$7,
-    		then: create_then_block$7,
-    		catch: create_catch_block$7,
+    		pending: create_pending_block$9,
+    		then: create_then_block$9,
+    		catch: create_catch_block$9,
     		value: 9,
     		error: 10,
     		blocks: [,,,]
