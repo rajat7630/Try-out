@@ -29,7 +29,40 @@
 
 <style>
   .savebutton {
-    @apply text-white ml-4 outline-none px-4;
+    @apply ml-4 outline-none px-4;
+  }
+  .statement {
+    height: 50vh;
+  }
+  .labels {
+    @apply text-2xl;
+  }
+  .outer_box {
+    @apply p-3 flex-1 border-solid  border-2 rounded;
+  }
+  .rows {
+    @apply mx-auto text-xl;
+  }
+  .boxheight2 {
+    max-height: 385px;
+  }
+  body {
+    --color-ed: White;
+    --color-d: #88999e;
+    --color-l: #106270;
+    --color-el: #3c7380;
+  }
+  :global(body.dark-mode) body {
+    --color-ed: #1b262c;
+    --color-d: #254b62;
+    --color-l: #303030;
+    --color-el: #77abb7;
+  }
+  .tag {
+    color: black;
+  }
+  :global(body.dark-mode) .tag {
+    color: white;
   }
 </style>
 
@@ -37,83 +70,91 @@
   href="https://unpkg.com/tailwindcss@^1.0/dist/tailwind.min.css"
   rel="stylesheet" />
 
-<div class=" rounded h-full flex flex-col box-border">
-  <div class="bg-edark rounded flex flex-col max-w-full overflow-auto">
+<body>
+  <div class="bg-edark h-full flex flex-col box-border">
+
     {#await $problem}
       Loading...
     {:then result}
-      <div class="mx-auto mt-8 max-w-xl flex flex-col">
-        <div class="font-bold text-2xl text-elight mx-auto">
-          {result.data.problemById.problemName}
+      <div class="bg-edark rounded flex flex-col max-w-full overflow-auto">
+        <div class="mx-auto mt-8 max-w-xl flex flex-col">
+          <div class="font-bold text-2xl text-elight mx-auto">
+            {result.data.problemById.problemName}
+          </div>
+          <div class=" text-xl text-elight mx-auto">
+            Data Limit :- {result.data.problemById.datalimit} Mb
+          </div>
+          <div class=" text-xl text-elight mx-auto">
+            Time Limit :- {result.data.problemById.timelimit} ms
+          </div>
         </div>
-        <div class=" text-xl text-elight mx-auto">
-          Data Limit :- {result.data.problemById.datalimit} Mb
-        </div>
-        <div class=" text-xl text-elight mx-auto">
-          Time Limit :- {result.data.problemById.timelimit} ms
-        </div>
-      </div>
-      <div class="bg-dark rounded max-w-full mt-12 mx-64">
+        <div class="bg-dark rounded max-w-full mt-12 mx-64">
 
-        <div class="shadow-lg rounded">
-          <div class="px-12 py-8">
-            <div class="w-full h-full px-3 flex flex-col">
-              <label class=" text-2xl text-elight mb-3 my-2">Description</label>
-              <p class="text-xl text-elight">
-                {result.data.problemById.description}
-              </p>
-            </div>
+          <div class="shadow-lg rounded">
+            <div class="px-12 py-8">
+              <div class="w-full h-full px-3 flex flex-col">
+                <label class=" text-2xl text-elight mb-3 my-2">
+                  Description
+                </label>
+                <p class="text-xl text-elight">
+                  {result.data.problemById.description}
+                </p>
+              </div>
 
-            <div class="w-full h-full px-3 flex flex-col">
-              <label class=" text-2xl text-elight mb-3 my-2">TestCases</label>
-              <textarea
-                value={JSON.parse(result.data.problemById.problemTests)}
-                class=" w-full bg-edark flex-grow text-elight text-2xl border
-                rounded py-3 px-4 mb-3 leading-tight focus:outline-none
-                focus:border-white h-48 resize-none"
-                id="message"
-                readonly />
-            </div>
-            <div class="flex flex-col w-full h-full px-3">
-              <label class=" text-2xl text-elight mb-3 my-2">Solution</label>
-              <textarea
-                value={result.data.problemById.solution}
-                class=" flex-grow w-full bg-edark text-elight text-2xl border
-                rounded py-3 px-4 mb-3 leading-tight focus:outline-none
-                focus:border-white h-48 resize-none"
-                id="message"
-                readonly />
-            </div>
+              <div class="w-full h-full px-3 flex flex-col">
+                <label class=" text-2xl text-elight mb-3 my-2">TestCases</label>
+                <textarea
+                  value={JSON.parse(result.data.problemById.problemTests)}
+                  class=" w-full bg-edark flex-grow text-elight text-2xl border
+                  rounded py-3 px-4 mb-3 leading-tight focus:outline-none
+                  focus:border-white h-48 resize-none"
+                  id="message"
+                  readonly />
+              </div>
+              <div class="flex flex-col w-full h-full px-3">
+                <label class=" text-2xl text-elight mb-3 my-2">Solution</label>
+                <textarea
+                  value={result.data.problemById.solution}
+                  class=" flex-grow w-full bg-edark text-elight text-2xl border
+                  rounded py-3 px-4 mb-3 leading-tight focus:outline-none
+                  focus:border-white h-48 resize-none"
+                  id="message"
+                  readonly />
+              </div>
 
-            <div class="w-full h-full px-3 flex flex-col">
-              <label class=" text-2xl text-elight mb-3 my-2">Tags</label>
-              <p class="text-xl text-elight">{result.data.problemById.tags}</p>
+              <div class="w-full h-full px-3 flex flex-col">
+                <label class=" text-2xl text-elight mb-3 my-2">Tags</label>
+                <p class="text-xl text-elight">
+                  {result.data.problemById.tags}
+                </p>
+              </div>
             </div>
           </div>
         </div>
-      </div>
-      <div class="max-w-6xl my-4 mb-32 flex flex-col mx-auto">
-        <div class="float-right ">
-          <button
-            style="color:#254b62;"
-            class="savebutton hover:bg-grey hover:text-edark font-bold py-2 px-4
-            border rounded">
-            <Navigate to="/editProblem/{currentRoute.namedParams.id}">
-              Edit
-            </Navigate>
-          </button>
+        <div class="max-w-6xl my-4 mb-32 flex flex-col mx-auto">
+          <div class="float-right ">
+            <button
+              style="color:#254b62;"
+              class="savebutton hover:bg-grey hover:text-edark font-bold py-2
+              px-4 border rounded">
+              <Navigate to="/editProblem/{currentRoute.namedParams.id}">
+                Edit
+              </Navigate>
+            </button>
 
-          <button
-            on:click={deleteProblemHandler}
-            style="color:#254b62;"
-            class="savebutton hover:bg-grey hover:text-edark font-bold py-2 px-4
-            border rounded">
-            Delete
-          </button>
+            <button
+              on:click={deleteProblemHandler}
+              style="color:#254b62;"
+              class="savebutton hover:bg-grey hover:text-edark font-bold py-2
+              px-4 border rounded">
+              Delete
+            </button>
+          </div>
         </div>
       </div>
     {:catch err}
       Error : {err}
     {/await}
   </div>
-</div>
+
+</body>

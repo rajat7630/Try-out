@@ -33,7 +33,7 @@
   }
 </style>
 
-<div class="w-screen bg-edark h-screen flex flex-col">
+<div class="w-screen h-screen flex flex-col">
   <header>
     <subheader>
       <SubNavbar position={pageNum} />
