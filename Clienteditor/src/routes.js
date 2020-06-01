@@ -1,5 +1,6 @@
+// eslint-disable-next-line prettier/prettier
 import Home from './Home.svelte';
-import Admin from './routes/Admin.svelte';
+
 import Login from './routes/Login.svelte';
 import Problems from './routes/Problems.svelte';
 import Tests from './routes/Tests.svelte';
@@ -10,7 +11,13 @@ import NewProblem from './routes/problem/add_problem.svelte';
 import EditProblem from './routes/update_problem/edit_problem.svelte';
 import Thankyou from './routes/thankyou.svelte';
 import Introduce from './routes/introduce_yourself.svelte';
-import AdminPanel from './routes/admin_panel/AdminPanel.svelte';
+import ProblemPanel from './routes/admin_panel/problems.svelte';
+import TestPanel from './routes/admin_panel/tests.svelte';
+import AttemptsPanel from './routes/admin_panel/attempts.svelte';
+
+//layout
+import AdminLayout from './layouts/admin_layout.svelte';
+import PublicLayout from './layouts/public_layout.svelte';
 
 function userIsAdmin() {
   //check if user is admin and returns true or false
@@ -28,41 +35,6 @@ const routes = [
     onlyIf: { guard: notAdmin, redirect: '/admin' },
   },
   {
-    name: '/newtest',
-    component: NewTest,
-    onlyIf: { guard: userIsAdmin, redirect: '/' },
-  },
-  {
-    name: '/newProblem',
-    component: NewProblem,
-    onlyIf: { guard: userIsAdmin, redirect: '/' },
-  },
-  {
-    name: '/editProblem/:id',
-    component: EditProblem,
-    onlyIf: { guard: userIsAdmin, redirect: '/' },
-  },
-  {
-    name: '/editTest/:id',
-    component: EditTest,
-    onlyIf: { guard: userIsAdmin, redirect: '/' },
-  },
-  {
-    name: '/test/:id',
-    component: Tests,
-    onlyIf: { guard: userIsAdmin, redirect: '/' },
-  },
-  {
-    name: '/problem/:id',
-    component: Problems,
-    onlyIf: { guard: userIsAdmin, redirect: '/' },
-  },
-  {
-    name: '/sendtest/:id',
-    component: SendTest,
-    onlyIf: { guard: userIsAdmin, redirect: '/' },
-  },
-  {
     name: '/givetest/:token',
     component: Introduce,
   },
@@ -75,19 +47,65 @@ const routes = [
     component: Home,
   },
   {
+    name: '/test/:id',
+    component: Tests,
+    layout: AdminLayout,
+  },
+  {
+    name: '/newtest',
+    component: NewTest,
+    layout: AdminLayout,
+  },
+  {
+    name: '/newProblem',
+    component: NewProblem,
+    layout: AdminLayout,
+  },
+  {
+    name: '/editProblem/:id',
+    component: EditProblem,
+    layout: AdminLayout,
+  },
+  {
+    name: '/editTest/:id',
+    component: EditTest,
+    layout: AdminLayout,
+  },
+
+  {
+    name: '/problem/:id',
+    component: Problems,
+    layout: AdminLayout,
+  },
+  {
+    name: '/sendtest/:id',
+    component: SendTest,
+    layout: AdminLayout,
+  },
+  {
     name: '/admin',
-    component: AdminPanel,
+    layout: AdminLayout,
     onlyIf: { guard: userIsAdmin, redirect: '/' },
-  },
-  {
-    name: '/showtests',
-    component: AdminPanel,
-    onlyIf: { guard: userIsAdmin, redirect: '/' },
-  },
-  {
-    name: '/showresults',
-    component: AdminPanel,
-    onlyIf: { guard: userIsAdmin, redirect: '/' },
+    nestedRoutes: [
+      {
+        name: '/panel',
+        layout: PublicLayout,
+        nestedRoutes: [
+          {
+            name: '/showproblems',
+            component: ProblemPanel,
+          },
+          {
+            name: '/showtests',
+            component: TestPanel,
+          },
+          {
+            name: '/showresults',
+            component: AttemptsPanel,
+          },
+        ],
+      },
+    ],
   },
 ];
 

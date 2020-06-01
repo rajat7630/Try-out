@@ -1,6 +1,7 @@
 importers:
   .:
     dependencies:
+      '@modular-css/svelte': 25.7.0
       apollo-boost: 0.4.7
       apollo-server-express: 2.13.1
       aws-sdk: 2.654.0
@@ -26,6 +27,7 @@ importers:
       '@commitlint/cli': ^8.3.5
       '@commitlint/config-conventional': ^8.3.4
       '@fullhuman/postcss-purgecss': ^2.1.2
+      '@modular-css/svelte': ^25.7.0
       apollo-boost: ^0.4.7
       apollo-server-express: ^2.13.0
       aws-sdk: ^2.644.0
@@ -481,6 +483,31 @@ packages:
     dev: true
     resolution:
       integrity: sha1-GViWWHTyS8Ub5Ih1/rUNZC/EH3s=
+  /@modular-css/processor/25.7.0:
+    dependencies:
+      dependency-graph: 0.9.0
+      escape-string-regexp: 4.0.0
+      lodash: 4.17.15
+      postcss: 7.0.30
+      postcss-selector-parser: 6.0.2
+      postcss-url: 8.0.0
+      postcss-value-parser: 4.0.3
+      resolve-from: 5.0.0
+      unique-slug: 2.0.2
+    dev: false
+    resolution:
+      integrity: sha512-aeLIP3+j0BSo1SfFjqGFcK8xrIWQU9rvioqlwgKYQPbVww9G5TKcNXFwS3bRjTpxGVtmIjJsv8qJ96b3GB0lRg==
+  /@modular-css/svelte/25.7.0:
+    dependencies:
+      '@modular-css/processor': 25.7.0
+      escape-string-regexp: 4.0.0
+      is-url: 1.2.4
+      slash: 3.0.0
+    dev: false
+    peerDependencies:
+      svelte: '>1'
+    resolution:
+      integrity: sha512-HBAIIJwnVFMoYQ0avR3xuRRqqBIg+2JgD0UmQvC3CGjAlMCSo7b4Tvp+1cTC0/dMrzrkf2jkVuc2nMBQa+WYZw==
   /@oclif/color/0.0.0:
     dependencies:
       ansi-styles: 3.2.1
@@ -2935,6 +2962,10 @@ packages:
     hasBin: true
     resolution:
       integrity: sha512-/Tb/JcjK111nNScGob5MNtsntNM1aCNUDipB/TkwZFhyDrrE47SOx/18wF2bbjgc3ZzCSKW1T5nt5EbFoAz/Vg==
+  /cuint/0.2.2:
+    dev: false
+    resolution:
+      integrity: sha1-QICG1AlVDCYxFVYZ6fp7ytw7mRs=
   /currently-unhandled/0.4.1:
     dependencies:
       array-find-index: 1.0.2
@@ -3096,6 +3127,12 @@ packages:
       node: '>= 0.6'
     resolution:
       integrity: sha1-m81S4UwJd2PnSbJ0xDRu0uVgtak=
+  /dependency-graph/0.9.0:
+    dev: false
+    engines:
+      node: '>= 0.6.0'
+    resolution:
+      integrity: sha512-9YLIBURXj4DJMFALxXw9K3Y3rwb5Fk0X5/8ipCzaN84+gKxoHK43tVKRNakCQbiEx07E8Uwhuq21BpUagFhZ8w==
   /deprecated-decorator/0.1.6:
     dev: false
     resolution:
@@ -3307,6 +3344,12 @@ packages:
       node: '>=0.8.0'
     resolution:
       integrity: sha1-G2HAViGQqN/2rjuyzwIAyhMLhtQ=
+  /escape-string-regexp/4.0.0:
+    dev: false
+    engines:
+      node: '>=10'
+    resolution:
+      integrity: sha512-TtpcNJ3XAzx3Gq8sWRzJaVajRs0uVxA2YAkdb1jm2YkPz4G6egUFAyA3n5vtEIZefPk5Wa4UXbKuS5fKkJWdgA==
   /escodegen/1.14.1:
     dependencies:
       esprima: 4.0.1
@@ -5020,6 +5063,10 @@ packages:
     dev: false
     resolution:
       integrity: sha1-jQsfp+eTOh5YSDYA7H2WYcuvdW8=
+  /is-url/1.2.4:
+    dev: false
+    resolution:
+      integrity: sha512-ITvGim8FhRiYe4IQ5uHSkj7pVaPDrCTkNd3yq3cV7iZAcJdHTUMPMEHcqSOy9xZ9qFenQCvi+2wjH9a1nXqHww==
   /is-windows/1.0.2:
     engines:
       node: '>=0.10.0'
@@ -6733,6 +6780,18 @@ packages:
       node: '>=4'
     resolution:
       integrity: sha512-36P2QR59jDTOAiIkqEprfJDsoNrvwFei3eCqKd1Y0tUsBimsq39BLp7RD+JWny3WgB1zGhJX8XVePwm9k4wdBg==
+  /postcss-url/8.0.0:
+    dependencies:
+      mime: 2.4.4
+      minimatch: 3.0.4
+      mkdirp: 0.5.5
+      postcss: 7.0.30
+      xxhashjs: 0.2.2
+    dev: false
+    engines:
+      node: '>=6.0.0'
+    resolution:
+      integrity: sha512-E2cbOQ5aii2zNHh8F6fk1cxls7QVFZjLPSrqvmiza8OuXLzIpErij8BDS5Y3STPfJgpIMNCPEr8JlKQWEoozUw==
   /postcss-value-parser/3.3.1:
     resolution:
       integrity: sha512-pISE66AbVkp4fDQ7VHBwRNXzAAKJjw4Vw7nWI/+Q3vuly7SNfgYXvm6i5IgFylHGK5sP/xHAbB7N49OS4gWNyQ==
@@ -7303,7 +7362,6 @@ packages:
     resolution:
       integrity: sha512-pb/MYmXstAkysRFx8piNI1tGFNQIFA3vkE3Gq4EuA1dF6gHp/+vgZqsCGJapvy8N3Q+4o7FwvquPJcnZ7RYy4g==
   /resolve-from/5.0.0:
-    dev: true
     engines:
       node: '>=8'
     resolution:
@@ -7650,7 +7708,6 @@ packages:
     resolution:
       integrity: sha512-dQbZnsMaIiTQPZmbGmktz+c74zt/hyrJEB4tdp2Jj0RNv9J6B/OWR5RyrZEvIn9fyh9Zlg2OlE2XzKz6wMKGAw==
   /slash/3.0.0:
-    dev: true
     engines:
       node: '>=8'
     resolution:
@@ -8595,6 +8652,12 @@ packages:
   /uniq/1.0.1:
     resolution:
       integrity: sha1-sxxa6CVIRKOoKBVBzisEuGWnNP8=
+  /unique-slug/2.0.2:
+    dependencies:
+      imurmurhash: 0.1.4
+    dev: false
+    resolution:
+      integrity: sha512-zoWr9ObaxALD3DOPfjPSqxt4fnZiWblxHIgeWqW8x7UqDzEtHEQLzji2cuJYQFCU6KmoJikOYAZlrTHHebjx2w==
   /unique-string/1.0.0:
     dependencies:
       crypto-random-string: 1.0.0
@@ -8936,6 +8999,12 @@ packages:
       node: '>=0.4'
     resolution:
       integrity: sha512-LKYU1iAXJXUgAXn9URjiu+MWhyUXHsvfp7mcuYm9dSUKK0/CjtrUwFAxD82/mCWbtLsGjFIad0wIsod4zrTAEQ==
+  /xxhashjs/0.2.2:
+    dependencies:
+      cuint: 0.2.2
+    dev: false
+    resolution:
+      integrity: sha512-AkTuIuVTET12tpsVIQo+ZU6f/qDmKuRUcjaqR+OIvm+aCBsZ95i7UVY5WJ9TMsSaZ0DA2WxoZ4acu0sPH+OKAw==
   /y18n/4.0.0:
     dev: false
     resolution:

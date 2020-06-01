@@ -1,6 +1,7 @@
 <script>
   import Icon from "../Icon.svelte";
-  import Navbar from "./navbar.svelte";
+
+  import { Navigate } from "svelte-router-spa";
 </script>
 
 <style>
@@ -70,28 +71,39 @@
 <div class="sidebar">
   <ul>
     <li>
-      <a href="/admin">
-        <span class="icon">
-          <Icon icon="server" />
-        </span>
-        <div class="name">Problems</div>
-      </a>
+
+      <Navigate to="/admin/panel/showproblems">
+        <a href="">
+          <span class="icon">
+            <Icon icon="server" />
+          </span>
+          <div class="name">Problems</div>
+        </a>
+      </Navigate>
+
     </li>
     <li>
-      <a href="/showtests">
-        <span class="icon">
-          <Icon icon="folder" />
-        </span>
-        <div class="name">&nbsp;Tests</div>
-      </a>
+
+      <Navigate to="/admin/panel/showtests">
+        <a href="">
+          <span class="icon">
+            <Icon icon="folder" />
+          </span>
+          <div class="name">&nbsp;Tests</div>
+        </a>
+      </Navigate>
+
     </li>
     <li>
-      <a href="/showresults">
-        <span class="icon">
-          <Icon icon="user-check" />
-        </span>
-        <div class="name">Results</div>
-      </a>
+      <Navigate to="/admin/panel/showresults">
+        <a href="">
+          <span class="icon">
+            <Icon icon="user-check" />
+          </span>
+          <div class="name">Results</div>
+        </a>
+      </Navigate>
+
     </li>
   </ul>
 </div>

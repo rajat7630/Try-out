@@ -1,5 +1,6 @@
 <script>
   import Loader from "../../components/Loader.svelte";
+  import { Navigate } from "svelte-router-spa";
   import Error from "../../components/Error.svelte";
   import { onMount } from "svelte";
   import { apolloClient } from "../../apolloClient.js";

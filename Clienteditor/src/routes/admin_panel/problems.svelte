@@ -1,5 +1,6 @@
 <script>
   import Loader from "../../components/Loader.svelte";
+  import { Navigate } from "svelte-router-spa";
   import Error from "../../components/Error.svelte";
   import { onMount } from "svelte";
   import { apolloClient } from "../../apolloClient.js";
@@ -147,9 +148,9 @@
           bind:value={problemSearch}
           on:keypress={() => changePageNumber(1)} />
         <a
-          href="http://localhost:5000/newProblem"
-          class="add-btn text-2xl rounded-full w-3/12 ">
-          &nbsp; Add Prob. &nbsp;
+          class="add-btn btun rounded-full px-2 mb-5 shadow-2xl w-3/12"
+          style="padding: 13px 22px">
+          <Navigate to="/newProblem">&nbsp; Add Prob. &nbsp;</Navigate>
         </a>
 
       </div>
@@ -159,29 +160,28 @@
     {:then res}
       <div class="problems flex flex-col text-black ">
         {#each res.data.searchProblems.problems as problem}
-          <div
-            id="problem-{problem.id}"
-            on:click={() => {
-              window.location = `/problem/${problem.id}`;
-            }}
-            class="card-problem {'cursor-pointer'}">
-            <p class="problem__name">
-              {problem.problemName}
-              <span class="text-xs font-normal italic lowercase">
-                {problem.tags}
-              </span>
-            </p>
-            <div class="flex w-full justify-between items-center mt-4">
-              <span class="problem__type">
-                Time_limit: {problem.timelimit}ms
-              </span>
-              <div class="text-xs ml-8">
-                <span class="font-bold">
-                  {timeConverter(problem.createdAt)}
+          <Navigate to="/problem/{problem.id}">
+            <div
+              class="card-problem {'cursor-pointer'}"
+              id="problem-{problem.id}">
+              <p class="problem__name">
+                {problem.problemName}
+                <span class="text-xs font-normal italic lowercase">
+                  {problem.tags}
                 </span>
+              </p>
+              <div class="flex w-full justify-between items-center mt-4">
+                <span class="problem__type">
+                  TimeLimit :{problem.timelimit} ms
+                </span>
+                <div class="text-xs ml-8">
+                  <span class="font-bold">
+                    {timeConverter(problem.createdAt)}
+                  </span>
+                </div>
               </div>
             </div>
-          </div>
+          </Navigate>
         {/each}
       </div>
       <div class="items-center mx-auto max-w-6xl">

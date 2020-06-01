@@ -1,13 +1,11 @@
 <script>
   import { cookieHandler } from "../helperFunctions/cookie_handler.js";
+  import { Navigate } from "svelte-router-spa";
 
   const tokens = cookieHandler.getCookie("access_token").split(".");
   console.log(atob(tokens[1]));
   function myFunction() {
     location.replace("http://localhost:3000/logout");
-  }
-  function home() {
-    location.replace("http://localhost:5000/admin");
   }
 
   if (cookieHandler.getCookie("mode") == "dark") {
@@ -96,7 +94,9 @@
   class="flex shadow-2xl items-center justify-between day flex-wrap sticky p-6">
 
   <div class="w-full block flex-grow lg:items-right">
-    <h1 on:click={home} class="welcome text-primary">Welcome Admin</h1>
+    <h1 class="welcome text-primary">
+      <Navigate to="/admin/panel/showtests">Welcome Admin</Navigate>
+    </h1>
     <div id="btn" class="flex flex-row">
 
       <div class="dropdown">

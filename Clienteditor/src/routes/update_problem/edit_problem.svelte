@@ -35,7 +35,6 @@
 
 <div class="w-screen bg-edark h-screen flex flex-col">
   <header>
-    <Navbar />
     <subheader>
       <SubNavbar position={pageNum} />
     </subheader>

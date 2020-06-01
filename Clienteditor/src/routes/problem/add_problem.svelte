@@ -1,6 +1,4 @@
 <script>
-  import Navbar from "../../components/navbar.svelte";
-  import Sidebar from "../../components/Side.svelte";
   import SubNavbar from "./problem_navbar.svelte";
   import SelectPage from "./select_page.svelte";
   $: pageNum = 1;
@@ -12,7 +10,6 @@
 
 <div class="w-screen h-screen flex flex-col">
   <header>
-    <Navbar />
     <subheader>
       <SubNavbar position={pageNum} />
     </subheader>

@@ -1,5 +1,6 @@
 <script>
   import Loader from "../../components/Loader.svelte";
+  import { Navigate } from "svelte-router-spa";
   import Error from "../../components/Error.svelte";
   import { onMount } from "svelte";
   import { apolloClient } from "../../apolloClient.js";
@@ -142,52 +143,54 @@
           on:keypress={() => changePageNumber(1)}
           bind:value={testSearch} />
         <a
-          href="http://localhost:5000/newTest"
           class="add-btn btun rounded-full px-2 mb-5 shadow-2xl w-3/12"
           style="padding: 13px 22px">
-          &nbsp; &nbsp; Add Test&nbsp; &nbsp;
+          <Navigate to="/newTest">&nbsp; &nbsp; Add Test&nbsp; &nbsp;</Navigate>
         </a>
 
       </div>
-    </header>
 
-    {#await $searchTests}
-      <Loader />
-    {:then res}
-      <div class="problems flex flex-col text-black">
-        {#each res.data.searchTests.tests as test}
-          <div
-            id="problem-{test.id}"
-            on:click={() => {
-              window.location = `/test/${test.id}`;
-            }}
-            class="card-problem {'cursor-pointer'}">
-            <p class="problem__name">
-              {test.testName}
-              <span class="text-xs font-normal italic lowercase">
-                {test.tags}
-              </span>
-            </p>
-            <div class="flex w-full justify-between items-center mt-4">
-              <span class="problem__type">Time_limit: {test.timelimit}min</span>
-              <div class="text-xs ml-8">
-                <span class="font-bold">{timeConverter(test.createdAt)}</span>
+      {#await $searchTests}
+        <Loader />
+      {:then res}
+        <div class="problems flex flex-col text-black">
+          {#each res.data.searchTests.tests as test}
+            <Navigate to="/test/{test.id}">
+              <div
+                id="problem-{test.id}"
+                class="card-problem {'cursor-pointer'}">
+                <p class="problem__name">
+                  {test.testName}
+                  <span class="text-xs font-normal italic lowercase">
+                    {test.tags}
+                  </span>
+                </p>
+                <div class="flex w-full justify-between items-center mt-4">
+                  <span class="problem__type">
+                    TimeLimit :{test.timelimit} min
+                  </span>
+                  <div class="text-xs ml-8">
+                    <span class="font-bold">
+                      {timeConverter(test.createdAt)}
+                    </span>
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
-        {/each}
-      </div>
-      <div class="items-center mx-auto max-w-6xl">
-        <Pagination
-          changePage={changePageNumber}
-          currPage={pageNumber}
-          {pageSize}
-          total={res.data.searchTests.total} />
-      </div>
-    {:catch error}
-      <Error {error} />
-    {/await}
+            </Navigate>
+          {/each}
+        </div>
+        <div class="items-center mx-auto max-w-6xl">
+          <Pagination
+            changePage={changePageNumber}
+            currPage={pageNumber}
+            {pageSize}
+            total={res.data.searchTests.total} />
+        </div>
+      {:catch error}
+        <Error {error} />
+      {/await}
 
+    </header>
   </div>
 
 </div>

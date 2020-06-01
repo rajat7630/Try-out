@@ -1,7 +1,7 @@
 const express = require('express');
 
 const router = express.Router();
-const passport = require('passport'); 
+const passport = require('passport');
 const redis = require('redis');
 const jwt = require('jsonwebtoken');
 
@@ -66,7 +66,7 @@ router.get(
     res.cookie('access_email', userEmail, {
       httpOnly: false,
     });
-    res.redirect('http://localhost:5000/admin');
+    res.redirect('http://localhost:5000/admin/panel/showtests');
     // eslint-disable-next-line comma-dangle
   }
 );

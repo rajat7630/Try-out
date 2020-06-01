@@ -1,7 +1,2 @@
-Clienteditor/public/build/
-/Server/node_modules/
-/Server/certs
-/node_modules
-.env
-.env
 node_modules
+.env

@@ -27,9 +27,6 @@
 
 <body />
 <div class=" w-full h-full">
-  <div>
-    <Navbar />
-  </div>
   <h1 class="heading text-elight text-center">
     <strong>Send Test</strong>
   </h1>

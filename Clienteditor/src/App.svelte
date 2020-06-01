@@ -26,6 +26,7 @@
   setClient(client);
   export let currentRoute;
   $: num = 0;
+  const params = { validCheck: true };
 </script>
 
 <style global>
@@ -66,4 +67,4 @@
     }
   }} /> -->
 
-<Router {routes} {currentRoute} />
+<Router {routes} {currentRoute} {params} />

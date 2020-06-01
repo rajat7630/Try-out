@@ -4,6 +4,7 @@
   import Navbar from "../components/navbar.svelte";
   import Sidebar from "../components/Side.svelte";
   import InputWindow from "../inputTest.svelte";
+  import { Navigate } from "svelte-router-spa";
   export let currentRoute;
   console.log(currentRoute);
   const client = getClient();
@@ -19,7 +20,7 @@
         variables: { id: parseInt(currentRoute.namedParams.id) }
       });
       console.log("hp");
-      location.replace("http://localhost:5000/admin");
+      location.replace("http://localhost:5000/admin/panel/showproblems");
     } catch (err) {
       Error: -{ err };
     }
@@ -27,9 +28,6 @@
 </script>
 
 <style>
-  ::-webkit-scrollbar {
-    width: 0px;
-  }
   .savebutton {
     @apply text-white ml-4 outline-none px-4;
   }
@@ -39,10 +37,7 @@
   href="https://unpkg.com/tailwindcss@^1.0/dist/tailwind.min.css"
   rel="stylesheet" />
 
-<div class="bg-edark rounded h-full flex flex-col box-border">
-  <header>
-    <Navbar />
-  </header>
+<div class=" rounded h-full flex flex-col box-border">
   <div class="bg-edark rounded flex flex-col max-w-full overflow-auto">
     {#await $problem}
       Loading...
@@ -100,14 +95,14 @@
       <div class="max-w-6xl my-4 mb-32 flex flex-col mx-auto">
         <div class="float-right ">
           <button
-            on:click={() => {
-              location.replace(`http://localhost:5000/editProblem/${currentRoute.namedParams.id}`);
-            }}
             style="color:#254b62;"
             class="savebutton hover:bg-grey hover:text-edark font-bold py-2 px-4
             border rounded">
-            Edit
+            <Navigate to="/editProblem/{currentRoute.namedParams.id}">
+              Edit
+            </Navigate>
           </button>
+
           <button
             on:click={deleteProblemHandler}
             style="color:#254b62;"

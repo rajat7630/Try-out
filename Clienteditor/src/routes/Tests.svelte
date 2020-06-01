@@ -1,9 +1,10 @@
 <script>
   import { apolloClient } from "../apolloClient.js";
   import { getClient, query, mutate } from "svelte-apollo";
-  import Navbar from "../components/navbar.svelte";
+  import { Navigate } from "svelte-router-spa";
   export let currentRoute;
   console.log(currentRoute);
+
   const client = getClient();
   const test = query(client, {
     query: apolloClient.getTestById,
@@ -18,7 +19,7 @@
         mutation: apolloClient.deleteTest,
         variables: { id: currentRoute.namedParams.id }
       });
-      location.replace("http://localhost:5000/admin");
+      location.replace("http://localhost:5000/admin/panel/showtests");
     } catch (err) {
       Error: -{ err };
     }
@@ -70,8 +71,6 @@
 
 <body>
 
-  <Navbar />
-
   <div class="bg-edark h-full flex flex-col box-border">
 
     {#await $test}
@@ -109,10 +108,10 @@
                   <div class="flex pb-3">
                     <div class="w-10/12">
                       <div class="rows bg-edark rounded-full p-2 px-4 mx-2">
-                        <a
-                          href="http://localhost:5000/problem/{prob.problem.id}"
-                          class="no-underline px-3 text-elight">
-                          {prob.problem.problemName}
+                        <a class="no-underline px-3 text-elight">
+                          <Navigate to="/problem/{prob.problem.id}">
+                            {prob.problem.problemName}
+                          </Navigate>
                         </a>
                       </div>
                     </div>
@@ -134,14 +133,14 @@
         <div class="max-w-6xl my-4 mb-32 flex flex-col mx-auto">
           <div class="float-right ">
             <button
-              on:click={() => {
-                location.replace(`http://localhost:5000/edittest/${currentRoute.namedParams.id}`);
-              }}
               style="color:#254b62;"
               class="savebutton hover:bg-grey hover:text-edark font-bold py-2
               px-4 border rounded">
-              Edit
+              <Navigate to="/edittest/{currentRoute.namedParams.id}">
+                Edit
+              </Navigate>
             </button>
+
             <button
               style="color:#254b62;"
               on:click={deleteTestHandler}
@@ -149,15 +148,16 @@
               px-4 border rounded">
               Delete
             </button>
+
             <button
-              on:click={() => {
-                location.replace(`http://localhost:5000/sendtest/${currentRoute.namedParams.id}`);
-              }}
               style="color:#254b62;"
               class="savebutton hover:bg-grey hover:text-edark font-bold py-2
               px-4 border rounded">
-              Send Test
+              <Navigate to="/sendtest/{currentRoute.namedParams.id}">
+                Send Test
+              </Navigate>
             </button>
+
           </div>
         </div>
       </div>
