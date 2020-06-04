@@ -95,7 +95,9 @@
 
   <div class="w-full block flex-grow lg:items-right">
     <h1 class="welcome text-primary">
-      <Navigate to="/admin/panel/showtests">Welcome Admin</Navigate>
+      <Navigate to="/admin/panel/showtests">
+        Welcome to {JSON.parse(atob(tokens[1])).username}
+      </Navigate>
     </h1>
     <div id="btn" class="flex flex-row">
 

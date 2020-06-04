@@ -6,6 +6,8 @@
   import { apolloClient } from "../../apolloClient.js";
   import { getClient, query } from "svelte-apollo";
   import Pagination from "./pagination.svelte";
+  import moment from "moment";
+
   const client = getClient();
   let pageNumber = 1;
   let pageSize = 6;
@@ -30,28 +32,8 @@
   });
 
   function timeConverter(timestamp) {
-    let dateObj = new Date(timestamp * 1000);
-    let year = dateObj.getUTCFullYear().toString();
-    let b = dateObj.getUTCDay();
-    let month = dateObj.getUTCMonth().toString();
-    let day = dateObj.getUTCDate().toString();
-
-    let hours = dateObj.getUTCHours();
-    let minutes = dateObj.getUTCMinutes();
-    let seconds = dateObj.getUTCSeconds();
-    let formattedTime =
-      day +
-      "/" +
-      month +
-      "/" +
-      year +
-      " " +
-      hours.toString().padStart(2, "0") +
-      ":" +
-      minutes.toString().padStart(2, "0") +
-      ":" +
-      seconds.toString().padStart(2, "0");
-    return formattedTime;
+    let date = moment.unix(timestamp / 1000).format("DD/MM/YYYY HH:mm:ss");
+    return date;
   }
 </script>
 
@@ -108,6 +90,14 @@
     margin-bottom: 10px;
   }
 
+  :global(body.dark-mode) .card-problem {
+    border-radius: 25px;
+    background-position: left top;
+    background-repeat: repeat;
+    padding: 15px;
+    background-color: #2d393f;
+    margin-bottom: 10px;
+  }
   @media (min-width: 720px) {
     #problem-switcher-container {
       @apply h-screen;
@@ -148,7 +138,7 @@
     {#await $searchAttempts}
       <Loader />
     {:then res}
-      <div class="problems flex flex-col text-black">
+      <div class="problems flex flex-col day">
         {#each res.data.searchAttempt.attempts as attempt}
           <div id="problem-{attempt.id}" class="card-problem">
             <p class="problem__name">

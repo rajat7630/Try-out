@@ -6,6 +6,8 @@
   import { apolloClient } from "../../apolloClient.js";
   import { getClient, query } from "svelte-apollo";
   import Pagination from "./pagination.svelte";
+  import moment from "moment";
+
   const client = getClient();
   let pageNumber = 1;
   let pageSize = 5;
@@ -31,28 +33,8 @@
   });
 
   function timeConverter(timestamp) {
-    let dateObj = new Date(timestamp * 1000);
-    let year = dateObj.getUTCFullYear().toString();
-    let b = dateObj.getUTCDay();
-    let month = dateObj.getUTCMonth().toString();
-    let day = dateObj.getUTCDate().toString();
-
-    let hours = dateObj.getUTCHours();
-    let minutes = dateObj.getUTCMinutes();
-    let seconds = dateObj.getUTCSeconds();
-    let formattedTime =
-      day +
-      "/" +
-      month +
-      "/" +
-      year +
-      " " +
-      hours.toString().padStart(2, "0") +
-      ":" +
-      minutes.toString().padStart(2, "0") +
-      ":" +
-      seconds.toString().padStart(2, "0");
-    return formattedTime;
+    let date = moment.unix(timestamp / 1000).format("DD/MM/YYYY HH:mm:ss");
+    return date;
   }
 </script>
 
@@ -109,6 +91,15 @@
     margin-bottom: 10px;
   }
 
+  :global(body.dark-mode) .card-problem {
+    border-radius: 25px;
+    background-position: left top;
+    background-repeat: repeat;
+    padding: 15px;
+    background-color: #2d393f;
+    margin-bottom: 10px;
+  }
+
   @media (min-width: 720px) {
     #problem-switcher-container {
       @apply h-screen;
@@ -143,54 +134,52 @@
           on:keypress={() => changePageNumber(1)}
           bind:value={testSearch} />
         <a
+          href="/newTest"
           class="add-btn btun rounded-full px-2 mb-5 shadow-2xl w-3/12"
           style="padding: 13px 22px">
-          <Navigate to="/newTest">&nbsp; &nbsp; Add Test&nbsp; &nbsp;</Navigate>
+          &nbsp; &nbsp; Add Test&nbsp; &nbsp;
         </a>
 
       </div>
-
-      {#await $searchTests}
-        <Loader />
-      {:then res}
-        <div class="problems flex flex-col text-black">
-          {#each res.data.searchTests.tests as test}
-            <Navigate to="/test/{test.id}">
-              <div
-                id="problem-{test.id}"
-                class="card-problem {'cursor-pointer'}">
-                <p class="problem__name">
-                  {test.testName}
-                  <span class="text-xs font-normal italic lowercase">
-                    {test.tags}
-                  </span>
-                </p>
-                <div class="flex w-full justify-between items-center mt-4">
-                  <span class="problem__type">
-                    TimeLimit :{test.timelimit} min
-                  </span>
-                  <div class="text-xs ml-8">
-                    <span class="font-bold">
-                      {timeConverter(test.createdAt)}
-                    </span>
-                  </div>
+    </header>
+    {#await $searchTests}
+      <Loader />
+    {:then res}
+      <div class="problems flex flex-col day">
+        {#each res.data.searchTests.tests as test}
+          <Navigate to="/test/{test.id}">
+            <div
+              id="problem-{test.id}"
+              class="card-problem {'cursor-pointer'} shadow opacity-75">
+              <p class="problem__name">
+                {test.testName}
+                <span class="text-xs font-normal italic lowercase">
+                  {test.tags}
+                </span>
+              </p>
+              <div class="flex w-full justify-between items-center mt-4">
+                <span class="problem__type">
+                  Time Limit : {test.timelimit} min
+                </span>
+                <div class="text-xs ml-8">
+                  <span class="font-bold">{timeConverter(test.createdAt)}</span>
                 </div>
               </div>
-            </Navigate>
-          {/each}
-        </div>
-        <div class="items-center mx-auto max-w-6xl">
-          <Pagination
-            changePage={changePageNumber}
-            currPage={pageNumber}
-            {pageSize}
-            total={res.data.searchTests.total} />
-        </div>
-      {:catch error}
-        <Error {error} />
-      {/await}
+            </div>
+          </Navigate>
+        {/each}
+      </div>
+      <div class="items-center mx-auto max-w-6xl">
+        <Pagination
+          changePage={changePageNumber}
+          currPage={pageNumber}
+          {pageSize}
+          total={res.data.searchTests.total} />
+      </div>
+    {:catch error}
+      <Error {error} />
+    {/await}
 
-    </header>
   </div>
 
 </div>
