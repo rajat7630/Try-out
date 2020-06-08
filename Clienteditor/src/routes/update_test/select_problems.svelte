@@ -129,8 +129,8 @@
                         $testStore.problems = JSON.stringify(problemScore);
                       }}
                       type="string"
-                      class="w-3/4 bg-dark mx-auto outline-none text-white
-                      rounded-full p-2 px-4 "
+                      class="w-3/4 bg-dark mx-auto outline-none text-white rounded-full
+                      p-2 px-4 "
                       bind:value={problem.score} />
                   </div>
                 </div>

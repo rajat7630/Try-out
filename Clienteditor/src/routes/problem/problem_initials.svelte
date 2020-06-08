@@ -80,7 +80,11 @@
     display: none;
   }
   .tagwidth {
-    max-width: 80vw;
+    max-width: 60vw;
+    overflow-x: overlay;
+  }
+  .inputwidth {
+    width: 60vw;
   }
   .labels {
     @apply text-elight text-2xl mb-3;
@@ -184,9 +188,26 @@
                     }}>
                     x
                   </div>
-                </div>
-              {/each}
+                {/each}
+              </div>
             </div>
+            <div class="mx-3 flex-auto w-full">
+              <input
+                on:keypress={e => {
+                  if (e.key === ' ') {
+                    console.log(hastTagString);
+                    newTagHandler(hastTagString);
+                    $problemStore.tags = '';
+                    selectedTags.forEach(tag => {
+                      $problemStore.tags += '#' + tag;
+                    });
+                  }
+                }}
+                type="text"
+                class="outline-none bg-transparent h-full text-white w-full"
+                bind:value={hastTagString} />
+            </div>
+<<<<<<< HEAD
             <input
               on:keypress={e => {
                 if (e.key === ' ') {
@@ -201,6 +222,8 @@
               type="text"
               class="outline-none bg-transparent text-elight ml-3 w-full"
               bind:value={hastTagString} />
+=======
+>>>>>>> fix: navbar and sidebar
           </div>
         </div>
       </div>
