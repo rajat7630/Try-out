@@ -195,7 +195,7 @@
                 }
               }}
               type="text"
-              class="outline-none ml-3 w-full"
+              class="outline-none text-white bg-transparent ml-3 w-full"
               bind:value={hashTagString} />
           </div>
         </div>

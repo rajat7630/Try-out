@@ -88,7 +88,7 @@
     on:keydown={onInput} />
 
 </div>
-<div class="my-3 flex justify-center">
+<div class="my-3 mb-20 flex justify-center">
   <button
     on:click={e => {
       submitData();

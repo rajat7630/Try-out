@@ -179,7 +179,7 @@
             <div class="flex overflow-auto tagwidth ">
               {#each selectedTags as tag, ind}
                 <div
-                  class="flex border-solid border-2 rounded-full p-1 px-3 text-l">
+                  class="flex border-solid border-2 text-white rounded-full p-1 px-3 text-l">
                   {tag}
                   <div
                     class="px-2 cursor-pointer"
@@ -210,7 +210,7 @@
                 }
               }}
               type="text"
-              class="outline-none ml-3 w-full"
+              class="outline-none text-white bg-transparent ml-3 w-full"
               bind:value={hastTagString} />
           </div>
         </div>

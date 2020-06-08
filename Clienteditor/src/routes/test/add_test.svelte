@@ -2,6 +2,8 @@
   import SubNavbar from "./test_navbar.svelte";
   import SelectPage from "./select_page.svelte";
   import Sidebar from "../../components/Side.svelte";
+  import TestInitials from "./test_initials.svelte";
+  import TestProblems from "./select_problems.svelte";
   $: pageNum = 1;
 </script>
 
@@ -9,18 +11,27 @@
   ::-webkit-scrollbar {
     width: 0px;
   }
+  .problembox {
+    @apply border-2 mx-auto max-w-6xl border-solid border-white rounded-lg p-8 my-10;
+  }
 </style>
 
-<div class="w-screen h-screen flex flex-col">
-  <header>
+<div class="flex flex-col">
+  <!-- <header>
     <subheader>
       <SubNavbar position={pageNum} />
     </subheader>
-  </header>
-  <main class=" mx-auto w-full flex-grow overflow-auto">
-    <SelectPage {pageNum} class="h-full" />
+  </header> -->
+  <main class=" flex-grow ">
+    <!-- <SelectPage {pageNum} class="h-full" /> -->
+    <div class="problembox">
+      <TestInitials />
+    </div>
+    <div class="">
+      <TestProblems />
+    </div>
   </main>
-  <footer class=" footer my-8 w-full px-20 mx-auto sticky">
+  <!-- <footer class=" footer my-8 w-full px-20 mx-auto sticky">
     <div class="flex-1 ">
       <button
         id="prevbutton"
@@ -55,5 +66,5 @@
         Next
       </button>
     </div>
-  </footer>
+  </footer> -->
 </div>

@@ -63,7 +63,7 @@
         <ProblemSolution />
       </div>
       <div class="">
-        <Testcase />
+        <Testcase {currentRoute} />
       </div>
       <!-- <SelectPage {pageNum} class="h-full" {currentRoute} /> -->
     </main>

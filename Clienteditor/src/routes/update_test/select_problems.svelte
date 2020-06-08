@@ -65,7 +65,7 @@
     @apply text-elight text-2xl;
   }
   .outer_box {
-    @apply p-3 flex-1 border-solid mx-24 border-dark border-2;
+    @apply p-3 flex-1 border-solid mx-4 border-dark border-2;
   }
   .rows {
     @apply mx-auto  text-xl text-elight;
@@ -76,9 +76,12 @@
   .boxheight2 {
     height: 385px;
   }
+  .problembox {
+    @apply border-2 mx-auto max-w-6xl border-solid border-white rounded-lg p-8 my-10;
+  }
 </style>
 
-<div>
+<div class="problembox">
   <div class="max-w-full mx-auto flex statement mb-4 ">
     <div class="flex mx-3 w-full mb-6 h-full">
       <div class="outer_box flex-col h-full">
@@ -141,14 +144,15 @@
       </div>
     </div>
   </div>
-  <div class="mt-10 flex justify-center">
-    <button
-      on:click={e => {
-        submitHandler();
-      }}
-      class="bg-dark hover:bg-elight hover:text-edark outline-none text-white
-      font-bold py-4 px-4 text-xl rounded-full">
-      Submit
-    </button>
-  </div>
+
+</div>
+<div class="mt-10 mb-20 flex justify-center">
+  <button
+    on:click={e => {
+      submitHandler();
+    }}
+    class="bg-dark hover:bg-elight hover:text-edark outline-none text-white
+    font-bold py-4 px-4 text-xl rounded-full">
+    Submit
+  </button>
 </div>

@@ -196,7 +196,7 @@
                 }
               }}
               type="text"
-              class="outline-none ml-3 w-full"
+              class="outline-none bg-transparent text-white ml-3 w-full"
               bind:value={hastTagString} />
           </div>
         </div>

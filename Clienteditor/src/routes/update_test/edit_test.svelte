@@ -5,6 +5,8 @@
   import { apolloClient } from "../../apolloClient.js";
   import { getClient, query, mutate, subscribe } from "svelte-apollo";
   import { testStore } from "./test_store.js";
+  import TestInitials from "./test_initials.svelte";
+  import TestProblems from "./select_problems.svelte";
   export let currentRoute;
   console.log(currentRoute);
   $: pageNum = 1;
@@ -29,24 +31,33 @@
     width: 0px;
     display: none;
   }
+  .problembox {
+    @apply border-2 mx-auto max-w-6xl border-solid border-white rounded-lg p-8 my-10;
+  }
 </style>
 
-<div class="w-screen h-screen flex flex-col">
-  <header>
+<div class=" flex flex-col">
+  <!-- <header>
     <subheader>
       <SubNavbar position={pageNum} />
     </subheader>
-  </header>
+  </header> -->
   {#await $test}
     Loading ....
   {:then res}
-    <main class=" mx-auto w-full flex-grow overflow-auto">
-      <SelectPage {pageNum} {currentRoute} class="h-full" />
+    <main class=" flex-grow">
+      <div class="problembox">
+        <TestInitials />
+      </div>
+      <div class="">
+        <TestProblems {currentRoute} />
+      </div>
+      <!-- <SelectPage {pageNum} {currentRoute} class="h-full" /> -->
     </main>
   {:catch err}
     Err:- {err}
   {/await}
-  <footer class=" footer my-8 w-full px-20 mx-auto sticky">
+  <!-- <footer class=" footer my-8 w-full px-20 mx-auto sticky">
     <div class="flex-1 ">
       <button
         id="prevbutton"
@@ -81,5 +92,5 @@
         Next
       </button>
     </div>
-  </footer>
+  </footer> -->
 </div>
