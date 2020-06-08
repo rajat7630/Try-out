@@ -9,7 +9,7 @@
 </style>
 
 <div class="max-w-6xl mx-auto flex statement flex-grow ">
-  <div class="flex-col mx-3 w-full mb-6">
+  <div class="flex-col w-full mb-6">
     <div class="w-full h-full px-3">
       <label class=" text-2xl text-elight mb-3 my-2">
         Describe Problem Statement here

@@ -97,7 +97,7 @@
 </style>
 
 <div class="mx-auto flex-col flex-grow">
-  <div class="text-edark mx-auto max-w-5xl w-full">
+  <div class="text-edark mx-auto max-w-6xl w-full">
     <div>
       <label class="text-elight text-2xl my-3">
         Enter a unique Problem code
@@ -164,7 +164,7 @@
             <div class="flex overflow-auto tagwidth ">
               {#each selectedTags as tag, ind}
                 <div
-                  class="flex border-solid border-2 rounded-full p-1 px-3 text-l">
+                class="flex border-solid border-2 text-white rounded-full p-1 px-3 text-l">
                   {tag}
                   <div
                     class="px-2 cursor-pointer"

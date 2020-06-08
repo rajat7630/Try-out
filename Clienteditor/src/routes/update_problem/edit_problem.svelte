@@ -1,5 +1,9 @@
 <script>
   import Navbar from "../../components/navbar.svelte";
+  import ProblemInitials from "./problem_initials.svelte";
+  import ProblemStatement from "./problem_statement.svelte";
+  import Testcase from "./testcase.svelte";
+  import ProblemSolution from "./problem_solution.svelte";
   import SubNavbar from "./problem_navbar.svelte";
   import SelectPage from "./select_page.svelte";
   import { apolloClient } from "../../apolloClient.js";
@@ -24,31 +28,49 @@
     $problemStore.timelimit = tt.timelimit;
     $problemStore.solution = tt.solution;
   });
+  $: pos = 0;
 </script>
 
 <style>
+  .problembox {
+    @apply border-2 border-solid mx-auto max-w-6xl border-white rounded-lg p-8 my-10;
+  }
   ::-webkit-scrollbar {
     width: 0px;
     display: none;
   }
 </style>
 
-<div class="w-screen h-screen flex flex-col">
-  <header>
+<svelte:window bind:scrollY={pos} />
+
+<div class="flex flex-col">
+  <!-- <header>
     <subheader>
       <SubNavbar position={pageNum} />
     </subheader>
-  </header>
+  </header> -->
   {#await $problem}
     Loading...
   {:then res}
-    <main class=" mx-auto w-full flex-grow overflow-auto">
-      <SelectPage {pageNum} class="h-full" {currentRoute} />
+    <main class=" flex-grow ">
+      <div class="problembox">
+        <ProblemInitials />
+      </div>
+      <div class="problembox">
+        <ProblemStatement />
+      </div>
+      <div class="problembox">
+        <ProblemSolution />
+      </div>
+      <div class="">
+        <Testcase />
+      </div>
+      <!-- <SelectPage {pageNum} class="h-full" {currentRoute} /> -->
     </main>
   {:catch err}
     Err: {err}
   {/await}
-  <footer class=" footer my-8 w-full px-20 mx-auto sticky">
+  <!-- <footer class=" footer my-8 w-full px-20 mx-auto sticky">
     <div class="flex-1 ">
       <button
         id="prevbutton"
@@ -83,5 +105,5 @@
         Next
       </button>
     </div>
-  </footer>
+  </footer> -->
 </div>

@@ -1,23 +1,48 @@
 <script>
   import SubNavbar from "./problem_navbar.svelte";
   import SelectPage from "./select_page.svelte";
+  import ProblemInitials from "./problem_initials.svelte";
+  import ProblemStatement from "./problem_statement.svelte";
+  import Testcase from "./testcase.svelte";
+  import ProblemSolution from "./problem_solution.svelte";
   $: pageNum = 1;
+  $: pos = 0;
 </script>
 
 <style>
-
+  .problembox {
+    @apply border-2 border-solid mx-auto max-w-6xl border-white rounded-lg p-8 my-10;
+  }
 </style>
 
-<div class="w-screen h-screen flex flex-col">
-  <header>
+<svelte:window bind:scrollY={pos} />
+<div class="flex flex-col">
+  <!-- <header>
     <subheader>
       <SubNavbar position={pageNum} />
     </subheader>
-  </header>
-  <main class=" mx-auto w-full flex-grow overflow-auto">
-    <SelectPage {pageNum} class="h-full" />
+  </header> -->
+  <main
+    class="flex-grow "
+    on:scrollY={e => {
+      console.log(e);
+    }}>
+    <div class="problembox">
+      <ProblemInitials />
+    </div>
+    <div class="problembox">
+      <ProblemStatement />
+    </div>
+    <div class="problembox">
+      <ProblemSolution />
+    </div>
+    <div class="">
+      <Testcase />
+    </div>
+    <!-- <SelectPage {pageNum} class="h-full" /> -->
+
   </main>
-  <footer class=" footer my-8 w-full px-20 mx-auto sticky">
+  <!-- <footer class=" footer my-8 w-full px-20 mx-auto sticky">
     <div class="flex-1 ">
       <button
         id="prevbutton"
@@ -52,5 +77,5 @@
         Next
       </button>
     </div>
-  </footer>
+  </footer> -->
 </div>

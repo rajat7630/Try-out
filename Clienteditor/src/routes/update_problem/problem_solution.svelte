@@ -77,7 +77,7 @@
   }
 </style>
 
-<div class="mx-64 flex-grow editor_window box-border">
+<div class="mx-auto max-w-6xl flex-grow editor_window box-border">
   <h1 class="text-2xl text-elight mt-3 my-2">Enter Solution</h1>
   <div
     id="editor"
@@ -107,7 +107,7 @@
       </div>
     </div>
   </div>
-  <div>
+  <div class="h-8">
     <button
       on:click={e => {
         outputData(e);

@@ -13,11 +13,11 @@
   console.log(currentRoute);
   const client = getClient();
   console.log($problemStore);
-  let editor;
+  let testeditor;
   onMount(() => {
     ace.config.set("basePath", "ace-builds/src-noconflict/");
-    editor = ace.edit("editor");
-    editor.setOptions({
+    testeditor = ace.edit("testeditor");
+    testeditor.setOptions({
       enableBasicAutocompletion: true,
       enableSnippets: true,
       highlightActiveLine: true,
@@ -30,9 +30,9 @@
   });
 
   afterUpdate(() => {
-    var pos = editor.session.selection.toJSON();
-    editor.session.setValue($problemStore.problemTests);
-    editor.session.selection.fromJSON(pos);
+    var pos = testeditor.session.selection.toJSON();
+    testeditor.session.setValue($problemStore.problemTests);
+    testeditor.session.selection.fromJSON(pos);
   });
 
   const onInput = (function onInput() {
@@ -40,7 +40,7 @@
     return e => {
       clearTimeout(timer);
       timer = setTimeout(() => {
-        $problemStore.problemTests = editor.getValue();
+        $problemStore.problemTests = testeditor.getValue();
       }, 500);
     };
   })();
@@ -66,7 +66,7 @@
 </script>
 
 <style>
-  .editor {
+  .testeditor {
     font-size: 1.4rem;
     height: 40vh;
     border-bottom: solid 2px #25282c;
@@ -74,23 +74,27 @@
   ::-webkit-scrollbar {
     width: 0px;
   }
+  .problembox {
+    @apply border-2 border-solid mx-auto max-w-6xl border-white rounded-lg p-8 my-10;
+  }
 </style>
 
-<div class="mx-64 flex-grow editor_window box-border">
+<div class="problembox mx-auto max-w-6xl flex-grow testeditor_window box-border">
   <h1 class="text-2xl text-elight mt-3 my-2">Enter TestCases</h1>
 
   <div
-    id="editor"
-    class="editor mx-60 box-border flex-grow"
+    id="testeditor"
+    class="testeditor mx-60 box-border flex-grow"
     on:keydown={onInput} />
-  <div class="my-3 flex justify-center">
-    <button
-      on:click={e => {
-        submitData();
-      }}
-      class="bg-dark hover:bg-elight hover:text-edark outline-none text-white
-      font-bold py-4 px-4 text-xl rounded-full">
-      Submit
-    </button>
-  </div>
+
+</div>
+<div class="my-3 flex justify-center">
+  <button
+    on:click={e => {
+      submitData();
+    }}
+    class="bg-dark hover:bg-elight hover:text-edark outline-none text-white
+    font-bold py-4 px-4 text-xl rounded-full">
+    Submit
+  </button>
 </div>

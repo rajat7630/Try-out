@@ -68,7 +68,7 @@
       variables: { data: res, timelimit: $problemStore.timelimit }
     });
     console.log(data);
-    if (data.data.checkTimeLimit.success  === true) {
+    if (data.data.checkTimeLimit.success === true) {
       try {
         result = eval(`${code} solution(${testCase})`);
       } catch (err) {
@@ -81,6 +81,9 @@
 </script>
 
 <style>
+  .problembox {
+    @apply border-2 border-solid mx-auto max-w-6xl border-white rounded-sm p-4 my-4;
+  }
   .editor {
     font-size: 1.4rem;
     height: 40vh;
@@ -91,44 +94,46 @@
   }
 </style>
 
-<div class="mx-64 flex-grow editor_window box-border">
-  <h1 class="text-2xl text-elight mt-3 my-2">Enter Solution</h1>
-  <div
-    id="editor"
-    class="editor mx-60 box-border flex-grow"
-    on:keydown={onInput} />
+<div class="">
+  <div class="mx-auto max-w-6xl flex-grow editor_window box-border">
+    <h1 class="text-2xl text-elight mt-3 my-2">Enter Solution</h1>
+    <div
+      id="editor"
+      class="editor mx-60 box-border flex-grow"
+      on:keydown={onInput} />
 
-  <div class="flex my-4 p-2 border-solid h-64 border-2 border-light">
-    <div class="flex-1 mr-4 box-border">
-      <h2 class="text-xl text-elight my-3 my-2">Input</h2>
-      <div class="flex-grow h-48 box-border">
-        <div
-          id="inputeditor"
-          class="inputeditor text-xl h-full box-border "
-          on:keydown={onInput} />
+    <div class="flex my-4 p-2 border-solid h-64 border-2 border-light">
+      <div class="flex-1 mr-4 box-border">
+        <h2 class="text-xl text-elight my-3 my-2">Input</h2>
+        <div class="flex-grow h-48 box-border">
+          <div
+            id="inputeditor"
+            class="inputeditor text-xl h-full box-border "
+            on:keydown={onInput} />
+        </div>
+      </div>
+      <div class="flex-1 ml-4">
+        <h2 class="text-xl text-elight my-3 my-2 box-border">Output</h2>
+        <div class="flex-grow h-48">
+          <textarea
+            bind:value={result}
+            class=" h-full w-full bg-dark text-elight text-xl box-border
+            border-none rounded py-3 px-4 mb-3 leading-tight focus:outline-none
+            resize-none"
+            id="message"
+            readonly />
+        </div>
       </div>
     </div>
-    <div class="flex-1 ml-4">
-      <h2 class="text-xl text-elight my-3 my-2 box-border">Output</h2>
-      <div class="flex-grow h-48">
-        <textarea
-          bind:value={result}
-          class=" h-full w-full bg-dark text-elight text-xl box-border
-          border-none rounded py-3 px-4 mb-3 leading-tight focus:outline-none
-          resize-none"
-          id="message"
-          readonly />
-      </div>
+    <div class="h-10">
+      <button
+        on:click={e => {
+          outputData(e);
+        }}
+        class="bg-dark hover:bg-elight hover:text-edark outline-none text-white
+        float-right font-bold py-2 px-4 rounded-full">
+        Run
+      </button>
     </div>
-  </div>
-  <div>
-    <button
-      on:click={e => {
-        outputData(e);
-      }}
-      class="bg-dark hover:bg-elight hover:text-edark outline-none text-white
-      float-right font-bold py-2 px-4 rounded-full">
-      Run
-    </button>
   </div>
 </div>
