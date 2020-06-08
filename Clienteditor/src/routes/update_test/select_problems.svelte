@@ -97,30 +97,30 @@
         </div>
         <div class="flex-col">
           <div class="flex mb-6">
-            <div class="w-9/12">
+            <div class="w-8/12">
               <div class="rows mx-4">Problem Name</div>
             </div>
-            <div class="w-3/12">
+            <div class="w-4/12">
               <div class="rows mx-4">Score</div>
             </div>
           </div>
           <div class="boxheight2 flex flex-col overflow-auto">
             {#each problemScore as problem}
               <div class="flex pb-3">
-                <div class="w-9/12">
+                <div class="w-8/12">
                   <div class="rows bg-dark rounded-full p-2 px-4 mx-2">
                     {problem.problem.problemName}
                   </div>
                 </div>
-                <div class="w-2/12">
-                  <div class="rows ">
+                <div class="w-3/12 ">
+                  <div class="rows mx-auto">
                     <input
                       on:change={() => {
                         $testStore.problems = JSON.stringify(problemScore);
                       }}
                       type="string"
-                      class="w-3/4 bg-dark outline-none text-white rounded-full
-                      p-2 px-4 mx-2"
+                      class="w-3/4 bg-dark mx-auto outline-none text-white rounded-full
+                      p-2 px-4 "
                       bind:value={problem.score} />
                   </div>
                 </div>
@@ -130,8 +130,8 @@
                       on:click={() => {
                         return removeProblem(problem.problem.id);
                       }}
-                      class="w-3/4 bg-dark outline-none text-white rounded-full
-                      p-2 px-4 mx-2">
+                      class="w-3/4 bg-dark mx-auto outline-none text-white rounded-full
+                      p-2 px-1 mx-2">
                       X
                     </button>
                   </div>
@@ -145,7 +145,7 @@
         <div class="mx-auto w-64 pb-2 flex flex-col">
           <h1 class="labels">Select Problems</h1>
         </div>
-        <div class=" pb-4 max-w-full boxheight flex flex-col overflow-auto">
+        <div class=" pb-4 max-w-full flex flex-col">
           <AllProblems addProblem={addingProblem} />
         </div>
       </div>

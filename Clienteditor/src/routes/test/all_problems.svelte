@@ -65,7 +65,7 @@
     <div class="problemheight overflow-auto mb-3">
       {#each res.data.searchProblems.problems as prob}
         <div class="flex mb mt-3 text-xl">
-          <div class="w-10/12">
+          <div class="w-9/12">
             <div
               class="rows bg-dark rounded-full p-2 px-4 mx-2 text-white text-xl
               px-3">
@@ -76,7 +76,7 @@
               </a>
             </div>
           </div>
-          <div class="w-2/12">
+          <div class="w-3/12">
             <div class="rows ">
               <button
                 on:click={() => {
@@ -92,7 +92,7 @@
         </div>
       {/each}
     </div>
-    <div class="items-center mx-auto pageWidth mt-2">
+    <div class="mx-auto w-full pageWidth mt-2">
       <Pagination
         changePage={changePageNumber}
         currPage={pageNumber}

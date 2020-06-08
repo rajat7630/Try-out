@@ -104,22 +104,22 @@
         </div>
         <div class="flex-col">
           <div class="flex mb-6">
-            <div class="w-9/12">
+            <div class="w-8/12">
               <div class="rows mx-4">Problem Name</div>
             </div>
-            <div class="w-3/12">
+            <div class="w-4/12">
               <div class="rows mx-4">Score</div>
             </div>
           </div>
           <div class="boxheight2 flex flex-col overflow-auto">
             {#each problemScore as problem}
               <div class="flex pb-3">
-                <div class="w-9/12">
+                <div class="w-8/12">
                   <div class="rows bg-dark rounded-full p-2 px-4 mx-2">
                     {problem.problem.problemName}
                   </div>
                 </div>
-                <div class="w-2/12">
+                <div class="w-3/12">
                   <div class="rows ">
                     <input
                       on:change={() => {
