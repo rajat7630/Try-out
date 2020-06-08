@@ -32,7 +32,7 @@
 
 <style>
   :global(body) {
-    background-color: white;
+    background-color: #ebe9e9;
     color: black;
     transition: background-color 0.3s;
     --color-ed: White;
@@ -53,7 +53,7 @@
     color: white;
   }
   :global(body) .day {
-    background-color: #77abb7;
+    background-color: #38b2ac;
     color: white;
   }
   .toggle-checkbox:checked {
@@ -91,7 +91,7 @@
   href="https://fonts.googleapis.com/css2?family=Jost&display=swap"
   rel="stylesheet" />
 <nav
-  class="flex shadow-2xl items-center justify-between day flex-wrap sticky p-6">
+  class="flex shadow-2xl items-center justify-between day flex-wrap sticky p-5">
 
   <div class="w-full block flex-grow lg:items-right">
     <h1 class="welcome text-primary">

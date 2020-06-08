@@ -42,10 +42,16 @@
   :global(body.dark-mode) .btun {
     background-color: #2d393f;
     color: white;
+    @apply py-3 px-4 mb-5;
+    text-decoration: none;
+    cursor: pointer;
   }
   .btun {
     background-color: #008cba;
     color: white;
+    @apply py-3 px-4 mb-5;
+    text-decoration: none;
+    cursor: pointer;
   }
   .add-btn {
     background-color: #008cba;
@@ -58,7 +64,6 @@
   #problem-switcher {
     @apply flex-grow flex flex-col text-white px-2;
     min-width: 50vw;
-    backdrop-filter: blur(0.25rem);
     height: calc(100% - 6rem);
   }
 
@@ -73,7 +78,7 @@
   }
   .problem-search {
     @apply appearance-none w-full bg-white border py-3 px-4 mb-5 shadow rounded text-black;
-    background-color: #efefef;
+    background-color: #ffffff;
     width: 86%;
   }
   .problem__name {
@@ -83,16 +88,16 @@
     @apply rounded-lg text-white text-xs font-semibold px-5 py-2 bg-teal-500;
   }
   .card-problem {
-    border-radius: 25px;
+    border-radius: 15px;
     background-position: left top;
     background-repeat: repeat;
     padding: 15px;
-    background-color: #dae0e2;
+    background-color: white;
     margin-bottom: 10px;
   }
 
   :global(body.dark-mode) .card-problem {
-    border-radius: 25px;
+    border-radius: 15px;
     background-position: left top;
     background-repeat: repeat;
     padding: 15px;
@@ -119,13 +124,30 @@
   }
 </style>
 
-<div class="flex flex-col items-center">
+<link
+  href="https://fonts.googleapis.com/css2?family=Abril+Fatface&family=Rubik&display=swap"
+  rel="stylesheet" />
+
+<link
+  rel="stylesheet"
+  href="https://pro.fontawesome.com/releases/v5.10.0/css/all.css"
+  integrity="sha384-AYmEC3Yw5cVb3ZcuHtOA93w35dYTsvhLPVnYs9eStHfGJvOvKxVfELGroGkvsg+p"
+  crossorigin="anonymous" />
+
+<div class="flex flex-col items-center p-6">
   <div id="problem-switcher">
-    <header class="w-full text-center flex flex-col justify-end md:px-16">
-      <h2 class="text-3xl day font-semibold mb-6">All Tests:</h2>
-      <div class="px-2 w-full flex">
+    <header class="w-full flex flex-col justify-end md:px-16">
+      <h2
+        style="font-family: 'Rubik', sans-serif;"
+        class="text-3xl day font-semibold mb-6">
+        <i
+          class="far fa-file-alt text-blue-500 hover:text-blue-600 transition
+          duration-150" />
+        &nbsp; ALL TESTS:
+      </h2>
+      <div class="px-2 ml-16 w-full flex">
         <input
-          class="problem-search rounded-full w-9/12 mr-3"
+          class="problem-search rounded-full shadow w-9/12 mr-3"
           id="problem-search"
           name="problem-search"
           style="width:86%"
@@ -135,10 +157,8 @@
           bind:value={testSearch} />
         <a
           href="/newTest"
-          class="add-btn btun rounded-full px-2 mb-5 shadow-2xl w-3/12"
-          style="padding: 13px 22px">
-          &nbsp; &nbsp; Add Test&nbsp; &nbsp;
-        </a>
+          class="fas fa-folder-plus btun rounded-full"
+          style="padding: 20px 20px" />
 
       </div>
     </header>
@@ -150,7 +170,7 @@
           <Navigate to="/test/{test.id}">
             <div
               id="problem-{test.id}"
-              class="card-problem {'cursor-pointer'} shadow opacity-75">
+              class="card-problem {'cursor-pointer'} shadow">
               <p class="problem__name">
                 {test.testName}
                 <span class="text-xs font-normal italic lowercase">

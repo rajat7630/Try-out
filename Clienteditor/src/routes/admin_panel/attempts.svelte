@@ -57,7 +57,6 @@
   #problem-switcher {
     @apply flex-grow flex flex-col text-white px-2;
     min-width: 50vw;
-    backdrop-filter: blur(0.25rem);
     height: calc(100% - 6rem);
   }
 
@@ -72,8 +71,8 @@
   }
   .problem-search {
     @apply appearance-none w-full bg-white border py-3 px-4 mb-5 shadow rounded text-black;
-    background-color: #efefef;
-    width: 86%;
+    background-color: #ffffff;
+    width: 100%;
   }
   .problem__name {
     @apply font-bold flex w-full justify-between items-center;
@@ -82,22 +81,23 @@
     @apply rounded-lg text-white text-xs font-semibold px-5 py-2 bg-teal-500;
   }
   .card-problem {
-    border-radius: 25px;
+    border-radius: 15px;
     background-position: left top;
     background-repeat: repeat;
     padding: 15px;
-    background-color: #dae0e2;
+    background-color: white;
     margin-bottom: 10px;
   }
 
   :global(body.dark-mode) .card-problem {
-    border-radius: 25px;
+    border-radius: 15px;
     background-position: left top;
     background-repeat: repeat;
     padding: 15px;
     background-color: #2d393f;
     margin-bottom: 10px;
   }
+
   @media (min-width: 720px) {
     #problem-switcher-container {
       @apply h-screen;
@@ -117,21 +117,38 @@
   }
 </style>
 
-<div class="flex flex-col items-center">
+<link
+  href="https://fonts.googleapis.com/css2?family=Abril+Fatface&family=Rubik&display=swap"
+  rel="stylesheet" />
+
+<link
+  rel="stylesheet"
+  href="https://pro.fontawesome.com/releases/v5.10.0/css/all.css"
+  integrity="sha384-AYmEC3Yw5cVb3ZcuHtOA93w35dYTsvhLPVnYs9eStHfGJvOvKxVfELGroGkvsg+p"
+  crossorigin="anonymous" />
+
+<div class="flex flex-col items-center p-6">
 
   <div id="problem-switcher">
-    <header class=" text-center flex flex-col justify-end py-3">
-      <h2 class="text-3xl day font-semibold mb-6">Scoreboard:</h2>
-      <div class="px-4">
+    <header class="w-full flex flex-col justify-end md:px-16">
+      <h2
+        style="font-family: 'Rubik', sans-serif;"
+        class="text-3xl day font-semibold mb-6">
+        <i
+          class="fas fa-poll text-blue-500 hover:text-blue-600 transition
+          duration-150" />
+        &nbsp; SCOREBOARD:
+      </h2>
+      <div class="px-6 ml-24 flex w-full">
         <input
-          class="problem-search rounded-full w-full"
+          class="problem-search shadow rounded-full w-9/12 mr-5"
           id="problem-search"
           name="problem-search"
-          on:keypress={() => changePageNumber(1)}
-          style="width:100%"
+          style="padding: 16px 20px"
           type="text"
-          placeholder="Enter a user name"
-          bind:value={attemptSearch} />
+          placeholder="Enter a User name"
+          bind:value={attemptSearch}
+          on:keypress={() => changePageNumber(1)} />
       </div>
     </header>
 
@@ -140,7 +157,7 @@
     {:then res}
       <div class="problems flex flex-col day">
         {#each res.data.searchAttempt.attempts as attempt}
-          <div id="problem-{attempt.id}" class="card-problem">
+          <div id="problem-{attempt.id}" class="card-problem shadow">
             <p class="problem__name">
               {attempt.user.name}
               <span class="text-xs font-normal italic lowercase">

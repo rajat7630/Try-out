@@ -136,8 +136,8 @@
 
   .chat-notification {
     display: flex;
-    background-color: #77abb7;
-    color: white;
+    background-color: white;
+    color: #38b2ac;
     max-width: 14rem;
     margin: 0 auto;
     padding: 1.5rem;
@@ -158,7 +158,7 @@
     padding-top: 0.25rem;
   }
   .chat-notification-title {
-    color: white;
+    color: #38b2ac;
     font-size: 1.25rem;
     line-height: 1;
   }

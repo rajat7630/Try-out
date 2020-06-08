@@ -66,7 +66,7 @@
         <div class="md:w-3/5">
           <input
             class="bg-gray-200 appearance-none border-2 border-gray-200
-            rounded-full w-full py-2 px-4 text-edark leading-tight
+            rounded-full w-full py-2 px-4 text-black leading-tight
             focus:outline-none focus:bg-white "
             id="inline-full-name"
             type="Number"
