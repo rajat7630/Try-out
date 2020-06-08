@@ -29,9 +29,11 @@
     window.document.body.classList.toggle("dark-mode");
   }
 </script>
-
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Jost&display=swap" rel="stylesheet" />
 <style>
-  :global(body) {
+
+ :global(body) {
     background-color: #ebe9e9;
     color: black;
     transition: background-color 0.3s;
@@ -53,7 +55,7 @@
     color: white;
   }
   :global(body) .day {
-    background-color: #38b2ac;
+    background-color: #38b2ac;;
     color: white;
   }
   .toggle-checkbox:checked {
@@ -72,56 +74,83 @@
     position: absolute;
   }
 
-  .dropdown {
-    position: relative;
-    display: inline-block;
-  }
 
-  .dropdown-content {
-    display: none;
-    position: absolute;
-  }
+body {
+  margin: 0;
+  font-family: Arial, Helvetica, sans-serif;
+}
 
-  .dropdown:hover .dropdown-content {
+.topnav {
+  overflow: hidden;
+  background-color: #333;
+}
+
+.topnav a {
+  float: left;
+  color: #f2f2f2;
+  text-align: center;
+  padding: 14px 16px;
+  text-decoration: none;
+  font-size: 17px;
+}
+
+.topnav li {
+  float: left;
+  color: #f2f2f2;
+  text-align: center;
+  padding: 14px 16px;
+  text-decoration: none;
+  font-size: 17px;
+}
+
+.topnav a:hover {
+  background-color: #ddd;
+  color: black;
+}
+
+.topnav a:active {
+  background-color: #ddd;
+  color: black;
+}
+.topnav-right {
+  float: right;
+}
+
+@media screen and (max-width: 500px) {
+  .topnav a , .topnav li{
+    float: none;
     display: block;
   }
+}
 </style>
-
-<link
-  href="https://fonts.googleapis.com/css2?family=Jost&display=swap"
-  rel="stylesheet" />
-<nav
-  class="flex shadow-2xl items-center justify-between day flex-wrap sticky p-5">
-
-  <div class="w-full block flex-grow lg:items-right">
-    <h1 class="welcome text-primary">
-      <Navigate to="/admin/panel/showtests">
-        Welcome to {JSON.parse(atob(tokens[1])).username}
-      </Navigate>
-    </h1>
-    <div id="btn" class="flex flex-row">
-
-      <div class="dropdown">
-        <button
-          class="container bg-white mx-3 flex flex-row hover:bg-light text-dark
-          font-semibold hover:text-white py-4 px-6 border border-white-500
-          rounded hover:border-white hover:border-transparent rounded-full">
-          <img
-            alt="admin"
-            width="25"
-            height="25"
-            src="https://img.icons8.com/carbon-copy/64/000000/user.png" />
-          <p style="font-family: 'Jost', sans-serif;">
-            &nbsp;&nbsp;{JSON.parse(atob(tokens[1])).username}
-          </p>
-        </button>
-        <ul class="ml-3 dropdown-content container text-gray-700 pt-1">
-          <li
-            class="rounded-t flex flex-row bg-gray-200 hover:bg-gray-400 py-2
-            px-4 block whitespace-no-wrap">
-            <div
-              class="relative inline-block w-10 mr-2 align-middle select-none
-              transition duration-200 ease-in">
+<div class="topnav">
+  <Navigate to="/admin/panel/showproblems">
+    <li>Welcome <b>{JSON.parse(atob(tokens[1])).username}</b></li>
+  </Navigate>
+  <Navigate to="/admin/panel/showproblems">
+    <a onclick="clickSingleA(this)" class="single active" href="/admin/panel/showproblems">
+      <i class="fa fa-server"></i>
+      Problems
+    </a>
+  </Navigate>
+  <Navigate to="/admin/panel/showtests">
+    <a href="/admin/panel/showtests" onclick="clickSingleA(this)" class="single" >
+      <i class="fa fa-database">
+      </i>
+      Tests
+    </a>
+  </Navigate>
+  <Navigate to="/admin/panel/showresults">
+    <a href="/admin/panel/showresults" onclick="clickSingleA(this)" class="single" >
+      <i class="fa fa-envelope">
+      </i>
+      Results
+    </a>
+  </Navigate>
+      <ul class ="topnav-right">
+        <li>
+           <div class="relative inline-block w-10 mr-2 align-middle select-none
+              transition duration-200 ease-in" id="btn-toogle">
               <input
                 type="checkbox"
                 on:click={toggle}
@@ -134,25 +163,14 @@
                 class="toggle-label block overflow-hidden h-6 rounded-full
                 bg-gray-300 cursor-pointer" />
             </div>
+             <label>{mode}</label>
+        </li>
+        <a class="nav-link" href ="#" on:click ={myFunction}>
+          <i class="fa fa-sign-out">
+          </i>
+          Logout
+        </a>
+    </ul>
+</div>
 
-            <label>&nbsp;&nbsp;{mode}</label>
-          </li>
-          <li
-            class="bg-gray-200 flex flex-row hover:bg-gray-400 py-2 px-4 block
-            whitespace-no-wrap"
-            on:click={myFunction}>
-
-            <img
-              alt="logout"
-              width="25"
-              height="25"
-              src="https://img.icons8.com/pastel-glyph/64/000000/logout-rounded-down.png" />
-            <p>&nbsp;&nbsp;Logout</p>
-          </li>
-
-        </ul>
-      </div>
-
-    </div>
-  </div>
-</nav>
+	

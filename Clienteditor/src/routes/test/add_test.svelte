@@ -1,7 +1,6 @@
 <script>
   import SubNavbar from "./test_navbar.svelte";
   import SelectPage from "./select_page.svelte";
-  import Sidebar from "../../components/Side.svelte";
   import TestInitials from "./test_initials.svelte";
   import TestProblems from "./select_problems.svelte";
   $: pageNum = 1;

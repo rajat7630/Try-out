@@ -2,7 +2,6 @@
   import { apolloClient } from "../apolloClient.js";
   import { getClient, query, mutate } from "svelte-apollo";
   import Navbar from "../components/navbar.svelte";
-  import Sidebar from "../components/Side.svelte";
   import InputWindow from "../inputTest.svelte";
   import { Navigate } from "svelte-router-spa";
   export let currentRoute;
