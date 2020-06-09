@@ -30,6 +30,24 @@
   .savebutton {
     @apply ml-4 outline-none px-4;
   }
+  .edit {
+    @apply bg-green-400;
+  }
+  :global(body.dark-mode) .edit {
+    background-color: #2d393f;
+  }
+  .delete {
+    @apply bg-red-400;
+  }
+  :global(body.dark-mode) .delete {
+    background-color: #2d393f;
+  }
+  .share {
+    @apply bg-blue-400;
+  }
+  :global(body.dark-mode) .share {
+    background-color: #2d393f;
+  }
   .statement {
     height: 50vh;
   }
@@ -66,8 +84,14 @@
 </style>
 
 <link
-  href="https://unpkg.com/tailwindcss@^1.0/dist/tailwind.min.css"
+  href="https://fonts.googleapis.com/css2?family=Abril+Fatface&family=Rubik&display=swap"
   rel="stylesheet" />
+
+<link
+  rel="stylesheet"
+  href="https://pro.fontawesome.com/releases/v5.10.0/css/all.css"
+  integrity="sha384-AYmEC3Yw5cVb3ZcuHtOA93w35dYTsvhLPVnYs9eStHfGJvOvKxVfELGroGkvsg+p"
+  crossorigin="anonymous" />
 
 <body>
 
@@ -134,25 +158,28 @@
           <div class="float-right ">
             <Navigate to="/edittest/{currentRoute.namedParams.id}">
               <button
-                style="color:#254b62;"
-                class="savebutton hover:bg-grey hover:text-edark font-bold py-2
-                px-4 border rounded">
-                Edit
+                class="text-white px-4 w-auto h-12 edit rounded-full
+                hover:bg-green-700 active:shadow-lg mouse shadow transition
+                ease-in duration-200 focus:outline-none">
+                <i class="fas fa-edit" />
+                <span>Edit</span>
               </button>
             </Navigate>
             <button
-              style="color:#254b62;"
               on:click={deleteTestHandler}
-              class="savebutton hover:bg-grey hover:text-edark font-bold py-2
-              px-4 border rounded">
-              Delete
+              class="text-white px-4 w-auto h-12 delete rounded-full
+              hover:bg-red-700 active:shadow-lg mouse shadow transition ease-in
+              duration-200 focus:outline-none">
+              <i class="fas fa-trash-alt" />
+              <span>Delete</span>
             </button>
             <Navigate to="/sendtest/{currentRoute.namedParams.id}">
               <button
-                style="color:#254b62;"
-                class="savebutton hover:bg-grey hover:text-edark font-bold py-2
-                px-4 border rounded">
-                Send Test
+                class="text-white px-4 w-auto h-12 share rounded-full
+                hover:bg-blue-700 active:shadow-lg mouse shadow transition
+                ease-in duration-200 focus:outline-none">
+                <i class="fas fa-share-square" />
+                <span>Send</span>
               </button>
             </Navigate>
 
@@ -166,7 +193,7 @@
               <div
                 class="tag border-solid border-2 mr-4 mb-10 rounded-full p-2
                 px-4 ">
-                {tag}
+                #{tag}
               </div>
             {/if}
           {/each}

@@ -64,6 +64,15 @@
     location.replace("http://localhost:5000/admin/showProblems");
   }
 </script>
+<link
+  href="https://fonts.googleapis.com/css2?family=Abril+Fatface&family=Rubik&display=swap"
+  rel="stylesheet" />
+
+<link
+  rel="stylesheet"
+  href="https://pro.fontawesome.com/releases/v5.10.0/css/all.css"
+  integrity="sha384-AYmEC3Yw5cVb3ZcuHtOA93w35dYTsvhLPVnYs9eStHfGJvOvKxVfELGroGkvsg+p"
+  crossorigin="anonymous" />
 
 <style>
   .testeditor {
@@ -101,8 +110,10 @@
     on:click={e => {
       submitData();
     }}
-    class="bg-dark hover:bg-elight hover:text-edark outline-none text-white
-    font-bold py-4 px-4 text-xl rounded-full">
-    Submit
+    class="text-white px-4 w-auto h-12 rounded-full bg-blue-500 active:shadow-lg
+    mouse hover:bg-blue-700; shadow transition ease-in duration-200
+    focus:outline-none">
+    <i class="fas fa-stamp" />
+    <span>Submit</span>
   </button>
 </div>

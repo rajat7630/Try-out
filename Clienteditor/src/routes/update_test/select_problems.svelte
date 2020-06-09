@@ -88,6 +88,16 @@
   }
 </style>
 
+<link
+  href="https://fonts.googleapis.com/css2?family=Abril+Fatface&family=Rubik&display=swap"
+  rel="stylesheet" />
+
+<link
+  rel="stylesheet"
+  href="https://pro.fontawesome.com/releases/v5.10.0/css/all.css"
+  integrity="sha384-AYmEC3Yw5cVb3ZcuHtOA93w35dYTsvhLPVnYs9eStHfGJvOvKxVfELGroGkvsg+p"
+  crossorigin="anonymous" />
+
 <div class="problembox">
   <div class="max-w-full mx-auto flex statement mb-4 ">
     <div class="flex mx-3 w-full mb-6 h-full">
@@ -119,8 +129,8 @@
                         $testStore.problems = JSON.stringify(problemScore);
                       }}
                       type="string"
-                      class="w-3/4 bg-dark mx-auto outline-none text-white rounded-full
-                      p-2 px-4 "
+                      class="w-3/4 bg-dark mx-auto outline-none text-white
+                      rounded-full p-2 px-4 "
                       bind:value={problem.score} />
                   </div>
                 </div>
@@ -130,8 +140,8 @@
                       on:click={() => {
                         return removeProblem(problem.problem.id);
                       }}
-                      class="w-3/4 bg-dark mx-auto outline-none text-white rounded-full
-                      p-2 px-1 mx-2">
+                      class="w-3/4 bg-dark mx-auto outline-none text-white
+                      rounded-full p-2 px-1 mx-2">
                       X
                     </button>
                   </div>
@@ -158,8 +168,10 @@
     on:click={e => {
       submitHandler();
     }}
-    class="bg-dark hover:bg-elight hover:text-edark outline-none text-white
-    font-bold py-4 px-4 text-xl rounded-full">
-    Submit
+    class="text-white px-4 w-auto h-12 rounded-full bg-blue-500 active:shadow-lg
+    mouse hover:bg-blue-700; shadow transition ease-in duration-200
+    focus:outline-none">
+    <i class="fas fa-stamp" />
+    <span>Submit</span>
   </button>
 </div>

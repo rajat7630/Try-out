@@ -29,11 +29,9 @@
     window.document.body.classList.toggle("dark-mode");
   }
 </script>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
-<link href="https://fonts.googleapis.com/css2?family=Jost&display=swap" rel="stylesheet" />
-<style>
 
- :global(body) {
+<style>
+  :global(body) {
     background-color: #ebe9e9;
     color: black;
     transition: background-color 0.3s;
@@ -55,7 +53,7 @@
     color: white;
   }
   :global(body) .day {
-    background-color: #38b2ac;;
+    background-color: #38b2ac;
     color: white;
   }
   .toggle-checkbox:checked {
@@ -129,6 +127,12 @@
   }
 </style>
 
+<link
+  rel="stylesheet"
+  href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css" />
+<link
+  href="https://fonts.googleapis.com/css2?family=Jost&display=swap"
+  rel="stylesheet" />
 <link
   rel="stylesheet"
   href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css" />

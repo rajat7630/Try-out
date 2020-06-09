@@ -30,6 +30,18 @@
   .savebutton {
     @apply ml-4 outline-none px-4;
   }
+  .edit {
+    @apply bg-blue-500;
+  }
+  :global(body.dark-mode) .edit {
+    background-color: #2d393f;
+  }
+  .delete {
+    @apply bg-red-500;
+  }
+  :global(body.dark-mode) .delete {
+    background-color: #2d393f;
+  }
   .statement {
     height: 50vh;
   }
@@ -66,8 +78,14 @@
 </style>
 
 <link
-  href="https://unpkg.com/tailwindcss@^1.0/dist/tailwind.min.css"
+  href="https://fonts.googleapis.com/css2?family=Abril+Fatface&family=Rubik&display=swap"
   rel="stylesheet" />
+
+<link
+  rel="stylesheet"
+  href="https://pro.fontawesome.com/releases/v5.10.0/css/all.css"
+  integrity="sha384-AYmEC3Yw5cVb3ZcuHtOA93w35dYTsvhLPVnYs9eStHfGJvOvKxVfELGroGkvsg+p"
+  crossorigin="anonymous" />
 
 <body>
   <div class="bg-edark h-full flex flex-col box-border">
@@ -132,21 +150,24 @@
         </div>
         <div class="max-w-6xl my-4 mb-32 flex flex-col mx-auto">
           <div class="float-right ">
-            <button
-              style="color:#254b62;"
-              class="savebutton hover:bg-grey hover:text-dark font-bold py-2
-              px-4 border rounded">
-              <Navigate to="/editProblem/{currentRoute.namedParams.id}">
-                Edit
-              </Navigate>
-            </button>
+
+            <Navigate to="/editProblem/{currentRoute.namedParams.id}">
+              <button
+                class="text-white px-4 w-auto h-12 edit rounded-full
+                hover:bg-blue-700 active:shadow-lg mouse shadow transition
+                ease-in duration-200 focus:outline-none">
+                <i class="fas fa-edit" />
+                <span>Edit</span>
+              </button>
+            </Navigate>
 
             <button
               on:click={deleteProblemHandler}
-              style="color:#254b62;"
-              class="savebutton hover:bg-grey hover:text-dark font-bold py-2
-              px-4 border rounded">
-              Delete
+              class="text-white px-4 w-auto h-12 delete rounded-full
+              hover:bg-red-700 active:shadow-lg mouse shadow transition ease-in
+              duration-200 focus:outline-none">
+              <i class="fas fa-trash-alt" />
+              <span>Delete</span>
             </button>
           </div>
         </div>

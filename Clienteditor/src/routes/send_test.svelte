@@ -26,6 +26,12 @@
     background-color: #2d393f;
     color: white;
   }
+  .share {
+    @apply bg-blue-400;
+  }
+  :global(body.dark-mode) .share {
+    background-color: #2d393f;
+  }
 </style>
 
 <link
@@ -108,15 +114,18 @@
                     linktime: mailInitials.linktime
                   }
                 });
-                location.replace('http://localhost:5000/admin');
+                location.replace('http://localhost:5000/admin/showtests');
               } catch (err) {
                 console.log(err);
               }
             }}
-            class="bg-dark hover:bg-elight text-white hover:text-edark font-bold
-            py-2 px-4 border border-white rounded">
-            Send Test
+            class="text-white px-4 w-auto h-12 rounded-full share
+            active:shadow-lg mouse hover:bg-blue-700; shadow transition ease-in
+            duration-200 focus:outline-none">
+            <i class="fas fa-share-square" />
+            <span>Send Test</span>
           </button>
+
         </div>
       </div>
     </div>
