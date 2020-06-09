@@ -88,22 +88,16 @@ const routes = [
     onlyIf: { guard: userIsAdmin, redirect: '/' },
     nestedRoutes: [
       {
-        name: '/panel',
-        layout: PublicLayout,
-        nestedRoutes: [
-          {
-            name: '/showproblems',
-            component: ProblemPanel,
-          },
-          {
-            name: '/showtests',
-            component: TestPanel,
-          },
-          {
-            name: '/showresults',
-            component: AttemptsPanel,
-          },
-        ],
+        name: '/showproblems',
+        component: ProblemPanel,
+      },
+      {
+        name: '/showtests',
+        component: TestPanel,
+      },
+      {
+        name: '/showresults',
+        component: AttemptsPanel,
       },
     ],
   },

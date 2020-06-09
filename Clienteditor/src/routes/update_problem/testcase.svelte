@@ -61,7 +61,7 @@
       mutation: apolloClient.updateProblem,
       variables: problemValue
     });
-    location.replace("http://localhost:5000/admin");
+    location.replace("http://localhost:5000/admin/showProblems");
   }
 </script>
 
@@ -75,11 +75,19 @@
     width: 0px;
   }
   .problembox {
-    @apply border-2 border-solid mx-auto max-w-6xl border-white rounded-lg p-8 my-10;
+    @apply mx-auto max-w-6xl rounded-lg p-8 my-10 shadow;
+    background-color: white;
+    color: black;
+  }
+  :global(body.dark-mode) .problembox {
+    @apply mx-auto max-w-6xl rounded-lg p-8 my-10 shadow;
+    background-color: #2d393f;
+    color: white;
   }
 </style>
 
-<div class="problembox mx-auto max-w-6xl flex-grow testeditor_window box-border">
+<div
+  class="problembox mx-auto max-w-6xl flex-grow testeditor_window box-border">
   <h1 class="text-2xl text-elight mt-3 my-2">Enter TestCases</h1>
 
   <div

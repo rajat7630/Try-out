@@ -161,7 +161,7 @@
           on:keypress={() => changePageNumber(1)} />
 
         <a
-          href="/newTest"
+          href="/newProblem"
           class="fas fa-folder-plus btun rounded-full"
           style="padding: 20px 20px" />
 

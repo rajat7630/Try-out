@@ -37,7 +37,7 @@
     @apply text-2xl;
   }
   .outer_box {
-    @apply p-3 flex-1 border-solid  border-2 rounded;
+    @apply p-3 flex-1 rounded;
   }
   .rows {
     @apply mx-auto text-xl;
@@ -46,14 +46,14 @@
     max-height: 385px;
   }
   body {
-    --color-ed: White;
-    --color-d: #88999e;
-    --color-l: #106270;
+    --color-ed: #ebe9e9;
+    --color-d: white;
+    --color-l: #1b262c;
     --color-el: #3c7380;
   }
   :global(body.dark-mode) body {
     --color-ed: #1b262c;
-    --color-d: #254b62;
+    --color-d: #2d393f;
     --color-l: #303030;
     --color-el: #77abb7;
   }
@@ -71,36 +71,36 @@
 
 <body>
 
-  <div class="bg-edark h-full flex flex-col box-border">
+  <div class="bg-edark h-full flex flex-col">
 
     {#await $test}
       Loading...
     {:then result}
-      <div class="bg-edark flex flex-col max-w-full overflow-auto">
+      <div class="bg-edark flex flex-col max-w-full overflow-auto ">
         <div class="mx-auto mt-8 max-w-full flex flex-col">
           <div class="font-bold text-2xl text-elight mx-auto">
-            {result.data.testById.testName}
+            Test Name : {result.data.testById.testName}
           </div>
           <div class=" text-xl text-elight mx-auto">
-            Time Limit :- {result.data.testById.timelimit} ms
+            Time Limit : {result.data.testById.timelimit} ms
           </div>
           <div class=" text-xl text-elight mx-auto">
-            Difficulty :- {result.data.testById.difficultyLevel}
+            Difficulty : {result.data.testById.difficultyLevel}
           </div>
         </div>
-        <div class="bg-dark max-w-full mt-12 mx-64">
+        <div class="bg-dark max-w-full mt-12 mx-64 rounded">
 
           <div class="outer_box flex-col h-full">
             <div class="mx-auto mb-4 w-32">
-              <h1 class="labels">Problems</h1>
+              <h1 class="tag labels">Problems</h1>
             </div>
             <div class="flex-col">
               <div class="flex mb-6">
                 <div class="w-10/12">
-                  <div class="rows mx-4">Problem Name</div>
+                  <div class="tag rows mx-4">Problem Name</div>
                 </div>
                 <div class="w-2/12">
-                  <div class="rows mx-4">Score</div>
+                  <div class="tag rows mx-4">Score</div>
                 </div>
               </div>
               <div class="boxheight2 flex flex-col flex-grow overflow-auto">
@@ -108,10 +108,10 @@
                   <div class="flex pb-3">
                     <div class="w-10/12">
                       <div class="rows bg-edark rounded-full p-2 px-4 mx-2">
-                        <a class="no-underline px-3 text-elight">
-                          <Navigate to="/problem/{prob.problem.id}">
-                            {prob.problem.problemName}
-                          </Navigate>
+                        <a
+                          href="/problem/{prob.problem.id}"
+                          class="no-underline px-3 text-elight">
+                          {prob.problem.problemName}
                         </a>
                       </div>
                     </div>
@@ -119,7 +119,7 @@
                       <div class="rows bg-edark rounded-full">
                         <div
                           type="string"
-                          class=" mx-auto w-10 outline-none p-2">
+                          class="text-elight mx-auto w-10 outline-none p-2">
                           {prob.score}
                         </div>
                       </div>
@@ -132,15 +132,14 @@
         </div>
         <div class="max-w-6xl my-4 mb-32 flex flex-col mx-auto">
           <div class="float-right ">
-            <button
-              style="color:#254b62;"
-              class="savebutton hover:bg-grey hover:text-edark font-bold py-2
-              px-4 border rounded">
-              <Navigate to="/edittest/{currentRoute.namedParams.id}">
+            <Navigate to="/edittest/{currentRoute.namedParams.id}">
+              <button
+                style="color:#254b62;"
+                class="savebutton hover:bg-grey hover:text-edark font-bold py-2
+                px-4 border rounded">
                 Edit
-              </Navigate>
-            </button>
-
+              </button>
+            </Navigate>
             <button
               style="color:#254b62;"
               on:click={deleteTestHandler}
@@ -148,15 +147,14 @@
               px-4 border rounded">
               Delete
             </button>
-
-            <button
-              style="color:#254b62;"
-              class="savebutton hover:bg-grey hover:text-edark font-bold py-2
-              px-4 border rounded">
-              <Navigate to="/sendtest/{currentRoute.namedParams.id}">
+            <Navigate to="/sendtest/{currentRoute.namedParams.id}">
+              <button
+                style="color:#254b62;"
+                class="savebutton hover:bg-grey hover:text-edark font-bold py-2
+                px-4 border rounded">
                 Send Test
-              </Navigate>
-            </button>
+              </button>
+            </Navigate>
 
           </div>
         </div>

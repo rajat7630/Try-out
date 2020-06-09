@@ -10,5 +10,6 @@
 <div>
   <Navbar />
   <Route {currentRoute} {params} />
+  <Pubnub />
 
 </div>

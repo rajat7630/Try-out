@@ -19,7 +19,7 @@
         variables: { id: parseInt(currentRoute.namedParams.id) }
       });
       console.log("hp");
-      location.replace("http://localhost:5000/admin/panel/showproblems");
+      location.replace("http://localhost:5000/admin/showproblems");
     } catch (err) {
       Error: -{ err };
     }
@@ -46,14 +46,14 @@
     max-height: 385px;
   }
   body {
-    --color-ed: White;
-    --color-d: #88999e;
+    --color-ed: #ebe9e9;
+    --color-d: white;
     --color-l: #106270;
     --color-el: #3c7380;
   }
   :global(body.dark-mode) body {
     --color-ed: #1b262c;
-    --color-d: #254b62;
+    --color-d: #2d393f;
     --color-l: #303030;
     --color-el: #77abb7;
   }
@@ -75,16 +75,16 @@
     {#await $problem}
       Loading...
     {:then result}
-      <div class="bg-edark rounded flex flex-col max-w-full overflow-auto">
-        <div class="mx-auto mt-8 max-w-xl flex flex-col">
+      <div class="bg-edark rounded flex flex-col max-w-full overflow-auto p-16">
+        <div class="mx-auto max-w-xl flex flex-col">
           <div class="font-bold text-2xl text-elight mx-auto">
-            {result.data.problemById.problemName}
+            Problem Name : {result.data.problemById.problemName}
           </div>
           <div class=" text-xl text-elight mx-auto">
-            Data Limit :- {result.data.problemById.datalimit} Mb
+            Data Limit : {result.data.problemById.datalimit} Mb
           </div>
           <div class=" text-xl text-elight mx-auto">
-            Time Limit :- {result.data.problemById.timelimit} ms
+            Time Limit : {result.data.problemById.timelimit} ms
           </div>
         </div>
         <div class="bg-dark rounded max-w-full mt-12 mx-64">
@@ -95,7 +95,7 @@
                 <label class=" text-2xl text-elight mb-3 my-2">
                   Description
                 </label>
-                <p class="text-xl text-elight">
+                <p class="text-xl text-elight mr-6">
                   {result.data.problemById.description}
                 </p>
               </div>
@@ -134,7 +134,7 @@
           <div class="float-right ">
             <button
               style="color:#254b62;"
-              class="savebutton hover:bg-grey hover:text-edark font-bold py-2
+              class="savebutton hover:bg-grey hover:text-dark font-bold py-2
               px-4 border rounded">
               <Navigate to="/editProblem/{currentRoute.namedParams.id}">
                 Edit
@@ -144,7 +144,7 @@
             <button
               on:click={deleteProblemHandler}
               style="color:#254b62;"
-              class="savebutton hover:bg-grey hover:text-edark font-bold py-2
+              class="savebutton hover:bg-grey hover:text-dark font-bold py-2
               px-4 border rounded">
               Delete
             </button>

@@ -47,7 +47,7 @@
         mutation: apolloClient.updateTest,
         variables: test
       });
-      location.replace("http://localhost:5000/admin");
+      location.replace("http://localhost:5000/admin/showtests");
     } catch (err) {
       console.log(err);
     }
@@ -77,7 +77,14 @@
     height: 385px;
   }
   .problembox {
-    @apply border-2 mx-auto max-w-6xl border-solid border-white rounded-lg p-8 my-10;
+    @apply mx-auto max-w-6xl rounded-lg p-8 my-10 shadow;
+    background-color: white;
+    color: black;
+  }
+  :global(body.dark-mode) .problembox {
+    @apply mx-auto max-w-6xl rounded-lg p-8 my-10 shadow;
+    background-color: #2d393f;
+    color: white;
   }
 </style>
 

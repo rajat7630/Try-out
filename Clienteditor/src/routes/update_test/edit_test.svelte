@@ -32,7 +32,14 @@
     display: none;
   }
   .problembox {
-    @apply border-2 mx-auto max-w-6xl border-solid border-white rounded-lg p-8 my-10;
+    @apply mx-auto max-w-6xl rounded-lg p-8 my-10 shadow;
+    background-color: white;
+    color: black;
+  }
+  :global(body.dark-mode) .problembox {
+    @apply mx-auto max-w-6xl rounded-lg p-8 my-10 shadow;
+    background-color: #2d393f;
+    color: white;
   }
 </style>
 
@@ -49,7 +56,7 @@
       <div class="problembox">
         <TestInitials />
       </div>
-      <div class="">
+      <div>
         <TestProblems {currentRoute} />
       </div>
       <!-- <SelectPage {pageNum} {currentRoute} class="h-full" /> -->

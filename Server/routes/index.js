@@ -66,7 +66,7 @@ router.get(
     res.cookie('access_email', userEmail, {
       httpOnly: false,
     });
-    res.redirect('http://localhost:5000/admin/panel/showtests');
+    res.redirect('http://localhost:5000/admin/showtests');
     // eslint-disable-next-line comma-dangle
   }
 );

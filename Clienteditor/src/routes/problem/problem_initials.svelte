@@ -100,9 +100,11 @@
 <div class="mx-auto flex-col flex-grow">
   <div class="text-edark mx-auto max-w-6xl w-full">
     <div>
-      <label class="text-elight text-2xl my-3">
-        Enter a unique Problem code
-      </label>
+      <div style="margin-bottom:10px;">
+        <label class="text-elight text-2xl my-3">
+          Enter a Unique Problem code
+        </label>
+      </div>
       <div class="flex">
         <div class=" flex-col w-full">
           <div class="w-full">
@@ -116,7 +118,7 @@
               tet-edark focus:outline-none" />
           </div>
           <div>
-            <p class="text-white text-sm my-2">{alert}</p>
+            <p class="text-elight text-sm my-2">{alert}</p>
           </div>
         </div>
         <div class="ml-3">
@@ -132,7 +134,7 @@
         </div>
       </div>
     </div>
-    <div class="border-solid border-2 mt-6 border-light p-4">
+    <div class=" mt-6 p-4">
       <div>
         <h2 class="labels text-2xl">Other Details</h2>
       </div>
@@ -165,7 +167,8 @@
             <div class="flex overflow-auto tagwidth ">
               {#each selectedTags as tag, ind}
                 <div
-                  class="flex text-white border-solid border-2 rounded-full p-1 px-3 text-l">
+                  class="flex text-white border-solid border-2 rounded-full p-1
+                  px-3 text-l">
                   {tag}
                   <div
                     class="px-2 cursor-pointer"

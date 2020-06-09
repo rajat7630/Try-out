@@ -112,7 +112,7 @@
               tet-edark focus:outline-none" />
           </div>
           <div>
-            <p class="text-white text-sm my-2">{alert}</p>
+            <p class="text-elight text-sm my-2">{alert}</p>
           </div>
         </div>
         <div class="ml-3">
@@ -128,7 +128,7 @@
         </div>
       </div>
     </div>
-    <div class="border-solid border-2 mt-6 border-light p-4">
+    <div class=" mt-6 p-4">
       <div>
         <h2 class="labels text-3xl">Other Details</h2>
       </div>
@@ -173,7 +173,8 @@
             <div class="flex overflow-auto tagwidth ">
               {#each selectedTags as tag, ind}
                 <div
-                  class="flex border-solid text-white border-2 rounded-full p-1 px-3 text-l">
+                  class="flex border-solid text-white border-2 rounded-full p-1
+                  px-3 text-l">
                   {tag}
                   <div
                     class="px-2 cursor-pointer"

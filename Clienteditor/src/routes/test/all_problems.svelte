@@ -34,10 +34,20 @@
   .problemheight {
     height: 30vh;
   }
-  .pageWidth{
+  .pageWidth {
     max-width: 20vw;
   }
 </style>
+
+<link
+  href="https://fonts.googleapis.com/css2?family=Abril+Fatface&family=Rubik&display=swap"
+  rel="stylesheet" />
+
+<link
+  rel="stylesheet"
+  href="https://pro.fontawesome.com/releases/v5.10.0/css/all.css"
+  integrity="sha384-AYmEC3Yw5cVb3ZcuHtOA93w35dYTsvhLPVnYs9eStHfGJvOvKxVfELGroGkvsg+p"
+  crossorigin="anonymous" />
 
 <div class="w-full mt-2">
   <div>
@@ -75,7 +85,7 @@
                 }}
                 class="w-3/4 bg-dark outline-none text-white rounded-full p-2
                 px-4 mx-2">
-                Add
+                <i class="far fa-plus-square" />
               </button>
             </div>
           </div>
