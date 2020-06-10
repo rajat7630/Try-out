@@ -137,8 +137,9 @@
                       on:click={() => {
                         return removeProblem(problem.problem.id);
                       }}
-                      class="w-3/4 bg-dark outline-none text-red rounded-full ">
-                      <i class="fas fa-minus-square text-red p-2 px-4" />
+                      class="w-3/4 bg-dark mx-auto outline-none text-white
+                      rounded-full p-2 px-1 mx-2">
+                      X
                     </button>
                   </div>
                 </div>

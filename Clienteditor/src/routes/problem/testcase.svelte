@@ -59,7 +59,7 @@
       mutation: apolloClient.addProblem,
       variables: problemValue
     });
-    location.replace("http://localhost:5000/admin");
+    location.replace("http://localhost:5000/admin/showProblems");
   }
 </script>
 

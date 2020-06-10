@@ -19,7 +19,7 @@
         mutation: apolloClient.deleteTest,
         variables: { id: currentRoute.namedParams.id }
       });
-      location.replace("http://localhost:5000/admin/panel/showtests");
+      location.replace("http://localhost:5000/admin/showtests");
     } catch (err) {
       Error: -{ err };
     }

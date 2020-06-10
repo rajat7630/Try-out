@@ -173,11 +173,11 @@
             <div class="flex overflow-auto tagwidth ">
               {#each selectedTags as tag, ind}
                 <div
-                  class="flex border-solid text-white border-2 rounded-full p-1
+                  class="flex border-solid text-elight border-2 rounded-full p-1
                   px-3 text-l">
                   {tag}
                   <div
-                    class="px-2 cursor-pointer"
+                    class="px-2 text-elight cursor-pointer"
                     on:click={() => {
                       selectedTags = [...selectedTags.filter((__, index) => {
                           return ind !== index;
@@ -205,7 +205,7 @@
                 }
               }}
               type="text"
-              class="outline-none bg-transparent text-white ml-3 w-full"
+              class="outline-none bg-transparent text-elight ml-3 w-full"
               bind:value={hastTagString} />
           </div>
         </div>

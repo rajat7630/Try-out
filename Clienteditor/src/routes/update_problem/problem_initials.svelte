@@ -159,16 +159,16 @@
         <div>
           <label class="labels">Add Tags</label>
           <div
-            class="w-full border-2 border-solid border-gray flex px-5 py-2
+            class="w-full border-2 border-solid border-gray flex px-6 py-2
             rounded-full">
             <div class="flex overflow-auto tagwidth ">
               {#each selectedTags as tag, ind}
                 <div
-                  class="flex border-solid border-2 text-white rounded-full p-1
+                  class="flex border-solid border-2 text-elight rounded-full p-1
                   px-3 text-l">
                   {tag}
                   <div
-                    class="px-2 cursor-pointer"
+                    class="px-2 text-elight cursor-pointer"
                     on:click={() => {
                       selectedTags = [...selectedTags.filter((__, index) => {
                           return ind !== index;
