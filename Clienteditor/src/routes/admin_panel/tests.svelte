@@ -10,7 +10,7 @@
 
   const client = getClient();
   let pageNumber = 1;
-  let pageSize = 5;
+  let pageSize = 6;
   const searchTests = query(client, {
     query: apolloClient.getSearchTests,
     variables: {
@@ -70,7 +70,6 @@
   .problems {
     @apply flex-grow;
     margin-bottom: 4vh;
-    height: 60vh;
   }
 
   .problem {
@@ -111,7 +110,6 @@
     }
 
     .problems {
-      @apply overflow-y-auto;
       padding-left: 4.5rem;
       padding-right: 3.5rem;
     }
@@ -145,9 +143,9 @@
           duration-150" />
         &nbsp; ALL TESTS:
       </h2>
-      <div class="px-2 ml-16 w-full flex">
+      <div class="w-full flex">
         <input
-          class="problem-search rounded-full shadow w-9/12 mr-3"
+          class="problem-search rounded-lg shadow w-11/12 mr-3"
           id="problem-search"
           name="problem-search"
           style="width:86%"
@@ -155,10 +153,11 @@
           placeholder="Enter a Test name"
           on:keypress={() => changePageNumber(1)}
           bind:value={testSearch} />
-        <a
-          href="/newTest"
-          class="fas fa-folder-plus btun rounded-full"
-          style="padding: 20px 20px" />
+        <div class="text-xl btun w-1/12 rounded-lg">
+          <a
+            href="/newTest"
+            class="fas fa-folder-plus w-10 mx-auto" />
+        </div>
 
       </div>
     </header>

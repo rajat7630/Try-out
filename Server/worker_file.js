@@ -26,3 +26,22 @@ module.exports = async (program, timelimit, callback) => {
     }
     programWorker.terminate();
 }
+
+// module.exports = (program, timelimit) => new Promise(async (resolve, reject) => {
+//     console.log(program);
+//     const programWorker = new Worker(program, { eval: true });
+//     let status = false;
+//     programWorker.on("error", () => {
+//         console.log("process error found");
+//         resolve(true);
+//         programWorker.terminate();
+//     });
+//     await timeout(timelimit);
+//     programWorker.on("exit", () => {
+//         console.log("process finished");
+//         resolve(true);
+//     });
+//     reject(false);
+//     programWorker.terminate();
+// }
+// )

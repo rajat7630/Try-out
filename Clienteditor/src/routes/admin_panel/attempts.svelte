@@ -63,16 +63,14 @@
   .problems {
     @apply flex-grow;
     margin-bottom: 4vh;
-    height: 60vh;
   }
 
   .problem {
     @apply mb-2;
   }
   .problem-search {
-    @apply appearance-none w-full bg-white border py-3 px-4 mb-5 shadow rounded text-black;
+    @apply  w-full bg-white border py-3 px-4 mb-5 shadow  text-black;
     background-color: #ffffff;
-    width: 100%;
   }
   .problem__name {
     @apply font-bold flex w-full justify-between items-center;
@@ -104,7 +102,6 @@
     }
 
     .problems {
-      @apply overflow-y-auto;
       padding-left: 4.5rem;
       padding-right: 3.5rem;
     }
@@ -139,12 +136,11 @@
           duration-150" />
         &nbsp; SCOREBOARD:
       </h2>
-      <div class="px-6 ml-24 flex w-full">
+      <div class=" flex w-full">
         <input
-          class="problem-search shadow rounded-full w-9/12 mr-5"
+          class="problem-search outline-none shadow rounded-lg w-full"
           id="problem-search"
           name="problem-search"
-          style="padding: 16px 20px"
           type="text"
           placeholder="Enter a User name"
           bind:value={attemptSearch}

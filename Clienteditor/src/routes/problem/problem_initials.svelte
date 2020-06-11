@@ -188,26 +188,11 @@
                     }}>
                     x
                   </div>
-                {/each}
-              </div>
+                </div>
+              {/each}
             </div>
-            <div class="mx-3 flex-auto w-full">
-              <input
-                on:keypress={e => {
-                  if (e.key === ' ') {
-                    console.log(hastTagString);
-                    newTagHandler(hastTagString);
-                    $problemStore.tags = '';
-                    selectedTags.forEach(tag => {
-                      $problemStore.tags += '#' + tag;
-                    });
-                  }
-                }}
-                type="text"
-                class="outline-none bg-transparent h-full text-white w-full"
-                bind:value={hastTagString} />
-            </div>
-<<<<<<< HEAD
+          </div>
+          <div class="mx-3 flex-auto w-full">
             <input
               on:keypress={e => {
                 if (e.key === ' ') {
@@ -220,10 +205,8 @@
                 }
               }}
               type="text"
-              class="outline-none bg-transparent text-elight ml-3 w-full"
+              class="outline-none bg-transparent h-full text-white w-full"
               bind:value={hastTagString} />
-=======
->>>>>>> fix: navbar and sidebar
           </div>
         </div>
       </div>

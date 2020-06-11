@@ -73,7 +73,6 @@
   .problems {
     @apply flex-grow;
     margin-bottom: 4vh;
-    height: 60vh;
   }
 
   .problem {
@@ -109,12 +108,7 @@
   }
 
   @media (min-width: 720px) {
-    #problem-switcher-container {
-      @apply h-screen;
-    }
-
     .problems {
-      @apply overflow-y-auto;
       padding-left: 4.5rem;
       padding-right: 3.5rem;
     }
@@ -149,9 +143,9 @@
           transition duration-150" />
         &nbsp; ALL PROBLEMS:
       </h2>
-      <div class="px-4 ml-16 flex w-full">
+      <div class="flex w-full">
         <input
-          class="problem-search shadow rounded-full w-9/12 mr-3"
+          class="problem-search outline-none shadow rounded-lg w-11/12 mr-3"
           id="problem-search"
           name="problem-search"
           style="width:86%"
@@ -160,11 +154,10 @@
           bind:value={problemSearch}
           on:keypress={() => changePageNumber(1)} />
 
-        <a
-          href="/newProblem"
-          class="fas fa-folder-plus btun rounded-full"
-          style="padding: 20px 20px" />
+        <a href="/newProblem" class="text-xl w-1/12 btun rounded-lg ">
+          <div class="fas fa-folder-plus mx-auto" />
 
+        </a>
       </div>
     </header>
     {#await $searchProblems}

@@ -86,7 +86,6 @@ async function addNewUser(user) {
         name: user.name,
         collegeName: user.collegeName,
     });
-    console.log(res);
     const res2 = await Test.query().where('id', parseInt(user.testId));
     const res1 = await getTestProblems(res2[0]);
     const res3 = await addNewAttempt({
@@ -156,7 +155,6 @@ async function getTestProblems(test) {
         .leftJoin('problems', 'testProblems.p_id', '=', 'problems.id')
         .where('testProblems.t_id', parseInt(test.id))
         .select('problems.*', 'testProblems.score');
-    console.log(res, "res");
     const problems = [
         ...res.map((prob) => ({ problem: prob, score: prob.score })),
     ];
@@ -182,42 +180,40 @@ async function getAllProblems() {
 }
 
 async function getSearchProblems(search, page, pageSize) {
-    let query = Problem.query().select('problems.*');
-    if (search) {
-        query = await query.where(fn.lower(ref('problemName')), 'ilike', `%${(search.match(/\w+/gi) || []).join('%')}%`)
-            .orderBy('createdAt', 'DESC')
-            .page(page - 1, pageSize);
-    } else {
-        query = await query.orderBy('createdAt', 'DESC').page(page - 1, pageSize);
-        console.log(query);
-    }
+    let searchString = '%';
+    [...search].forEach(s => {
+        searchString += s + '%';
+    })
+    console.log(searchString);
+    const query = await Problem.query().where('problemName', 'ilike', `${searchString}`)
+        .orderBy('createdAt', 'DESC')
+        .page(page - 1, pageSize);
+    console.log(query);
     return { problems: query.results.map((problem) => problemReducer(problem)), total: query.total };
 }
 
 async function getSearchTests(search, page, pageSize) {
-    let query = Test.query().select('tests.*');
-    if (search) {
-        query = await query.where(fn.lower(ref('testName')), 'ilike', `%${(search.match(/\w+/gi) || []).join('%')}%`)
-            .orderBy('createdAt', 'DESC')
-            .page(page - 1, pageSize);
-    } else {
-        query = await query.orderBy('createdAt', 'DESC').page(page - 1, pageSize);
-    }
+    let searchString = '%';
+    [...search].forEach(s => {
+        searchString += s + '%';
+    })
+    const query = await Test.query().where('testName', 'ilike', `${searchString}`)
+        .orderBy('createdAt', 'DESC')
+        .page(page - 1, pageSize);
     return { tests: query.results.map((test) => testReducer(test)), total: query.total };
 }
 
 async function getSearchAttempt(search, page, pageSize) {
-    var res;
-    if (search) {
-        res = await Attempt.query()
-            .joinRelated('user')
-            .where(fn.lower(ref('user.name')), 'ilike', `%${(search.match(/\w+/gi) || []).join('%')}%`)
-            .orderBy('attemptTime', 'DESC')
-            .page(page - 1, pageSize);
-    } else {
-        res = await Attempt.query().select('attempts.*').orderBy('attemptTime', 'DESC')
-            .page(page - 1, pageSize);
-    }
+    let searchString = '%';
+    [...search].forEach(s => {
+        searchString += s + '%';
+    })
+    const res = await Attempt.query()
+        .joinRelated('user')
+        .where('user.name', 'ilike', `${searchString}`)
+        .orderBy('attemptTime', 'DESC')
+        .page(page - 1, pageSize);
+
     return { attempts: res.results.map((attempt) => attemptReducer(attempt)), total: res.total };
 }
 
@@ -288,7 +284,6 @@ async function getTestByToken(token) {
         timelimit: ele.problem.timelimit,
         description: ele.problem.description,
     }));
-    console.log(res2[0]);
     return res2[0];
 }
 
@@ -301,7 +296,6 @@ function sendMail(mailDetails) {
     const mailBody = `<h1>Sourcefuse Technologies</h1><p>This link will be active for ${mailDetails.linktime} hours</p><span>To give test click <a href="http://localhost:5000/givetest/${token}">here</a></span>`;
     mailOptions.html = mailBody;
     mailOptions.to = mailDetails.email;
-    console.log(mailBody);
     transporter.sendMail(mailOptions, (error, info) => {
         if (error) {
             throw error;
@@ -352,15 +346,17 @@ async function updateAttempt(data) {
                 }
             }
         });
+
         return { ...ele, userSolution: tt[index].solution };
     });
+    // const r = await worker(ree, ele.problem.timelimit, ree, ele.problem.timelimit);
+    // console.log("value", r);
     const res2 = await Attempt.query().patchAndFetchById(parseInt(data.id), {
         u_id: parseInt(data.u_id),
         solutions: JSON.stringify(rr),
         Score: score,
     });
 
-    console.log(res2);
     return {
         success: true,
         message: 'Attempt updated',
@@ -368,7 +364,6 @@ async function updateAttempt(data) {
 }
 
 async function attemptReducer(attempt) {
-    console.log(attempt);
     const user = await User.query().where('id', parseInt(attempt.u_id));
     const test = await Test.query().where('id', parseInt(attempt.t_id));
 
