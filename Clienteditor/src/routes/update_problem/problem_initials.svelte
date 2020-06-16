@@ -142,7 +142,9 @@
           <input
             bind:value={$problemStore.timelimit}
             class="unitinput"
-            type="text"
+            type="number"
+            min="0"
+            max="10000"
             placeholder="in milli seconds" />
           <span class="unit">ms</span>
         </div>
@@ -151,7 +153,9 @@
           <input
             bind:value={$problemStore.datalimit}
             class="unitinput"
-            type="text"
+            type="number"
+            min="1"
+            max="1024"
             placeholder="in Mbs" />
           <span class="unit">Mb</span>
         </div>

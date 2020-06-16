@@ -148,7 +148,9 @@
           <input
             bind:value={$problemStore.timelimit}
             class="unitinput"
-            type="text"
+            type="number"
+            min="0"
+            max="10000"
             placeholder="in milli seconds" />
           <span class="unit">ms</span>
         </div>
@@ -157,7 +159,9 @@
           <input
             bind:value={$problemStore.datalimit}
             class="unitinput"
-            type="text"
+            type="number"
+            min="1"
+            max="1024"
             placeholder="in Mbs" />
           <span class="unit">Mb</span>
         </div>
@@ -191,22 +195,22 @@
                 </div>
               {/each}
             </div>
-          </div>
-          <div class="mx-3 flex-auto w-full">
-            <input
-              on:keypress={e => {
-                if (e.key === ' ') {
-                  console.log(hastTagString);
-                  newTagHandler(hastTagString);
-                  $problemStore.tags = '';
-                  selectedTags.forEach(tag => {
-                    $problemStore.tags += '#' + tag;
-                  });
-                }
-              }}
-              type="text"
-              class="outline-none bg-transparent h-full text-white w-full"
-              bind:value={hastTagString} />
+            <div class="mx-3 flex-auto w-full">
+              <input
+                on:keypress={e => {
+                  if (e.key === ' ') {
+                    console.log(hastTagString);
+                    newTagHandler(hastTagString);
+                    $problemStore.tags = '';
+                    selectedTags.forEach(tag => {
+                      $problemStore.tags += '#' + tag;
+                    });
+                  }
+                }}
+                type="text"
+                class="outline-none bg-transparent h-full text-white w-full"
+                bind:value={hastTagString} />
+            </div>
           </div>
         </div>
       </div>

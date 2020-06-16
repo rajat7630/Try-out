@@ -138,7 +138,7 @@
           <input
             bind:value={$testStore.timelimit}
             class="unitinput"
-            type="text"
+            type="number"
             placeholder="in minutes" />
           <span class="unit">minutes</span>
         </div>

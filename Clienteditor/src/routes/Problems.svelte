@@ -5,11 +5,18 @@
   import InputWindow from "../inputTest.svelte";
   import { Navigate } from "svelte-router-spa";
   export let currentRoute;
+  import { onMount } from "svelte";
   console.log(currentRoute);
   const client = getClient();
   const problem = query(client, {
     query: apolloClient.getProblemById,
     variables: { id: parseInt(currentRoute.namedParams.id) }
+  });
+  let description;
+  let eeeditor;
+  $problem.then(data => {
+    console.log(data);
+    description = data.data.problemById.description;
   });
   async function deleteProblemHandler() {
     try {
@@ -23,6 +30,9 @@
     } catch (err) {
       Error: -{ err };
     }
+  }
+  function EditorInput() {
+    document.getElementById("description").innerHTML = description;
   }
 </script>
 
@@ -113,9 +123,12 @@
                 <label class=" text-2xl text-elight mb-3 my-2">
                   Description
                 </label>
-                <p class="text-xl text-elight mr-6">
-                  {result.data.problemById.description}
-                </p>
+                <div
+                  use:EditorInput
+                  class=" w-full bg-edark flex-grow text-elight text-2xl border
+                  rounded py-3 px-4 mb-3 leading-tight "
+                  id="description"
+                  readonly />
               </div>
 
               <div class="w-full h-full px-3 flex flex-col">

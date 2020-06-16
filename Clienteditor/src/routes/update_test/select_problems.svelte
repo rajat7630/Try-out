@@ -128,7 +128,7 @@
                       on:change={() => {
                         $testStore.problems = JSON.stringify(problemScore);
                       }}
-                      type="string"
+                      type="number"
                       class="w-3/4 bg-dark mx-auto outline-none text-white rounded-full
                       p-2 px-4 "
                       bind:value={problem.score} />

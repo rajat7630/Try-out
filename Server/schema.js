@@ -10,8 +10,8 @@ const typeDefs = gql`
     createdAt: String
     problemTests: JSON
     tags: String
-    timelimit: String
-    datalimit: String
+    timelimit:Int
+    datalimit: Int
     solution: String
     email: String
   }
@@ -31,7 +31,7 @@ const typeDefs = gql`
     problems: JSON
     tags: String
     difficultyLevel: String
-    timelimit: String
+    timelimit: Int
   }
   type User {
     id: ID!
@@ -124,8 +124,8 @@ const typeDefs = gql`
     description: String
     problemTests: JSON
     email: String
-    timelimit: String
-    datalimit: String
+    timelimit: Int
+    datalimit: Int
     solution: String
     tags: String
   }
@@ -134,7 +134,7 @@ const typeDefs = gql`
     difficultyLevel: String
     email: String
     tags: String
-    timelimit: String
+    timelimit: Int
     problems: JSON
   }
   input addAttemptInput {
@@ -161,8 +161,8 @@ const typeDefs = gql`
     problemName: String
     description: String
     problemTests: JSON
-    timelimit: String
-    datalimit: String
+    timelimit: Int
+    datalimit: Int
     solution: String
     tags: String
   }
@@ -170,7 +170,7 @@ const typeDefs = gql`
     testName: String
     difficultyLevel: String
     problems: JSON
-    timelimit: String
+    timelimit: Int
     tags: String
   }
   type addProblemOutput {

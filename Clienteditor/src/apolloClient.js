@@ -136,8 +136,8 @@ const addProblem = gql`
     $description: String
     $problemTests: JSON
     $email: String
-    $timelimit: String
-    $datalimit: String
+    $timelimit: Int
+    $datalimit: Int
     $tags: String
     $solution: String
   ) {
@@ -184,8 +184,8 @@ const updateProblem = gql`
     $description: String
     $problemTests: JSON
     $solution: String
-    $timelimit: String
-    $datalimit: String
+    $timelimit: Int
+    $datalimit: Int
     $tags: String
   ) {
     updateProblem(
@@ -213,7 +213,7 @@ const addTest = gql`
     $email: String
     $problems: JSON
     $tags: String
-    $timelimit: String
+    $timelimit: Int
   ) {
     addTest(
       data: {
@@ -246,7 +246,7 @@ const updateTest = gql`
     $difficultyLevel: String
     $problems: JSON
     $tags: String
-    $timelimit: String
+    $timelimit: Int
   ) {
     updateTest(
       id: $id
@@ -410,7 +410,7 @@ const checkTestIfAvailable = gql`
 `;
 
 const checkTimeLimit = gql`
-mutation checkTimeLimit($data:String, $timelimit:String){
+mutation checkTimeLimit($data:String, $timelimit:Int){
   checkTimeLimit(data:$data, timelimit:$timelimit)
   {
     success

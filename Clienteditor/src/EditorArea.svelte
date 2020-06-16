@@ -31,6 +31,11 @@
       useWorker: false
     });
   });
+
+  afterUpdate(() => {
+    document.getElementById("description").innerHTML = $currentTab.description;
+    console.log("done");
+  });
   async function runHandler() {
     let ind = 0;
     $dataStore.forEach((ele, index) => {
@@ -50,7 +55,7 @@
       variables: { data: res, timelimit: $dataStore[ind].timelimit }
     });
     console.log(data);
-    if (data.data.checkTimeLimit.success  === true) {
+    if (data.data.checkTimeLimit.success === true) {
       try {
         result = eval(`${code} solution(${testCase})`);
       } catch (err) {
@@ -60,7 +65,10 @@
       result = "Timelimit Exceeded";
     }
   }
-
+  function SetDescription() {
+    document.getElementById("description").innerHTML = $currentTab.description;
+    console.log("done");
+  }
   async function sendSolution(data) {
     let solutions = {
       id: parseInt(cookieHandler.getCookie("attempt_id")),
@@ -124,7 +132,7 @@
     <NewProblem />
   {:else}
   {/if} -->
-  <h1 class="question px-3 py-3">{$currentTab.description}</h1>
+  <h1 class="question px-3 py-3" id="description" use:SetDescription />
   <EditorWindow />
   <div
     class="w-full bg-gray-800 sizechanger cursor-move text-bg-600 flex
