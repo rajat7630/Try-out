@@ -1,4 +1,4 @@
-<script>
+<!-- <script>
   import { cookieHandler } from "../helperFunctions/cookie_handler.js";
   import { Navigate } from "svelte-router-spa";
 
@@ -193,5 +193,5 @@
       <i class="fa fa-sign-out" />
       Logout
     </a>
-  </ul>
-</div>
+  </ul> -->
+<!-- </div> -->

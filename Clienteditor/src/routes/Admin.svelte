@@ -34,7 +34,7 @@
 <body>
   <div class="w-screen bg-edark h-screen flex flex-col">
     <header>
-      <Navbar />
+      <!-- <Navbar /> -->
       <Sidebar />
     </header>
     <Pubnub />

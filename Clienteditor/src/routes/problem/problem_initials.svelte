@@ -4,18 +4,18 @@
   import { getClient, query, subscribe, mutate } from "svelte-apollo";
   import { problemStore } from "./problem_store.js";
   console.log($problemStore);
-  let alert =
-    "*Name must be in capital letters with no space in between and no special characters";
-  const tagList = [
-    "Choose Tags",
-    "Dynamic_Programming",
-    "Mathematics",
-    "Binary_Search",
-    "Graph",
-    "Algorithm",
-    "Data_Structure",
-    "Trees"
-  ];
+  // let alert =
+  //   "*Name must be in capital letters with no space in between and no special characters";
+  // const tagList = [
+  //   "Choose Tags",
+  //   "Dynamic_Programming",
+  //   "Mathematics",
+  //   "Binary_Search",
+  //   "Graph",
+  //   "Algorithm",
+  //   "Data_Structure",
+  //   "Trees"
+  // ];
   const client = getClient();
   $: uniqueNameStatus = 0;
 

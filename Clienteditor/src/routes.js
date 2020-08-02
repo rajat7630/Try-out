@@ -19,20 +19,20 @@ import AttemptsPanel from './routes/admin_panel/attempts.svelte';
 import AdminLayout from './layouts/admin_layout.svelte';
 import PublicLayout from './layouts/public_layout.svelte';
 
-function userIsAdmin() {
-  //check if user is admin and returns true or false
-  return document.cookie ? true : false;
-}
+// function userIsAdmin() {
+//   //check if user is admin and returns true or false
+//   return document.cookie ? true : false;
+// }
 
-function notAdmin() {
-  return document.cookie ? false : true;
-}
+// function notAdmin() {
+//   return document.cookie ? false : true;
+// }
 
 const routes = [
   {
     name: '/',
     component: Login,
-    onlyIf: { guard: notAdmin, redirect: '/admin' },
+    // onlyIf: { guard: notAdmin, redirect: '/admin' },
   },
   {
     name: '/givetest/:token',
@@ -85,7 +85,7 @@ const routes = [
   {
     name: '/admin',
     layout: AdminLayout,
-    onlyIf: { guard: userIsAdmin, redirect: '/' },
+    // onlyIf: { guard: userIsAdmin, redirect: '/' },
     nestedRoutes: [
       {
         name: '/showproblems',
